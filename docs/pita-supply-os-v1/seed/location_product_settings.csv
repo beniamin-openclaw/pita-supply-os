@@ -1,0 +1,53 @@
+setting_id,location_id,product_id,min_stock_qty_base,max_stock_qty_base,target_stock_qty_base,is_critical_for_location,allow_over_max_due_to_packaging,notes
+WOLA__P001,WOLA,P001,2,6,6,FALSE,FALSE,Masło MR 500g
+WOLA__P002,WOLA,P002,0.5,2,2,FALSE,FALSE,Cytryna
+WOLA__P003,WOLA,P003,0.5,2,2,FALSE,FALSE,Papryka zielona
+WOLA__P004,WOLA,P004,2,5,5,FALSE,FALSE,Awokado
+WOLA__P005,WOLA,P005,0.5,2,2,FALSE,FALSE,Ogórek
+WOLA__P006,WOLA,P006,12,42,42,TRUE,FALSE,Pomidor — Greek salad essential
+WOLA__P007,WOLA,P007,5,15,15,FALSE,FALSE,Rucola 125 gr
+WOLA__P008,WOLA,P008,5,20,20,FALSE,FALSE,Sałata bolero mix 150gr
+WOLA__P009,WOLA,P009,0.2,0.5,0.5,FALSE,FALSE,Natka Pietruszki
+WOLA__P010,WOLA,P010,0.2,0.5,0.5,FALSE,FALSE,Czosnek
+WOLA__P011,WOLA,P011,9,30,30,TRUE,FALSE,Tzatzyki — core menu sauce
+WOLA__P012,WOLA,P012,3,6,6,FALSE,FALSE,Tirokafteri
+WOLA__P013,WOLA,P013,0.5,1.5,1.5,FALSE,FALSE,Oliwki kalamata
+WOLA__P014,WOLA,P014,1,3,3,TRUE,FALSE,Feta blok
+WOLA__P015,WOLA,P015,24,72,72,TRUE,FALSE,Halloumi — core menu cheese; verify Wzór range with Captain (17_05 actual was 9.83 kg)
+WOLA__P016,WOLA,P016,5,15,15,TRUE,FALSE,Cebula czerwona
+WOLA__P017,WOLA,P017,0.5,1.5,1.5,FALSE,FALSE,Florinis
+WOLA__P018,WOLA,P018,0.5,1,1,FALSE,FALSE,Cebula Biała
+WOLA__P019,WOLA,P019,0.5,1,1,FALSE,FALSE,Przyprawa do souvlakow
+WOLA__P020,WOLA,P020,5,15,15,TRUE,FALSE,Falafel — menu item
+WOLA__P021,WOLA,P021,20,44,44,TRUE,FALSE,Frytki Aviko — core menu fries
+WOLA__P022,WOLA,P022,2,6,6,FALSE,FALSE,Frytki z batatów
+WOLA__P023,WOLA,P023,0.5,1.5,1.5,FALSE,FALSE,Fasolka Szparagowa
+WOLA__P024,WOLA,P024,2,10,10,TRUE,FALSE,Gyros 15 KG — core menu gyros
+WOLA__P025,WOLA,P025,0,0,0,FALSE,FALSE,Gyros 25 KG — not used at Wola (Wzór min=max=0)
+WOLA__P026,WOLA,P026,1,5,5,TRUE,FALSE,Pita opakowania szt 10 — verify Wzór range with Captain (17_05 actual was 52 opak)
+WOLA__P027,WOLA,P027,4,12,12,TRUE,FALSE,Souvlaki Kurczak — verify Wzór range with Captain (17_05 actual was 53.16 kg, far above max)
+WOLA__P028,WOLA,P028,2,4,4,TRUE,TRUE,Souvlaki Wieprz — 1 karton = 5 kg > max 4 kg → packaging overage permitted
+WOLA__P038,WOLA,P038,1,2,2,FALSE,FALSE,Frytura Eppo 15L
+WOLA__P039,WOLA,P039,0.5,1.5,1.5,FALSE,FALSE,Ocet spirytusowy
+WOLA__P040,WOLA,P040,2,6,6,FALSE,FALSE,Woda 5l pracownicza
+WOLA__P041,WOLA,P041,0.5,1.5,1.5,FALSE,FALSE,Olej Rzepakowy 5 L
+WOLA__P042,WOLA,P042,2,4,4,FALSE,FALSE,Ketchup Fanex VII 1.1 kg
+WOLA__P043,WOLA,P043,1,2,2,FALSE,FALSE,DEVELEY MUSZTARDA 3 kg
+WOLA__P044,WOLA,P044,1,2,2,FALSE,FALSE,FANEX MAJONEZ 4kg
+WOLA__P045,WOLA,P045,2,5,5,FALSE,FALSE,Oliwa z Oliwek 1L
+WOLA__P046,WOLA,P046,6,16,16,FALSE,FALSE,CIECIORKA — chickpeas for falafel
+WOLA__P047,WOLA,P047,2,10,10,FALSE,FALSE,Kasza Pęczak Melvit 900g
+WOLA__P048,WOLA,P048,1,3,3,FALSE,FALSE,Sriracha chili 730 ml
+WOLA__P049,WOLA,P049,1,2,2,FALSE,FALSE,Miód 1 kg
+WOLA__P050,WOLA,P050,0.5,1.5,1.5,FALSE,FALSE,Pieprz
+WOLA__P051,WOLA,P051,0.5,1.5,1.5,FALSE,FALSE,Oregano — Wzór max was empty; defaulted to 1.5 (matches other spices) — Captain to confirm
+WOLA__P052,WOLA,P052,0.5,1.5,1.5,FALSE,FALSE,Papryka słodka - mielona
+WOLA__P053,WOLA,P053,2,10,10,FALSE,FALSE,Sól 1kg
+WOLA__P054,WOLA,P054,0.5,1.5,1.5,FALSE,FALSE,Liść Laurowy
+WOLA__P055,WOLA,P055,0.5,1.5,1.5,FALSE,FALSE,Ziele Angielskie
+WOLA__P056,WOLA,P056,0.5,1.5,1.5,FALSE,FALSE,Cukier w saszetkach 5g
+WOLA__P057,WOLA,P057,0.5,1.5,1.5,FALSE,FALSE,Sól w saszetkach 5g
+WOLA__P058,WOLA,P058,0.5,1.5,1.5,FALSE,FALSE,Pieprz w saszetkach 5g
+WOLA__P075,WOLA,P075,10,48,48,FALSE,FALSE,Lemoniada Lemon
+WOLA__P076,WOLA,P076,10,48,48,FALSE,FALSE,Lemoniada Orange
+WOLA__P077,WOLA,P077,10,48,48,FALSE,FALSE,Lemoniada Grapefruit

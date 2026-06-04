@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pita Bros — Order Dispatch (Manager Dashboard, v0 Mockup)</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --panel: #ffffff;
+    --border: #e6e3da;
+    --ink: #1f2329;
+    --ink-soft: #5a6068;
+    --ink-muted: #8b9099;
+    --brand: #1a4480;
+    --brand-soft: #e3eaf3;
+    --accent: #c97a2b;
+    --green: #2e7d32;
+    --green-bg: #e8f5e9;
+    --yellow: #d4a017;
+    --yellow-bg: #fff8e1;
+    --orange: #c97a2b;
+    --orange-bg: #fdf0e0;
+    --red: #b3261e;
+    --red-bg: #fde7e7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  /* ---------- Header strip ---------- */
+  .header {
+    background: var(--brand);
+    color: #fff;
+    padding: 14px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #122f5a;
+  }
+  .header-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  .header-title .pita { opacity: 0.7; margin-right: 8px; font-weight: 400; }
+  /* ---------- Filter bar (locations + status) ---------- */
+  .filter-bar {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .filter-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-right: 6px;
+  }
+  .chip-loc, .chip-status {
+    border: 1px solid var(--border);
+    background: #fff;
+    padding: 5px 12px;
+    font-size: 12.5px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .chip-loc { border-radius: 14px; }
+  .chip-status { border-radius: 6px; }
+  .chip-loc.active, .chip-status.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+    font-weight: 600;
+  }
+  .chip-loc.disabled {
+    background: #f5f3ec;
+    color: var(--ink-muted);
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+  .chip-num {
+    background: rgba(255,255,255,0.25);
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 11px;
+    margin-left: 6px;
+    font-weight: 600;
+  }
+  .chip-status:not(.active) .chip-num {
+    background: var(--brand-soft);
+    color: var(--brand);
+  }
+  .header-date {
+    font-size: 13px;
+    opacity: 0.9;
+  }
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .btn-refresh {
+    background: transparent;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.35);
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .btn-refresh:hover { background: rgba(255,255,255,0.08); }
+
+  /* ---------- Main layout ---------- */
+  .main {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 18px;
+    padding: 18px;
+    min-height: calc(100vh - 56px);
+  }
+
+  /* ---------- Queue (left) ---------- */
+  .queue h2 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    letter-spacing: 0.6px;
+    margin: 0 0 10px 4px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .card:hover { border-color: var(--brand); box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .card.active {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px var(--brand-soft);
+  }
+  .card.sent {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .card.empty {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--ink-muted);
+    text-align: center;
+    cursor: default;
+    font-size: 13px;
+    padding: 18px;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .card-head .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .card.sent .card-head .dot { background: var(--green); }
+  .card-meta {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .card-meta-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .card-cutoff {
+    font-weight: 600;
+    color: var(--red);
+  }
+  .card-cutoff.ok { color: var(--ink-soft); font-weight: 400; }
+  .card-footer {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+  }
+  .card-flags {
+    color: var(--ink-soft);
+  }
+  .card-open {
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  /* ---------- Detail (right) ---------- */
+  .detail {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+    min-height: 600px;
+  }
+  .detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+  }
+  .detail-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .detail-sub {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .btn-send {
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-send:disabled {
+    background: #c5c8cc;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: #fff;
+    border: 1px solid var(--border);
+    color: var(--ink);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+
+  /* ---------- Lines table ---------- */
+  .lines {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .lines th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--ink-soft);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .lines td {
+    padding: 10px;
+    border-bottom: 1px solid #f1efe9;
+    vertical-align: middle;
+  }
+  .lines tbody tr.row-match { background: var(--green-bg); }
+  .lines tbody tr.row-info  { background: var(--yellow-bg); }
+  .lines tbody tr.row-audit { background: var(--orange-bg); }
+  .lines tbody tr.row-block { background: var(--red-bg); }
+
+  .qty { font-variant-numeric: tabular-nums; }
+  .qty-strong { font-weight: 600; }
+  .delta { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .delta.pos { color: var(--orange); }
+  .delta.neg { color: var(--brand); }
+  .delta.zero { color: var(--ink-muted); font-weight: 400; }
+
+  .pill {
+    display: inline-block;
+    font-size: 11.5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #eee;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .pill.warn { background: var(--orange-bg); color: var(--orange); }
+  .pill.bad  { background: var(--red-bg); color: var(--red); }
+  .pill.ok   { background: var(--green-bg); color: var(--green); }
+
+  input.qty-input {
+    width: 60px;
+    padding: 4px 6px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: #fff;
+    text-align: right;
+  }
+  input.qty-input:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+  .math-hint {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+    font-style: italic;
+  }
+  .product-name { font-weight: 500; }
+  .product-sub { font-size: 11.5px; color: var(--ink-muted); }
+
+  .manager-note {
+    margin-top: 18px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fcfbf7;
+  }
+  .manager-note label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 6px;
+  }
+  .manager-note textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    min-height: 60px;
+    resize: vertical;
+  }
+
+  .actions-bar {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .actions-left { color: var(--ink-soft); font-size: 13px; }
+  .actions-right { display: flex; align-items: center; }
+
+  /* ---------- Send modal ---------- */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(20, 25, 30, 0.45);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: #fff;
+    width: 640px;
+    max-width: 92vw;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    padding: 22px 24px;
+  }
+  .modal-title { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+  .modal-sub   { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; }
+  .modal-mail  {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: #fbfaf6;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .modal-mail .row { display: flex; margin-bottom: 4px; }
+  .modal-mail .row .k { width: 70px; color: var(--ink-soft); }
+  .modal-mail .row .v { flex: 1; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+  .modal-mail pre {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    overflow-x: auto;
+    margin-top: 10px;
+  }
+  .modal-actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px; }
+
+  /* ---------- Footer note ---------- */
+  .footer-note {
+    padding: 14px 22px;
+    color: var(--ink-muted);
+    font-size: 12px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+    background: #fbfaf6;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header strip -->
+<div class="header">
+  <div class="header-title"><span class="pita">PITA BROS</span> Order Dispatch</div>
+  <div class="header-right">
+    <div class="header-date">Tue, 2026-05-22 · 11:00 Europe/Warsaw</div>
+    <button class="btn-refresh" onclick="alert('In v1 build: re-reads the Google Sheet.')">⟳ Refresh</button>
+  </div>
+</div>
+
+<!-- Filter bar (locations + status) -->
+<div class="filter-bar">
+  <div class="filter-group">
+    <span class="filter-label">Locations</span>
+    <div class="chip-loc active">Wola</div>
+    <div class="chip-loc disabled" title="Phase 2+ rollout">KEN</div>
+    <div class="chip-loc disabled" title="Phase 2+ rollout">Browary</div>
+    <div class="chip-loc disabled" title="Phase 2+ rollout">Kamienica</div>
+    <div class="chip-loc disabled" title="Phase 2+ rollout">Kulinarna</div>
+    <div class="chip-loc disabled" title="Phase 2+ rollout">Bracka</div>
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">Status</span>
+    <div class="chip-status active" title="Captain submitted, awaiting Manager dispatch">Pending action <span class="chip-num">1</span></div>
+    <div class="chip-status" title="Manager sent to supplier, awaiting delivery">In transit <span class="chip-num">1</span></div>
+    <div class="chip-status" title="Delivered and final-accepted (Phase 2)">Closed</div>
+  </div>
+</div>
+
+<!-- Main layout -->
+<div class="main">
+
+  <!-- Queue (left) -->
+  <div class="queue">
+    <h2>Today · 1 order pending</h2>
+
+    <div class="card active" onclick="void 0">
+      <div class="card-head">
+        <div class="dot"></div>
+        Wola → Supplier A <span class="pill" style="margin-left:auto">v0 pilot</span>
+      </div>
+      <div class="card-meta">
+        18 lines · est. 1,240 PLN
+      </div>
+      <div class="card-meta card-meta-row">
+        <span>Captain submitted 09:30</span>
+        <span class="card-cutoff">Cutoff in 5h 00m</span>
+      </div>
+      <div class="card-footer">
+        <span class="card-flags">2 deviations · 1 reason captured</span>
+        <span class="card-open">Open ▸</span>
+      </div>
+    </div>
+
+    <div class="card sent">
+      <div class="card-head">
+        <div class="dot"></div>
+        Wola → Supplier B
+      </div>
+      <div class="card-meta">12 lines · sent yesterday 14:12</div>
+      <div class="card-footer">
+        <span class="card-flags">Awaiting delivery</span>
+        <span class="card-open">View</span>
+      </div>
+    </div>
+
+    <div class="card empty">
+      No more orders today.<br>
+      Captain Submit screen at Wola is the upstream.
+    </div>
+  </div>
+
+  <!-- Detail (right) -->
+  <div class="detail">
+    <div class="detail-head">
+      <div>
+        <h2 class="detail-title">Wola → Supplier A — 2026-05-22</h2>
+        <div class="detail-sub">
+          Delivery requested: 2026-05-23 (Wed) ·
+          Captain: <span class="pill">wola_captain_1</span> ·
+          Cutoff: 16:00 (Europe/Warsaw)
+        </div>
+      </div>
+      <button id="btn-send-top" class="btn-send" onclick="openSend()">Send order ▸</button>
+    </div>
+
+    <table class="lines">
+      <thead>
+        <tr>
+          <th style="width: 26%">Product</th>
+          <th>Stock</th>
+          <th>Suggested</th>
+          <th>Captain</th>
+          <th>Manager</th>
+          <th>Δ</th>
+          <th>Reason / Note</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- Row 1: match - GREEN -->
+        <tr class="row-match">
+          <td>
+            <div class="product-name">Halloumi</div>
+            <div class="product-sub">kg · 1 karton = 9 kg</div>
+          </td>
+          <td class="qty">2.5 kg</td>
+          <td class="qty qty-strong">1 karton
+            <div class="math-hint">need 9.5 kg → 1 karton (9 kg)</div>
+          </td>
+          <td class="qty">1 karton</td>
+          <td><input class="qty-input" value="1" /></td>
+          <td class="delta zero">0%</td>
+          <td><span class="pill ok">match</span></td>
+        </tr>
+
+        <!-- Row 2: low storage, captain reduced - ORANGE (deviation with reason) -->
+        <tr class="row-audit">
+          <td>
+            <div class="product-name">Suwlaki</div>
+            <div class="product-sub">kg · 1 karton = 5 kg</div>
+          </td>
+          <td class="qty">2.5 kg</td>
+          <td class="qty qty-strong">3 kartony
+            <div class="math-hint">need 12.5 kg → 3 kartony (15 kg, +2.5 over max)</div>
+          </td>
+          <td class="qty">2 kartony</td>
+          <td><input class="qty-input" value="2" /></td>
+          <td class="delta neg">−33%</td>
+          <td><span class="pill warn">Low storage</span></td>
+        </tr>
+
+        <!-- Row 3: stable, fully matching - GREEN -->
+        <tr class="row-match">
+          <td>
+            <div class="product-name">Pita bread</div>
+            <div class="product-sub">szt · 1 zgrzewka = 24 szt</div>
+          </td>
+          <td class="qty">120 szt</td>
+          <td class="qty qty-strong">2 zgrzewki
+            <div class="math-hint">need 48 szt → 2 zgrzewki</div>
+          </td>
+          <td class="qty">2 zgrzewki</td>
+          <td><input class="qty-input" value="2" /></td>
+          <td class="delta zero">0%</td>
+          <td><span class="pill ok">match</span></td>
+        </tr>
+
+        <!-- Row 4: weekend uplift, captain increased - YELLOW (small deviation) -->
+        <tr class="row-info">
+          <td>
+            <div class="product-name">Sos czosnkowy</div>
+            <div class="product-sub">l · 1 wiadro = 5 l</div>
+          </td>
+          <td class="qty">3.0 l</td>
+          <td class="qty qty-strong">2 wiadra
+            <div class="math-hint">need 9 l → 2 wiadra (10 l)</div>
+          </td>
+          <td class="qty">2 wiadra</td>
+          <td><input class="qty-input" value="2" /></td>
+          <td class="delta zero">0%</td>
+          <td><span class="pill ok">match</span></td>
+        </tr>
+
+        <!-- Row 5: critical product set to 0 - RED (block) - until reason -->
+        <tr class="row-block" id="row-pomidor">
+          <td>
+            <div class="product-name">Pomidor pelati</div>
+            <div class="product-sub">kg · 1 karton = 6 kg · <span style="color:var(--red)">critical</span></div>
+          </td>
+          <td class="qty">6.0 kg</td>
+          <td class="qty qty-strong">1 karton
+            <div class="math-hint">need 6 kg → 1 karton</div>
+          </td>
+          <td class="qty">0 karton</td>
+          <td><input class="qty-input" value="0" /></td>
+          <td class="delta neg">−100%</td>
+          <td><span class="pill bad">Reason required</span></td>
+        </tr>
+
+        <!-- Row 6+: collapsed -->
+        <tr>
+          <td colspan="7" style="text-align:center; color: var(--ink-muted); font-size:12.5px; padding:14px;">
+            ⌄ 13 more lines (all matching suggestion)
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+
+    <!-- Manager note -->
+    <div class="manager-note">
+      <label>Manager note (optional, shown only internally)</label>
+      <textarea placeholder="Anything to flag to the Captain or the supplier..."></textarea>
+    </div>
+
+    <!-- Actions bar -->
+    <div class="actions-bar">
+      <div class="actions-left">
+        <strong>1 row blocking send</strong> — Pomidor pelati final = 0 on a critical product without a reason.
+      </div>
+      <div class="actions-right">
+        <button class="btn-secondary">Save changes</button>
+        <button id="btn-send-bottom" class="btn-send" disabled title="Resolve the red row to enable Send">Send order ▸</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Send modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <h3 class="modal-title">Gmail draft created</h3>
+    <p class="modal-sub">Review the draft in Gmail. Manager dashboard will not send automatically.</p>
+    <div class="modal-mail">
+      <div class="row"><div class="k">To</div><div class="v">orders@supplier-a.example</div></div>
+      <div class="row"><div class="k">Subject</div><div class="v">Order from Pita Bros Wola — 2026-05-22</div></div>
+      <div class="row"><div class="k">Body</div><div class="v">(see below)</div></div>
+      <pre>Dzień dobry,
+
+Below is our order for delivery on Wed, 2026-05-23.
+
+  Product             | Qty       | Unit
+  -------------------- + --------- + ---------
+  Halloumi             | 1         | karton
+  Suwlaki              | 2         | kartony
+  Pita bread           | 2         | zgrzewki
+  Sos czosnkowy        | 2         | wiadra
+  Pomidor pelati       | 1         | karton
+  ... 13 more lines ...
+
+Delivery address: ul. Wolska XX, 01-XXX Warsaw
+Contact: wola_manager@pitabros.pl
+
+Dziękuję,
+Pita Bros</pre>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeSend()">Cancel</button>
+      <button class="btn-send" onclick="closeSend(); alert('Mocked: status → manager_sent. Gmail draft would open in a new tab.');">Open in Gmail</button>
+    </div>
+  </div>
+</div>
+
+<div class="footer-note">
+  v0 mockup · static data · iterate this file together · spec: <code>docs/pita-supply-os-v1/MANAGER_DASHBOARD_SPEC.md</code>
+</div>
+
+<script>
+  function openSend() {
+    // For demo: even though there's a blocking row, top button allows opening the modal
+    // so we can preview the email format. In real build, both buttons are gated.
+    document.getElementById('modal').classList.add('open');
+  }
+  function closeSend() {
+    document.getElementById('modal').classList.remove('open');
+  }
+  // Filter bar — toggle active status chip (single select)
+  document.querySelectorAll('.chip-status').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.chip-status').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+  // Filter bar — toggle location chip (multi-select, disabled ones don't toggle)
+  document.querySelectorAll('.chip-loc:not(.disabled)').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      chip.classList.toggle('active');
+    });
+  });
+
+  // Enable Send by adjusting the blocking row's qty to non-zero
+  document.querySelectorAll('input.qty-input').forEach(function(inp) {
+    inp.addEventListener('input', function() {
+      const row = inp.closest('tr');
+      if (row && row.id === 'row-pomidor') {
+        const v = parseFloat(inp.value || '0');
+        if (v > 0) {
+          row.classList.remove('row-block');
+          row.classList.add('row-match');
+          row.querySelector('.pill').className = 'pill ok';
+          row.querySelector('.pill').textContent = 'match';
+          row.querySelector('.delta').className = 'delta zero';
+          row.querySelector('.delta').textContent = '0%';
+          document.querySelector('.actions-left').innerHTML = '<span style="color: var(--green); font-weight:600;">Ready to send.</span> All deviations have reasons or are within tolerance.';
+          document.getElementById('btn-send-bottom').disabled = false;
+        }
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

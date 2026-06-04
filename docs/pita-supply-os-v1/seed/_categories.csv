@@ -1,0 +1,17 @@
+category_id,category_name_pl,source,used_for_inventory,used_for_pos,notes
+CAT_ALKOHOL,Alkohol,GoStock,TRUE,TRUE,Beer + spirits — separate from Wino
+CAT_BIUROWE,Biurowe,GoStock+Inventory,TRUE,FALSE,Office supplies (rolki kasy, markery, koperty)
+CAT_CHEMIA,Chemia,GoStock+Inventory,TRUE,FALSE,Cleaning chemicals + gloves + toilet paper
+CAT_CHLODNIA,Chłodnia,GoStock+Inventory,TRUE,FALSE,Refrigerated fresh + dairy + cheese
+CAT_COMBO,Combo,GoStock,FALSE,TRUE,Menu (POS) — combo meals
+CAT_DANIA,Dania Główne,GoStock,FALSE,TRUE,Menu (POS) — main dishes
+CAT_DODATKI,Dodatki,GoStock,FALSE,TRUE,Menu (POS) — sides / extras
+CAT_GAZ,Gaz,Inventory,TRUE,FALSE,Gas cylinders (Kamino) — new from inventory, not in GoStock list
+CAT_MROZONKI,Mrożonki,GoStock+Inventory,TRUE,FALSE,Frozen (souvlaki, gyros, frytki, falafel, pita)
+CAT_NAPOJE,Napoje,GoStock+Inventory,TRUE,FALSE,Beverages (Coca Cola Hub + Eurofood beers + lemoniady)
+CAT_OPAKOWANIA,Opakowania,GoStock+Inventory,TRUE,FALSE,Packaging — boxes, bags, foil, cutlery
+CAT_POLACZENIA,Połączenia,GoStock,FALSE,TRUE,Menu (POS) — combos / variations
+CAT_PRODUKCJA,Produkcja,GoStock+Inventory,TRUE,FALSE,Internally produced sauces (Spicy Mayo, Tzatziki prep)
+CAT_SNACKS,Snacks,GoStock,FALSE,TRUE,Menu (POS) — snacks
+CAT_SPOZYWCZE,Spożywcze,GoStock+Inventory,TRUE,FALSE,Dry goods (oil, salt, pepper, oregano, etc.)
+CAT_WINO,Wino,GoStock+Inventory,TRUE,FALSE,Wine (Ionos Greek wine)

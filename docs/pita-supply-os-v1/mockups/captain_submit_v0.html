@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pita Bros — Captain Submit (Wola, v0 Mockup)</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --panel: #ffffff;
+    --border: #e6e3da;
+    --ink: #1f2329;
+    --ink-soft: #5a6068;
+    --ink-muted: #8b9099;
+    --brand: #1a4480;
+    --brand-dark: #122f5a;
+    --brand-soft: #e3eaf3;
+    --accent: #c97a2b;
+    --green: #2e7d32;
+    --green-bg: #e8f5e9;
+    --yellow: #d4a017;
+    --yellow-bg: #fff8e1;
+    --orange: #c97a2b;
+    --orange-bg: #fdf0e0;
+    --red: #b3261e;
+    --red-bg: #fde7e7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  /* Header */
+  .header {
+    background: var(--brand);
+    color: #fff;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--brand-dark);
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .header-title { font-size: 16px; font-weight: 600; letter-spacing: 0.2px; }
+  .header-title .pita { opacity: 0.7; font-weight: 400; margin-right: 8px; }
+  .header-menu {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #fff;
+  }
+  .header-meta {
+    font-size: 13px;
+    opacity: 0.92;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .header-meta .pill {
+    background: rgba(255,255,255,0.12);
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
+
+  /* Supplier picker */
+  .supplier-bar {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow-x: auto;
+  }
+  .supplier-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    margin-right: 4px;
+  }
+  .chip {
+    border: 1px solid var(--border);
+    background: #fff;
+    padding: 8px 14px;
+    border-radius: 18px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    color: var(--ink-soft);
+    position: relative;
+  }
+  .chip.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+    font-weight: 600;
+  }
+  .chip .chip-badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+    font-weight: 600;
+  }
+  .chip.sent { opacity: 0.55; cursor: default; }
+  .chip.sent::after {
+    content: "✓";
+    margin-left: 6px;
+    color: var(--green);
+  }
+
+  /* Context strip */
+  .context {
+    background: var(--brand-soft);
+    padding: 10px 18px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .context strong { color: var(--ink); }
+  .context .cutoff {
+    color: var(--red);
+    font-weight: 600;
+  }
+
+  /* Products list (mobile-first cards) */
+  .products {
+    padding: 14px 12px 120px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .product-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    margin-bottom: 10px;
+    transition: border-left-color 0.15s;
+  }
+  .product-card.match  { border-left-color: var(--green); background: linear-gradient(to right, var(--green-bg) 0%, #fff 60%); }
+  .product-card.info   { border-left-color: var(--yellow); background: linear-gradient(to right, var(--yellow-bg) 0%, #fff 60%); }
+  .product-card.audit  { border-left-color: var(--orange); background: linear-gradient(to right, var(--orange-bg) 0%, #fff 60%); }
+  .product-card.block  { border-left-color: var(--red); background: linear-gradient(to right, var(--red-bg) 0%, #fff 60%); }
+  .product-card.zero   { border-left-color: var(--ink-muted); opacity: 0.85; }
+
+  .pc-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .pc-name {
+    font-weight: 600;
+    font-size: 15.5px;
+  }
+  .pc-name .crit {
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-left: 6px;
+    background: var(--red-bg);
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+  .pc-unit {
+    font-size: 12.5px;
+    color: var(--ink-muted);
+  }
+
+  .pc-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: flex-end;
+    margin-top: 6px;
+  }
+  .pc-cell label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--ink-muted);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .pc-input {
+    width: 100%;
+    padding: 10px 10px;
+    font-size: 16px; /* prevents iOS zoom */
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #fff;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .pc-input:focus {
+    outline: 2px solid var(--brand);
+    outline-offset: -1px;
+  }
+  .pc-suggested {
+    padding: 10px;
+    border: 1px dashed var(--border);
+    border-radius: 7px;
+    background: #fbfbf7;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 16px;
+  }
+  .pc-math {
+    font-size: 11.5px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+    text-align: right;
+    font-style: italic;
+  }
+
+  .pc-reason {
+    margin-top: 10px;
+    padding: 10px;
+    background: var(--orange-bg);
+    border: 1px solid var(--orange);
+    border-radius: 7px;
+    display: none;
+  }
+  .pc-reason.show { display: block; }
+  .pc-reason.required {
+    background: var(--red-bg);
+    border-color: var(--red);
+  }
+  .pc-reason label {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .pc-reason select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    font-size: 14px;
+  }
+  .pc-reason textarea {
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 50px;
+    display: none;
+  }
+  .pc-reason textarea.show { display: block; }
+
+  .pc-tag {
+    margin-top: 8px;
+    display: inline-block;
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 10px;
+  }
+  .pc-tag.ok    { background: var(--green-bg); color: var(--green); }
+  .pc-tag.info  { background: var(--yellow-bg); color: var(--yellow); }
+  .pc-tag.audit { background: var(--orange-bg); color: var(--orange); }
+  .pc-tag.block { background: var(--red-bg);    color: var(--red);   }
+  .pc-tag.zero  { background: #eee;             color: var(--ink-muted); }
+
+  /* Sticky bottom action bar */
+  .action-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.05);
+    z-index: 10;
+  }
+  .action-summary {
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .action-summary .total {
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 14.5px;
+  }
+  .btn {
+    border: none;
+    padding: 11px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary  { background: var(--brand); color: #fff; }
+  .btn-primary:disabled { background: #c5c8cc; cursor: not-allowed; }
+  .btn-secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); margin-right: 8px; }
+
+  /* Footer note */
+  .footer-note {
+    padding: 10px 16px;
+    color: var(--ink-muted);
+    font-size: 12px;
+    text-align: center;
+    margin-bottom: 80px;
+  }
+
+  /* Responsive */
+  @media (min-width: 700px) {
+    .products { padding: 18px 22px 120px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-top">
+    <div class="header-title"><span class="pita">PITA BROS</span> Order Submission</div>
+    <button class="header-menu">☰</button>
+  </div>
+  <div class="header-meta">
+    <span class="pill">📍 Wola</span>
+    <span class="pill">👤 wola_captain_1</span>
+    <span class="pill">📅 Tue, 2026-05-22</span>
+  </div>
+</div>
+
+<!-- Supplier picker -->
+<div class="supplier-bar">
+  <div class="supplier-label">Order for</div>
+  <div class="chip active">Pago<span class="chip-badge">6</span></div>
+  <div class="chip">Bukat<span class="chip-badge">14</span></div>
+  <div class="chip">Intermlecz<span class="chip-badge">28</span></div>
+  <div class="chip sent">Blue Service</div>
+  <div class="chip">Eurofood<span class="chip-badge">6</span></div>
+  <div class="chip">Filber<span class="chip-badge">3</span></div>
+</div>
+
+<!-- Context strip -->
+<div class="context">
+  <div>
+    <strong>Pago</strong> · weekly delivery · last submitted Tue, 2026-05-15 by you
+  </div>
+  <div>
+    <span class="cutoff">⏰ Submit by today 14:00</span> · Manager dispatches by 16:00
+  </div>
+</div>
+
+<!-- Products -->
+<div class="products">
+
+  <!-- Card 1: deviation, match - GREEN (captain accepted suggestion) -->
+  <div class="product-card match">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">Souvlaki Kurczak</div>
+        <div class="pc-unit">kg · 1 karton = 5 kg · target 35 kg · max 40 kg</div>
+      </div>
+    </div>
+    <div class="pc-row">
+      <div class="pc-cell">
+        <label>Current stock</label>
+        <input class="pc-input" type="number" value="8" step="0.1" /> <span class="pc-unit" style="margin-left:4px">kg</span>
+      </div>
+      <div class="pc-cell">
+        <label>System suggests</label>
+        <div class="pc-suggested">6 kartony</div>
+        <div class="pc-math">need 27 kg → 6 kartony (30 kg)</div>
+      </div>
+      <div class="pc-cell">
+        <label>You order</label>
+        <input class="pc-input" type="number" value="6" step="1" /> <span class="pc-unit" style="margin-left:4px">kartony</span>
+      </div>
+    </div>
+    <span class="pc-tag ok">match — accepted suggestion</span>
+  </div>
+
+  <!-- Card 2: captain reduced - ORANGE (deviation w/ reason captured) -->
+  <div class="product-card audit">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">Souvlaki Wieprz</div>
+        <div class="pc-unit">kg · 1 karton = 5 kg · target 25 kg · max 30 kg</div>
+      </div>
+    </div>
+    <div class="pc-row">
+      <div class="pc-cell">
+        <label>Current stock</label>
+        <input class="pc-input" type="number" value="12" step="0.1" /> <span class="pc-unit" style="margin-left:4px">kg</span>
+      </div>
+      <div class="pc-cell">
+        <label>System suggests</label>
+        <div class="pc-suggested">3 kartony</div>
+        <div class="pc-math">need 13 kg → 3 kartony (15 kg)</div>
+      </div>
+      <div class="pc-cell">
+        <label>You order</label>
+        <input class="pc-input" type="number" value="2" step="1" /> <span class="pc-unit" style="margin-left:4px">kartony</span>
+      </div>
+    </div>
+    <span class="pc-tag audit">−33% deviation — reason captured</span>
+    <div class="pc-reason show">
+      <label>Reason for change</label>
+      <select>
+        <option>LOW_STORAGE — Low storage space</option>
+        <option>EVENT_HIGH_TRAFFIC — Event / higher traffic expected</option>
+        <option>WEEKEND_HIGH_TRAFFIC — Weekend / high traffic</option>
+        <option>PACKAGING_LIMITATION — Packaging / order-unit limitation</option>
+        <option>SUPPLIER_UNDERDELIVERS — Supplier often underdelivers</option>
+        <option>SYSTEM_SUGGESTION_WRONG — System suggestion likely wrong</option>
+        <option>OTHER — Other (comment required)</option>
+      </select>
+      <textarea placeholder="Optional comment..."></textarea>
+    </div>
+  </div>
+
+  <!-- Card 3: critical zero - RED block until reason -->
+  <div class="product-card block" id="card-gyros">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">Gyros 15 KG <span class="crit">critical</span></div>
+        <div class="pc-unit">szt (1 szt = 15 kg) · target 6 szt · max 8 szt</div>
+      </div>
+    </div>
+    <div class="pc-row">
+      <div class="pc-cell">
+        <label>Current stock</label>
+        <input class="pc-input" type="number" value="0" step="1" /> <span class="pc-unit" style="margin-left:4px">szt</span>
+      </div>
+      <div class="pc-cell">
+        <label>System suggests</label>
+        <div class="pc-suggested">6 szt</div>
+        <div class="pc-math">need 6 szt → 6 szt</div>
+      </div>
+      <div class="pc-cell">
+        <label>You order</label>
+        <input class="pc-input" type="number" value="0" step="1" id="input-gyros" /> <span class="pc-unit" style="margin-left:4px">szt</span>
+      </div>
+    </div>
+    <span class="pc-tag block">−100% on critical product — reason required</span>
+    <div class="pc-reason required show">
+      <label>Reason required (critical product set to 0)</label>
+      <select>
+        <option value="">— Pick a reason —</option>
+        <option>EVENT_HIGH_TRAFFIC</option>
+        <option>WEEKEND_HIGH_TRAFFIC</option>
+        <option>LOW_STORAGE</option>
+        <option>PACKAGING_LIMITATION</option>
+        <option>SUPPLIER_UNDERDELIVERS</option>
+        <option>SYSTEM_SUGGESTION_WRONG</option>
+        <option>OTHER — comment required</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Card 4: stable, no order needed - ZERO (informational) -->
+  <div class="product-card zero">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">Przyprawa do souvlakow</div>
+        <div class="pc-unit">kg · purchase unit = kg · target 6 kg · max 8 kg</div>
+      </div>
+    </div>
+    <div class="pc-row">
+      <div class="pc-cell">
+        <label>Current stock</label>
+        <input class="pc-input" type="number" value="6" step="0.1" /> <span class="pc-unit" style="margin-left:4px">kg</span>
+      </div>
+      <div class="pc-cell">
+        <label>System suggests</label>
+        <div class="pc-suggested">0 kg</div>
+        <div class="pc-math">at target — no order needed</div>
+      </div>
+      <div class="pc-cell">
+        <label>You order</label>
+        <input class="pc-input" type="number" value="0" step="0.1" /> <span class="pc-unit" style="margin-left:4px">kg</span>
+      </div>
+    </div>
+    <span class="pc-tag zero">no order — stock at target</span>
+  </div>
+
+  <!-- Card 5: pita packaging match - GREEN -->
+  <div class="product-card match">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">Pita (opakowania) szt 10</div>
+        <div class="pc-unit">opak (each = 10 szt) · target 50 opak · max 60 opak</div>
+      </div>
+    </div>
+    <div class="pc-row">
+      <div class="pc-cell">
+        <label>Current stock</label>
+        <input class="pc-input" type="number" value="30" step="1" /> <span class="pc-unit" style="margin-left:4px">opak</span>
+      </div>
+      <div class="pc-cell">
+        <label>System suggests</label>
+        <div class="pc-suggested">20 opak</div>
+        <div class="pc-math">need 20 opak → 20 opak</div>
+      </div>
+      <div class="pc-cell">
+        <label>You order</label>
+        <input class="pc-input" type="number" value="20" step="1" /> <span class="pc-unit" style="margin-left:4px">opak</span>
+      </div>
+    </div>
+    <span class="pc-tag ok">match — accepted suggestion</span>
+  </div>
+
+  <!-- Card 6: minor weekend uplift - YELLOW (small deviation, no reason needed yet) -->
+  <div class="product-card info">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">Gyros 25 KG</div>
+        <div class="pc-unit">szt (1 szt = 25 kg) · target 2 szt · max 3 szt</div>
+      </div>
+    </div>
+    <div class="pc-row">
+      <div class="pc-cell">
+        <label>Current stock</label>
+        <input class="pc-input" type="number" value="0" step="1" /> <span class="pc-unit" style="margin-left:4px">szt</span>
+      </div>
+      <div class="pc-cell">
+        <label>System suggests</label>
+        <div class="pc-suggested">2 szt</div>
+        <div class="pc-math">need 2 szt → 2 szt</div>
+      </div>
+      <div class="pc-cell">
+        <label>You order</label>
+        <input class="pc-input" type="number" value="2" step="1" /> <span class="pc-unit" style="margin-left:4px">szt</span>
+      </div>
+    </div>
+    <span class="pc-tag info">+0% — stable, weekend uplift handled by Souvlaki</span>
+  </div>
+
+</div>
+
+<div class="footer-note">
+  v0 mockup · static demo data · pilot at Wola · supplier: Pago<br>
+  spec: <code>docs/pita-supply-os-v1/MANAGER_DASHBOARD_SPEC.md</code> · upstream of Manager Dashboard
+</div>
+
+<!-- Action bar -->
+<div class="action-bar">
+  <div class="action-summary">
+    <div class="total">6 lines · 2 deviations · 1 reason captured</div>
+    <div><a href="#card-gyros" style="color: var(--red); font-weight: 600; text-decoration: underline; cursor: pointer;" onclick="document.getElementById('card-gyros').scrollIntoView({behavior:'smooth', block:'center'}); return false;">⚠ 1 row blocks submit — tap to fix</a></div>
+  </div>
+  <div>
+    <button class="btn btn-secondary">Save draft</button>
+    <button class="btn btn-primary" disabled title="Resolve the red card before submitting">Submit to Manager ▸</button>
+  </div>
+</div>
+
+<script>
+  // Unblock submit when Gyros reason picked
+  document.querySelector('#card-gyros select').addEventListener('change', function(e) {
+    if (e.target.value) {
+      const card = document.getElementById('card-gyros');
+      card.classList.remove('block');
+      card.classList.add('audit');
+      card.querySelector('.pc-tag').className = 'pc-tag audit';
+      card.querySelector('.pc-tag').textContent = '−100% on critical product — reason captured';
+      card.querySelector('.pc-reason').classList.remove('required');
+      const summary = document.querySelector('.action-summary');
+      summary.innerHTML = '<div class="total">6 lines · 2 deviations</div><div><span style="color: var(--green); font-weight: 600;">✓ All reasons captured — ready to submit</span></div>';
+      const btn = document.querySelector('.btn-primary');
+      btn.disabled = false;
+      btn.removeAttribute('title');
+    }
+  });
+
+  // Demo: editing Gyros qty to non-zero also unblocks
+  document.getElementById('input-gyros').addEventListener('input', function(e) {
+    const v = parseFloat(e.target.value || '0');
+    if (v > 0) {
+      const card = document.getElementById('card-gyros');
+      card.classList.remove('block');
+      card.classList.add('audit');
+      card.querySelector('.pc-tag').className = 'pc-tag audit';
+      card.querySelector('.pc-tag').textContent = 'deviation — reason captured';
+      const btn = document.querySelector('.btn-primary');
+      btn.disabled = false;
+      btn.removeAttribute('title');
+    }
+  });
+</script>
+</body>
+</html>

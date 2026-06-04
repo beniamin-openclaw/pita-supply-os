@@ -1,0 +1,7 @@
+location_id,location_name,delivery_address,city,active,notes
+WOLA,Pita Bros Wola,TBD,Warsaw,TRUE,v0 pilot location — Wolska street
+KEN,Pita Bros KEN,TBD,Warsaw,FALSE,Phase 2+ rollout candidate
+BROWARY,Pita Bros Browary,TBD,Warsaw,FALSE,Phase 2+ rollout candidate
+KAMIENICA,Pita Bros Kamienica,TBD,Warsaw,FALSE,Phase 2+ rollout candidate
+KULINARNA,Pita Bros Kulinarna,TBD,Warsaw,FALSE,Phase 2+ rollout candidate
+BRACKA,Pita Bros Bracka,TBD,Warsaw,FALSE,Phase 2+ rollout candidate

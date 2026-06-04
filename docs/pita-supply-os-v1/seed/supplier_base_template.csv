@@ -1,0 +1,10 @@
+supplier_id,supplier_name,category,ordering_method,order_email,order_portal_url,contact_person,contact_phone,delivery_days,cutoff_time,min_order_value_pln,active,notes
+SUP_BLUESERV,Blue Service,Opakowania + Chemia,email,TBD,,TBD,TBD,TBD,TBD,,TRUE,"Packaging (Opakowania) + cleaning chemicals (Chemia) — biweekly or as-needed"
+SUP_BUKAT,Bukat,Chłodnia,email,TBD,,TBD,TBD,"Mon, Wed, Fri",TBD,,TRUE,"Fresh produce + Greek cheese/dips (Chłodnia) — most frequent supplier, daily/3x weekly"
+SUP_COCACOLA,Coca Cola Hub,Napoje + Alkohol,portal,TBD,https://cchbcshop.com/websitePL/en/,TBD,TBD,TBD,TBD,,TRUE,"Beverages (Napoje + Alkohol) — platform-based ordering, manual in v0"
+SUP_EUROFOOD,Eurofood,Wino + Napoje,email,TBD,,TBD,TBD,TBD,TBD,,TRUE,"Greek wine + retsina + Mythos beer (Wino + Napoje)"
+SUP_FILBER,Filber Wyspy Piwne,Napoje,email,TBD,,TBD,TBD,TBD,TBD,,TRUE,"Lemoniady (Napoje)"
+SUP_INTERMLECZ,Intermlecz,Nabiał + Sucharne + Mrożonki,email,TBD,,TBD,TBD,TBD,TBD,,TRUE,"Largest by SKU count (26): dairy + olives + frozen + dry goods + spices"
+SUP_KAMINO,Kamino,Gaz,phone,TBD,,TBD,TBD,TBD,TBD,,TRUE,"Gas cylinders (10L butla) — phone-based, low frequency"
+SUP_KUCHNIE,Kuchnie Świata,Mrożonki,email,TBD,,TBD,TBD,TBD,TBD,,TRUE,"Falafel (Mrożonki)"
+SUP_PAGO,Pago,Mięso + Pita + Opakowania,email,TBD,,TBD,TBD,Tue,14:00,,TRUE,"v0 PILOT SUPPLIER — meat (Souvlaki Kurczak/Wieprz, Gyros) + Pita + PB-branded packaging + office supplies. 18 SKUs."

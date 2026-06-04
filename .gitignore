@@ -1,0 +1,18 @@
+.DS_Store
+.claude/
+*.lock
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Python / venv / build / secrets
+.venv/
+venv/
+__pycache__/
+*.pyc
+dist/
+build/
+sa.json
+service_account*.json
+*.pem
