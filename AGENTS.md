@@ -31,6 +31,9 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 - Style differs from defaults: ruff `line-length = 100` (not 88); TS `strict` is **off** in `frontend/tsconfig.app.json` — annotate function params, return types, and component props explicitly; don't rely on inferred `any`.
 - Other known gaps: frontend has no test runner; backend has no lockfile. Detail + fixes: @context/foundation/health-check.md.
 
+## Tooling & vendors
+The user holds paid premium subscriptions on the platforms in @docs/tooling.md — informational only; no tool or host preference is set yet (decisions pending).
+
 ## Agent tooling
 - `CLAUDE.md` is a **symlink to this file** — single source of truth, so Claude Code, Cursor, and Codex all read the same rules.
 - After any `10x get`, keep the link intact: run `10x get --no-course-rules`, or re-link with `ln -sf AGENTS.md CLAUDE.md`.
