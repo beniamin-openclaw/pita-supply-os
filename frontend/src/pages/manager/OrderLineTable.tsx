@@ -191,11 +191,17 @@ export function OrderLineTable({
                     <input
                       type="number"
                       min={0}
-                      step={1}
+                      step={
+                        line.rounding_rule === "tenth_kg"
+                          ? 0.1
+                          : line.rounding_rule === "half_allowed"
+                            ? 0.5
+                            : 1
+                      }
                       value={managerQty}
                       aria-label={t("manager.qtyInputLabel")}
                       onChange={(e) => {
-                        const raw = Math.floor(Number(e.target.value));
+                        const raw = Number(e.target.value);
                         const next = Number.isFinite(raw) && raw > 0 ? raw : 0;
                         onQtyChange?.(line.order_line_id, next);
                       }}

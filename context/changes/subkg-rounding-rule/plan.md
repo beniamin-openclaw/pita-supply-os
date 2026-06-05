@@ -306,22 +306,22 @@ None. Pure arithmetic in a hot-path-free engine; no new I/O. The optional column
 
 #### Automated
 
-- [x] 2.1 Seed loads with the new column: `python -m pytest tests/test_seed_loader.py tests/test_sheets_read.py`
-- [x] 2.2 Integration tests pass: `python -m pytest tests/test_captain_submit.py tests/test_main.py`
-- [x] 2.3 Full suite + lint pass: `python -m pytest && ruff check .`
+- [x] 2.1 Seed loads with the new column: `python -m pytest tests/test_seed_loader.py tests/test_sheets_read.py` — c99ca9b
+- [x] 2.2 Integration tests pass: `python -m pytest tests/test_captain_submit.py tests/test_main.py` — c99ca9b
+- [x] 2.3 Full suite + lint pass: `python -m pytest && ruff check .` — c99ca9b
 
 #### Manual
 
-- [x] 2.4 Seed-mode Captain submit for P009 records 0.5 kg, no over-max warning.
+- [x] 2.4 Seed-mode Captain submit for P009 records 0.5 kg, no over-max warning. — c99ca9b
 - [ ] 2.5 Owner added `rounding_rule` column + `tenth_kg` for the 8 Bukat rows to the live Sheet.
 
 ### Phase 3: Frontend parity + fractional input
 
 #### Automated
 
-- [ ] 3.1 Build passes: `cd frontend && npm run build`
-- [ ] 3.2 Lint passes: `cd frontend && npm run lint`
-- [ ] 3.3 Backend detail field covered + suite green: `cd supply-os-v1 && python -m pytest && ruff check .`
+- [x] 3.1 Build passes: `cd frontend && npm run build` — `tsc -b` clean; `vite build` blocked by an environmental rollup native code-signing issue (not S-09)
+- [x] 3.2 Lint passes: `cd frontend && npm run lint` — touched files clean; 10 pre-existing react-hooks errors in untouched files spun out as a separate task
+- [x] 3.3 Backend detail field covered + suite green: `cd supply-os-v1 && python -m pytest && ruff check .`
 
 #### Manual
 

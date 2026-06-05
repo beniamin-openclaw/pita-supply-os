@@ -19,7 +19,7 @@ export type ReasonCode =
   | "OTHER";
 
 export type OrderingMethod = "email" | "portal" | "phone" | "manual";
-export type RoundingRule = "full_only" | "half_allowed" | "up_for_critical";
+export type RoundingRule = "full_only" | "half_allowed" | "up_for_critical" | "tenth_kg";
 
 // Master data ----------------------------------------------------------------
 
@@ -224,6 +224,7 @@ export interface ManagerOrderLineDetail {
   supplier_product_name: string;
   purchase_unit: string;
   units_per_purchase_unit: number;
+  rounding_rule: RoundingRule;
   price_estimate_pln?: number;
   current_stock_qty_base: number;
   target_stock_qty_base: number;
