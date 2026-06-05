@@ -290,7 +290,7 @@ No backfill; no change to existing `orders` / `order_lines` tabs or the pilot da
 
 #### Manual
 
-- [ ] 2.4 Captain token (sheet mode): products list, submit returns count_id
+- [x] 2.4 Captain token (sheet mode): products list, submit returns count_id
 - [x] 2.5 No supplier order touched by the flow — ac7144b
 
 ### Phase 3: Frontend inventory screen
@@ -302,7 +302,7 @@ No backfill; no change to existing `orders` / `order_lines` tabs or the pilot da
 #### Manual
 
 - [x] 3.2 Screen lists every product configured for the location
-- [ ] 3.3 Enter + confirm + submit creates a snapshot (only entered products → lines)
+- [x] 3.3 Enter + confirm + submit creates a snapshot (only entered products → lines)
 - [x] 3.4 Reload mid-count restores the draft; discard clears it
 - [x] 3.5 Existing `/captain-v2` ordering flow unaffected
 - [x] 3.6 All copy via i18n (pl + en); no hardcoded strings
