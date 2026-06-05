@@ -121,12 +121,12 @@ None. No schema, data, or API change. The pilot supplier is a plain frontend con
 
 #### Automated
 
-- [x] 1.1 Frontend builds: `cd frontend && npm run build`
-- [x] 1.2 Frontend lints: `cd frontend && npm run lint`
-- [x] 1.3 Backend regression green: `cd supply-os-v1 && python -m pytest`
+- [x] 1.1 Frontend builds: `cd frontend && npm run build` — 5df6ec3
+- [x] 1.2 Frontend lints: `cd frontend && npm run lint` — 5df6ec3
+- [x] 1.3 Backend regression green: `cd supply-os-v1 && python -m pytest` — 5df6ec3
 
 #### Manual
 
-- [x] 1.4 `/captain-v2` defaults to Bukat with 14 lines + visible math on first load
-- [x] 1.5 Graceful fallback to `suppliers[0]` when the pilot supplier is absent/inactive
-- [x] 1.6 Sheet-mode e2e: Bukat submit appears on the Manager queue, then backed out (no dispatch)
+- [x] 1.4 `/captain-v2` defaults to Bukat with 14 lines + visible math on first load — 5df6ec3
+- [x] 1.5 Graceful fallback to `suppliers[0]` when the pilot supplier is absent/inactive — 5df6ec3
+- [x] 1.6 Sheet-mode e2e: Bukat submit appears on the Manager queue, then backed out (no dispatch) — 5df6ec3
