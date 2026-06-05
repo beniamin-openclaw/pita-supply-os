@@ -1,10 +1,10 @@
 ---
 change_id: inventory-count
 title: Captain location inventory count → dated snapshot
-status: archived
+status: implemented
 created: 2026-06-05
 updated: 2026-06-05
-archived_at: 2026-06-05T11:00:19Z
+archived_at: null
 ---
 
 ## Notes
