@@ -648,7 +648,7 @@ def manager_order_detail(
     products_by_id = {p.product_id: p for p in backend.load_products()}
     sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
-    locations_by_id = {l.location_id: l for l in backend.load_locations()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
 
     supplier = suppliers_by_id.get(order.supplier_id)
     location = locations_by_id.get(order.location_id)
@@ -1207,7 +1207,7 @@ def manager_dispatch(
             ),
         )
 
-    locations_by_id = {l.location_id: l for l in backend.load_locations()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     location = locations_by_id.get(order.location_id)
 
     products_by_id = {p.product_id: p for p in backend.load_products()}

@@ -16,7 +16,6 @@ from app.models import (
     Order,
     OrderLine,
     OrderStatus,
-    OrderingMethod,
     ReasonCode,
 )
 
@@ -257,8 +256,6 @@ def test_update_order_found_updates_only_specified_fields(mocker):
     assert len(updates) == 2
     ranges = {u["range"] for u in updates}
     values = {u["range"]: u["values"][0][0] for u in updates}
-    status_col = ORDER_HEADERS.index("status") + 1  # 1-indexed
-    manager_user_col = ORDER_HEADERS.index("manager_user") + 1
     # column F = status (6); just sanity check both ranges are on row 2.
     for rng in ranges:
         assert rng.endswith("2"), f"expected row 2 in {rng}"
@@ -442,7 +439,7 @@ def test_get_order_returns_order_with_lines(mocker):
     assert order.order_id == "O123"
     assert order.status == OrderStatus.DRAFT
     assert len(order.lines) == 3
-    assert {l.order_line_id for l in order.lines} == {"OL001", "OL002", "OL003"}
+    assert {ln.order_line_id for ln in order.lines} == {"OL001", "OL002", "OL003"}
 
 
 def test_get_order_returns_none_when_missing(mocker):

@@ -6,7 +6,6 @@ deviation > 20%), happy paths, response shape, and the persist contract
 in both backends (seed = no-op + warning; sheet = append called).
 """
 import os
-from unittest.mock import MagicMock
 
 # Configure auth env BEFORE importing the app (settings reads at import time).
 os.environ.setdefault(
