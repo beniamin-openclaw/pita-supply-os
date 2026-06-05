@@ -1,7 +1,7 @@
 ---
 change_id: captain-bukat-submit
 title: Captain submits a Bukat order with visible suggestion math (S-01)
-status: implemented
+status: impl_reviewed
 created: 2026-06-05
 updated: 2026-06-05
 archived_at: null
