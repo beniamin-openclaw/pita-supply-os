@@ -8,20 +8,14 @@ Fixtures mirror test_manager_queue.py: monkeypatch the sheets surface.
 """
 from __future__ import annotations
 
-import os
 from datetime import date, datetime, timezone
 
-os.environ.setdefault(
-    "SUPPLY_OS_CAPTAIN_TOKENS", "WOLA:test_wola_token,KEN:test_ken_token"
-)
-os.environ.setdefault("SUPPLY_OS_MANAGER_TOKEN", "test_manager_token")
+from fastapi.testclient import TestClient
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import sheets  # noqa: E402
-from app.config import DataBackend  # noqa: E402
-from app.main import app  # noqa: E402
-from app.models import Order, OrderStatus  # noqa: E402
+from app import sheets
+from app.config import DataBackend
+from app.main import app
+from app.models import Order, OrderStatus
 
 client = TestClient(app)
 MANAGER_AUTH = {"Authorization": "Bearer test_manager_token"}

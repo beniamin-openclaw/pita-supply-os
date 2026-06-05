@@ -5,20 +5,12 @@ gates (unknown supplier/product, missing settings, critical under-order,
 deviation > 20%), happy paths, response shape, and the persist contract
 in both backends (seed = no-op + warning; sheet = append called).
 """
-import os
+import pytest
+from fastapi.testclient import TestClient
 
-# Configure auth env BEFORE importing the app (settings reads at import time).
-os.environ.setdefault(
-    "SUPPLY_OS_CAPTAIN_TOKENS", "WOLA:test_wola_token,KEN:test_ken_token"
-)
-os.environ.setdefault("SUPPLY_OS_MANAGER_TOKEN", "test_manager_token")
-
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import sheets  # noqa: E402
-from app.config import DataBackend  # noqa: E402
-from app.main import app  # noqa: E402
+from app import sheets
+from app.config import DataBackend
+from app.main import app
 
 client = TestClient(app)
 

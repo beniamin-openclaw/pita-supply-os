@@ -5,22 +5,15 @@ Tests mock the `sheets` module's read+write API to avoid hitting Google.
 """
 from __future__ import annotations
 
-import os
 from datetime import date, datetime, timezone
 
-# Configure auth env BEFORE importing the app (settings reads at import time).
-os.environ.setdefault(
-    "SUPPLY_OS_CAPTAIN_TOKENS", "WOLA:test_wola_token,KEN:test_ken_token"
-)
-os.environ.setdefault("SUPPLY_OS_MANAGER_TOKEN", "test_manager_token")
+import pytest
+from fastapi.testclient import TestClient
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import sheets  # noqa: E402
-from app.config import DataBackend  # noqa: E402
-from app.main import app  # noqa: E402
-from app.models import (  # noqa: E402
+from app import sheets
+from app.config import DataBackend
+from app.main import app
+from app.models import (
     Location,
     Order,
     OrderLine,

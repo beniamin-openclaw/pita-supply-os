@@ -224,7 +224,7 @@ export interface ManagerOrderLineDetail {
   supplier_product_name: string;
   purchase_unit: string;
   units_per_purchase_unit: number;
-  rounding_rule: RoundingRule;
+  rounding_rule?: RoundingRule;
   price_estimate_pln?: number;
   current_stock_qty_base: number;
   target_stock_qty_base: number;

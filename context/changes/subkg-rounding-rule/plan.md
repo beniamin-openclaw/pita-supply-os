@@ -319,9 +319,9 @@ None. Pure arithmetic in a hot-path-free engine; no new I/O. The optional column
 
 #### Automated
 
-- [x] 3.1 Build passes: `cd frontend && npm run build` — `tsc -b` clean; `vite build` blocked by an environmental rollup native code-signing issue (not S-09)
-- [x] 3.2 Lint passes: `cd frontend && npm run lint` — touched files clean; 10 pre-existing react-hooks errors in untouched files spun out as a separate task
-- [x] 3.3 Backend detail field covered + suite green: `cd supply-os-v1 && python -m pytest && ruff check .`
+- [x] 3.1 Build passes: `cd frontend && npm run build` — `tsc -b` clean; `vite build` blocked by an environmental rollup native code-signing issue (not S-09) — 502613b
+- [x] 3.2 Lint passes: `cd frontend && npm run lint` — touched files clean; 10 pre-existing react-hooks errors in untouched files spun out as a separate task — 502613b
+- [x] 3.3 Backend detail field covered + suite green: `cd supply-os-v1 && python -m pytest && ruff check .` — 502613b
 
 #### Manual
 

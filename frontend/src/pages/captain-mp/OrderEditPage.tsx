@@ -34,7 +34,7 @@ function lineToItem(line: ManagerOrderLineDetail): OrderableItem {
     is_critical: line.is_critical,
     purchase_unit: line.purchase_unit,
     units_per_purchase_unit: line.units_per_purchase_unit,
-    rounding_rule: line.rounding_rule, // now carried on the detail line (S-09)
+    rounding_rule: line.rounding_rule ?? "full_only", // detail line carries it (S-09); fall back to full_only
     min_stock_qty_base: 0,
     max_stock_qty_base: 0,
     target_stock_qty_base: line.target_stock_qty_base,
