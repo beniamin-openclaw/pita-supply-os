@@ -30,7 +30,7 @@ Pita Supply OS is the single structured path from a location's stock counts to s
 | ID   | Change ID                     | Outcome (user can …)                                                              | Prerequisites | PRD refs                                      | Status   |
 | ---- | ----------------------------- | --------------------------------------------------------------------------------- | ------------- | --------------------------------------------- | -------- |
 | F-01 | bukat-master-data-ready       | (foundation) Bukat master data verified + corrected at Wola so suggestions hold   | —             | FR-012, US-01                                 | done     |
-| S-01 | captain-bukat-submit          | Captain selects Bukat, enters stock, sees suggestion math, submits to the queue   | F-01          | US-01, FR-001, FR-002, FR-003, FR-004, FR-005 | proposed |
+| S-01 | captain-bukat-submit          | Captain selects Bukat, enters stock, sees suggestion math, submits to the queue   | F-01          | US-01, FR-001, FR-002, FR-003, FR-004, FR-005 | done     |
 | S-02 | manager-bukat-email-dispatch  | Manager claims, edits/sends-back, dispatches the Bukat order by email             | S-01          | US-01, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011 | proposed |
 | S-03 | bukat-suggestion-learning-loop| Owner validates Bukat suggestions vs per-line history and corrects master data    | S-02          | FR-012                                        | proposed |
 | S-04 | channel-aware-dispatch        | Manager dispatches additional suppliers via portal / phone / manual               | S-02          | FR-013                                        | proposed |
@@ -89,7 +89,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** — (the capability is present in the baseline; the only open item is master-data readiness, owned by F-01)
 - **Risk:** Largely validation of existing capability against Bukat data; sequenced after F-01 because submitting against unverified master data produces misleading suggestions. The visible-math contract is Tier-1 (must not regress). No real supplier order is placed by submit.
-- **Status:** proposed
+- **Status:** done
 
 ### S-02: Manager dispatches the Bukat order by email
 
@@ -213,3 +213,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 - **S-06: Captain counts all location products in one pass → dated snapshot** — Archived 2026-06-05 → `context/archive/2026-06-05-inventory-count/`. Lesson: tests must be order-independent (conftest, not per-file).
 - **F-01: (foundation) Bukat products, supplier_products (units-per-purchase-unit, rounding rule, price), and Wola location_product_settings (min/target/max, critical flags) are verified and corrected so the suggestion engine is trustworthy for the pilot SKUs.** — Archived 2026-06-05 → `context/archive/2026-06-05-bukat-master-data-ready/`. Lesson: `over_max` is informational-only — packaging granularity is handled by `allow_over_max=TRUE`, never a quantity cap; sub-kg targets on whole-unit SKUs need an engine rounding rule (spun out as S-09), not a data hack. Closes Open Roadmap Question 2.
+- **S-01: Captain logs in, selects supplier Bukat, sees the Wola product lines for that supplier, enters current stock, reviews the suggestion math, sets the final purchase quantity (with a reason where deviation rules apply), and submits — the order appears on the Manager queue the same business day.** — Archived 2026-06-05 → `context/archive/2026-06-05-captain-bukat-submit/`. Lesson: a supplier "pivot" is a frontend default + data, not backend branching (1-line `PILOT_SUPPLIER_ID` with `suppliers[0]` fallback); the "lands on Manager queue" proof needs sheet mode (seed submit is in-memory), validated via submit-and-back-out, never dispatch. Unblocks S-02 (north star).
