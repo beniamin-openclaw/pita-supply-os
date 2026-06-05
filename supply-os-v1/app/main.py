@@ -40,10 +40,11 @@ from .models import (
     OrderingMethod,
     OrderStatus,
     Product,
+    RoundingRule,
     Supplier,
     SupplierProduct,
 )
-from .suggestion import SuggestionInput, compute_suggestion
+from .suggestion import SuggestionInput, compute_suggestion, rounding_step
 
 log = logging.getLogger(__name__)
 
@@ -160,6 +161,7 @@ class SuggestRequest(BaseModel):
     units_per_purchase_unit: float = Field(gt=0, description="Inventory units in 1 purchase unit")
     is_critical: bool = False
     allow_over_max_due_to_packaging: bool = False
+    rounding_rule: RoundingRule = RoundingRule.FULL_ONLY
 
 
 @app.post("/api/captain/suggest")
@@ -173,6 +175,7 @@ def captain_suggest(
             target_stock_qty_base=req.target_stock_qty_base,
             max_stock_qty_base=req.max_stock_qty_base,
             units_per_purchase_unit=req.units_per_purchase_unit,
+            rounding_rule=req.rounding_rule,
             is_critical=req.is_critical,
             allow_over_max_due_to_packaging=req.allow_over_max_due_to_packaging,
         )
@@ -353,7 +356,7 @@ def captain_submit(
 
         delta_pct = abs(
             line.captain_final_qty_purchase - suggested_qty_purchase
-        ) / max(suggested_qty_purchase, 1.0)
+        ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
 
         # Hard gates
         if (
@@ -985,7 +988,7 @@ def captain_order_edit(
         suggested_qty_base = suggestion.suggested_qty_base
         delta_pct = abs(
             line.captain_final_qty_purchase - suggested_qty_purchase
-        ) / max(suggested_qty_purchase, 1.0)
+        ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
 
         if (
             is_critical

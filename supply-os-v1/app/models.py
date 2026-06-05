@@ -38,6 +38,7 @@ class RoundingRule(str, Enum):
     FULL_ONLY = "full_only"
     HALF_ALLOWED = "half_allowed"
     UP_FOR_CRITICAL = "up_for_critical"
+    TENTH_KG = "tenth_kg"  # weight goods: round up to the next 0.1 (kg)
 
 
 # ---------- Master data ----------

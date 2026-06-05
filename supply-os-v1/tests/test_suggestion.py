@@ -2,7 +2,7 @@
 import pytest
 
 from app.models import RoundingRule
-from app.suggestion import SuggestionInput, compute_suggestion
+from app.suggestion import SuggestionInput, compute_suggestion, rounding_step
 
 
 def _inp(**kwargs) -> SuggestionInput:
@@ -161,3 +161,59 @@ def test_float_artifacts_cleaned_for_01_units():
     ))
     assert out.suggested_qty_purchase == 10
     assert out.suggested_qty_base == 1.0
+
+
+# ---------- Sub-kg (tenth_kg) rule ----------
+
+def test_tenth_kg_exact_tenth_no_over_max():
+    """The P009 Natka / P010 Czosnek case: 0.5 kg target, 0 stock, 1 kg/unit →
+    0.5 kg suggested, and NO cosmetic over-max (the whole point of S-09)."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=0.5,
+        max_stock_qty_base=0.5, units_per_purchase_unit=1,
+        rounding_rule=RoundingRule.TENTH_KG,
+    ))
+    assert out.suggested_qty_purchase == 0.5
+    assert out.suggested_qty_base == 0.5
+    assert out.over_max_qty_base == 0
+
+
+def test_tenth_kg_ceils_up_to_next_tenth():
+    """0.74 kg need rounds UP to 0.8 (never under-order)."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=0.74,
+        max_stock_qty_base=10, units_per_purchase_unit=1,
+        rounding_rule=RoundingRule.TENTH_KG,
+    ))
+    assert out.suggested_qty_purchase == 0.8
+
+
+def test_tenth_kg_float_artifact_guarded():
+    """2.3 kg need must yield 2.3, not 2.4: raw*10 == 23.000000000000004 would
+    ceil to the wrong tenth without the pre-clean."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=2.3,
+        max_stock_qty_base=10, units_per_purchase_unit=1,
+        rounding_rule=RoundingRule.TENTH_KG,
+    ))
+    assert out.suggested_qty_purchase == 2.3
+
+
+def test_tenth_kg_no_order_at_target():
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0.5, target_stock_qty_base=0.5,
+        max_stock_qty_base=0.5, units_per_purchase_unit=1,
+        rounding_rule=RoundingRule.TENTH_KG,
+    ))
+    assert out.suggested_qty_purchase == 0
+
+
+# ---------- Deviation-gate denominator step ----------
+
+def test_rounding_step_per_rule():
+    """full_only / up_for_critical keep the original 1.0 floor (zero regression);
+    half_allowed and tenth_kg expose their finer step for the deviation gate."""
+    assert rounding_step(RoundingRule.FULL_ONLY) == 1.0
+    assert rounding_step(RoundingRule.UP_FOR_CRITICAL) == 1.0
+    assert rounding_step(RoundingRule.HALF_ALLOWED) == 0.5
+    assert rounding_step(RoundingRule.TENTH_KG) == 0.1

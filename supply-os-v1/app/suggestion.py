@@ -67,7 +67,27 @@ def _round_per_rule(raw: float, rule: RoundingRule, is_critical: bool) -> float:
         if is_critical:
             return float(math.ceil(raw))
         return float(round(raw))
+    if rule == RoundingRule.TENTH_KG:
+        # Ceil up to the next 0.1 (never under-order). Pre-clean the scaled
+        # value before ceil: raw*10 can land a hair above an integer
+        # (2.3 * 10 == 23.000000000000004) and ceil to the wrong tenth.
+        return math.ceil(round(raw * 10, _PRECISION)) / 10
     return float(math.ceil(raw))
+
+
+def rounding_step(rule: RoundingRule) -> float:
+    """Smallest purchase-unit increment a rule can emit.
+
+    Used as the deviation-gate denominator floor (`max(suggested, step)`) so the
+    >20% gate stays meaningful for sub-1.0 suggestions. `FULL_ONLY` /
+    `UP_FOR_CRITICAL` snap to whole units (1.0), keeping the gate byte-identical
+    to the original hardcoded `max(suggested, 1.0)` for those rules.
+    """
+    if rule == RoundingRule.HALF_ALLOWED:
+        return 0.5
+    if rule == RoundingRule.TENTH_KG:
+        return 0.1
+    return 1.0
 
 
 def compute_suggestion(inp: SuggestionInput) -> SuggestionOutput:
