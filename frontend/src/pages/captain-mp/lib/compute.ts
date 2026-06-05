@@ -4,6 +4,11 @@
 import type { OrderableItem, OrderLine, CardState } from "../types";
 import type { StringKey } from "../../../i18n/strings";
 
+// NOTE (S-09): this preview ALWAYS ceils to whole purchase units (full_only).
+// The backend (app/suggestion.py) is the source of truth and honors each SKU's
+// rounding_rule. They agree for Bukat today (all SKUs default full_only), but
+// will diverge once S-09 adds sub-unit (0.1 kg) rounding for weight goods — at
+// which point this preview must match the backend (e.g. call /api/captain/suggest).
 export function computeSuggestion(
   item: OrderableItem,
   currentStock: number,

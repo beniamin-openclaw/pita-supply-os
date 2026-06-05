@@ -27,6 +27,12 @@ import { getRequestedDeliveryDate } from "./lib/dates";
 
 import type { Supplier, OrderableItem, OrderLine, DraftState } from "./types";
 
+// Pilot supplier for the Wola×Bukat round-trip (S-01). The order screen defaults
+// to this supplier on load instead of suppliers[0] (the first CSV row,
+// SUP_BLUESERV — 0 orderable lines at Wola). Retargeting the pilot later is a
+// one-line edit; no env var needed (same value in dev and prod).
+const PILOT_SUPPLIER_ID = "SUP_BUKAT";
+
 export function CaptainMP() {
   const { t, formatDateTime } = useT();
   const navigate = useNavigate();
@@ -73,10 +79,16 @@ export function CaptainMP() {
     };
   }, [showToast]);
 
-  // ---- Auto-select first supplier once loaded -------------------------------
+  // ---- Auto-select the pilot supplier (Bukat) once loaded -------------------
+  // Default to the pilot supplier if it's in the (already active-filtered) list,
+  // else fall back to the first supplier — today's behaviour. The
+  // `suppliers.length > 0` guard keeps `suppliers[0]` defined; an inactive pilot
+  // simply falls through to the fallback.
   useEffect(() => {
     if (!activeSupplierId && suppliers.length > 0) {
-      setActiveSupplierId(suppliers[0].supplier_id);
+      const pilot =
+        suppliers.find((s) => s.supplier_id === PILOT_SUPPLIER_ID) ?? suppliers[0];
+      setActiveSupplierId(pilot.supplier_id);
     }
   }, [suppliers, activeSupplierId]);
 
