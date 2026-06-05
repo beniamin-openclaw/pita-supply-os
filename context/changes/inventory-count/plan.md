@@ -297,12 +297,12 @@ No backfill; no change to existing `orders` / `order_lines` tabs or the pilot da
 
 #### Automated
 
-- [x] 3.1 Build + typecheck + lint pass: `npm run build && npm run lint`
+- [x] 3.1 Build + typecheck + lint pass: `npm run build && npm run lint` — 5cebc66
 
 #### Manual
 
-- [ ] 3.2 Screen lists every product configured for the location
+- [x] 3.2 Screen lists every product configured for the location
 - [ ] 3.3 Enter + confirm + submit creates a snapshot (only entered products → lines)
-- [ ] 3.4 Reload mid-count restores the draft; discard clears it
-- [ ] 3.5 Existing `/captain-v2` ordering flow unaffected
-- [ ] 3.6 All copy via i18n (pl + en); no hardcoded strings
+- [x] 3.4 Reload mid-count restores the draft; discard clears it
+- [x] 3.5 Existing `/captain-v2` ordering flow unaffected
+- [x] 3.6 All copy via i18n (pl + en); no hardcoded strings
