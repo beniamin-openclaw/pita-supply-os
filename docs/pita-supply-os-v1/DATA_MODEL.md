@@ -98,7 +98,7 @@ where the **unit conversion** lives.
 | `supplier_product_name`      | string      | Polish, what the supplier calls it on their invoice                   |
 | `purchase_unit`              | string      | Polish unit, e.g., `karton`, `szt`, `worek`                           |
 | `units_per_purchase_unit`    | number      | Inventory units in one purchase unit. E.g., 1 karton Halloumi = 9 kg → `9.0` |
-| `rounding_rule`              | enum        | `full_only`, `half_allowed`, `up_for_critical`                        |
+| `rounding_rule`              | enum        | `full_only`, `half_allowed`, `up_for_critical`, `tenth_kg`            |
 | `price_estimate_pln`         | number      | Optional in v0, populated when known                                  |
 | `active`                     | boolean     |                                                                       |
 | `notes`                      | string      | E.g., `1 karton = 36 szt = 9 kg`                                      |
@@ -212,6 +212,7 @@ delta_vs_suggestion_pct  = ((manager_final_qty_base - suggested_qty_base) / sugg
 - `full_only`: `ceil(x)` for critical or low-stock products, `round(x)` otherwise
 - `half_allowed`: `round(x × 2) / 2`
 - `up_for_critical`: `ceil(x)` always
+- `tenth_kg`: `ceil(x × 10) / 10` — round up to the next 0.1 (weight goods, e.g. 0.7 / 1.5 kg)
 
 ---
 

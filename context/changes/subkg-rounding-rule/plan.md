@@ -294,25 +294,25 @@ None. Pure arithmetic in a hot-path-free engine; no new I/O. The optional column
 
 #### Automated
 
-- [x] 1.1 Unit tests pass: `cd supply-os-v1 && python -m pytest tests/test_suggestion.py`
-- [x] 1.2 Full suite passes (no regression in deviation/critical tests): `cd supply-os-v1 && python -m pytest`
-- [x] 1.3 Lint passes: `cd supply-os-v1 && ruff check .`
+- [x] 1.1 Unit tests pass: `cd supply-os-v1 && python -m pytest tests/test_suggestion.py` — 6de0790
+- [x] 1.2 Full suite passes (no regression in deviation/critical tests): `cd supply-os-v1 && python -m pytest` — 6de0790
+- [x] 1.3 Lint passes: `cd supply-os-v1 && ruff check .` — 6de0790
 
 #### Manual
 
-- [x] 1.4 `/api/captain/suggest` with `rounding_rule:"tenth_kg"`, target 0.5 / current 0 / upu 1 returns `suggested_qty_purchase: 0.5`, over-max-free.
+- [x] 1.4 `/api/captain/suggest` with `rounding_rule:"tenth_kg"`, target 0.5 / current 0 / upu 1 returns `suggested_qty_purchase: 0.5`, over-max-free. — 6de0790
 
 ### Phase 2: Data + schema assignment
 
 #### Automated
 
-- [ ] 2.1 Seed loads with the new column: `python -m pytest tests/test_seed_loader.py tests/test_sheets_read.py`
-- [ ] 2.2 Integration tests pass: `python -m pytest tests/test_captain_submit.py tests/test_main.py`
-- [ ] 2.3 Full suite + lint pass: `python -m pytest && ruff check .`
+- [x] 2.1 Seed loads with the new column: `python -m pytest tests/test_seed_loader.py tests/test_sheets_read.py`
+- [x] 2.2 Integration tests pass: `python -m pytest tests/test_captain_submit.py tests/test_main.py`
+- [x] 2.3 Full suite + lint pass: `python -m pytest && ruff check .`
 
 #### Manual
 
-- [ ] 2.4 Seed-mode Captain submit for P009 records 0.5 kg, no over-max warning.
+- [x] 2.4 Seed-mode Captain submit for P009 records 0.5 kg, no over-max warning.
 - [ ] 2.5 Owner added `rounding_rule` column + `tenth_kg` for the 8 Bukat rows to the live Sheet.
 
 ### Phase 3: Frontend parity + fractional input
