@@ -1,10 +1,10 @@
 ---
 change_id: bukat-master-data-ready
 title: Verify & correct Bukat master data + ops fields so suggestions are pilot-ready
-status: implemented
+status: archived
 created: 2026-06-05
 updated: 2026-06-05
-archived_at: null
+archived_at: 2026-06-05T15:10:45Z
 ---
 
 ## Notes
