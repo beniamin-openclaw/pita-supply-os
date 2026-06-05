@@ -369,6 +369,17 @@ class ManagerReleaseResponse(BaseModel):
 
 # ---------- Inventory count (S-06) ----------
 
+class InventoryProduct(BaseModel):
+    """One row on the Captain's location-wide inventory-count screen — a product
+    configured for the location, to be counted in one pass. Enriched join of
+    `products` + `location_product_settings` (mirrors the orderable item shape,
+    but spans every supplier at the location rather than one supplier)."""
+    product_id: str
+    product_name_pl: str
+    inventory_unit: str
+    is_critical: bool
+
+
 class InventoryCountLine(BaseModel):
     """One counted product within an inventory snapshot. A line exists only for
     a product the Captain actually entered (blank = not counted, no line)."""

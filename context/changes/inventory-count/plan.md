@@ -272,26 +272,26 @@ No backfill; no change to existing `orders` / `order_lines` tabs or the pilot da
 
 #### Automated
 
-- [x] 1.1 New unit tests pass: `python -m pytest tests/test_inventory_sheets.py`
-- [x] 1.2 Full suite stays green: `python -m pytest`
-- [x] 1.3 Lint clean: `ruff check .`
+- [x] 1.1 New unit tests pass: `python -m pytest tests/test_inventory_sheets.py` — ce34e51
+- [x] 1.2 Full suite stays green: `python -m pytest` — ce34e51
+- [x] 1.3 Lint clean: `ruff check .` — ce34e51
 
 #### Manual
 
-- [x] 1.4 Header constants match the intended Google Sheet columns (Migration Notes)
+- [x] 1.4 Header constants match the intended Google Sheet columns (Migration Notes) — ce34e51
 
 ### Phase 2: Backend endpoints
 
 #### Automated
 
-- [ ] 2.1 Endpoint tests pass: `python -m pytest tests/test_inventory_submit.py`
-- [ ] 2.2 Full suite green: `python -m pytest`
-- [ ] 2.3 Lint clean: `ruff check .`
+- [x] 2.1 Endpoint tests pass: `python -m pytest tests/test_inventory_submit.py`
+- [x] 2.2 Full suite green: `python -m pytest`
+- [x] 2.3 Lint clean: `ruff check .`
 
 #### Manual
 
 - [ ] 2.4 Captain token (sheet mode): products list, submit returns count_id
-- [ ] 2.5 No supplier order touched by the flow
+- [x] 2.5 No supplier order touched by the flow
 
 ### Phase 3: Frontend inventory screen
 

@@ -19,6 +19,11 @@ from .models import (
     CaptainOrderListItem,
     CaptainSubmitRequest,
     CaptainSubmitResponse,
+    InventoryCount,
+    InventoryCountLine,
+    InventoryCountSubmitRequest,
+    InventoryCountSubmitResponse,
+    InventoryProduct,
     LocationProductSetting,
     ManagerClaimResponse,
     ManagerDispatchRequest,
@@ -32,7 +37,6 @@ from .models import (
     ManagerSaveResponse,
     Order,
     OrderLine,
-    OrderLineSubmit,
     OrderingMethod,
     OrderStatus,
     Product,
@@ -1390,4 +1394,177 @@ def manager_order_save(
         status=OrderStatus.MANAGER_CLAIMED,
         lines_updated=len(line_updates),
         total_value_estimate_pln=total_rounded,
+    )
+
+
+# ---------- Captain inventory count (S-06) ----------
+
+
+def _generate_count_id(location_id: str, today: date) -> str:
+    """INV-YYYYMMDD-<LOC3>-<6hex> (mirrors `_generate_order_id`)."""
+    loc = (location_id or "XXX")[:3].upper()
+    rand = secrets.token_hex(3)
+    return f"INV-{today.strftime('%Y%m%d')}-{loc}-{rand}"
+
+
+def _persist_inventory_count(
+    backend,
+    count: InventoryCount,
+    lines: list[InventoryCountLine],
+) -> bool:
+    """Write count + lines to backend. Returns True on persistent write, False
+    on in-memory-only fallback (seed backend). Mirrors `_persist_order`: the
+    append is sheet-only; the read-only seed backend has no
+    `append_inventory_count*`, so we degrade to a warning instead of erroring."""
+    appender = getattr(backend, "append_inventory_count", None)
+    lines_appender = getattr(backend, "append_inventory_count_lines", None)
+    if appender is None or lines_appender is None:
+        log.warning(
+            "Inventory count %s submitted to read-only backend %s — not persisted",
+            count.count_id,
+            getattr(backend, "__name__", "?"),
+        )
+        return False
+    try:
+        appender(count)
+        lines_appender(lines)
+    except NotImplementedError:
+        log.warning(
+            "Inventory count %s — backend %s raised NotImplementedError on write",
+            count.count_id,
+            getattr(backend, "__name__", "?"),
+        )
+        return False
+    return True
+
+
+@app.get(
+    "/api/captain/inventory/products",
+    response_model=list[InventoryProduct],
+)
+def captain_inventory_products(
+    location_id: str = Depends(require_captain),
+):
+    """Active products configured for this Captain's location — the one-pass
+    inventory-count list (FR-015).
+
+    Location-wide (not per-supplier); the location is derived from the
+    authenticated Captain's token, so cross-location access is not permitted in
+    v0. Mirrors `captain_orderable` but spans every supplier's products at the
+    location. Discontinued SKUs (`active = False`) are skipped — a location-wide
+    list would otherwise surface products the per-supplier order screen never
+    showed.
+    """
+    products_by_id = {p.product_id: p for p in seed_loader.load_products()}
+    items: list[InventoryProduct] = []
+    for setting in seed_loader.load_location_product_settings():
+        if setting.location_id != location_id:
+            continue
+        product = products_by_id.get(setting.product_id)
+        if product is None or not product.active:
+            continue
+        items.append(
+            InventoryProduct(
+                product_id=product.product_id,
+                product_name_pl=product.product_name_pl,
+                inventory_unit=product.inventory_unit,
+                is_critical=setting.is_critical_for_location or product.is_critical,
+            )
+        )
+    return items
+
+
+@app.post(
+    "/api/captain/inventory/submit",
+    response_model=InventoryCountSubmitResponse,
+)
+def captain_inventory_submit(
+    req: InventoryCountSubmitRequest,
+    location_id: str = Depends(require_captain),
+):
+    """Validate + persist a Captain location-wide inventory snapshot (FR-016).
+
+    Append-only: every submit creates a new `count_id` (no upsert/edit). A line
+    is created only for a product the Captain actually entered — blank = not
+    counted (`0 ≠ unknown`); the frontend omits untouched products from the
+    request. Persistence is sheet-only via `_persist_inventory_count`; seed mode
+    keeps it in-memory and surfaces a warning, mirroring `captain_submit`.
+
+    Validation (deterministic):
+      - every line's product_id must exist in master data → 400 otherwise.
+      - every line's product must have a `location_product_setting` at this
+        Captain's location → 400 otherwise.
+    """
+    backend = _choose_backend()
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == location_id
+    }
+
+    today = datetime.now(timezone.utc).date()
+    count_id = _generate_count_id(location_id, today)
+
+    count_lines: list[InventoryCountLine] = []
+    for idx, line in enumerate(req.lines, start=1):
+        if line.product_id not in products_by_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown product_id '{line.product_id}'",
+            )
+        if line.product_id not in settings_by_pid:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"product '{line.product_id}' has no location_product_setting "
+                    f"at this location"
+                ),
+            )
+        count_lines.append(
+            InventoryCountLine(
+                count_line_id=f"ICL-{count_id}-{idx:03d}",
+                count_id=count_id,
+                product_id=line.product_id,
+                current_stock_qty_base=line.current_stock_qty_base,
+                count_comment=line.count_comment,
+            )
+        )
+
+    count = InventoryCount(
+        count_id=count_id,
+        location_id=location_id,
+        count_date=today,
+        count_user=location_id,  # proxy — no individual identity in v0
+        count_submitted_at=datetime.now(timezone.utc),
+        line_count=len(count_lines),
+        notes=req.notes,
+    )
+
+    warnings: list[str] = []
+    try:
+        persisted = _persist_inventory_count(backend, count, count_lines)
+    except sheets.WorksheetNotFound:
+        # Sheet mode but the operator hasn't created the inventory tabs yet.
+        # Without this catch the append raises a raw 500; surface a clear,
+        # actionable 503 instead (see plan Migration Notes / F2).
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Inventory worksheets not configured — create the "
+                "'inventory_counts' and 'inventory_count_lines' tabs "
+                "(see Migration Notes) before submitting."
+            ),
+        )
+    if not persisted:
+        warnings.append(
+            "Inventory count was not persisted (read-only backend) — "
+            "data is in-memory only."
+        )
+
+    return InventoryCountSubmitResponse(
+        count_id=count_id,
+        count_date=today,
+        line_count=len(count_lines),
+        warnings=warnings,
     )
