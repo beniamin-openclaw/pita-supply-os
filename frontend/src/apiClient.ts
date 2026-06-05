@@ -13,6 +13,9 @@ import type {
   CaptainOrderListItem,
   CaptainSubmitRequest,
   CaptainSubmitResponse,
+  InventoryCountSubmitRequest,
+  InventoryCountSubmitResponse,
+  InventoryProduct,
   Location,
   ManagerClaimResponse,
   ManagerDispatchRequest,
@@ -187,6 +190,11 @@ export const api = {
       req,
       "captain",
     ),
+  // Captain inventory count (S-06)
+  inventoryProducts: () =>
+    apiGet<InventoryProduct[]>("/api/captain/inventory/products", "captain"),
+  inventorySubmit: (req: InventoryCountSubmitRequest) =>
+    apiPost<InventoryCountSubmitResponse>("/api/captain/inventory/submit", req, "captain"),
   // Manager
   managerQueue: (location_id?: string, status: OrderStatus = "captain_submitted") => {
     const params = new URLSearchParams({ status });

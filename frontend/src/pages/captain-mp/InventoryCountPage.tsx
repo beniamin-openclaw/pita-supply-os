@@ -1,0 +1,436 @@
+// Captain Location Inventory Count page (S-06 / FR-015, FR-016).
+// Counts every product configured for the Captain's location in one pass →
+// confirm → POST /api/captain/inventory/submit creates a dated snapshot.
+// Mirrors CaptainMP's fetch → draft → confirm → submit → toast flow. The draft
+// uses a fixed sentinel key because inventory is location-scoped (one count per
+// location), not supplier-scoped like the order screen.
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { api, ApiError } from "../../apiClient";
+import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
+import { useT } from "../../i18n";
+
+import { Header } from "./components/Header";
+import { Toast, type ToastProps } from "./components/Toast";
+
+import type { InventoryProduct, InventoryCountLineSubmit } from "../../types";
+
+// Inventory is location-wide (one count per location), so the draft uses a
+// fixed key rather than CaptainMP's per-supplier id.
+const DRAFT_KEY = "__inventory__";
+
+/** In-memory line — stock stays "" until the user types a number. */
+interface InventoryLineInput {
+  current_stock_qty_base: number | "";
+  count_comment: string;
+}
+
+interface InventoryDraftState {
+  lines: Record<string, InventoryLineInput>;
+  timestamp: number;
+}
+
+function blankLine(): InventoryLineInput {
+  return { current_stock_qty_base: "", count_comment: "" };
+}
+
+// ---- Confirm dialog (lightweight; Escape + backdrop cancel) ------------------
+
+interface ConfirmApproveDialogProps {
+  open: boolean;
+  counted: number;
+  total: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}
+
+function ConfirmApproveDialog({
+  open,
+  counted,
+  total,
+  onConfirm,
+  onCancel,
+  isSubmitting,
+}: ConfirmApproveDialogProps) {
+  const { t } = useT();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      role="presentation"
+    >
+      <div
+        className="absolute inset-0 bg-slate-900/50"
+        aria-hidden="true"
+        onClick={onCancel}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="inv-confirm-title"
+        aria-describedby="inv-confirm-summary"
+        className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 outline-none"
+      >
+        <div className="px-5 pt-5 pb-3">
+          <h2
+            id="inv-confirm-title"
+            className="text-lg font-bold text-slate-900 leading-tight"
+          >
+            {t("inventory.confirmTitle")}
+          </h2>
+        </div>
+        <div className="px-5 pb-2">
+          <p id="inv-confirm-summary" className="text-sm text-slate-700">
+            {t("inventory.confirmSummary", { counted, total })}
+          </p>
+        </div>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 px-5 pt-3 pb-5">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="px-4 py-3 text-sm font-semibold text-slate-800 bg-gray-100 rounded-lg active:bg-gray-200 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            {t("inventory.confirmBack")}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={isSubmitting}
+            className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white rounded-lg bg-[#1a4480] active:bg-blue-900 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            {isSubmitting ? t("inventory.submittingBtn") : t("inventory.confirmSend")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Page -------------------------------------------------------------------
+
+export function InventoryCountPage() {
+  const { t, formatDateTime } = useT();
+  const navigate = useNavigate();
+
+  const [products, setProducts] = useState<InventoryProduct[]>([]);
+  const [lines, setLines] = useState<Record<string, InventoryLineInput>>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [confirmOpen, setConfirmOpen] = useState<boolean>(false);
+  const [toast, setToast] = useState<ToastProps | null>(null);
+  const [draftBanner, setDraftBanner] = useState<{ timestamp: number } | null>(null);
+
+  const token = getToken("captain") || "";
+
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToast({ message, type, onClose: () => setToast(null) });
+  }, []);
+
+  // ---- Fetch products on mount ---------------------------------------------
+  // `isLoading` starts true; we deliberately do NOT setState synchronously in
+  // the effect body (avoids react-hooks/set-state-in-effect) — the .finally
+  // flips it false once the fetch settles.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .inventoryProducts()
+      .then((items) => {
+        if (cancelled) return;
+        setProducts(items);
+        const initial: Record<string, InventoryLineInput> = {};
+        items.forEach((p) => {
+          initial[p.product_id] = blankLine();
+        });
+        setLines(initial);
+
+        // Surface a draft banner if a recent count is in progress; don't auto-load.
+        const draft = loadDraft<InventoryDraftState>(DRAFT_KEY);
+        if (draft?.state?.lines && Object.keys(draft.state.lines).length > 0) {
+          setDraftBanner({ timestamp: draft.state.timestamp });
+        }
+      })
+      .catch((err: ApiError) => {
+        if (cancelled) return;
+        if (err.status !== 401) {
+          showToast(t("inventory.productsError", { detail: err.detail }), "error");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast, t]);
+
+  // ---- Draft auto-save (debounced) -----------------------------------------
+  useEffect(() => {
+    if (Object.keys(lines).length === 0) return;
+    const id = setTimeout(() => {
+      saveDraft<InventoryDraftState>(DRAFT_KEY, { lines, timestamp: Date.now() });
+    }, 500);
+    return () => clearTimeout(id);
+  }, [lines]);
+
+  // ---- Handlers -------------------------------------------------------------
+  const handleStockChange = useCallback((productId: string, raw: string) => {
+    setLines((prev) => ({
+      ...prev,
+      [productId]: {
+        ...(prev[productId] || blankLine()),
+        current_stock_qty_base: raw === "" ? "" : Number(raw),
+      },
+    }));
+  }, []);
+
+  const handleCommentChange = useCallback((productId: string, raw: string) => {
+    setLines((prev) => ({
+      ...prev,
+      [productId]: {
+        ...(prev[productId] || blankLine()),
+        count_comment: raw,
+      },
+    }));
+  }, []);
+
+  const acceptDraft = useCallback(() => {
+    const draft = loadDraft<InventoryDraftState>(DRAFT_KEY);
+    if (draft?.state?.lines) setLines(draft.state.lines);
+    setDraftBanner(null);
+  }, []);
+
+  const discardDraft = useCallback(() => {
+    clearDraft(DRAFT_KEY);
+    setDraftBanner(null);
+  }, []);
+
+  const handleSaveDraft = useCallback(() => {
+    saveDraft<InventoryDraftState>(DRAFT_KEY, { lines, timestamp: Date.now() });
+    showToast(t("inventory.draftSaved"), "success");
+  }, [lines, showToast, t]);
+
+  // Only products with a typed stock value become lines (blank = not counted).
+  const countedLines = useMemo<InventoryCountLineSubmit[]>(
+    () =>
+      Object.entries(lines)
+        .filter(([, line]) => line.current_stock_qty_base !== "")
+        .map(([product_id, line]) => ({
+          product_id,
+          current_stock_qty_base: Number(line.current_stock_qty_base),
+          count_comment: line.count_comment.trim() || undefined,
+        })),
+    [lines],
+  );
+
+  const countedCount = countedLines.length;
+
+  const handleSubmit = useCallback(async () => {
+    setConfirmOpen(false);
+    setIsSubmitting(true);
+    try {
+      const resp = await api.inventorySubmit({ lines: countedLines, notes: "" });
+      clearDraft(DRAFT_KEY);
+      // Reset to a fresh blank pass (append-only — a re-count is a new snapshot).
+      setLines((prev) => {
+        const reset: Record<string, InventoryLineInput> = {};
+        Object.keys(prev).forEach((pid) => {
+          reset[pid] = blankLine();
+        });
+        return reset;
+      });
+      const notPersisted = resp.warnings.some((w) => w.includes("not persisted"));
+      showToast(
+        notPersisted
+          ? t("inventory.notPersistedWarning")
+          : t("inventory.successToast", { count: resp.line_count }),
+        notPersisted ? "error" : "success",
+      );
+    } catch (err) {
+      const detail =
+        err instanceof ApiError ? err.detail : err instanceof Error ? err.message : "?";
+      showToast(t("inventory.submitError", { detail }), "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [countedLines, showToast, t]);
+
+  // ---- Render ---------------------------------------------------------------
+  const submitDisabled = countedCount === 0 || isSubmitting;
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col pb-28">
+      {toast && <Toast {...toast} />}
+
+      <Header
+        locationName=""
+        token={token}
+        onShowOrders={() => navigate("/captain-v2/orders")}
+        onShowInventory={() => navigate("/captain-v2/inventory-count")}
+      />
+
+      <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-slate-900">{t("inventory.title")}</h2>
+          <p className="text-sm text-slate-600">{t("inventory.subtitle")}</p>
+        </div>
+
+        {draftBanner && (
+          <div
+            role="dialog"
+            aria-label={t("inventory.draftBannerAriaLabel")}
+            className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm"
+          >
+            <div className="text-amber-900">
+              {t("inventory.draftBannerTitle", {
+                time: formatDateTime(draftBanner.timestamp, { timeStyle: "short" }),
+              })}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={acceptDraft}
+                className="px-3 py-2 rounded-md bg-amber-700 text-white text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+              >
+                {t("inventory.draftBannerAccept")}
+              </button>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="px-3 py-2 rounded-md bg-white text-amber-900 border border-amber-300 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+              >
+                {t("inventory.draftBannerDiscard")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="text-center py-12 text-slate-600">{t("inventory.loading")}</div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-12 text-slate-600">{t("inventory.empty")}</div>
+        ) : (
+          <ul className="space-y-2">
+            {products.map((p) => {
+              const line = lines[p.product_id] || blankLine();
+              return (
+                <li
+                  key={p.product_id}
+                  className="bg-white border border-gray-200 rounded-xl p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-900 truncate">
+                          {p.product_name_pl}
+                        </span>
+                        {p.is_critical && (
+                          <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
+                            {t("card.critical")}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500">{p.inventory_unit}</div>
+                    </div>
+                    <div className="shrink-0">
+                      <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
+                        {t("inventory.qtyLabel")}
+                      </label>
+                      <input
+                        id={`stock-${p.product_id}`}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="any"
+                        value={line.current_stock_qty_base}
+                        onChange={(e) => handleStockChange(p.product_id, e.target.value)}
+                        className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={line.count_comment}
+                    onChange={(e) => handleCommentChange(p.product_id, e.target.value)}
+                    placeholder={t("inventory.commentPlaceholder")}
+                    className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </main>
+
+      {!isLoading && products.length > 0 && (
+        <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-30">
+          <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-slate-700 font-medium mb-1 truncate">
+                {t("inventory.counted", { counted: countedCount, total: products.length })}
+              </div>
+              <div className="text-xs font-semibold">
+                {countedCount === 0 ? (
+                  <span className="text-slate-600">{t("inventory.fillFirst")}</span>
+                ) : (
+                  <span className="text-green-700 flex items-center gap-1">
+                    <span
+                      className="w-2 h-2 rounded-full bg-green-600"
+                      aria-hidden="true"
+                    />
+                    {t("inventory.readyToSubmit")}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSubmitting}
+                className="px-4 py-3 text-sm font-medium text-slate-800 bg-gray-100 rounded-lg active:bg-gray-200 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              >
+                {t("inventory.saveDraftBtn")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+                disabled={submitDisabled}
+                className={`px-6 py-3 text-sm font-semibold text-white rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                  submitDisabled
+                    ? "bg-gray-500 cursor-not-allowed"
+                    : "bg-[#1a4480] active:bg-blue-900"
+                }`}
+              >
+                {isSubmitting ? t("inventory.submittingBtn") : t("inventory.submitBtn")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmApproveDialog
+        open={confirmOpen}
+        counted={countedCount}
+        total={products.length}
+        onConfirm={handleSubmit}
+        onCancel={() => setConfirmOpen(false)}
+        isSubmitting={isSubmitting}
+      />
+    </div>
+  );
+}

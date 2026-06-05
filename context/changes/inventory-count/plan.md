@@ -284,20 +284,20 @@ No backfill; no change to existing `orders` / `order_lines` tabs or the pilot da
 
 #### Automated
 
-- [x] 2.1 Endpoint tests pass: `python -m pytest tests/test_inventory_submit.py`
-- [x] 2.2 Full suite green: `python -m pytest`
-- [x] 2.3 Lint clean: `ruff check .`
+- [x] 2.1 Endpoint tests pass: `python -m pytest tests/test_inventory_submit.py` — ac7144b
+- [x] 2.2 Full suite green: `python -m pytest` — ac7144b
+- [x] 2.3 Lint clean: `ruff check .` — ac7144b
 
 #### Manual
 
 - [ ] 2.4 Captain token (sheet mode): products list, submit returns count_id
-- [x] 2.5 No supplier order touched by the flow
+- [x] 2.5 No supplier order touched by the flow — ac7144b
 
 ### Phase 3: Frontend inventory screen
 
 #### Automated
 
-- [ ] 3.1 Build + typecheck + lint pass: `npm run build && npm run lint`
+- [x] 3.1 Build + typecheck + lint pass: `npm run build && npm run lint`
 
 #### Manual
 

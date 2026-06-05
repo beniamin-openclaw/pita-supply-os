@@ -99,6 +99,33 @@ export interface CaptainSubmitResponse {
   warnings: string[];
 }
 
+// Inventory count (S-06) — match supply-os-v1/app/models.py -------------------
+
+export interface InventoryProduct {
+  product_id: string;
+  product_name_pl: string;
+  inventory_unit: string;
+  is_critical: boolean;
+}
+
+export interface InventoryCountLineSubmit {
+  product_id: string;
+  current_stock_qty_base: number;
+  count_comment?: string;
+}
+
+export interface InventoryCountSubmitRequest {
+  lines: InventoryCountLineSubmit[];
+  notes?: string;
+}
+
+export interface InventoryCountSubmitResponse {
+  count_id: string;
+  count_date: string; // ISO date "YYYY-MM-DD"
+  line_count: number;
+  warnings: string[];
+}
+
 // Captain own-orders view + edit (Phase E3) ---------------------------------
 
 export interface CaptainOrderListItem {

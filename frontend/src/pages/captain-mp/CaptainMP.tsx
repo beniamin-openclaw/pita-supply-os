@@ -294,6 +294,7 @@ export function CaptainMP() {
         locationName=""
         token={token}
         onShowOrders={() => navigate("/captain-v2/orders")}
+        onShowInventory={() => navigate("/captain-v2/inventory-count")}
       />
 
       {isLoadingSuppliers ? (

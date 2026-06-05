@@ -12,9 +12,10 @@ import { useT } from "../../../i18n";
 
 interface HamburgerMenuProps {
   onShowOrders?: () => void;
+  onShowInventory?: () => void;
 }
 
-export function HamburgerMenu({ onShowOrders }: HamburgerMenuProps) {
+export function HamburgerMenu({ onShowOrders, onShowInventory }: HamburgerMenuProps) {
   const { t, lang, setLang } = useT();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -81,6 +82,20 @@ export function HamburgerMenu({ onShowOrders }: HamburgerMenuProps) {
               className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-none focus-visible:bg-slate-100"
             >
               {t("hamburger.orders")}
+            </button>
+          )}
+
+          {onShowInventory && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onShowInventory();
+              }}
+              className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-none focus-visible:bg-slate-100"
+            >
+              {t("hamburger.inventory")}
             </button>
           )}
 

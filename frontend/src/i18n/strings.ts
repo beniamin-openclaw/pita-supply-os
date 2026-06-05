@@ -493,6 +493,79 @@ export const STRINGS = {
     pl: "Błąd edycji: {detail}",
     en: "Edit error: {detail}",
   },
+
+  // Inventory count (S-06) --------------------------------------------------
+  "hamburger.inventory": { pl: "Inwentaryzacja", en: "Inventory count" },
+  "inventory.title": { pl: "Inwentaryzacja lokalizacji", en: "Location inventory" },
+  "inventory.subtitle": {
+    pl: "Policz cały stan w jednym przejściu, potem zatwierdź.",
+    en: "Count all stock in one pass, then approve.",
+  },
+  "inventory.loading": { pl: "Ładowanie produktów…", en: "Loading products…" },
+  "inventory.empty": {
+    pl: "Brak produktów skonfigurowanych dla tej lokalizacji.",
+    en: "No products configured for this location.",
+  },
+  "inventory.productsError": {
+    pl: "Błąd pobierania produktów: {detail}",
+    en: "Error loading products: {detail}",
+  },
+  "inventory.qtyLabel": { pl: "Stan", en: "Stock" },
+  "inventory.commentPlaceholder": {
+    pl: "Komentarz (opcjonalnie)",
+    en: "Comment (optional)",
+  },
+  "inventory.counted": {
+    pl: "Policzono {counted} z {total}",
+    en: "{counted} of {total} counted",
+  },
+  "inventory.saveDraftBtn": { pl: "Zapisz roboczo", en: "Save draft" },
+  "inventory.submitBtn": { pl: "Zatwierdź", en: "Approve" },
+  "inventory.submittingBtn": { pl: "Zapisywanie…", en: "Saving…" },
+  "inventory.fillFirst": {
+    pl: "Wpisz stan, aby zatwierdzić",
+    en: "Enter stock to approve",
+  },
+  "inventory.readyToSubmit": {
+    pl: "Gotowe do zatwierdzenia",
+    en: "Ready to approve",
+  },
+  "inventory.confirmTitle": {
+    pl: "Zatwierdzić inwentaryzację?",
+    en: "Approve inventory count?",
+  },
+  "inventory.confirmSummary": {
+    pl: "Policzono {counted} z {total} produktów. Zapis utworzy datowany snapshot.",
+    en: "{counted} of {total} products counted. Approving creates a dated snapshot.",
+  },
+  "inventory.confirmBack": { pl: "Wróć", en: "Back" },
+  "inventory.confirmSend": { pl: "Tak, zatwierdź", en: "Yes, approve" },
+  "inventory.draftBannerAriaLabel": {
+    pl: "Wznowić niezapisaną inwentaryzację",
+    en: "Resume unsaved inventory count",
+  },
+  "inventory.draftBannerTitle": {
+    pl: "Wykryto niezapisaną inwentaryzację z godziny {time}. Wznowić?",
+    en: "Unsaved inventory count from {time} found. Resume it?",
+  },
+  "inventory.draftBannerAccept": { pl: "Wznów", en: "Resume" },
+  "inventory.draftBannerDiscard": { pl: "Odrzuć", en: "Discard" },
+  "inventory.draftSaved": {
+    pl: "Szkic inwentaryzacji zapisany",
+    en: "Inventory draft saved",
+  },
+  "inventory.successToast": {
+    pl: "Inwentaryzacja zapisana ({count} poz.)",
+    en: "Inventory saved ({count} items)",
+  },
+  "inventory.submitError": {
+    pl: "Błąd zapisu inwentaryzacji: {detail}",
+    en: "Inventory save error: {detail}",
+  },
+  "inventory.notPersistedWarning": {
+    pl: "Uwaga: zapis tymczasowy (tryb seed) — dane nie utrwalone.",
+    en: "Note: in-memory only (seed mode) — not persisted.",
+  },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

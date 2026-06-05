@@ -8,9 +8,10 @@ interface HeaderProps {
   /** Captain token — first chars shown as a masked id badge. */
   token: string;
   onShowOrders?: () => void;
+  onShowInventory?: () => void;
 }
 
-export function Header({ locationName, token, onShowOrders }: HeaderProps) {
+export function Header({ locationName, token, onShowOrders, onShowInventory }: HeaderProps) {
   const { t, formatDateTime } = useT();
   const maskedToken = token.slice(0, 4).toUpperCase() || "—";
   // Header date pill: short weekday + numeric date, no time. We pass individual
@@ -27,7 +28,7 @@ export function Header({ locationName, token, onShowOrders }: HeaderProps) {
     <header className="bg-[#1a4480] text-white px-4 py-3 sticky top-0 z-40">
       <div className="flex justify-between items-center mb-3">
         <h1 className="font-semibold text-lg tracking-tight">{t("header.title")}</h1>
-        <HamburgerMenu onShowOrders={onShowOrders} />
+        <HamburgerMenu onShowOrders={onShowOrders} onShowInventory={onShowInventory} />
       </div>
 
       <div className="flex gap-2 text-xs font-medium overflow-x-auto hide-scrollbar -mx-1 px-1">
