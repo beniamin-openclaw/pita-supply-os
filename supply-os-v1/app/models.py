@@ -365,3 +365,48 @@ class ManagerReleaseResponse(BaseModel):
     'send-back' banner; cleared when the captain resubmits)."""
     order_id: str
     status: OrderStatus  # captain_submitted on success
+
+
+# ---------- Inventory count (S-06) ----------
+
+class InventoryCountLine(BaseModel):
+    """One counted product within an inventory snapshot. A line exists only for
+    a product the Captain actually entered (blank = not counted, no line)."""
+    count_line_id: str
+    count_id: str
+    product_id: str
+    current_stock_qty_base: float = 0
+    count_comment: str = ""
+
+
+class InventoryCount(BaseModel):
+    """A dated, append-only location-wide stock snapshot (FR-016). Immutable:
+    a re-count produces a new count_id, never an edit."""
+    count_id: str
+    location_id: str
+    count_date: date
+    count_user: Optional[str] = None  # proxy = location_id in v0 (no per-user identity)
+    count_submitted_at: Optional[datetime] = None
+    line_count: int = 0
+    notes: str = ""
+    lines: list[InventoryCountLine] = Field(default_factory=list)
+
+
+class InventoryCountLineSubmit(BaseModel):
+    product_id: str
+    current_stock_qty_base: float = Field(ge=0)
+    count_comment: str = ""
+
+
+class InventoryCountSubmitRequest(BaseModel):
+    """Payload for POST /api/captain/inventory/submit. Only entered products are
+    included; an empty list is rejected (min_length=1)."""
+    lines: list[InventoryCountLineSubmit] = Field(min_length=1)
+    notes: str = ""
+
+
+class InventoryCountSubmitResponse(BaseModel):
+    count_id: str
+    count_date: date
+    line_count: int
+    warnings: list[str] = Field(default_factory=list)

@@ -30,6 +30,8 @@ from pydantic import BaseModel
 
 from .config import settings
 from .models import (
+    InventoryCount,
+    InventoryCountLine,
     Location,
     LocationProductSetting,
     Order,
@@ -678,3 +680,66 @@ def delete_order_lines(order_id: str) -> int:
         ws.delete_rows(lo, hi)
     invalidate_cache("order_lines")
     return len(target_rows)
+
+
+# ---------- Inventory count read + append-only write API (S-06) ----------
+
+def load_inventory_counts() -> list[InventoryCount]:
+    """Read 'inventory_counts' worksheet, return InventoryCount instances (no lines)."""
+    return _read_with_ttl("inventory_counts", InventoryCount)
+
+
+def load_inventory_count_lines() -> list[InventoryCountLine]:
+    """Read 'inventory_count_lines' worksheet, return InventoryCountLine instances."""
+    return _read_with_ttl("inventory_count_lines", InventoryCountLine)
+
+
+def append_inventory_count(count: InventoryCount) -> None:
+    """Append one row to 'inventory_counts', then invalidate the read cache.
+
+    Mirrors ``append_order``. Append-only: inventory counts are immutable dated
+    snapshots — there is no update/delete in S-06.
+    """
+    ws = _open_worksheet("inventory_counts")
+    column_order = _get_column_order(ws)
+    row = _model_to_row(count, column_order)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    invalidate_cache("inventory_counts")
+
+
+def append_inventory_count_lines(lines: list[InventoryCountLine]) -> None:
+    """Batch-append InventoryCountLine rows to 'inventory_count_lines' in one call.
+
+    All lines must share the same ``count_id`` (mirrors ``append_order_lines``);
+    raises ValueError otherwise. A no-op when ``lines`` is empty. Invalidates the
+    'inventory_count_lines' read cache after a successful write.
+    """
+    if not lines:
+        return
+    count_ids = {line.count_id for line in lines}
+    if len(count_ids) > 1:
+        raise ValueError(
+            f"append_inventory_count_lines: all lines must share count_id; "
+            f"got {sorted(count_ids)}"
+        )
+    ws = _open_worksheet("inventory_count_lines")
+    column_order = _get_column_order(ws)
+    rows = [_model_to_row(line, column_order) for line in lines]
+    ws.append_rows(rows, value_input_option="USER_ENTERED")
+    invalidate_cache("inventory_count_lines")
+
+
+def get_inventory_count(count_id: str) -> InventoryCount | None:
+    """Return the InventoryCount with ``count_id`` and its lines populated.
+
+    Uses the cached read paths (load_inventory_counts + load_inventory_count_lines).
+    Returns None if the count_id is not present. Mirrors ``get_order``.
+    """
+    counts = load_inventory_counts()
+    match = next((c for c in counts if c.count_id == count_id), None)
+    if match is None:
+        return None
+    lines = [
+        line for line in load_inventory_count_lines() if line.count_id == count_id
+    ]
+    return match.model_copy(update={"lines": lines})
