@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-04
+updated: 2026-06-05
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -35,7 +35,7 @@ Pita Supply OS is the single structured path from a location's stock counts to s
 | S-03 | bukat-suggestion-learning-loop| Owner validates Bukat suggestions vs per-line history and corrects master data    | S-02          | FR-012                                        | proposed |
 | S-04 | channel-aware-dispatch        | Manager dispatches additional suppliers via portal / phone / manual               | S-02          | FR-013                                        | proposed |
 | S-05 | manager-queue-filters         | Manager filters/narrows the queue by supplier / location / status                 | —             | FR-014                                        | ready    |
-| S-06 | inventory-count               | Captain counts all location products in one pass → dated snapshot                 | —             | US-02, FR-015, FR-016                         | ready    |
+| S-06 | inventory-count               | Captain counts all location products in one pass → dated snapshot                 | —             | US-02, FR-015, FR-016                         | done     |
 | S-07 | order-prefill-from-inventory  | Order screen offers opt-in pre-fill of stock from the latest inventory snapshot   | S-06          | US-02, FR-017                                 | proposed |
 | S-08 | inventory-manager-view        | (Phase 2) Manager views inventories; Owner browses inventory history/trends       | S-06          | FR-018, FR-019                                | proposed |
 
@@ -149,7 +149,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Independent of the Bukat-master-data blocker AND of the north star — a true parallel early track (the user's "one of the first slices"). Introduces the inventory data entities (`inventory_counts` / `inventory_count_lines`) behind `_choose_backend()`, mirroring orders/order_lines; the pilot's data store and dispatch are untouched. NFR: no entered count lost mid-pass.
-- **Status:** ready
+- **Status:** done
 
 ### S-07: Order screen pre-fills stock from an inventory snapshot
 
@@ -209,4 +209,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Done
 
-(Empty on first generation. `/10x-archive` appends here — and flips that item's `Status` to `done` — when a change whose `Change ID` matches a roadmap item is archived.)
+- **S-06: Captain counts the whole location → dated snapshot** — Archived 2026-06-05 → `context/archive/2026-06-05-inventory-count/`. Lesson: —.
