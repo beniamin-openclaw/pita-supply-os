@@ -1,8 +1,9 @@
 ---
 project: "Pita Supply OS"
-version: 1
+version: 2
 status: draft
 created: 2026-06-04
+updated: 2026-06-04   # v2: +Location Inventory Count change (FR-015…FR-019, US-02)
 context_type: brownfield
 product_type: web-app
 target_scale:
@@ -110,11 +111,26 @@ All three personas already exist; this change alters the Captain's and Manager's
 - Dispatch produces a ready-to-send email draft containing the Bukat line quantities in purchase units.
 - The owner can review the same per-line history after the flow completes.
 
+### US-02: Wola Captain counts the whole location once, then orders with stock pre-filled
+
+*New (Location Inventory Count change): decouples "count everything once" from "order per supplier", making the governing rule's stock-count step explicit and reusable. A parallel early track — does not block or delay the Bukat pilot (US-01).*
+
+- **Given** a Wola Captain with a valid Captain token and products configured for the location
+- **When** the Captain opens the location inventory screen, enters current stock for every product in one pass, and approves it
+- **Then** the count is saved as a dated snapshot, and when the Captain later starts a supplier order they are offered — with the snapshot's date/time shown — to pre-fill current stock (editable, and skippable for manual entry as today)
+
+#### Acceptance Criteria
+
+- The inventory screen lists every product configured for the Captain's location.
+- Approving persists a snapshot carrying timestamp + actor; prior snapshots are retained.
+- The order screen's pre-fill is opt-in, names its source snapshot, and never overwrites without confirmation; ordering without any inventory behaves exactly as today.
+- Phase-2 (should-have, deferred): a Manager view of submitted inventories and history/trend browsing.
+
 ---
 
 ## Scope of Change
 
-The 14 functional requirements from shaping, categorized by change type. FR-NNN identifiers and Socratic resolutions are preserved as load-bearing for downstream review. No requirements are removed.
+The functional requirements from shaping, categorized by change type — 14 baseline plus 5 added for the **Location Inventory Count** change (FR-015…FR-019, a parallel early track). FR-NNN identifiers and Socratic resolutions are preserved as load-bearing for downstream review. No requirements are removed.
 
 ### Preserved (must not break)
 
@@ -154,6 +170,19 @@ The 14 functional requirements from shaping, categorized by change type. FR-NNN 
 - **[new] FR-014** — Manager can filter or narrow the order queue (supplier, location, status). Priority: must-have by week 2.
   > Socrates: N/A (added from the FR-006 resolution).
 
+**Location Inventory Count change (FR-015…FR-019 — parallel early track, independent of the Bukat pilot):**
+
+- **[new] FR-015** — Captain can open a location-wide inventory screen (all products configured for the location) and enter current stock for every product in one pass. Priority: must-have.
+  > Socrates: Counter-argument considered: "redundant with per-supplier stock entry already in the order screen." Resolution: kept — the win is count-once, reuse across suppliers; matches the operator counting the whole store at once.
+- **[new] FR-016** — Captain can approve an inventory count, persisted as a dated snapshot (timestamp + actor); snapshots are retained over time. Priority: must-have.
+  > Socrates: Counter-argument considered: "a snapshot store breaks 'no schema change in week 1'." Resolution: kept — accepted as a separate parallel track (new entities behind `_choose_backend()`), not week-1 pilot scope.
+- **[new] FR-017** — When starting a per-supplier order, the Captain can opt in (a confirmation that names the snapshot's date/time) to pre-fill current stock from the latest snapshot; values are editable and ordering works without it. Priority: must-have.
+  > Socrates: Counter-argument considered: "stale auto-fill could push a wrong count into an order." Resolution: kept with a double-safeguard — opt-in, and the prompt names which inventory (date/time) it pulls from; nothing fills without confirmation.
+- **[new] FR-018** — Manager can view submitted inventory counts (read-only). Priority: should-have (Phase 2; deferred past the pilot).
+  > Socrates: Counter-argument accepted: the Manager already receives the order with stock embedded — a separate inventory view duplicates without pilot value. Resolution: demoted to should-have, Phase 2.
+- **[new] FR-019** — Captain/Owner can browse inventory history/trends over time. Priority: should-have (Phase 2; deferred past the pilot).
+  > Socrates: Counter-argument accepted: snapshots are persisted regardless (FR-016); a trend/browse UI is audit/scale value, not pilot value. Resolution: demoted to should-have, Phase 2.
+
 ---
 
 ## Constraints & Compatibility
@@ -164,7 +193,8 @@ The 14 functional requirements from shaping, categorized by change type. FR-NNN 
 - The suggestion math remains visible to the user.
 
 **Data:**
-- No schema change planned for the baseline. The existing data-store schema, the order-line history columns, and secrets-kept-off-repo all stay as-is. No data migration or backfill in week 1.
+- No schema change planned for the **baseline pilot**. The existing data-store schema, the order-line history columns, and secrets-kept-off-repo all stay as-is. No data migration or backfill in week 1.
+- **Location Inventory Count change (parallel track) — the one intentional exception:** introduces two new data entities, `inventory_counts` + `inventory_count_lines`, behind the existing `_choose_backend()` seam (mirroring `orders` / `order_lines`). This is parallel to, not part of, the week-1 Bukat pilot, and leaves the pilot's data store, the `order_lines` schema, and the order/dispatch flow untouched.
 
 **Existing integrations / behavior that must not regress:**
 - Email dispatch continues to work.
@@ -204,6 +234,7 @@ Notes carried from shaping: the operator reviewed a fuller role→capability mat
 
 - **Pago internal warehouse pipeline** — master-ordering Excel aggregation, warehouse email, driver delivery plan (a separate Excel process today; future module).
 - **Auto-ordering without a human final** — the system only suggests; the Captain and Manager always commit (governing rule).
+- **Auto-generating draft orders from an inventory count** — the Location Inventory Count change only *pre-fills* the stock field; it never creates orders automatically (consistent with the suggest-only governing rule).
 - **Guest / customer-facing restaurant ordering** — Supply OS is internal supplier ordering only.
 - **GoStock integration, receiving/WZ, finance/KSeF, predictive AI** — per existing roadmap postponements.
 

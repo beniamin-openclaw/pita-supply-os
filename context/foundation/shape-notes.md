@@ -2,7 +2,7 @@
 project: "Pita Supply OS"
 context_type: brownfield
 created: 2026-06-03
-updated: 2026-06-03
+updated: 2026-06-04
 product_type: web-app
 target_scale:
   users: small                      # pilot = Wola only; end-state (all company) ~ medium — see Open Questions
@@ -44,7 +44,7 @@ checkpoint:
       decision: operator reviewed the out-of-band role→capability matrix and chose the short "two-token, unchanged" note for the baseline ("go easy, harden later"); per-manager identity → week-1 Non-Goal, token rotation → Open Questions; earlier token-prefix issues reported hardened
     - topic: product framing (Phase 6)
       decision: web-app (unchanged); after_hours_only=false (mixed — day-job + after-hours, operator confirmed); scale small at pilot, ~medium company-wide end-state (Open Q); hard_deadline=null; non-goals rebuilt with operator (4 functional + 2 non-functional; queue-filters NOT locked as a non-goal)
-  frs_drafted: 14
+  frs_drafted: 19   # 14 baseline + 5 for the Location Inventory Count change (see end of file)
   quality_check_status: accepted
 ---
 
@@ -286,3 +286,79 @@ No gaps to mirror into `/10x-prd` Open Questions. The four entries under `## Ope
 2. **Bukat master data** — ready for week 1 or needs a prep pass before Captain pilot.
 3. **End-state scale** — frontmatter `users: small` (pilot); company-wide rollout likely `medium` — confirm before scale work.
 4. **Token rotation** — two exposed tokens; rotate before wider rollout (deferred).
+
+---
+
+## Change: Location Inventory Count (2026-06-04 — additive, extends baseline)
+
+> Additive brownfield change shaped on top of the completed baseline above (facilitated this session, `/10x-shape` extend-in-place). Staged: **Phase 1 = must-have core**, **Phase 2 = should-have, deferred**. Feeds the PRD's `## Scope of Change → New` (FR-015…FR-019) + a new user story (US-02). The baseline sections above are unchanged.
+
+### Change framing
+
+- **Current system delta** — today the Captain enters current stock **per supplier**, inline in the order screen (`/captain-v2`); there is no standalone, reusable record of "what's on site". The stock value lives only in an order line.
+- **Vision delta** — add a **location-wide inventory count**: the Captain counts all of a location's products in one pass and approves it, producing a **dated stock snapshot** that can optionally pre-fill the per-supplier order screen. This makes the governing rule's "location stock counts" step **explicit and counted-once** (count all → feed many orders), instead of re-typed per supplier.
+- **Primary persona** — Captain (performs the count). Manager (Phase-2 view) and Owner (Phase-2 history) consume it; no new persona.
+- **Sequencing** — a **parallel early track**, independent of the Bukat email-dispatch north star; must NOT block or delay it. Ordering still works with manual stock entry exactly as today.
+
+### Access Control delta
+
+No change. The Captain uses the existing two-token model; the inventory screen is location-scoped from the Captain token, like ordering. (Matches baseline `## Access Control`: "No changes planned — current model preserved.")
+
+### Success Criteria (this change)
+
+- **Primary:** Captain opens the location-wide inventory screen → enters current stock for every Wola product in one pass → approves → a dated snapshot is saved. Later, starting a Bukat order, the Captain opts into pre-fill (confirmation names the snapshot's date/time), sees `current_stock` pre-populated (editable), and submits as today.
+- **Secondary (Phase 2):** Manager can view submitted inventories; Owner can browse inventory history/trends over time.
+- **Guardrails:** ordering still works WITHOUT inventory (no regression to the current per-supplier flow); no entered count is lost mid-inventory; the suggestion engine, dispatch, and `order_lines` schema are untouched.
+
+### Functional Requirements (new)
+
+- FR-015: Captain can open a location-wide inventory screen (all products with a `location_product_setting` at the location) and enter current stock for every product in one pass. Priority: must-have. Change: new.
+  > Socrates: Counter-argument considered: "redundant with per-supplier stock entry already in the order screen." Resolution: kept — the win is **count once, reuse across suppliers**, and it matches how the operator physically counts the whole store at once.
+- FR-016: Captain can approve/submit an inventory count, persisting it as a dated snapshot (timestamp + actor). Priority: must-have. Change: new.
+  > Socrates: Counter-argument considered: "a snapshot store violates baseline 'no schema change in week 1'." Resolution: kept — accepted as a **separate parallel track** (two new entities behind `_choose_backend()`), not week-1 pilot scope; the pilot's data store is untouched.
+- FR-017: When starting a per-supplier order, the Captain can opt in (via a confirmation that names the source snapshot's date/time) to pre-fill `current_stock` from the latest snapshot; values are editable and ordering works without it. Priority: must-have. Change: new.
+  > Socrates: Counter-argument considered: "silent auto-fill could push a stale count into an order." Resolution: kept WITH a double-safeguard — pre-fill is opt-in and the prompt names which inventory (date/time) it pulls from; nothing fills without confirmation.
+- FR-018: Manager can view submitted inventory counts (read-only, like the order queue). Priority: should-have. Change: new.
+  > Socrates: Counter-argument considered: "the Manager already receives the order with stock embedded; a separate inventory view duplicates without pilot value." Resolution: **demoted to should-have, Phase 2** — value grows with audit / multiple suppliers; not built in the must-have core.
+- FR-019: Captain/Owner can browse inventory history/trends over time. Priority: should-have. Change: new.
+  > Socrates: Counter-argument considered: "snapshots are persisted regardless (FR-016); a browsing/trend UI is audit/scale value, not pilot value." Resolution: **demoted to should-have, Phase 2** — data accumulates now; the browsing surface is added when there is history worth showing.
+
+### User Stories
+
+### US-02: Captain counts the whole location once, then orders with stock pre-filled
+
+- **Given** a Wola Captain with a valid token and products configured for the location
+- **When** the Captain opens the location inventory screen, enters current stock for every product in one pass, and approves it
+- **Then** the count is saved as a dated snapshot, and when the Captain later starts a supplier order they are offered (with the snapshot's date/time shown) to pre-fill current stock — editable, and skippable in favour of manual entry.
+
+#### Acceptance Criteria
+
+- The inventory screen lists every product with a `location_product_setting` at the Captain's location.
+- Approving persists a snapshot carrying timestamp + actor; prior snapshots are retained.
+- The order screen's pre-fill is opt-in, names its source snapshot, and never overwrites without confirmation; ordering without any inventory behaves exactly as today.
+
+### Business Logic delta
+
+**No new domain rule.** The governing rule — single path from location stock counts to supplier dispatch — is unchanged. This change makes the rule's **"location stock counts" input explicit and reusable** (count once → feed many orders) rather than re-entered per supplier. It is a workflow / input-surface change, not a new decision the application makes; the engine still only suggests, and a human still commits.
+
+### Non-Functional Requirements (new)
+
+- No entered count is lost mid-inventory on a phone or tablet under normal pilot connectivity (mirrors the baseline no-data-loss-on-submit NFR; the inventory screen is a larger single-pass form, so this matters more).
+
+### Constraints & Preserved Behavior delta
+
+- **New data entities:** `inventory_counts` + `inventory_count_lines`, implemented behind the `_choose_backend()` seam (mirroring the `orders` / `order_lines` pattern). This intentionally extends the baseline "no schema change in week 1" constraint — accepted because the inventory track is parallel to, not part of, the week-1 Bukat pilot.
+- **Preserved:** the existing per-supplier order flow, the suggestion engine, dispatch, and the `order_lines` schema must continue working unchanged; ordering must remain fully usable with manual stock entry and no inventory.
+
+### Non-Goals (new)
+
+- **Auto-generating draft orders from an inventory count** — explicitly out of scope. Inventory only *pre-fills* the stock field; it never creates orders automatically (consistent with the suggest-only / human-commits governing rule).
+- **Phase-2 surfaces in the must-have core** — Manager inventory view (FR-018) and history/trend browsing (FR-019) are should-have, deferred past the pilot.
+
+### Gray areas resolved (this change)
+
+- Doc strategy: **extend-in-place** (append here + amend `prd.md` `## Scope of Change → New`); baseline shape-notes/PRD preserved, not restarted.
+- "Approve & send" = persisted snapshot **+ Manager view (Phase 2)**; no auto-order generation.
+- Inventory ↔ ordering coupling = **opt-in, confirmed pre-fill naming the source snapshot**; ordering also works standalone.
+- History = **full snapshots over time** (browsing UI is Phase 2).
+- Sequencing = **parallel early track**, independent of the north star.
