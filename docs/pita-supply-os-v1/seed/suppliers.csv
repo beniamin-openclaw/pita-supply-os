@@ -1,6 +1,6 @@
 supplier_id,supplier_name,email,ordering_method,delivery_days,cutoff_time,minimum_order_value_pln,active,notes
 SUP_BLUESERV,Blue Service,TBD,email,TBD,TBD,,TRUE,"Packaging (Opakowania) + cleaning chemicals (Chemia) — biweekly or as-needed"
-SUP_BUKAT,Bukat,TBD,email,"Mon, Wed, Fri",TBD,,TRUE,"Fresh produce + Greek cheese/dips (Chłodnia) — most frequent supplier, daily/3x weekly"
+SUP_BUKAT,Bukat,biuro@bukat.com,email,"Mon, Tue, Wed, Thu, Fri, Sat",16:00,,TRUE,"Fresh produce + Greek cheese/dips (Chłodnia) — most frequent supplier, daily/3x weekly. Ordering habit Mon/Wed/Fri; deliveries Mon–Sat; Sunday order → Monday delivery."
 SUP_COCACOLA,Coca Cola Hub,TBD,portal,TBD,TBD,,TRUE,"Beverages (Napoje + Alkohol) — platform-based ordering, manual in v0"
 SUP_EUROFOOD,Eurofood,TBD,email,TBD,TBD,,TRUE,"Greek wine + retsina + Mythos beer (Wino + Napoje)"
 SUP_FILBER,Filber Wyspy Piwne,TBD,email,TBD,TBD,,TRUE,"Lemoniady (Napoje)"

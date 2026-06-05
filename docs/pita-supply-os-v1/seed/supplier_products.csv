@@ -51,7 +51,7 @@ SP_BUKAT_P010,SUP_BUKAT,P010,Czosnek,kg,1,27.00,TRUE,
 SP_BUKAT_P011,SUP_BUKAT,P011,Tzatzyki,wiadro,3,40.00,TRUE,1 wiadro = 3 kg (cena=40 zł/wiadro, cena_jm=13.33 zł/kg)
 SP_BUKAT_P012,SUP_BUKAT,P012,Tirokafteri,wiadro,3,60.00,TRUE,1 wiadro = 3 kg
 SP_BUKAT_P014,SUP_BUKAT,P014,Feta blok,blok,2,95.00,TRUE,1 blok = 2 kg
-SP_BUKAT_P016,SUP_BUKAT,P016,Cebula czerwona,kg,1,11.00,TRUE,
+SP_BUKAT_P016,SUP_BUKAT,P016,Cebula czerwona,kg,1,2.20,TRUE,
 SP_BUKAT_P018,SUP_BUKAT,P018,Cebula Biała,kg,1,1.50,TRUE,
 SP_COCACOLA_P063,SUP_COCACOLA,P063,Monster (wszystkie),szt,1,3.90,TRUE,
 SP_COCACOLA_P064,SUP_COCACOLA,P064,Cappy Jabłko,szt,1,2.85,TRUE,
