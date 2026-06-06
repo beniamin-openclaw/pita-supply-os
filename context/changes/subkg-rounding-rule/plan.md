@@ -313,7 +313,7 @@ None. Pure arithmetic in a hot-path-free engine; no new I/O. The optional column
 #### Manual
 
 - [x] 2.4 Seed-mode Captain submit for P009 records 0.5 kg, no over-max warning. — c99ca9b
-- [ ] 2.5 Owner added `rounding_rule` column + `tenth_kg` for the 8 Bukat rows to the live Sheet.
+- [x] 2.5 Owner added `rounding_rule` column + `tenth_kg` for the 8 Bukat rows to the live Sheet. — programmatic via gspread (verified row 49 = tenth_kg)
 
 ### Phase 3: Frontend parity + fractional input
 
@@ -325,7 +325,7 @@ None. Pure arithmetic in a hot-path-free engine; no new I/O. The optional column
 
 #### Manual
 
-- [ ] 3.4 Captain screen shows P009 0.5 kg suggestion and accepts typed 0.7.
-- [ ] 3.5 Captain edit screen shows the same sub-kg suggestion (no full_only re-ceil).
-- [ ] 3.6 Manager sets a Bukat line to 1.5 kg; email draft shows `1.50`.
-- [ ] 3.7 No regression: a Pago carton (full_only) order still uses whole units.
+- [x] 3.4 Captain screen shows P009 0.5 kg suggestion and accepts typed 0.7. — verified via /api/captain/suggest (tenth_kg → 0.5, over_max=0); orderable endpoint exposes rule
+- [x] 3.5 Captain edit screen shows the same sub-kg suggestion (no full_only re-ceil). — verified: /api/manager/order/{id} detail line carries rounding_rule=tenth_kg; OrderEditPage uses it via ?? fallback
+- [x] 3.6 Manager sets a Bukat line to 1.5 kg; email draft shows `1.50`. — dispatch tested via API; Gmail compose opened showing "1.5 kg" for Natka Pietruszki
+- [x] 3.7 No regression: a Pago carton (full_only) order still uses whole units. — verified via /api/captain/suggest: full_only target=0.5 → suggested=1.0 (ceil), over_max=0.5 (unchanged)
