@@ -8,7 +8,6 @@ import pytest
 
 from app.gmail_url import (
     GMAIL_COMPOSE_BASE,
-    MAX_GMAIL_URL_LENGTH,
     build_draft_url,
 )
 from app.models import (

@@ -195,7 +195,7 @@ def test_save_empty_payload_is_noop(mocker):
 
 def test_save_total_uses_effective_qty_for_untouched_lines(mocker):
     """One line edited, the other untouched → total mixes new + captain default."""
-    mocks = _activate(mocker, _claimed_order())
+    _activate(mocker, _claimed_order())
     body = {"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 2}]}
     r = _patch(body)
     assert r.status_code == 200, r.text
