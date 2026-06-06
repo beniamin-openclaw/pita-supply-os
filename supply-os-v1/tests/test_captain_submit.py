@@ -5,20 +5,12 @@ gates (unknown supplier/product, missing settings, critical under-order,
 deviation > 20%), happy paths, response shape, and the persist contract
 in both backends (seed = no-op + warning; sheet = append called).
 """
-import os
+import pytest
+from fastapi.testclient import TestClient
 
-# Configure auth env BEFORE importing the app (settings reads at import time).
-os.environ.setdefault(
-    "SUPPLY_OS_CAPTAIN_TOKENS", "WOLA:test_wola_token,KEN:test_ken_token"
-)
-os.environ.setdefault("SUPPLY_OS_MANAGER_TOKEN", "test_manager_token")
-
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import sheets  # noqa: E402
-from app.config import DataBackend  # noqa: E402
-from app.main import app  # noqa: E402
+from app import sheets
+from app.config import DataBackend
+from app.main import app
 
 client = TestClient(app)
 
@@ -52,6 +44,32 @@ def test_submit_happy_path_seed_backend():
     assert out["line_count"] == 1
     # 1 karton * 145 PLN = 145
     assert out["total_value_estimate_pln"] == 145.0
+
+
+def test_submit_bukat_p009_subkg_tenth_kg_from_seed():
+    """P009 carries rounding_rule=tenth_kg in seed: target 0.5, stock 0 →
+    suggestion 0.5 kg. Ordering exactly 0.5 is accepted with no deviation
+    warning — which only holds if the seed's tenth_kg rule is applied
+    (full_only would suggest 1.0 kg and reject 0.5 as a >20% under-order
+    without a reason)."""
+    body = {
+        "supplier_id": "SUP_BUKAT",
+        "lines": [
+            {
+                "product_id": "P009",
+                "supplier_product_id": "SP_BUKAT_P009",
+                "current_stock_qty_base": 0,
+                "captain_final_qty_purchase": 0.5,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["line_count"] == 1
+    assert not any("deviation" in w for w in out["warnings"])
+    # 0.5 kg * 18.00 zł/kg = 9.0
+    assert out["total_value_estimate_pln"] == 9.0
 
 
 def test_submit_unauthorized_no_token():

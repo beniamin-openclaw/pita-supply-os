@@ -38,6 +38,7 @@ class RoundingRule(str, Enum):
     FULL_ONLY = "full_only"
     HALF_ALLOWED = "half_allowed"
     UP_FOR_CRITICAL = "up_for_critical"
+    TENTH_KG = "tenth_kg"  # weight goods: round up to the next 0.1 (kg)
 
 
 # ---------- Master data ----------
@@ -245,6 +246,7 @@ class ManagerOrderLineDetail(BaseModel):
     supplier_product_name: str  # joined
     purchase_unit: str
     units_per_purchase_unit: float
+    rounding_rule: RoundingRule = RoundingRule.FULL_ONLY  # SKU snap rule, for FE parity
     price_estimate_pln: Optional[float] = None
     current_stock_qty_base: float
     target_stock_qty_base: float

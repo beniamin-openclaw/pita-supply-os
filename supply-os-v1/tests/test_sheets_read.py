@@ -15,6 +15,7 @@ from app.models import (
     Location,
     LocationProductSetting,
     Product,
+    RoundingRule,
     Supplier,
     SupplierProduct,
 )
@@ -264,6 +265,28 @@ def test_load_supplier_products_happy_path(mocker):
     assert isinstance(sp[0], SupplierProduct)
     assert sp[0].supplier_product_id == "SP001"
     assert sp[0].units_per_purchase_unit == 0.2
+
+
+def test_load_supplier_products_parses_tenth_kg(mocker):
+    """The S-09 weight rule must round-trip from the sheet's enum string."""
+    rows = [
+        {
+            "supplier_product_id": "SP_BUKAT_P009",
+            "supplier_id": "SUP_BUKAT",
+            "product_id": "P009",
+            "supplier_product_name": "Natka Pietruszki",
+            "purchase_unit": "kg",
+            "units_per_purchase_unit": 1,
+            "rounding_rule": "tenth_kg",
+            "price_estimate_pln": 18.0,
+            "active": "TRUE",
+            "notes": "",
+        }
+    ]
+    ws = _mk_worksheet(SUPPLIER_PRODUCT_HEADERS, rows)
+    mocker.patch.object(sheets, "_open_worksheet", return_value=ws)
+    sp = sheets.load_supplier_products()
+    assert sp[0].rounding_rule == RoundingRule.TENTH_KG
 
 
 def test_load_location_product_settings_happy_path(mocker):
@@ -539,6 +562,7 @@ def test_spreadsheet_not_found_raises_with_helpful_message(mocker):
 
 def test_is_configured_false_when_secret_empty(mocker):
     mocker.patch.object(sheets.settings, "google_sheet_id", "TEST_SHEET_ID")
+    mocker.patch.object(sheets.settings, "google_service_account_json_file", "")
     from pydantic import SecretStr
     mocker.patch.object(sheets.settings, "google_service_account_json", SecretStr(""))
     assert sheets.is_configured() is False

@@ -5,19 +5,11 @@ Auth uses the same env-token model as test_captain_submit.py. Persistence is
 sheet-only (seed = no-op + warning; sheet = append called); the submit endpoint
 maps a missing inventory worksheet to a 503 (F2).
 """
-import os
+from fastapi.testclient import TestClient
 
-# Configure auth env BEFORE importing the app (settings reads at import time).
-os.environ.setdefault(
-    "SUPPLY_OS_CAPTAIN_TOKENS", "WOLA:test_wola_token,KEN:test_ken_token"
-)
-os.environ.setdefault("SUPPLY_OS_MANAGER_TOKEN", "test_manager_token")
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app import seed_loader, sheets  # noqa: E402
-from app.config import DataBackend  # noqa: E402
-from app.main import app  # noqa: E402
+from app import seed_loader, sheets
+from app.config import DataBackend
+from app.main import app
 
 client = TestClient(app)
 

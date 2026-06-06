@@ -234,9 +234,20 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
               <input
                 id={finalInputId}
                 type="number"
-                inputMode="numeric"
+                inputMode={
+                  item.rounding_rule === "tenth_kg" ||
+                  item.rounding_rule === "half_allowed"
+                    ? "decimal"
+                    : "numeric"
+                }
                 min="0"
-                step="1"
+                step={
+                  item.rounding_rule === "tenth_kg"
+                    ? "0.1"
+                    : item.rounding_rule === "half_allowed"
+                      ? "0.5"
+                      : "1"
+                }
                 value={line.captain_final_qty_purchase}
                 onChange={handleFinalChange}
                 aria-describedby={`${finalUnitId} ${pillId}`}

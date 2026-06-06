@@ -43,3 +43,10 @@
 - **Problem**: Pydantic settings load ONCE at the first `app.config` import. Files set env via `os.environ.setdefault(...)` before importing the app, but a sibling that imports `app.config` (e.g. via `app.sheets`) WITHOUT those vars can load settings first — so a later file's `setdefault` is too late. Result: an order-dependent suite (a 2-file subset fails auth tests while the full alphabetical run passes 217/217).
 - **Rule**: Set test settings (auth tokens, data backend) once in a session-scoped `tests/conftest.py` BEFORE any app/config import — never rely on per-file `os.environ.setdefault` for settings that load once. The suite must pass regardless of file order or subset selection.
 - **Applies to**: implement, impl-review
+
+## Mirror Pydantic optionality in TypeScript response types
+
+- **Context**: TS interfaces in `frontend/src/types.ts` that mirror backend Pydantic models — especially a field that has a default or is `Optional` on the Pydantic side (e.g. `ManagerOrderLineDetail.rounding_rule`).
+- **Problem**: A backend optional-with-default field was mirrored as a *required* TS field. It was safe only because the server always emits it; the type contract still disagrees with the model — latent drift that bites the day a code path omits the field.
+- **Rule**: When mirroring a Pydantic model in TS, match optionality to the source — a field with a default or `Optional[...]` becomes `field?: T`. Only mark a TS field required when the backend guarantees it on every response.
+- **Applies to**: implement, impl-review

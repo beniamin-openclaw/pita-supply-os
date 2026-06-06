@@ -1,13 +1,7 @@
 """TestClient integration tests for FastAPI routes."""
-import os
+from fastapi.testclient import TestClient
 
-# Configure auth env BEFORE importing the app (settings reads at import time).
-os.environ.setdefault("SUPPLY_OS_CAPTAIN_TOKENS", "WOLA:test_wola_token,KEN:test_ken_token")
-os.environ.setdefault("SUPPLY_OS_MANAGER_TOKEN", "test_manager_token")
-
-from fastapi.testclient import TestClient  # noqa: E402
-
-from app.main import app  # noqa: E402
+from app.main import app
 
 client = TestClient(app)
 
@@ -137,6 +131,20 @@ def test_captain_orderable_wola_pago_returns_6_food_items():
     assert {"P019", "P024", "P025", "P026", "P027", "P028"} == pids
 
 
+def test_captain_orderable_bukat_exposes_tenth_kg_rule():
+    """The seed's tenth_kg assignment must reach the Captain order screen;
+    a discrete-pack Bukat SKU stays full_only."""
+    r = client.get(
+        "/api/captain/orderable",
+        params={"supplier_id": "SUP_BUKAT"},
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    items = {i["supplier_product_id"]: i for i in r.json()}
+    assert items["SP_BUKAT_P009"]["rounding_rule"] == "tenth_kg"
+    assert items["SP_BUKAT_P011"]["rounding_rule"] == "full_only"
+
+
 def test_captain_orderable_ken_returns_empty():
     """KEN has no location_product_settings rows in v0."""
     r = client.get(
@@ -167,6 +175,26 @@ def test_captain_suggest_souvlaki_kurczak():
     assert out["suggested_qty_purchase"] == 1
     assert out["suggested_qty_base"] == 5
     assert out["over_max_qty_base"] == 1
+
+
+def test_captain_suggest_tenth_kg_subkg():
+    """Sub-kg target on a per-kg SKU suggests 0.5 kg (no whole-kg ceil) and no
+    over-max — the P009/P010 fix, exercised through the HTTP preview."""
+    r = client.post(
+        "/api/captain/suggest",
+        json={
+            "current_stock_qty_base": 0,
+            "target_stock_qty_base": 0.5,
+            "max_stock_qty_base": 0.5,
+            "units_per_purchase_unit": 1,
+            "rounding_rule": "tenth_kg",
+        },
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200
+    out = r.json()
+    assert out["suggested_qty_purchase"] == 0.5
+    assert out["over_max_qty_base"] == 0
 
 
 def test_captain_suggest_rejects_negative_stock():
