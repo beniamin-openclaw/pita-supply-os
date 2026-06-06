@@ -80,6 +80,10 @@ export function ManagerPage() {
   // 60s auto-refresh of the queue. Selection is independent state, so it
   // survives the refresh; the detail pane is reloaded separately on selection.
   useEffect(() => {
+    // loadQueue() synchronously resets `error` before fetching — an
+    // intentional reset, and the same callback backs the manual refresh /
+    // retry buttons.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadQueue();
     const interval = setInterval(loadQueue, 60_000);
     return () => clearInterval(interval);

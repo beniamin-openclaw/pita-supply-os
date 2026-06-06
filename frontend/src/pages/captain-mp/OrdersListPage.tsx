@@ -27,6 +27,9 @@ export function OrdersListPage() {
   }, []);
 
   useEffect(() => {
+    // load() resets `error` before fetching — an intentional reset, and the
+    // same callback backs the "try again" retry button.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 

@@ -19,12 +19,17 @@ export function CaptainPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Intentional loading reset for the mount fetch (idempotent — `loading`
+    // starts true, so this never triggers an extra render).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     api.suppliers().then(setSuppliers).catch((e: ApiError) => setError(e.detail));
   }, []);
 
   useEffect(() => {
     if (!selectedSupplier) return;
+    // Intentional loading reset when the selected supplier changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     api.orderable(selectedSupplier)
       .then(setItems)

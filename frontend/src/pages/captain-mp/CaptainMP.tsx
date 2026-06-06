@@ -76,6 +76,9 @@ export function CaptainMP() {
   // ---- Auto-select first supplier once loaded -------------------------------
   useEffect(() => {
     if (!activeSupplierId && suppliers.length > 0) {
+      // One-time default selection once the supplier list arrives; guarded by
+      // `!activeSupplierId` so it never fights an explicit user choice.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSupplierId(suppliers[0].supplier_id);
     }
   }, [suppliers, activeSupplierId]);
@@ -84,6 +87,9 @@ export function CaptainMP() {
   useEffect(() => {
     if (!activeSupplierId) return;
     let cancelled = false;
+    // Intentional reset when the active supplier changes: show the loading
+    // skeleton and clear the previous supplier's items/lines before refetching.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoadingItems(true);
     setOrderableItems([]);
     setLines({});

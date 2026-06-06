@@ -31,6 +31,9 @@ export function OrderDetailPage() {
   }, [order_id]);
 
   useEffect(() => {
+    // load() resets `error` before fetching the order detail — an intentional
+    // fetch-on-mount reset, not a cascading-render hazard.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 

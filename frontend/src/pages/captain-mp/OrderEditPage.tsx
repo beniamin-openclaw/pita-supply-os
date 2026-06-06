@@ -77,6 +77,9 @@ export function OrderEditPage() {
   useEffect(() => {
     if (!order_id) return;
     let cancelled = false;
+    // Intentional error reset before the order load; the fetch is guarded by
+    // the `cancelled` flag below.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoadError(null);
     api
       .captainOrder(order_id)
