@@ -562,6 +562,7 @@ def test_spreadsheet_not_found_raises_with_helpful_message(mocker):
 
 def test_is_configured_false_when_secret_empty(mocker):
     mocker.patch.object(sheets.settings, "google_sheet_id", "TEST_SHEET_ID")
+    mocker.patch.object(sheets.settings, "google_service_account_json_file", "")
     from pydantic import SecretStr
     mocker.patch.object(sheets.settings, "google_service_account_json", SecretStr(""))
     assert sheets.is_configured() is False

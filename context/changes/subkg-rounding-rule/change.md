@@ -1,7 +1,7 @@
 ---
 change_id: subkg-rounding-rule
 title: Engine sub-kg (0.1 kg) rounding rule for weight-based SKUs
-status: verified
+status: impl_reviewed
 created: 2026-06-05
 updated: 2026-06-06
 archived_at: null
