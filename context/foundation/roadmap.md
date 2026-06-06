@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-04
+updated: 2026-06-06
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -199,7 +199,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 ## Parked
 
 - **Sheets → Supabase / Postgres migration** — Why parked: PRD Constraints state "No data migration or backfill in week 1"; the data store stays as-is for the pilot. Urgency for the company-wide stage is tracked in `infrastructure.md` and Open Roadmap Question 3 — not a week-1 roadmap slice.
-- **Product CI (pytest/ruff/build gate) + error-tracking/observability** — Why parked: not in week-1 PRD scope; the present quality floors (no lost stock, same-day queue, inspectable per-line history) are met by the baseline. Tracked in `stack-assessment.md` / `infrastructure.md` for the scale stages.
+- **Product CI (pytest/ruff/build gate) + error-tracking/observability** — Why parked: not in week-1 PRD scope; the present quality floors (no lost stock, same-day queue, inspectable per-line history) are met by the baseline. Tracked in `stack-assessment.md` / `infrastructure.md` for the scale stages. **Note (2026-06-06):** `supply-os-v1` is now ruff-clean repo-wide (lint-hygiene commit), but the gate is *unenforced* — ruff isn't installed in the project env (no lockfile), and the `PostToolUse` `ruff check --fix` hook silently no-ops without it, so the clean state will rot on the next edit. When picked up: add ruff + pytest to a dev install + pre-commit, and/or a `.github/workflows` CI gate (also covers the frontend `build`/`lint` and the missing Vitest runner). Address via the 10xDevs workflow (`/10x-plan`) when scale work begins.
 - **Pago internal warehouse pipeline** (master-ordering Excel aggregation, warehouse email, driver delivery plan) — Why parked: PRD Non-Goals (separate future module).
 - **Auto-ordering without a human final** — Why parked: PRD Non-Goals + governing rule — the engine only suggests; Captain and Manager always commit.
 - **Guest / customer-facing restaurant ordering** — Why parked: PRD Non-Goals (Supply OS is internal supplier ordering only).
