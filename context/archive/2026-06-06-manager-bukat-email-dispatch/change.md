@@ -1,10 +1,10 @@
 ---
 change_id: manager-bukat-email-dispatch
 title: Manager bukat email dispatch
-status: impl_reviewed
+status: archived
 created: 2026-06-06
 updated: 2026-06-06
-archived_at: null
+archived_at: 2026-06-06T12:33:17Z
 ---
 
 ## Notes
