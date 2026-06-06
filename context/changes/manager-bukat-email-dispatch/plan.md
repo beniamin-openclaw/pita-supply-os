@@ -166,24 +166,24 @@ No data-model or schema change. No migration. `conftest.py` is additive; existin
 
 #### Automated
 
-- [x] 1.1 Full backend suite passes (218 expected): `python -m pytest`
-- [x] 1.2 New history-preservation test passes in isolation
-- [x] 1.3 Order-independence proven via a 2-file subset run
-- [x] 1.4 Live-sheet safety: suite passes with sheet-mode `.env` present
-- [x] 1.5 Backend lint clean: `ruff check .`
-- [x] 1.6 Frontend type-check clean: `npx tsc -p tsconfig.app.json --noEmit`
-- [x] 1.7 Frontend lint adds no new findings vs S-01 baseline: `npm run lint`
+- [x] 1.1 Full backend suite passes (218 expected): `python -m pytest` — c7ab1d4
+- [x] 1.2 New history-preservation test passes in isolation — c7ab1d4
+- [x] 1.3 Order-independence proven via a 2-file subset run — c7ab1d4
+- [x] 1.4 Live-sheet safety: suite passes with sheet-mode `.env` present — c7ab1d4
+- [x] 1.5 Backend lint clean: `ruff check .` — c7ab1d4
+- [x] 1.6 Frontend type-check clean: `npx tsc -p tsconfig.app.json --noEmit` — c7ab1d4
+- [x] 1.7 Frontend lint adds no new findings vs S-01 baseline: `npm run lint` — c7ab1d4
 
 #### Manual
 
-- [x] 1.8 Diff reviewed: NOTE comments accurate and cross-referenced
+- [x] 1.8 Diff reviewed: NOTE comments accurate and cross-referenced — c7ab1d4
 
 ### Phase 2: Manual Wola×Bukat sheet-mode smoke
 
 #### Manual
 
-- [ ] 2.1 Captain submits a Bukat order; it appears on the Manager queue
-- [ ] 2.2 Manager claims; edits a line + saves (stays manager_claimed)
-- [ ] 2.3 Send-back with reason → captain resubmits
-- [ ] 2.4 Dispatch opens the frontend Gmail draft; content verified (recipient/purchase-units/PL total/address/date)
-- [ ] 2.5 Backed out cleanly: draft closed unsent + order/order_lines rows deleted; no real Bukat order placed
+- [x] 2.1 Captain submits a Bukat order; it appears on the Manager queue
+- [x] 2.2 Manager claims; edits a line + saves (stays manager_claimed)
+- [x] 2.3 Send-back with reason → captain resubmits
+- [x] 2.4 Dispatch opens the frontend Gmail draft; content verified (recipient/purchase-units/PL total/address/date)
+- [x] 2.5 Backed out cleanly: draft closed unsent + order/order_lines rows deleted; no real Bukat order placed
