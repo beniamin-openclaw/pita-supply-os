@@ -17,10 +17,14 @@ export function OrdersListPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    setError(null);
+    // Clear the error on success (inside .then), not synchronously — keeps the
+    // effect's load() call free of set-state-in-effect.
     api
       .captainOrders({ limit: 20 })
-      .then((data) => setOrders(data))
+      .then((data) => {
+        setError(null);
+        setOrders(data);
+      })
       .catch((e: ApiError) => {
         if (e.status !== 401) setError(e.detail);
       });

@@ -61,13 +61,17 @@ export function ManagerPage() {
   }, []);
 
   const loadQueue = useCallback(() => {
-    setError(null);
+    // setError(null) lives inside the .then (not the synchronous prefix) so the
+    // effect below can call loadQueue() without tripping set-state-in-effect.
+    // A stale error now clears on the next successful refresh rather than
+    // flashing away the instant a refetch starts.
     Promise.all([
       api.managerQueue(LOCATION_ID, "captain_submitted"),
       api.managerQueue(LOCATION_ID, "manager_claimed"),
       api.managerQueue(LOCATION_ID, "manager_sent"),
     ])
       .then(([sub, clm, snt]) => {
+        setError(null);
         setSubmitted(sub);
         setClaimed(clm);
         setSent(snt);

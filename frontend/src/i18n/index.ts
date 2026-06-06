@@ -107,7 +107,6 @@ export function LangProvider({ children }: LangProviderProps) {
       const entry = STRINGS[key];
       if (!entry) {
         if (import.meta.env.MODE === "development") {
-          // eslint-disable-next-line no-console
           console.warn(`[i18n] missing key: ${key}`);
         }
         return String(key);
@@ -127,7 +126,6 @@ export function LangProvider({ children }: LangProviderProps) {
         STRINGS[fallback];
       if (!entry) {
         if (import.meta.env.MODE === "development") {
-          // eslint-disable-next-line no-console
           console.warn(`[i18n] missing plural key: ${prefix}.${form}.${noun}`);
         }
         return `${n} ${noun}`;

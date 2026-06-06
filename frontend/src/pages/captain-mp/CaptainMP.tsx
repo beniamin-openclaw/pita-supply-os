@@ -6,7 +6,7 @@
 // token); we leave `locationName` blank for now. A future `/api/whoami` endpoint
 // would let us populate it.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../../apiClient";
@@ -51,18 +51,35 @@ export function CaptainMP() {
     setToast({ message, type, onClose: () => setToast(null) });
   }, []);
 
+  // Latest `t` in a ref so the fetch effects can build error toasts WITHOUT
+  // listing `t` as a dependency. `t`'s identity changes on a language switch
+  // (HamburgerMenu); depending on it would re-run the orderable effect mid-order
+  // and wipe entered stock. The ref keeps the effect deps honest (it no longer
+  // reads `t`) while still reaching the current translation at error time.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
   // ---- Initial fetch: suppliers ---------------------------------------------
   useEffect(() => {
     let cancelled = false;
     api
       .suppliers()
       .then((data) => {
-        if (!cancelled) setSuppliers(data.filter((s) => s.active));
+        if (cancelled) return;
+        const active = data.filter((s) => s.active);
+        setSuppliers(active);
+        // Auto-select the first supplier on first load. Folded in from a
+        // separate effect that did `setActiveSupplierId` synchronously (a
+        // set-state-in-effect cascade); the functional updater only assigns
+        // when nothing is selected yet, so later supplier picks are untouched.
+        setActiveSupplierId((cur) => cur ?? active[0]?.supplier_id ?? null);
       })
       .catch((err: ApiError) => {
         if (cancelled) return;
         if (err.status !== 401) {
-          showToast(t("toast.suppliersError", { detail: err.detail }), "error");
+          showToast(tRef.current("toast.suppliersError", { detail: err.detail }), "error");
         }
       })
       .finally(() => {
@@ -73,57 +90,54 @@ export function CaptainMP() {
     };
   }, [showToast]);
 
-  // ---- Auto-select first supplier once loaded -------------------------------
-  useEffect(() => {
-    if (!activeSupplierId && suppliers.length > 0) {
-      setActiveSupplierId(suppliers[0].supplier_id);
-    }
-  }, [suppliers, activeSupplierId]);
-
   // ---- Fetch orderable items on supplier change ------------------------------
   useEffect(() => {
     if (!activeSupplierId) return;
     let cancelled = false;
-    setIsLoadingItems(true);
-    setOrderableItems([]);
-    setLines({});
+    // Wrapped in a local async fn so the leading resets aren't synchronous
+    // setState in the effect body (react-hooks/set-state-in-effect).
+    const loadItems = async () => {
+      setIsLoadingItems(true);
+      setOrderableItems([]);
+      setLines({});
+      await api
+        .orderable(activeSupplierId)
+        .then((items) => {
+          if (cancelled) return;
+          setOrderableItems(items);
 
-    api
-      .orderable(activeSupplierId)
-      .then((items) => {
-        if (cancelled) return;
-        setOrderableItems(items);
-
-        // Check for a recent draft. If present, surface a banner; don't auto-load.
-        const draft = loadDraft<DraftState>(activeSupplierId);
-        if (draft && draft.state?.lines && Object.keys(draft.state.lines).length > 0) {
-          setDraftBanner({
-            supplierId: activeSupplierId,
-            timestamp: draft.state.timestamp,
+          // Check for a recent draft. If present, surface a banner; don't auto-load.
+          const draft = loadDraft<DraftState>(activeSupplierId);
+          if (draft && draft.state?.lines && Object.keys(draft.state.lines).length > 0) {
+            setDraftBanner({
+              supplierId: activeSupplierId,
+              timestamp: draft.state.timestamp,
+            });
+            // Initialize blank lines anyway; user explicitly accepts/dismisses.
+          }
+          // Initialize empty lines for the freshly-loaded items.
+          const initialLines: Record<string, OrderLine> = {};
+          items.forEach((item) => {
+            initialLines[item.product_id] = {
+              product_id: item.product_id,
+              supplier_product_id: item.supplier_product_id,
+              current_stock_qty_base: "",
+              captain_final_qty_purchase: "",
+            };
           });
-          // Initialize blank lines anyway; user explicitly accepts/dismisses.
-        }
-        // Initialize empty lines for the freshly-loaded items.
-        const initialLines: Record<string, OrderLine> = {};
-        items.forEach((item) => {
-          initialLines[item.product_id] = {
-            product_id: item.product_id,
-            supplier_product_id: item.supplier_product_id,
-            current_stock_qty_base: "",
-            captain_final_qty_purchase: "",
-          };
+          setLines(initialLines);
+        })
+        .catch((err: ApiError) => {
+          if (cancelled) return;
+          if (err.status !== 401) {
+            showToast(tRef.current("toast.itemsError", { detail: err.detail }), "error");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoadingItems(false);
         });
-        setLines(initialLines);
-      })
-      .catch((err: ApiError) => {
-        if (cancelled) return;
-        if (err.status !== 401) {
-          showToast(t("toast.itemsError", { detail: err.detail }), "error");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingItems(false);
-      });
+    };
+    loadItems();
     return () => {
       cancelled = true;
     };

@@ -10,6 +10,8 @@ TypeScript + React SPA (Vite, Tailwind) for Pita Supply OS — the Captain and M
 
 ## Build & run
 `npm run dev` (Vite), `npm run build`, `npm run lint` (ESLint). Deploys to Vercel (@./vercel.json).
+- **Use a standard Node toolchain** (Homebrew, nvm, Volta, or the official installer). `package-lock.json` is committed — install with `npm ci` for reproducible tool versions (it pins eslint + `eslint-plugin-react-hooks`, whose newer `react-hooks/set-state-in-effect` rule a floating install can otherwise surface). `.nvmrc` pins the Node line.
+- **`vite build` gotcha — `ERR_DLOPEN_FAILED` "different Team IDs":** Rollup's native addon (`@rollup/rollup-darwin-arm64`) is ad-hoc signed, so a Node built with **macOS hardened-runtime library validation** (e.g. an *app-bundled* Node like `Codex.app/Contents/Resources/node`) refuses to `dlopen` it. `tsc -b` still passes; only the Vite/Rollup step fails. Reinstalling `node_modules` and `codesign --remove-signature` do **not** help (library validation rejects any non-same-team lib). Fix: run the build under a normal dev Node (`which -a node`; prefer `/opt/homebrew/bin/node` / nvm), not an app-bundled one. Last resort for a hardened-only host: override `rollup` → `@rollup/wasm-node`.
 
 ## Naming
 Component files PascalCase; hooks and utilities camelCase.

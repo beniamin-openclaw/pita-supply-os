@@ -24,7 +24,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log to console so DevTools captures it. Also keep in state for the UI.
-    // eslint-disable-next-line no-console
     console.error("[ErrorBoundary] caught render error", error, errorInfo);
     this.setState({ errorInfo });
   }

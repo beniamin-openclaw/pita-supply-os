@@ -77,11 +77,13 @@ export function OrderEditPage() {
   useEffect(() => {
     if (!order_id) return;
     let cancelled = false;
-    setLoadError(null);
+    // setLoadError(null) moved into .then (off the synchronous effect body) to
+    // satisfy react-hooks/set-state-in-effect.
     api
       .captainOrder(order_id)
       .then((data) => {
         if (cancelled) return;
+        setLoadError(null);
         if (!data.editable) {
           // Server says this can't be edited — bounce back to detail with a toast.
           showToast(t("orders.editToast.locked"), "error");

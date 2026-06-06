@@ -21,10 +21,14 @@ export function OrderDetailPage() {
 
   const load = useCallback(() => {
     if (!order_id) return;
-    setError(null);
+    // Clear the error on success (inside .then), not synchronously — keeps the
+    // effect's load() call free of set-state-in-effect.
     api
       .captainOrder(order_id)
-      .then(setOrder)
+      .then((data) => {
+        setError(null);
+        setOrder(data);
+      })
       .catch((e: ApiError) => {
         if (e.status !== 401) setError(e.detail);
       });

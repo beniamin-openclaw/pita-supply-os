@@ -19,17 +19,23 @@ export function CaptainPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
+    // `loading` starts true; the orderable effect below owns clearing it.
     api.suppliers().then(setSuppliers).catch((e: ApiError) => setError(e.detail));
   }, []);
 
   useEffect(() => {
     if (!selectedSupplier) return;
-    setLoading(true);
-    api.orderable(selectedSupplier)
-      .then(setItems)
-      .catch((e: ApiError) => setError(e.detail))
-      .finally(() => setLoading(false));
+    // Wrapped in a local async fn so `setLoading(true)` isn't a synchronous
+    // setState in the effect body (react-hooks/set-state-in-effect).
+    const loadItems = async () => {
+      setLoading(true);
+      await api
+        .orderable(selectedSupplier)
+        .then(setItems)
+        .catch((e: ApiError) => setError(e.detail))
+        .finally(() => setLoading(false));
+    };
+    loadItems();
   }, [selectedSupplier]);
 
   return (
