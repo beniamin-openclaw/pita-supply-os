@@ -25,6 +25,13 @@ function formatQty(qty: number): string {
   return String(qty);
 }
 
+// NOTE (S-02): this is the AUTHORITATIVE builder for the email the operator
+// actually sends — the dispatch panel opens a Gmail draft from the URL built
+// here, out of the EDITED subject/body. The backend twin
+// supply-os-v1/app/gmail_url.py builds a parallel URL returned as
+// ManagerDispatchResponse.gmail_compose_url, used only for a session-only
+// re-open link. Change both together or they diverge (cf. S-09 compute.ts).
+
 /**
  * Subject (mirrors gmail_url._build_subject):
  *   "Zamowienie {order_id} - {supplier_name} - dostawa {ISO | 'do potwierdzenia'}"

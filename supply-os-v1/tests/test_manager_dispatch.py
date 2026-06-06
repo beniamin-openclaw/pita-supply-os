@@ -26,6 +26,7 @@ from app.models import (  # noqa: E402
     OrderLine,
     OrderStatus,
     Product,
+    ReasonCode,
     Supplier,
     SupplierProduct,
 )
@@ -367,6 +368,76 @@ def test_dispatch_update_order_lines_called_with_correct_payload(mocker):
     # 3 * 5 (units_per_pu) = 15
     assert payload["manager_final_qty_base"] == pytest.approx(15.0)
     assert payload["manager_comment"] == "Cut from 5 — leftover from last week"
+
+
+def test_dispatch_preserves_captain_and_suggested_history(mocker):
+    """Dispatch records manager_final_* WITHOUT overwriting the captain /
+    suggested / reason history columns (FR-011: every dispatched line stays
+    inspectable — suggested vs captain vs manager + reason code).
+
+    The write payload to update_order_lines carries ONLY the manager_* keys, so
+    no captain/suggested/reason column is ever in the write set; and a line the
+    manager did not touch is not written at all (its history is preserved
+    verbatim).
+    """
+    lines = [
+        OrderLine(
+            order_line_id="OL-001",
+            order_id="ORD-HIST-001",
+            product_id="P027",
+            supplier_product_id="SP_PAGO_P027",
+            suggested_qty_base=30,
+            suggested_qty_purchase=6,
+            captain_final_qty_purchase=5,
+            captain_final_qty_base=25,
+            delta_vs_suggestion_pct=-0.1667,
+            reason_code=ReasonCode.LOW_STORAGE,
+            captain_comment="Mniej — mało miejsca w chłodni",
+        ),
+        OrderLine(
+            order_line_id="OL-002",
+            order_id="ORD-HIST-001",
+            product_id="P026",
+            supplier_product_id="SP_PAGO_P026",
+            suggested_qty_purchase=5,
+            captain_final_qty_purchase=5,
+            captain_final_qty_base=25,
+            captain_comment="Zgodnie z sugestią",
+        ),
+    ]
+    order = _captain_submitted_order(order_id="ORD-HIST-001", lines=lines)
+    mocks = _activate_sheet_backend(mocker, order=order)
+
+    # Manager edits ONLY OL-001; OL-002 is left untouched.
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [
+            {
+                "order_line_id": "OL-001",
+                "manager_final_qty_purchase": 4,
+                "manager_comment": "Docięte do 4",
+            }
+        ],
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+
+    args, _ = mocks["update_order_lines"].call_args
+    _passed_order_id, passed_updates = args
+
+    # Only the manager-touched line is written...
+    assert set(passed_updates.keys()) == {"OL-001"}
+    # ...and its payload carries ONLY manager_* keys — dispatch never includes a
+    # captain/suggested/reason column in the write set, so it cannot overwrite
+    # the captured history.
+    assert set(passed_updates["OL-001"].keys()) == {
+        "manager_final_qty_purchase",
+        "manager_final_qty_base",
+        "manager_comment",
+    }
+    # OL-002 (no manager final sent) is not written at all → its captain /
+    # suggested / reason history is preserved verbatim.
+    assert "OL-002" not in passed_updates
 
 
 def test_dispatch_empty_manager_finals():

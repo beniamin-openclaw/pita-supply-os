@@ -121,6 +121,13 @@ def _build_body(
     return "\n".join(body_lines)
 
 
+# NOTE (S-02): the dispatch email body is built in TWO parallel places that must
+# change together. THIS builder populates ManagerDispatchResponse.gmail_compose_url,
+# which the frontend uses ONLY for a session-only "re-open" link. The draft the
+# operator actually sends is built CLIENT-SIDE by
+# frontend/src/pages/manager/lib/emailBody.ts (from the editable subject/body).
+# Any change to recipient / purchase units / Polish wording here must mirror there,
+# or the two diverge. (Same split as the S-09 compute.ts vs suggestion.py note.)
 def build_draft_url(
     order: Order,
     supplier: Supplier,
