@@ -63,18 +63,18 @@ On the Captain location-wide inventory-count screen, products are grouped by `pr
 ### Phase 1: Backend — surface product_category
 
 #### Automated
-- [x] 1.1 InventoryProduct.product_category added (models.py)
-- [x] 1.2 captain_inventory_products populates product_category (main.py)
-- [x] 1.3 test_inventory_submit.py key-set + value assertion updated
-- [x] 1.4 full backend pytest + ruff green
+- [x] 1.1 InventoryProduct.product_category added (models.py) — a6a161e
+- [x] 1.2 captain_inventory_products populates product_category (main.py) — a6a161e
+- [x] 1.3 test_inventory_submit.py key-set + value assertion updated — a6a161e
+- [x] 1.4 full backend pytest + ruff green — a6a161e
 
 ### Phase 2: Frontend — group + collapse
 
 #### Automated
-- [ ] 2.1 types.ts InventoryProduct.product_category
-- [ ] 2.2 strings.ts inventory.categoryCount + inventory.uncategorized
-- [ ] 2.3 InventoryCountPage grouping + collapse render
-- [ ] 2.4 frontend tsc + eslint (baseline) + build green
+- [x] 2.1 types.ts InventoryProduct.product_category
+- [x] 2.2 strings.ts inventory.categoryCount + inventory.uncategorized
+- [x] 2.3 InventoryCountPage grouping + collapse render
+- [x] 2.4 frontend tsc + eslint (baseline) + build green
 
 #### Manual
 - [ ] 2.5 Owner verifies grouped/collapsible UI tomorrow (count + submit still work)

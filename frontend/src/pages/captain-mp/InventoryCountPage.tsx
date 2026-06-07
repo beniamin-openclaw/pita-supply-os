@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
@@ -134,6 +135,7 @@ export function InventoryCountPage() {
   const [confirmOpen, setConfirmOpen] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
   const [draftBanner, setDraftBanner] = useState<{ timestamp: number } | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   const token = getToken("captain") || "";
 
@@ -239,6 +241,32 @@ export function InventoryCountPage() {
 
   const countedCount = countedLines.length;
 
+  // Group products by category (first-seen order) for collapsible sections.
+  const groupedProducts = useMemo<{ category: string; items: InventoryProduct[] }[]>(() => {
+    const order: string[] = [];
+    const byCategory = new Map<string, InventoryProduct[]>();
+    products.forEach((p) => {
+      const cat = p.product_category || t("inventory.uncategorized");
+      let bucket = byCategory.get(cat);
+      if (!bucket) {
+        bucket = [];
+        byCategory.set(cat, bucket);
+        order.push(cat);
+      }
+      bucket.push(p);
+    });
+    return order.map((cat) => ({ category: cat, items: byCategory.get(cat)! }));
+  }, [products, t]);
+
+  const toggleCategory = useCallback((category: string) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     setConfirmOpen(false);
     setIsSubmitting(true);
@@ -324,55 +352,95 @@ export function InventoryCountPage() {
         ) : products.length === 0 ? (
           <div className="text-center py-12 text-slate-600">{t("inventory.empty")}</div>
         ) : (
-          <ul className="space-y-2">
-            {products.map((p) => {
-              const line = lines[p.product_id] || blankLine();
+          <div className="space-y-3">
+            {groupedProducts.map((group) => {
+              const collapsed = collapsedCategories.has(group.category);
+              const countedInGroup = group.items.filter((p) => {
+                const v = lines[p.product_id]?.current_stock_qty_base;
+                return v !== "" && v !== undefined;
+              }).length;
               return (
-                <li
-                  key={p.product_id}
-                  className="bg-white border border-gray-200 rounded-xl p-3"
+                <section
+                  key={group.category}
+                  className="rounded-xl border border-gray-200 bg-white overflow-hidden"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900 truncate">
-                          {p.product_name_pl}
-                        </span>
-                        {p.is_critical && (
-                          <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
-                            {t("card.critical")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-500">{p.inventory_unit}</div>
-                    </div>
-                    <div className="shrink-0">
-                      <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
-                        {t("inventory.qtyLabel")}
-                      </label>
-                      <input
-                        id={`stock-${p.product_id}`}
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step="any"
-                        value={line.current_stock_qty_base}
-                        onChange={(e) => handleStockChange(p.product_id, e.target.value)}
-                        className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                  <input
-                    type="text"
-                    value={line.count_comment}
-                    onChange={(e) => handleCommentChange(p.product_id, e.target.value)}
-                    placeholder={t("inventory.commentPlaceholder")}
-                    className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </li>
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(group.category)}
+                    aria-expanded={!collapsed}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+                      {collapsed ? (
+                        <ChevronRight size={16} aria-hidden="true" />
+                      ) : (
+                        <ChevronDown size={16} aria-hidden="true" />
+                      )}
+                      {group.category}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums">
+                      {t("inventory.categoryCount", {
+                        counted: countedInGroup,
+                        total: group.items.length,
+                      })}
+                    </span>
+                  </button>
+
+                  {!collapsed && (
+                    <ul className="space-y-2 border-t border-gray-100 p-2">
+                      {group.items.map((p) => {
+                        const line = lines[p.product_id] || blankLine();
+                        return (
+                          <li
+                            key={p.product_id}
+                            className="bg-white border border-gray-200 rounded-xl p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-slate-900 truncate">
+                                    {p.product_name_pl}
+                                  </span>
+                                  {p.is_critical && (
+                                    <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
+                                      {t("card.critical")}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500">{p.inventory_unit}</div>
+                              </div>
+                              <div className="shrink-0">
+                                <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
+                                  {t("inventory.qtyLabel")}
+                                </label>
+                                <input
+                                  id={`stock-${p.product_id}`}
+                                  type="number"
+                                  inputMode="decimal"
+                                  min={0}
+                                  step="any"
+                                  value={line.current_stock_qty_base}
+                                  onChange={(e) => handleStockChange(p.product_id, e.target.value)}
+                                  className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+                            <input
+                              type="text"
+                              value={line.count_comment}
+                              onChange={(e) => handleCommentChange(p.product_id, e.target.value)}
+                              placeholder={t("inventory.commentPlaceholder")}
+                              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
               );
             })}
-          </ul>
+          </div>
         )}
       </main>
 

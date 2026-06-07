@@ -104,6 +104,7 @@ export interface CaptainSubmitResponse {
 export interface InventoryProduct {
   product_id: string;
   product_name_pl: string;
+  product_category: string;
   inventory_unit: string;
   is_critical: boolean;
 }

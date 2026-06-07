@@ -571,6 +571,8 @@ export const STRINGS = {
     pl: "Uwaga: zapis tymczasowy (tryb seed) — dane nie utrwalone.",
     en: "Note: in-memory only (seed mode) — not persisted.",
   },
+  "inventory.categoryCount": { pl: "{counted}/{total}", en: "{counted}/{total}" },
+  "inventory.uncategorized": { pl: "Bez kategorii", en: "Uncategorized" },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;
