@@ -56,11 +56,11 @@
 ### Phase 1: Apply the 13 fixes
 
 #### Automated
-- [x] 1.1 Delete 3 dead no-console directives (ErrorBoundary, i18n ×2)
-- [x] 1.2 Move setError/setLoadError async: OrdersListPage, OrderDetailPage, OrderEditPage, ManagerPage
-- [x] 1.3 Delete redundant setLoading(true) ×2 in CaptainPage placeholder
-- [x] 1.4 CaptainMP: justify+suppress the 2 intentional resets; add `t` to 2 effect deps
-- [x] 1.5 lint 0 problems + tsc clean + build green
+- [x] 1.1 Delete 3 dead no-console directives (ErrorBoundary, i18n ×2) — 21cd7a7
+- [x] 1.2 Move setError/setLoadError async: OrdersListPage, OrderDetailPage, OrderEditPage, ManagerPage — 21cd7a7
+- [x] 1.3 Delete redundant setLoading(true) ×2 in CaptainPage placeholder — 21cd7a7
+- [x] 1.4 CaptainMP: justify+suppress the 2 intentional resets; add `t` to 2 effect deps — 21cd7a7
+- [x] 1.5 lint 0 problems + tsc clean + build green — 21cd7a7
 
 #### Manual
 - [ ] 1.6 Owner smoke tomorrow — core screens load, no stuck spinners / refetch loops
