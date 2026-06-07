@@ -36,7 +36,7 @@ Pita Supply OS is the single structured path from a location's stock counts to s
 | S-04 | channel-aware-dispatch        | Manager dispatches additional suppliers via portal / phone / manual               | S-02          | FR-013                                        | done     |
 | S-05 | manager-queue-filters         | Manager filters/narrows the queue by supplier / location / status                 | —             | FR-014                                        | done     |
 | S-06 | inventory-count               | Captain counts all location products in one pass → dated snapshot                 | —             | US-02, FR-015, FR-016                         | done     |
-| S-07 | order-prefill-from-inventory  | Order screen offers opt-in pre-fill of stock from the latest inventory snapshot   | S-06          | US-02, FR-017                                 | proposed |
+| S-07 | order-prefill-from-inventory  | Order screen offers opt-in pre-fill of stock from the latest inventory snapshot   | S-06          | US-02, FR-017                                 | done     |
 | S-08 | inventory-manager-view        | (Phase 2) Manager views inventories; Owner browses inventory history/trends       | S-06          | FR-018, FR-019                                | proposed |
 
 ## Streams
@@ -161,7 +161,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Connects the inventory track to ordering. Double-safeguard required (opt-in + named source snapshot) so a stale count can't silently enter an order. Must not regress the existing manual-entry order flow (Tier-1).
-- **Status:** proposed
+- **Status:** done (archived 2026-06-08 → `context/archive/2026-06-08-order-prefill-from-inventory/`)
 
 ### S-08: Manager inventory view + history/trends (Phase 2)
 
@@ -186,7 +186,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | S-04       | channel-aware-dispatch         | Manager: channel-aware dispatch (portal / phone / manual)     | n/a                   | Done — shipped in Manager V2 G3 (see ## Done)    |
 | S-05       | manager-queue-filters          | Manager: filter the order queue (supplier / location / status)| yes                   | Run `/10x-plan manager-queue-filters`            |
 | S-06       | inventory-count                | Captain: count the whole location in one pass → dated snapshot | yes                   | Run `/10x-plan inventory-count` — parallel early track |
-| S-07       | order-prefill-from-inventory   | Order screen: opt-in pre-fill stock from latest inventory     | no                    | Waiting on S-06                                  |
+| S-07       | order-prefill-from-inventory   | Order screen: opt-in pre-fill stock from latest inventory     | n/a                   | Done — see ## Done                               |
 | S-08       | inventory-manager-view         | Manager inventory view + history/trends (Phase 2)             | no                    | Should-have; waiting on S-06                     |
 
 ## Open Roadmap Questions
@@ -218,3 +218,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-09 (subkg-rounding-rule): sub-unit (0.1 kg) rounding for weight goods.** — Landed on `main` 2026-06-06 by merging branch `claude/dreamy-shockley-005215` (reviewed + archived at `context/archive/2026-06-05-subkg-rounding-rule/`). Adds `RoundingRule.TENTH_KG` + `rounding_step()` deviation-gate floor + frontend parity (`compute.ts` `roundPerRule`) + seed mirror. **Resolves the live-sheet↔`main` drift that blocked S-02** — `main` now parses `supplier_products.rounding_rule = tenth_kg`. Not a formal roadmap slice: spun out from F-01/S-01 as a parked engine fix.
 - **S-05: Manager filters/narrows the queue by supplier / location / status** — Archived 2026-06-07 → `context/archive/2026-06-07-manager-queue-filters/`. Lesson: client-side narrowing of the already-fetched queue (supplier dropdown derived from the queue union + status-lane toggles) needs zero backend — `ManagerQueueItem` already carries `supplier_id`/`location_id`; the selected-supplier guard resolves at render (`effectiveSupplierId`) to avoid a `set-state-in-effect` lint regression. Location filter deferred (Wola-only pilot); the param stays plumbed for later.
 - **S-04: Channel-aware dispatch for portal / phone / manual suppliers** — Reconciled 2026-06-08; already shipped during Manager V2 (Phase G3), **no new code this session**. Evidence: `frontend/src/pages/manager/DispatchPanel.tsx` branches on `ordering_method` for all four channels (editable email + in-browser Gmail URL; portal copy-list + "Oznacz jako zamówione"; phone `tel:` link parsed from `supplier_notes`; manual note), wired `OrderDetailPane` → `ManagerPage`; backend `manager_dispatch` branches on `is_email_channel` (non-email persists the transition + `sent_method` with no email artifact); covered by `test_dispatch_portal_no_email_no_url` + `test_dispatch_phone_marks_ordered`. Follow-up: portal URLs aren't in supplier master data yet (placeholder shown) — a future master-data enhancement, not an FR-013 blocker. Lesson: check the code before scheduling a slice — channel-aware dispatch was a documentation gap, not a build gap.
+- **S-07: Order screen pre-fills stock from the latest inventory snapshot** — Archived 2026-06-08 → `context/archive/2026-06-08-order-prefill-from-inventory/`. Backend `GET /api/captain/inventory/latest` (newest InventoryCount for the token's location; sheet-only, seed→null) + CaptainMP opt-in banner that NAMES the snapshot date/time and fills only EMPTY `current_stock` (never clobbers typed values — the FR-017 double safeguard). 6 synthetic backend tests; 15-case edge ledger in `notes/edge-cases.md`. Lesson: when pre-filling user-editable fields from a data source, fill only empty fields and name the source (adopted from a scout-workflow cross-check — stronger than the original fill-all).
