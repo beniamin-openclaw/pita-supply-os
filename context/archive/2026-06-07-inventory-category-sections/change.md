@@ -1,10 +1,10 @@
 ---
 change_id: inventory-category-sections
 title: Inventory count — collapsible category sections on the Captain screen
-status: impl_reviewed
+status: archived
 created: 2026-06-07
 updated: 2026-06-07
-archived_at: null
+archived_at: 2026-06-07T21:47:11Z
 ---
 
 ## Notes
