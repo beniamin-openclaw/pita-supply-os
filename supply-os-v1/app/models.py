@@ -424,3 +424,21 @@ class InventoryCountSubmitResponse(BaseModel):
     count_date: date
     line_count: int
     warnings: list[str] = Field(default_factory=list)
+
+
+class InventoryLatestLine(BaseModel):
+    """One counted product from the latest snapshot, for order pre-fill (FR-017)."""
+    product_id: str
+    current_stock_qty_base: float = 0
+    count_comment: str = ""
+
+
+class InventoryLatestResponse(BaseModel):
+    """Latest location inventory snapshot offered as an opt-in order pre-fill
+    source (FR-017). The order screen NAMES this `count_submitted_at` / `count_date`
+    in its confirmation so a stale count can't silently enter an order."""
+    count_id: str
+    count_date: date
+    count_submitted_at: Optional[datetime] = None
+    line_count: int = 0
+    lines: list[InventoryLatestLine] = Field(default_factory=list)

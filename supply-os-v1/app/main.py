@@ -23,6 +23,8 @@ from .models import (
     InventoryCountLine,
     InventoryCountSubmitRequest,
     InventoryCountSubmitResponse,
+    InventoryLatestLine,
+    InventoryLatestResponse,
     InventoryProduct,
     LocationProductSetting,
     ManagerClaimResponse,
@@ -1573,4 +1575,57 @@ def captain_inventory_submit(
         count_date=today,
         line_count=len(count_lines),
         warnings=warnings,
+    )
+
+
+@app.get(
+    "/api/captain/inventory/latest",
+    response_model=Optional[InventoryLatestResponse],
+)
+def captain_inventory_latest(
+    location_id: str = Depends(require_captain),
+):
+    """Latest inventory snapshot for this Captain's location, for opt-in order
+    pre-fill (FR-017). Returns ``None`` (HTTP 200, null body) when there is no
+    snapshot — including seed mode, where snapshots are not persisted (mirrors
+    ``captain_orders`` / ``manager_queue`` degrading off-sheet).
+
+    "Latest" = newest ``count_submitted_at`` (fallback ``count_date``). The
+    location is derived from the token; cross-location reads are not permitted.
+    The order screen NAMES the returned date/time in its confirmation so a stale
+    count can't silently enter an order (the FR-017 double safeguard).
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        return None
+
+    counts = [
+        c for c in backend.load_inventory_counts() if c.location_id == location_id
+    ]
+    if not counts:
+        return None
+
+    def _recency_key(c: InventoryCount) -> datetime:
+        if c.count_submitted_at is not None:
+            return c.count_submitted_at
+        # No submit time → fall back to the count date at UTC midnight.
+        return datetime.combine(c.count_date, datetime.min.time(), tzinfo=timezone.utc)
+
+    latest = max(counts, key=_recency_key)
+    full = backend.get_inventory_count(latest.count_id)
+    snapshot_lines = full.lines if full is not None else []
+    lines = [
+        InventoryLatestLine(
+            product_id=line.product_id,
+            current_stock_qty_base=line.current_stock_qty_base,
+            count_comment=line.count_comment,
+        )
+        for line in snapshot_lines
+    ]
+    return InventoryLatestResponse(
+        count_id=latest.count_id,
+        count_date=latest.count_date,
+        count_submitted_at=latest.count_submitted_at,
+        line_count=len(lines),
+        lines=lines,
     )
