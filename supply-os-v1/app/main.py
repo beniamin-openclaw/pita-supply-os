@@ -1472,6 +1472,7 @@ def captain_inventory_products(
             InventoryProduct(
                 product_id=product.product_id,
                 product_name_pl=product.product_name_pl,
+                product_category=product.product_category,
                 inventory_unit=product.inventory_unit,
                 is_critical=setting.is_critical_for_location or product.is_critical,
             )

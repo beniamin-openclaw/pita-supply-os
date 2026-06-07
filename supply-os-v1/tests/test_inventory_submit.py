@@ -32,11 +32,13 @@ def test_inventory_products_lists_location_products():
     assert set(p027.keys()) == {
         "product_id",
         "product_name_pl",
+        "product_category",
         "inventory_unit",
         "is_critical",
     }
     assert p027["is_critical"] is True
     assert p027["inventory_unit"] == "kg"
+    assert p027["product_category"] == "Mrożonki"
 
 
 def test_inventory_products_empty_for_location_without_settings():

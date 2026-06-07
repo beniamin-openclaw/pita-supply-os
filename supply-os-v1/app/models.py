@@ -378,6 +378,7 @@ class InventoryProduct(BaseModel):
     but spans every supplier at the location rather than one supplier)."""
     product_id: str
     product_name_pl: str
+    product_category: str
     inventory_unit: str
     is_critical: bool
 
