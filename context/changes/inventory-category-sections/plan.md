@@ -71,10 +71,10 @@ On the Captain location-wide inventory-count screen, products are grouped by `pr
 ### Phase 2: Frontend — group + collapse
 
 #### Automated
-- [x] 2.1 types.ts InventoryProduct.product_category
-- [x] 2.2 strings.ts inventory.categoryCount + inventory.uncategorized
-- [x] 2.3 InventoryCountPage grouping + collapse render
-- [x] 2.4 frontend tsc + eslint (baseline) + build green
+- [x] 2.1 types.ts InventoryProduct.product_category — 30c81e4
+- [x] 2.2 strings.ts inventory.categoryCount + inventory.uncategorized — 30c81e4
+- [x] 2.3 InventoryCountPage grouping + collapse render — 30c81e4
+- [x] 2.4 frontend tsc + eslint (baseline) + build green — 30c81e4
 
 #### Manual
 - [ ] 2.5 Owner verifies grouped/collapsible UI tomorrow (count + submit still work)
