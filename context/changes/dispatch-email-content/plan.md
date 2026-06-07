@@ -69,12 +69,12 @@ Single phase — the two builders must change together (S-02 NOTE contract); lan
 ### Phase 1: Subject + body in both builders + tests
 
 #### Automated
-- [x] 1.1 gmail_url.py subject → `Zamówienie {location_name}` (+ fallback)
-- [x] 1.2 gmail_url.py body → supplier_product_name (+ NOTE/docstring)
-- [x] 1.3 emailBody.ts subject + body → location_name / supplier_product_name (+ NOTE)
-- [x] 1.4 test_gmail_url.py updated to new contract; `pytest tests/test_gmail_url.py` green
-- [x] 1.5 full backend pytest + ruff green
-- [x] 1.6 frontend tsc + eslint + build green
+- [x] 1.1 gmail_url.py subject → `Zamówienie {location_name}` (+ fallback) — ed29eeb
+- [x] 1.2 gmail_url.py body → supplier_product_name (+ NOTE/docstring) — ed29eeb
+- [x] 1.3 emailBody.ts subject + body → location_name / supplier_product_name (+ NOTE) — ed29eeb
+- [x] 1.4 test_gmail_url.py updated to new contract; `pytest tests/test_gmail_url.py` green — ed29eeb
+- [x] 1.5 full backend pytest + ruff green — ed29eeb
+- [x] 1.6 frontend tsc + eslint + build green — ed29eeb
 
 #### Manual
 - [ ] 1.7 Owner verifies a real draft tomorrow (subject + supplier names), back-out on submit
