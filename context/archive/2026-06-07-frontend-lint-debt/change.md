@@ -1,10 +1,10 @@
 ---
 change_id: frontend-lint-debt
 title: Clear frontend eslint debt (set-state-in-effect + stale directives + deps)
-status: impl_reviewed
+status: archived
 created: 2026-06-07
 updated: 2026-06-07
-archived_at: null
+archived_at: 2026-06-07T21:58:33Z
 ---
 
 ## Notes
