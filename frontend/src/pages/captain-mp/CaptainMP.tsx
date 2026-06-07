@@ -26,6 +26,7 @@ import { computeRowState } from "./lib/compute";
 import { getRequestedDeliveryDate } from "./lib/dates";
 
 import type { Supplier, OrderableItem, OrderLine, DraftState } from "./types";
+import type { InventoryLatestResponse } from "../../types";
 
 // Pilot supplier for the Wola×Bukat round-trip (S-01). The order screen defaults
 // to this supplier on load instead of suppliers[0] (the first CSV row,
@@ -50,6 +51,8 @@ export function CaptainMP() {
     supplierId: string;
     timestamp: number;
   } | null>(null);
+  const [latestSnapshot, setLatestSnapshot] = useState<InventoryLatestResponse | null>(null);
+  const [prefillDismissed, setPrefillDismissed] = useState<Set<string>>(new Set());
 
   const token = getToken("captain") || "";
 
@@ -78,6 +81,24 @@ export function CaptainMP() {
       cancelled = true;
     };
   }, [showToast, t]);
+
+  // ---- Fetch the latest inventory snapshot once (opt-in prefill source) ------
+  // Silent on error: prefill is optional and must never block ordering. Seed
+  // mode / no snapshot → null → no banner. Location-wide, so fetched once.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .inventoryLatest()
+      .then((snap) => {
+        if (!cancelled) setLatestSnapshot(snap);
+      })
+      .catch(() => {
+        /* optional feature — ignore errors */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ---- Auto-select the pilot supplier (Bukat) once loaded -------------------
   // Default to the pilot supplier if it's in the (already active-filtered) list,
@@ -201,6 +222,36 @@ export function CaptainMP() {
     showToast(t("toast.draftSaved"), "success");
   }, [activeSupplierId, lines, showToast, t]);
 
+  // Opt-in prefill: fill current_stock for orderable lines that were counted in
+  // the latest snapshot (matched by product_id). Non-counted / non-orderable
+  // products are left untouched. Editable afterwards; dismissed per supplier so
+  // the offer doesn't nag once acted on. The accept click IS the confirmation
+  // (FR-017 double safeguard: opt-in + the banner names the snapshot date/time).
+  const acceptPrefill = useCallback(() => {
+    if (!latestSnapshot || !activeSupplierId) return;
+    const stockByPid: Record<string, number> = {};
+    latestSnapshot.lines.forEach((ln) => {
+      stockByPid[ln.product_id] = ln.current_stock_qty_base;
+    });
+    const filled = Object.keys(lines).filter((pid) => pid in stockByPid).length;
+    setLines((prev) => {
+      const next: Record<string, OrderLine> = { ...prev };
+      Object.keys(next).forEach((pid) => {
+        if (pid in stockByPid) {
+          next[pid] = { ...next[pid], current_stock_qty_base: stockByPid[pid] };
+        }
+      });
+      return next;
+    });
+    setPrefillDismissed((prev) => new Set(prev).add(activeSupplierId));
+    showToast(t("captain.prefillApplied", { count: filled }), "success");
+  }, [latestSnapshot, activeSupplierId, lines, showToast, t]);
+
+  const skipPrefill = useCallback(() => {
+    if (!activeSupplierId) return;
+    setPrefillDismissed((prev) => new Set(prev).add(activeSupplierId));
+  }, [activeSupplierId]);
+
   const handleSubmit = useCallback(async () => {
     if (!activeSupplierId) return;
     const supplier = suppliers.find((s) => s.supplier_id === activeSupplierId);
@@ -306,6 +357,21 @@ export function CaptainMP() {
     return { [activeSupplierId]: orderableItems.length };
   }, [activeSupplierId, orderableItems.length]);
 
+  // ---- Prefill banner: visibility + named source date/time -------------------
+  const prefillTime = useMemo(() => {
+    if (!latestSnapshot) return "";
+    const iso = latestSnapshot.count_submitted_at ?? latestSnapshot.count_date;
+    return formatDateTime(iso);
+  }, [latestSnapshot, formatDateTime]);
+
+  const showPrefillBanner =
+    !!latestSnapshot &&
+    !!activeSupplierId &&
+    !prefillDismissed.has(activeSupplierId) &&
+    !isLoadingItems &&
+    orderableItems.length > 0 &&
+    latestSnapshot.lines.some((ln) => lines[ln.product_id] !== undefined);
+
   // ---- Render ---------------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-28">
@@ -358,6 +424,34 @@ export function CaptainMP() {
                 className="px-3 py-2 rounded-md bg-white text-amber-900 border border-amber-300 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
               >
                 {t("captain.draftBannerDiscard")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showPrefillBanner && (
+          <div
+            role="dialog"
+            aria-label={t("captain.prefillBannerTitle", { time: prefillTime })}
+            className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm"
+          >
+            <div className="text-sky-900">
+              {t("captain.prefillBannerTitle", { time: prefillTime })}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={acceptPrefill}
+                className="px-3 py-2 rounded-md bg-sky-700 text-white text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+              >
+                {t("captain.prefillBannerAccept")}
+              </button>
+              <button
+                type="button"
+                onClick={skipPrefill}
+                className="px-3 py-2 rounded-md bg-white text-sky-900 border border-sky-300 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+              >
+                {t("captain.prefillBannerSkip")}
               </button>
             </div>
           </div>

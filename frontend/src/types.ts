@@ -109,6 +109,20 @@ export interface InventoryProduct {
   is_critical: boolean;
 }
 
+export interface InventoryLatestLine {
+  product_id: string;
+  current_stock_qty_base: number;
+  count_comment: string;
+}
+
+export interface InventoryLatestResponse {
+  count_id: string;
+  count_date: string;
+  count_submitted_at: string | null;
+  line_count: number;
+  lines: InventoryLatestLine[];
+}
+
 export interface InventoryCountLineSubmit {
   product_id: string;
   current_stock_qty_base: number;

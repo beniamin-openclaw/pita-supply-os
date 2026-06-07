@@ -75,19 +75,19 @@ On the Captain order screen, when a supplier's lines have loaded and a location 
 ### Phase 1: Backend — latest-snapshot endpoint
 
 #### Automated
-- [x] 1.1 models.py: InventoryLatestLine + InventoryLatestResponse
-- [x] 1.2 main.py: GET /api/captain/inventory/latest (seed→null; latest by submitted_at; location-scoped)
-- [x] 1.3 test_inventory_latest.py synthetic tests (latest-wins, scoping, none→null, seed→null)
-- [x] 1.4 full backend pytest + ruff green
+- [x] 1.1 models.py: InventoryLatestLine + InventoryLatestResponse — df06c34
+- [x] 1.2 main.py: GET /api/captain/inventory/latest (seed→null; latest by submitted_at; location-scoped) — df06c34
+- [x] 1.3 test_inventory_latest.py synthetic tests (latest-wins, scoping, none→null, seed→null) — df06c34
+- [x] 1.4 full backend pytest + ruff green — df06c34
 
 ### Phase 2: Frontend — opt-in prefill banner
 
 #### Automated
-- [ ] 2.1 types.ts InventoryLatestResponse/Line
-- [ ] 2.2 apiClient.ts api.inventoryLatest()
-- [ ] 2.3 strings.ts prefill banner keys
-- [ ] 2.4 CaptainMP: snapshot fetch + opt-in banner + accept/skip (matching lines only)
-- [ ] 2.5 frontend tsc + eslint(0) + build green
+- [x] 2.1 types.ts InventoryLatestResponse/Line
+- [x] 2.2 apiClient.ts api.inventoryLatest()
+- [x] 2.3 strings.ts prefill banner keys
+- [x] 2.4 CaptainMP: snapshot fetch + opt-in banner + accept/skip (matching lines only)
+- [x] 2.5 frontend tsc + eslint(0) + build green
 
 #### Manual
 - [ ] 2.6 Owner sim/test: banner named-by-date, accept fills counted lines, skip = manual, no-snapshot = no banner

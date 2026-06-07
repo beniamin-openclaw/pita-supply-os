@@ -573,6 +573,16 @@ export const STRINGS = {
   },
   "inventory.categoryCount": { pl: "{counted}/{total}", en: "{counted}/{total}" },
   "inventory.uncategorized": { pl: "Bez kategorii", en: "Uncategorized" },
+  "captain.prefillBannerTitle": {
+    pl: "Wypełnić stan z inwentaryzacji z {time}?",
+    en: "Pre-fill stock from the inventory count of {time}?",
+  },
+  "captain.prefillBannerAccept": { pl: "Wypełnij stan", en: "Pre-fill stock" },
+  "captain.prefillBannerSkip": { pl: "Pomiń", en: "Skip" },
+  "captain.prefillApplied": {
+    pl: "Wypełniono stan z inwentaryzacji ({count} poz.)",
+    en: "Stock pre-filled from inventory ({count} items)",
+  },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

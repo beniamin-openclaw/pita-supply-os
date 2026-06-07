@@ -15,6 +15,7 @@ import type {
   CaptainSubmitResponse,
   InventoryCountSubmitRequest,
   InventoryCountSubmitResponse,
+  InventoryLatestResponse,
   InventoryProduct,
   Location,
   ManagerClaimResponse,
@@ -195,6 +196,10 @@ export const api = {
     apiGet<InventoryProduct[]>("/api/captain/inventory/products", "captain"),
   inventorySubmit: (req: InventoryCountSubmitRequest) =>
     apiPost<InventoryCountSubmitResponse>("/api/captain/inventory/submit", req, "captain"),
+  // Latest snapshot for the token's location (opt-in order prefill, S-07). Null
+  // when there is no snapshot / seed mode — the caller treats null as "no offer".
+  inventoryLatest: () =>
+    apiGet<InventoryLatestResponse | null>("/api/captain/inventory/latest", "captain"),
   // Manager
   managerQueue: (location_id?: string, status: OrderStatus = "captain_submitted") => {
     const params = new URLSearchParams({ status });
