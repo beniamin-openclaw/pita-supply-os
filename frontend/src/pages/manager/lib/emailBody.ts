@@ -33,12 +33,11 @@ function formatQty(qty: number): string {
 // re-open link. Change both together or they diverge (cf. S-09 compute.ts).
 
 /**
- * Subject (mirrors gmail_url._build_subject):
- *   "Zamowienie {order_id} - {supplier_name} - dostawa {ISO | 'do potwierdzenia'}"
+ * Subject (mirrors gmail_url._build_subject): "Zamówienie {location_name}".
+ * Order id + delivery date live in the body, not the subject.
  */
 export function buildEmailSubject(detail: ManagerOrderDetail): string {
-  const delivery = detail.requested_delivery_date ?? "do potwierdzenia";
-  return `Zamowienie ${detail.order_id} - ${detail.supplier_name} - dostawa ${delivery}`;
+  return `Zamówienie ${detail.location_name}`;
 }
 
 /**
@@ -72,7 +71,9 @@ export function buildEmailBody(
   visible.forEach((line, idx) => {
     const qty = effectiveQtyFor(line);
     const unit = line.purchase_unit ?? "";
-    const cell = `${idx + 1}.  | ${line.product_name_pl} | ${formatQty(qty)} ${unit}`;
+    // Supplier-facing name — the supplier can't read our internal product_name_pl.
+    const name = line.supplier_product_name || line.product_name_pl;
+    const cell = `${idx + 1}.  | ${name} | ${formatQty(qty)} ${unit}`;
     out.push(cell.replace(/\s+$/, ""));
   });
 

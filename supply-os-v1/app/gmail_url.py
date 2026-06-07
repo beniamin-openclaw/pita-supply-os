@@ -5,7 +5,7 @@ URL format:
     https://mail.google.com/mail/?view=cm&fs=1&to={email}&su={subject}&body={body}
 
 Subject (Polish):
-    "Zamowienie {order_id} - {supplier_name} - dostawa {delivery_date_iso_or_TBD}"
+    "Zamówienie {location_name}"  (falls back to order_id if location unknown)
 
 Body (Polish, plaintext, URL-encoded). Pure function — no I/O, easy to
 unit-test. Raises ValueError for caller-recoverable problems; the HTTP layer
@@ -35,15 +35,15 @@ def _effective_qty(line: OrderLine) -> float:
     return line.captain_final_qty_purchase
 
 
-def _build_subject(order: Order, supplier: Supplier) -> str:
-    """Polish subject. Falls back to 'do potwierdzenia' if no delivery date."""
-    if order.requested_delivery_date is not None:
-        delivery = order.requested_delivery_date.isoformat()
-    else:
-        delivery = "do potwierdzenia"
-    return (
-        f"Zamowienie {order.order_id} - {supplier.supplier_name} - dostawa {delivery}"
-    )
+def _build_subject(order: Order, location: Optional[Location]) -> str:
+    """Supplier-facing subject: ``Zamówienie {location_name}``.
+
+    Falls back to the order id when the location is unknown (``location`` is
+    Optional at the call boundary). Order id + delivery date live in the body.
+    """
+    if location is not None and location.location_name:
+        return f"Zamówienie {location.location_name}"
+    return f"Zamówienie {order.order_id}"
 
 
 def _build_body(
@@ -65,34 +65,32 @@ def _build_body(
     visible = [ln for ln in lines if _effective_qty(ln) > 0]
     visible.sort(key=lambda ln: ln.order_line_id)
 
-    # Need purchase_unit for each line — read from supplier_product if present.
-    # Caller passes products_by_id (product_id -> Product). We need the
-    # purchase_unit which lives on supplier_products. The endpoint already has
-    # those; we resolve unit via order line's supplier_product_id by looking up
-    # in a sps lookup map passed via products_by_id? No — keep contract clean:
-    # the endpoint enriches lines with manager_final_qty fields BEFORE passing,
-    # but purchase_unit is on the SupplierProduct row, not on OrderLine. We
-    # accept that and use the product's inventory_unit as a sensible fallback
-    # for the message text. (The number is the purchase-unit count, the label
-    # is the product's inventory unit if that's all we have.)
-    #
-    # In practice, callers pass a dict that includes both Product entries AND
-    # SupplierProduct entries keyed by their respective ids. To stay strict,
-    # we look up purchase_unit via a side-channel: products_by_id may also
-    # carry the SupplierProduct under its supplier_product_id key. Check both.
+    # `products_by_id` carries BOTH Product entries (keyed by product_id) and
+    # SupplierProduct entries (keyed by supplier_product_id) — the dispatch
+    # endpoint merges them. We prefer the supplier-facing name + purchase_unit
+    # from the SupplierProduct so the supplier reads names they recognise.
     for idx, line in enumerate(visible, start=1):
         product = products_by_id.get(line.product_id)
-        if product is None:
-            product_name = line.product_id
-            unit_label = ""
-        else:
-            product_name = product.product_name_pl
-            unit_label = product.inventory_unit or ""
-
-        # Try to find purchase_unit via supplier_product entry in same dict
         sp_entry = products_by_id.get(line.supplier_product_id)
-        if sp_entry is not None and hasattr(sp_entry, "purchase_unit"):
-            unit_label = sp_entry.purchase_unit
+
+        # Supplier-facing name first — the supplier can't read our internal
+        # product_name_pl / product_id. Fall back to the internal name, then id.
+        supplier_name = getattr(sp_entry, "supplier_product_name", None)
+        if supplier_name:
+            product_name = supplier_name
+        elif product is not None:
+            product_name = product.product_name_pl
+        else:
+            product_name = line.product_id
+
+        # Unit label: supplier purchase_unit, else product inventory_unit.
+        purchase_unit = getattr(sp_entry, "purchase_unit", None)
+        if purchase_unit:
+            unit_label = purchase_unit
+        elif product is not None:
+            unit_label = product.inventory_unit or ""
+        else:
+            unit_label = ""
 
         qty = _effective_qty(line)
         # Show int qty without trailing .0 when whole
@@ -126,7 +124,8 @@ def _build_body(
 # which the frontend uses ONLY for a session-only "re-open" link. The draft the
 # operator actually sends is built CLIENT-SIDE by
 # frontend/src/pages/manager/lib/emailBody.ts (from the editable subject/body).
-# Any change to recipient / purchase units / Polish wording here must mirror there,
+# Any change to recipient / purchase units / product names / subject / Polish
+# wording here must mirror there,
 # or the two diverge. (Same split as the S-09 compute.ts vs suggestion.py note.)
 def build_draft_url(
     order: Order,
@@ -154,7 +153,7 @@ def build_draft_url(
     if not visible:
         raise ValueError("Empty order - no lines to send (all qty are zero)")
 
-    subject = _build_subject(order, supplier)
+    subject = _build_subject(order, location)
     body = _build_body(order, supplier, lines, products_by_id, location)
 
     # urlencode handles UTF-8 + Polish diacritics and quotes \n as %0A.

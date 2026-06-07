@@ -82,12 +82,18 @@ def _make_product(pid: str, name: str, unit: str = "kg") -> Product:
     )
 
 
-def _make_sp(sp_id: str, supplier_id: str, product_id: str, purchase_unit: str = "karton") -> SupplierProduct:
+def _make_sp(
+    sp_id: str,
+    supplier_id: str,
+    product_id: str,
+    purchase_unit: str = "karton",
+    name: str | None = None,
+) -> SupplierProduct:
     return SupplierProduct(
         supplier_product_id=sp_id,
         supplier_id=supplier_id,
         product_id=product_id,
-        supplier_product_name=f"{product_id} karton",
+        supplier_product_name=name or f"{product_id} karton",
         purchase_unit=purchase_unit,
         units_per_purchase_unit=5.0,
         price_estimate_pln=145.0,
@@ -109,20 +115,32 @@ def test_build_url_contains_supplier_email():
     assert "to=orders%40pago.pl" in url
 
 
-def test_build_url_subject_includes_order_id_and_supplier_name():
+def test_build_url_subject_is_zamowienie_location():
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     order = _make_order(order_id="ORD-20260520-WOL-PAGO-deadbe", lines=[line])
     supplier = _make_supplier(name="Pago Sp. z o.o.")
     products = {"P027": _make_product("P027", "Souvlaki")}
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    location = Location(location_id="WOLA", location_name="Pita Bros Wola")
+
+    url = build_draft_url(order, supplier, [line], products, location)
+    subject = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["su"][0]
+    assert subject == "Zamówienie Pita Bros Wola"
+    # New contract: order id + supplier name are NOT in the subject anymore.
+    assert "ORD-20260520-WOL-PAGO-deadbe" not in subject
+    assert "Pago Sp. z o.o." not in subject
+
+
+def test_build_url_subject_falls_back_to_order_id_without_location():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(order_id="ORD-20260520-WOL-PAGO-deadbe", lines=[line])
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
 
     url = build_draft_url(order, supplier, [line], products, None)
-    # Extract subject ("su" param) and decode
-    qs = urllib.parse.urlparse(url).query
-    parsed = urllib.parse.parse_qs(qs)
-    subject = parsed["su"][0]
-    assert "ORD-20260520-WOL-PAGO-deadbe" in subject
-    assert "Pago Sp. z o.o." in subject
+    subject = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["su"][0]
+    assert subject == "Zamówienie ORD-20260520-WOL-PAGO-deadbe"
 
 
 def test_build_url_body_lists_all_lines_with_qty_unit():
@@ -134,38 +152,62 @@ def test_build_url_body_lists_all_lines_with_qty_unit():
     order = _make_order(lines=lines)
     supplier = _make_supplier()
     products = {
-        "P027": _make_product("P027", "Souvlaki Kurczak"),
-        "P026": _make_product("P026", "Gyros Wieprz"),
-        "P019": _make_product("P019", "Przyprawa"),
+        "P027": _make_product("P027", "Souvlaki Kurczak (wewn.)"),
+        "P026": _make_product("P026", "Gyros Wieprz (wewn.)"),
+        "P019": _make_product("P019", "Przyprawa (wewn.)"),
     }
-    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027", "karton")
-    products["SP_PAGO_P026"] = _make_sp("SP_PAGO_P026", "SUP_PAGO", "P026", "karton")
-    products["SP_PAGO_P019"] = _make_sp("SP_PAGO_P019", "SUP_PAGO", "P019", "szt")
+    products["SP_PAGO_P027"] = _make_sp(
+        "SP_PAGO_P027", "SUP_PAGO", "P027", "karton", name="Souvlaki z kurczaka 5kg"
+    )
+    products["SP_PAGO_P026"] = _make_sp(
+        "SP_PAGO_P026", "SUP_PAGO", "P026", "karton", name="Gyros wieprzowy 5kg"
+    )
+    products["SP_PAGO_P019"] = _make_sp(
+        "SP_PAGO_P019", "SUP_PAGO", "P019", "szt", name="Przyprawa gyros 1kg"
+    )
 
     url = build_draft_url(order, supplier, lines, products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
-    assert "Souvlaki Kurczak" in body
-    assert "Gyros Wieprz" in body
-    assert "Przyprawa" in body
+    # Body lists the SUPPLIER-facing names, with qty + purchase unit.
+    assert "Souvlaki z kurczaka 5kg" in body
+    assert "Gyros wieprzowy 5kg" in body
+    assert "Przyprawa gyros 1kg" in body
     assert "2 karton" in body
     assert "3 karton" in body
     assert "1 szt" in body
+    # Internal product names must NOT leak to the supplier.
+    assert "(wewn.)" not in body
+
+
+def test_build_url_body_falls_back_to_internal_name_when_no_supplier_product():
+    """No SupplierProduct entry in the dict → fall back to product_name_pl."""
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(lines=[line])
+    supplier = _make_supplier()
+    # Only the Product is present; the SupplierProduct is missing from the dict.
+    products = {"P027": _make_product("P027", "Souvlaki Kurczak")}
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "Souvlaki Kurczak" in body
 
 
 def test_build_url_body_includes_polish_diacritics_correctly():
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     order = _make_order(lines=[line])
-    supplier = _make_supplier(name="Dostawca ąęłłóźż")
-    products = {"P027": _make_product("P027", "Mąka żytnia śląska")}
-    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Mąka")}
+    products["SP_PAGO_P027"] = _make_sp(
+        "SP_PAGO_P027", "SUP_PAGO", "P027", name="Mąka żytnia śląska"
+    )
+    location = Location(location_id="WOLA", location_name="Pita Bros Wólka ąęłłóźż")
 
-    url = build_draft_url(order, supplier, [line], products, None)
+    url = build_draft_url(order, supplier, [line], products, location)
     # URL must be ASCII-only after percent-encoding
     assert all(ord(c) < 128 for c in url)
-    # Decode and verify diacritics survived round-trip
-    qs = urllib.parse.urlparse(url).query
-    parsed = urllib.parse.parse_qs(qs)
-    assert "Dostawca ąęłłóźż" in parsed["su"][0]
+    # Decode and verify diacritics survived round-trip (subject=location, body=sp name)
+    parsed = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert "Pita Bros Wólka ąęłłóźż" in parsed["su"][0]
     assert "Mąka żytnia śląska" in parsed["body"][0]
 
 
@@ -196,15 +238,15 @@ def test_build_url_body_skips_zero_qty_lines():
         "P026": _make_product("P026", "Gyros"),
         "P019": _make_product("P019", "Przyprawa"),
     }
-    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
-    products["SP_PAGO_P026"] = _make_sp("SP_PAGO_P026", "SUP_PAGO", "P026")
-    products["SP_PAGO_P019"] = _make_sp("SP_PAGO_P019", "SUP_PAGO", "P019")
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027", name="Souvlaki dostawca")
+    products["SP_PAGO_P026"] = _make_sp("SP_PAGO_P026", "SUP_PAGO", "P026", name="Gyros dostawca")
+    products["SP_PAGO_P019"] = _make_sp("SP_PAGO_P019", "SUP_PAGO", "P019", name="Przyprawa dostawca")
 
     url = build_draft_url(order, supplier, lines, products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
-    assert "Souvlaki" in body
-    assert "Przyprawa" in body
-    assert "Gyros" not in body  # qty=0 → skipped
+    assert "Souvlaki dostawca" in body
+    assert "Przyprawa dostawca" in body
+    assert "Gyros dostawca" not in body  # qty=0 → skipped
 
 
 def test_build_url_raises_when_supplier_no_email():
@@ -250,7 +292,7 @@ def test_build_url_raises_when_too_long():
         spid = f"SP_PAGO_{pid}"
         long_name = "Bardzo Długi Produkt " * 5 + str(i)
         products[pid] = _make_product(pid, long_name)
-        products[spid] = _make_sp(spid, "SUP_PAGO", pid)
+        products[spid] = _make_sp(spid, "SUP_PAGO", pid, name=long_name)
         lines.append(_make_line(f"OL-{i:03d}", pid, spid, captain_qty=5))
     order = _make_order(lines=lines)
     supplier = _make_supplier()
@@ -271,8 +313,8 @@ def test_build_url_uses_manager_final_if_present_else_captain_final():
         "P027": _make_product("P027", "Souvlaki"),
         "P026": _make_product("P026", "Gyros"),
     }
-    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027", "karton")
-    products["SP_PAGO_P026"] = _make_sp("SP_PAGO_P026", "SUP_PAGO", "P026", "karton")
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027", "karton", name="Souvlaki")
+    products["SP_PAGO_P026"] = _make_sp("SP_PAGO_P026", "SUP_PAGO", "P026", "karton", name="Gyros")
 
     url = build_draft_url(order, supplier, lines, products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
@@ -288,21 +330,17 @@ def test_build_url_includes_delivery_date_or_TBD():
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
     supplier = _make_supplier()
 
-    # With delivery date
+    # With delivery date — date appears in the BODY (subject no longer carries it).
     order_with = _make_order(delivery_date=date(2026, 5, 25), lines=[line])
     url_with = build_draft_url(order_with, supplier, [line], products, None)
     body_with = urllib.parse.parse_qs(urllib.parse.urlparse(url_with).query)["body"][0]
-    subject_with = urllib.parse.parse_qs(urllib.parse.urlparse(url_with).query)["su"][0]
     assert "2026-05-25" in body_with
-    assert "2026-05-25" in subject_with
 
     # Without delivery date
     order_without = _make_order(delivery_date=None, lines=[line])
     url_without = build_draft_url(order_without, supplier, [line], products, None)
     body_without = urllib.parse.parse_qs(urllib.parse.urlparse(url_without).query)["body"][0]
-    subject_without = urllib.parse.parse_qs(urllib.parse.urlparse(url_without).query)["su"][0]
     assert "do potwierdzenia" in body_without
-    assert "do potwierdzenia" in subject_without
 
 
 def test_build_url_includes_location_address_or_name():
