@@ -124,6 +124,27 @@ Execute **only when a Decision Trigger fires** (`infrastructure.md`); "scale arr
 
 ---
 
+## Execution status & immediate actions (2026-06-07)
+
+**Verified current state** (this is the *wiring gap*, not a plan gap — the plan above is complete):
+
+- **Vercel is NOT yet on the new repo.** All 18 recent deployments of project `pita-supply-os` come from OLD branches (`claude/supply-os-manager-v2`, `claude/romantic-elbakyan-3d712b`, …). Pushing `main` (`029b082`, carrying S-02 + S-09) to `beniamin-openclaw/pita-supply-os` produced **no deployment** → Vercel's Git integration still points at the old repo. §1 connect-step is unstarted.
+- **The backend redeploy is the one that matters right now.** S-09 (`RoundingRule.TENTH_KG`) is on `main` but not on the droplet. If the droplet runs `SUPPLY_OS_DATA_BACKEND=sheet`, prod currently **500s on every `supplier_products` read** (the live sheet carries `tenth_kg`) until the droplet is redeployed from `main`. If it runs `seed`, no crash — and the new seed already mirrors `tenth_kg`.
+- **Agent constraint:** SSH to `root@46.101.213.61` is blocked for the agent (production remote-shell). Droplet steps are owner-run; prod secrets stay with the owner.
+
+**Immediate ordered actions (owner-run):**
+
+1. **Backend (fixes the tenth_kg drift) — FIRST.** Confirm the droplet's backend mode, then redeploy from the new repo:
+   - `ssh root@46.101.213.61 'grep DATA_BACKEND /opt/pitabros/supply-os/.env'`
+   - rsync `supply-os-v1/` from this repo → `/opt/pitabros/supply-os/`, then `.venv/bin/pip install -e . && systemctl restart jarvis-supply-os` (see §2 / runbook).
+   - Smoke: `curl https://supply.46-101-213-61.nip.io/health`, then a Manager-token `/api/manager/queue`.
+2. **Frontend (Vercel) — establish auto-deploy.** Vercel → project `pita-supply-os` → Settings → Git → connect `beniamin-openclaw/pita-supply-os`, production branch `main` (§1). Then a push to `main` auto-deploys; verify a fresh deployment appears with a `main` SHA. (One-off alternative: `vercel --prod` from `frontend/`.)
+3. **CORS:** ensure the droplet `.env` `SUPPLY_OS_CORS_ALLOW_ORIGINS` includes the live Vercel origin.
+
+Once #1 lands, the tenth_kg prod-risk is closed; #2 makes future `main` pushes auto-deploy the frontend (closing the "re-pointing pending" gap from the repo guide).
+
+---
+
 ## Out of scope (not this lesson)
 
 - Executing an actual (re)deploy, re-pointing Vercel/droplet for real, provisioning/rotating secrets — gated real-world actions.
