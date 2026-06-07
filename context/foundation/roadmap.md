@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-07
+updated: 2026-06-08
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -33,7 +33,7 @@ Pita Supply OS is the single structured path from a location's stock counts to s
 | S-01 | captain-bukat-submit          | Captain selects Bukat, enters stock, sees suggestion math, submits to the queue   | F-01          | US-01, FR-001, FR-002, FR-003, FR-004, FR-005 | done     |
 | S-02 | manager-bukat-email-dispatch  | Manager claims, edits/sends-back, dispatches the Bukat order by email             | S-01          | US-01, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011 | done     |
 | S-03 | bukat-suggestion-learning-loop| Owner validates Bukat suggestions vs per-line history and corrects master data    | S-02          | FR-012                                        | proposed |
-| S-04 | channel-aware-dispatch        | Manager dispatches additional suppliers via portal / phone / manual               | S-02          | FR-013                                        | proposed |
+| S-04 | channel-aware-dispatch        | Manager dispatches additional suppliers via portal / phone / manual               | S-02          | FR-013                                        | done     |
 | S-05 | manager-queue-filters         | Manager filters/narrows the queue by supplier / location / status                 | —             | FR-014                                        | done     |
 | S-06 | inventory-count               | Captain counts all location products in one pass → dated snapshot                 | —             | US-02, FR-015, FR-016                         | done     |
 | S-07 | order-prefill-from-inventory  | Order screen offers opt-in pre-fill of stock from the latest inventory snapshot   | S-06          | US-02, FR-017                                 | proposed |
@@ -125,7 +125,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** Week-2 scope (must-have by week 2). The dispatch endpoint already branches on `supplier.ordering_method`; the work is per-channel UX + recording. Gated behind the pilot proving the email channel first, so it is not the riskiest-assumption slice.
-- **Status:** proposed
+- **Status:** done (already shipped in Manager V2 G3 — see ## Done; reconciled 2026-06-08)
 
 ### S-05: Manager filters/narrows the order queue
 
@@ -183,7 +183,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | S-01       | captain-bukat-submit           | Captain: submit a Bukat order with visible suggestion math    | no                    | Waiting on F-01                                  |
 | S-02       | manager-bukat-email-dispatch   | Manager: dispatch the Bukat order by email (north star)       | no                    | Waiting on S-01                                  |
 | S-03       | bukat-suggestion-learning-loop | Owner: validate Bukat suggestions & correct master data       | no                    | Waiting on S-02 (needs pilot data)               |
-| S-04       | channel-aware-dispatch         | Manager: channel-aware dispatch (portal / phone / manual)     | no                    | Week-2; waiting on S-02                          |
+| S-04       | channel-aware-dispatch         | Manager: channel-aware dispatch (portal / phone / manual)     | n/a                   | Done — shipped in Manager V2 G3 (see ## Done)    |
 | S-05       | manager-queue-filters          | Manager: filter the order queue (supplier / location / status)| yes                   | Run `/10x-plan manager-queue-filters`            |
 | S-06       | inventory-count                | Captain: count the whole location in one pass → dated snapshot | yes                   | Run `/10x-plan inventory-count` — parallel early track |
 | S-07       | order-prefill-from-inventory   | Order screen: opt-in pre-fill stock from latest inventory     | no                    | Waiting on S-06                                  |
@@ -217,3 +217,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-02: Manager claims, edits/sends-back, dispatches the Bukat order by email — a ready-to-send Gmail draft in purchase units, per-line history recorded.** — Archived 2026-06-06 → `context/archive/2026-06-06-manager-bukat-email-dispatch/`. Lesson: backend + frontend were already built (validation slice = 1 regression test + conftest + builder NOTEs); north-star proven on the live Wola×Bukat setup (submit→claim→edit→dispatch→draft, backed out unsent, no real order). The smoke surfaced a live-sheet↔`main` drift — `supplier_products.rounding_rule = tenth_kg` (S-09) crashes `main`'s `RoundingRule` enum — which blocks any sheet read until S-09 lands on `main`.
 - **S-09 (subkg-rounding-rule): sub-unit (0.1 kg) rounding for weight goods.** — Landed on `main` 2026-06-06 by merging branch `claude/dreamy-shockley-005215` (reviewed + archived at `context/archive/2026-06-05-subkg-rounding-rule/`). Adds `RoundingRule.TENTH_KG` + `rounding_step()` deviation-gate floor + frontend parity (`compute.ts` `roundPerRule`) + seed mirror. **Resolves the live-sheet↔`main` drift that blocked S-02** — `main` now parses `supplier_products.rounding_rule = tenth_kg`. Not a formal roadmap slice: spun out from F-01/S-01 as a parked engine fix.
 - **S-05: Manager filters/narrows the queue by supplier / location / status** — Archived 2026-06-07 → `context/archive/2026-06-07-manager-queue-filters/`. Lesson: client-side narrowing of the already-fetched queue (supplier dropdown derived from the queue union + status-lane toggles) needs zero backend — `ManagerQueueItem` already carries `supplier_id`/`location_id`; the selected-supplier guard resolves at render (`effectiveSupplierId`) to avoid a `set-state-in-effect` lint regression. Location filter deferred (Wola-only pilot); the param stays plumbed for later.
+- **S-04: Channel-aware dispatch for portal / phone / manual suppliers** — Reconciled 2026-06-08; already shipped during Manager V2 (Phase G3), **no new code this session**. Evidence: `frontend/src/pages/manager/DispatchPanel.tsx` branches on `ordering_method` for all four channels (editable email + in-browser Gmail URL; portal copy-list + "Oznacz jako zamówione"; phone `tel:` link parsed from `supplier_notes`; manual note), wired `OrderDetailPane` → `ManagerPage`; backend `manager_dispatch` branches on `is_email_channel` (non-email persists the transition + `sent_method` with no email artifact); covered by `test_dispatch_portal_no_email_no_url` + `test_dispatch_phone_marks_ordered`. Follow-up: portal URLs aren't in supplier master data yet (placeholder shown) — a future master-data enhancement, not an FR-013 blocker. Lesson: check the code before scheduling a slice — channel-aware dispatch was a documentation gap, not a build gap.
