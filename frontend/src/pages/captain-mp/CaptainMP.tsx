@@ -222,22 +222,26 @@ export function CaptainMP() {
     showToast(t("toast.draftSaved"), "success");
   }, [activeSupplierId, lines, showToast, t]);
 
-  // Opt-in prefill: fill current_stock for orderable lines that were counted in
-  // the latest snapshot (matched by product_id). Non-counted / non-orderable
-  // products are left untouched. Editable afterwards; dismissed per supplier so
-  // the offer doesn't nag once acted on. The accept click IS the confirmation
-  // (FR-017 double safeguard: opt-in + the banner names the snapshot date/time).
+  // Opt-in prefill: fill EMPTY current_stock for orderable lines that were
+  // counted in the latest snapshot (matched by product_id). Non-counted /
+  // non-orderable products, and any value the captain ALREADY typed, are left
+  // untouched. Editable afterwards; dismissed per supplier so the offer doesn't
+  // nag once acted on. Double safeguard (FR-017): opt-in + the banner names the
+  // snapshot date/time; and prefill never clobbers hand-typed stock.
   const acceptPrefill = useCallback(() => {
     if (!latestSnapshot || !activeSupplierId) return;
     const stockByPid: Record<string, number> = {};
     latestSnapshot.lines.forEach((ln) => {
       stockByPid[ln.product_id] = ln.current_stock_qty_base;
     });
-    const filled = Object.keys(lines).filter((pid) => pid in stockByPid).length;
+    // Only fill fields the captain hasn't typed (=== ""); a typed 0 is preserved.
+    const filled = Object.keys(lines).filter(
+      (pid) => pid in stockByPid && lines[pid].current_stock_qty_base === "",
+    ).length;
     setLines((prev) => {
       const next: Record<string, OrderLine> = { ...prev };
       Object.keys(next).forEach((pid) => {
-        if (pid in stockByPid) {
+        if (pid in stockByPid && next[pid].current_stock_qty_base === "") {
           next[pid] = { ...next[pid], current_stock_qty_base: stockByPid[pid] };
         }
       });

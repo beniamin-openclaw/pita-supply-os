@@ -10,9 +10,11 @@
 ## State log (update at each phase boundary)
 - 2026-06-08 — change scaffolded (change.md + plan.md), status=implementing. Starting Phase 1 (backend endpoint).
 - 2026-06-08 — Phase 1 DONE: backend endpoint + 6 synthetic tests; backend 235 pass + ruff clean. Commit df06c34.
+- 2026-06-08 — Phase 2 DONE: CaptainMP opt-in prefill banner + types/api/i18n; tsc + eslint(0) + build green. Commit 61c6948.
 
 ## Commit log (this change)
 - df06c34 feat(p1): latest-snapshot endpoint + models + tests
+- 61c6948 feat(p2): CaptainMP opt-in prefill banner + client/types/i18n
 
 ## Next action
-- Phase 2: frontend — types + api.inventoryLatest() + i18n + CaptainMP opt-in prefill banner.
+- Phase 3: write notes/edge-cases.md (fold scout workflow w0lafv5zc) + simulation note for the 2 prior chips; then impl-review + archive.

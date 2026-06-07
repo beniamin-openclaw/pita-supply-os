@@ -83,11 +83,11 @@ On the Captain order screen, when a supplier's lines have loaded and a location 
 ### Phase 2: Frontend — opt-in prefill banner
 
 #### Automated
-- [x] 2.1 types.ts InventoryLatestResponse/Line
-- [x] 2.2 apiClient.ts api.inventoryLatest()
-- [x] 2.3 strings.ts prefill banner keys
-- [x] 2.4 CaptainMP: snapshot fetch + opt-in banner + accept/skip (matching lines only)
-- [x] 2.5 frontend tsc + eslint(0) + build green
+- [x] 2.1 types.ts InventoryLatestResponse/Line — 61c6948
+- [x] 2.2 apiClient.ts api.inventoryLatest() — 61c6948
+- [x] 2.3 strings.ts prefill banner keys — 61c6948
+- [x] 2.4 CaptainMP: snapshot fetch + opt-in banner + accept/skip (matching lines only) — 61c6948
+- [x] 2.5 frontend tsc + eslint(0) + build green — 61c6948
 
 #### Manual
 - [ ] 2.6 Owner sim/test: banner named-by-date, accept fills counted lines, skip = manual, no-snapshot = no banner
@@ -95,8 +95,8 @@ On the Captain order screen, when a supplier's lines have loaded and a location 
 ### Phase 3: Edge-case simulation + flagging
 
 #### Automated
-- [ ] 3.1 notes/edge-cases.md ledger (each case → test or handled-in-code)
-- [ ] 3.2 simulation note for the 2 prior chips' pending manual gates
+- [x] 3.1 notes/edge-cases.md ledger (each case → test or handled-in-code)
+- [x] 3.2 simulation note for the 2 prior chips' pending manual gates
 
 #### Manual
 - [ ] 3.3 Owner reviews edge-case ledger before the real pilot test
