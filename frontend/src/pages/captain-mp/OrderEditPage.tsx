@@ -77,7 +77,6 @@ export function OrderEditPage() {
   useEffect(() => {
     if (!order_id) return;
     let cancelled = false;
-    setLoadError(null);
     api
       .captainOrder(order_id)
       .then((data) => {
@@ -88,6 +87,7 @@ export function OrderEditPage() {
           navigate(`/captain-v2/orders/${data.order_id}`, { replace: true });
           return;
         }
+        setLoadError(null);
         setOrder(data);
         const builtItems = data.lines.map(lineToItem);
         const builtLines: Record<string, OrderLine> = {};

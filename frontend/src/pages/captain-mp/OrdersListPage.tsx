@@ -17,10 +17,12 @@ export function OrdersListPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    setError(null);
     api
       .captainOrders({ limit: 20 })
-      .then((data) => setOrders(data))
+      .then((data) => {
+        setOrders(data);
+        setError(null);
+      })
       .catch((e: ApiError) => {
         if (e.status !== 401) setError(e.detail);
       });

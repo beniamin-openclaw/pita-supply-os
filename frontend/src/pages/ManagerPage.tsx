@@ -68,7 +68,6 @@ export function ManagerPage() {
   }, []);
 
   const loadQueue = useCallback(() => {
-    setError(null);
     Promise.all([
       api.managerQueue(LOCATION_ID, "captain_submitted"),
       api.managerQueue(LOCATION_ID, "manager_claimed"),
@@ -78,6 +77,7 @@ export function ManagerPage() {
         setSubmitted(sub);
         setClaimed(clm);
         setSent(snt);
+        setError(null);
       })
       .catch((e: ApiError) => {
         if (e.status !== 401) setError(e.detail);

@@ -21,10 +21,12 @@ export function OrderDetailPage() {
 
   const load = useCallback(() => {
     if (!order_id) return;
-    setError(null);
     api
       .captainOrder(order_id)
-      .then(setOrder)
+      .then((data) => {
+        setOrder(data);
+        setError(null);
+      })
       .catch((e: ApiError) => {
         if (e.status !== 401) setError(e.detail);
       });

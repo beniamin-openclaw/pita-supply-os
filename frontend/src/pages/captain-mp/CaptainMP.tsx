@@ -77,7 +77,7 @@ export function CaptainMP() {
     return () => {
       cancelled = true;
     };
-  }, [showToast]);
+  }, [showToast, t]);
 
   // ---- Auto-select the pilot supplier (Bukat) once loaded -------------------
   // Default to the pilot supplier if it's in the (already active-filtered) list,
@@ -88,6 +88,9 @@ export function CaptainMP() {
     if (!activeSupplierId && suppliers.length > 0) {
       const pilot =
         suppliers.find((s) => s.supplier_id === PILOT_SUPPLIER_ID) ?? suppliers[0];
+      // Intentional one-time default once suppliers load; activeSupplierId is
+      // also user-settable (picker), so it can't be derived purely in render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSupplierId(pilot.supplier_id);
     }
   }, [suppliers, activeSupplierId]);
@@ -96,9 +99,15 @@ export function CaptainMP() {
   useEffect(() => {
     if (!activeSupplierId) return;
     let cancelled = false;
+    // Intentional synchronous reset when the supplier changes: clear the
+    // previous supplier's items + form lines and show the loader before the
+    // refetch. The set-state-in-effect rule over-fires on this deliberate
+    // pattern (no async path can clear the stale list before paint).
+    /* eslint-disable react-hooks/set-state-in-effect */
     setIsLoadingItems(true);
     setOrderableItems([]);
     setLines({});
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     api
       .orderable(activeSupplierId)
@@ -139,7 +148,7 @@ export function CaptainMP() {
     return () => {
       cancelled = true;
     };
-  }, [activeSupplierId, showToast]);
+  }, [activeSupplierId, showToast, t]);
 
   // ---- Draft auto-save (debounced) ------------------------------------------
   useEffect(() => {

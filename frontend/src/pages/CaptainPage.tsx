@@ -19,13 +19,11 @@ export function CaptainPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     api.suppliers().then(setSuppliers).catch((e: ApiError) => setError(e.detail));
   }, []);
 
   useEffect(() => {
     if (!selectedSupplier) return;
-    setLoading(true);
     api.orderable(selectedSupplier)
       .then(setItems)
       .catch((e: ApiError) => setError(e.detail))
