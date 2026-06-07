@@ -11,7 +11,7 @@
 //     channel the editable-body Gmail URL is built in the DispatchPanel; this
 //     parent's onDispatch performs the state write-back.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, ApiError } from "../apiClient";
 import { clearToken } from "../auth";
@@ -21,7 +21,8 @@ import type {
   ManagerQueueItem,
   OrderingMethod,
 } from "../types";
-import { ManagerQueue } from "./manager/ManagerQueue";
+import { ManagerFilterBar } from "./manager/ManagerFilterBar";
+import { ManagerQueue, type QueueLane } from "./manager/ManagerQueue";
 import { OrderDetailPane } from "./manager/OrderDetailPane";
 import {
   type DraftMap,
@@ -39,6 +40,12 @@ export function ManagerPage() {
   const [claimed, setClaimed] = useState<ManagerQueueItem[] | null>(null);
   const [sent, setSent] = useState<ManagerQueueItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Queue filters (S-05) — ephemeral, client-side.
+  const [filterSupplierId, setFilterSupplierId] = useState<string | null>(null);
+  const [visibleLanes, setVisibleLanes] = useState<Set<QueueLane>>(
+    () => new Set<QueueLane>(["submitted", "claimed", "sent"]),
+  );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ManagerOrderDetail | null>(null);
@@ -264,6 +271,49 @@ export function ManagerPage() {
     [detail, drafts, refreshAll, showToast, t],
   );
 
+  // Queue filters (S-05): supplier options derive from the loaded queue (only
+  // suppliers that have orders → no dead options); the lanes toggle which groups
+  // render. Both ephemeral. effectiveSupplierId resolves at render so a supplier
+  // that drops out of the queue after a refresh falls back to "all" — no
+  // setState-in-effect.
+  const supplierOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const arr of [submitted, claimed, sent]) {
+      for (const q of arr ?? []) byId.set(q.supplier_id, q.supplier_name);
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [submitted, claimed, sent]);
+
+  const effectiveSupplierId =
+    filterSupplierId && supplierOptions.some((o) => o.id === filterSupplierId)
+      ? filterSupplierId
+      : null;
+
+  const filterBySupplier = (arr: ManagerQueueItem[] | null) =>
+    arr === null
+      ? null
+      : effectiveSupplierId
+        ? arr.filter((q) => q.supplier_id === effectiveSupplierId)
+        : arr;
+
+  const anyFilterActive = effectiveSupplierId !== null || visibleLanes.size < 3;
+
+  const handleToggleLane = useCallback((lane: QueueLane) => {
+    setVisibleLanes((prev) => {
+      const next = new Set(prev);
+      if (next.has(lane)) next.delete(lane);
+      else next.add(lane);
+      return next;
+    });
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setFilterSupplierId(null);
+    setVisibleLanes(new Set<QueueLane>(["submitted", "claimed", "sent"]));
+  }, []);
+
   // cutoff_iso is only on the queue item, not on ManagerOrderDetail — look it
   // up from whichever group holds the selected order.
   const selectedCutoffIso = selectedId
@@ -329,12 +379,22 @@ export function ManagerPage() {
 
         <div className="flex flex-col gap-4 lg:flex-row">
           <div className="w-full lg:w-[360px] lg:shrink-0">
+            <ManagerFilterBar
+              supplierOptions={supplierOptions}
+              selectedSupplierId={effectiveSupplierId}
+              onSupplierChange={setFilterSupplierId}
+              visibleLanes={visibleLanes}
+              onToggleLane={handleToggleLane}
+              onClear={handleClearFilters}
+              anyActive={anyFilterActive}
+            />
             <ManagerQueue
-              submitted={submitted}
-              claimed={claimed}
-              sent={sent}
+              submitted={filterBySupplier(submitted)}
+              claimed={filterBySupplier(claimed)}
+              sent={filterBySupplier(sent)}
               selectedId={selectedId}
               onSelect={handleSelect}
+              visibleLanes={visibleLanes}
             />
           </div>
           <div className="min-w-0 flex-1">

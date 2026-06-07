@@ -11,8 +11,11 @@ import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
 import type { ManagerQueueItem } from "../../types";
 
+/** The three queue lanes (one status group each). */
+export type QueueLane = "submitted" | "claimed" | "sent";
+
 interface QueueGroup {
-  key: string;
+  key: QueueLane;
   titleKey: StringKey;
   accent: string;
   items: ManagerQueueItem[] | null;
@@ -24,6 +27,8 @@ interface ManagerQueueProps {
   sent: ManagerQueueItem[] | null;
   selectedId: string | null;
   onSelect: (orderId: string) => void;
+  /** Which lanes to render. Omitted = all visible (backward compatible). */
+  visibleLanes?: Set<QueueLane>;
 }
 
 export function ManagerQueue({
@@ -32,16 +37,18 @@ export function ManagerQueue({
   sent,
   selectedId,
   onSelect,
+  visibleLanes,
 }: ManagerQueueProps) {
   const groups: QueueGroup[] = [
     { key: "submitted", titleKey: "manager.tab.submitted", accent: "text-blue-800", items: submitted },
     { key: "claimed", titleKey: "manager.tab.claimed", accent: "text-orange-700", items: claimed },
     { key: "sent", titleKey: "manager.tab.sent", accent: "text-green-700", items: sent },
   ];
+  const shown = visibleLanes ? groups.filter((g) => visibleLanes.has(g.key)) : groups;
 
   return (
     <div className="space-y-3">
-      {groups.map((group) => (
+      {shown.map((group) => (
         <QueueGroupSection
           key={group.key}
           group={group}

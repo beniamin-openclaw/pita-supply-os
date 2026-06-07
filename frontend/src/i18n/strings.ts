@@ -330,6 +330,11 @@ export const STRINGS = {
     en: "Select an order from the queue",
   },
   "manager.queueEmptyGroup": { pl: "Brak zamówień", en: "No orders" },
+  // Manager queue filters (S-05) --------------------------------------------
+  "manager.filter.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  "manager.filter.allSuppliers": { pl: "Wszyscy dostawcy", en: "All suppliers" },
+  "manager.filter.statusLabel": { pl: "Status", en: "Status" },
+  "manager.filter.clear": { pl: "Wyczyść filtry", en: "Clear filters" },
   "manager.detailLoading": { pl: "Ładowanie zamówienia…", en: "Loading order…" },
   "manager.groupCount": { pl: "{n}", en: "{n}" },
   // Detail header band labels
