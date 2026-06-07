@@ -1,7 +1,7 @@
 ---
 change_id: order-prefill-from-inventory
 title: Order screen — opt-in pre-fill of current stock from the latest inventory snapshot
-status: implementing
+status: implemented
 created: 2026-06-08
 updated: 2026-06-08
 archived_at: null

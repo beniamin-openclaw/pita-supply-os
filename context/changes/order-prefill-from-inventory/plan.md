@@ -95,8 +95,8 @@ On the Captain order screen, when a supplier's lines have loaded and a location 
 ### Phase 3: Edge-case simulation + flagging
 
 #### Automated
-- [x] 3.1 notes/edge-cases.md ledger (each case → test or handled-in-code)
-- [x] 3.2 simulation note for the 2 prior chips' pending manual gates
+- [x] 3.1 notes/edge-cases.md ledger (each case → test or handled-in-code) — c6e4c03
+- [x] 3.2 simulation note for the 2 prior chips' pending manual gates — c6e4c03
 
 #### Manual
 - [ ] 3.3 Owner reviews edge-case ledger before the real pilot test
