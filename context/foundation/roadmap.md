@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-06
+updated: 2026-06-07
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -34,7 +34,7 @@ Pita Supply OS is the single structured path from a location's stock counts to s
 | S-02 | manager-bukat-email-dispatch  | Manager claims, edits/sends-back, dispatches the Bukat order by email             | S-01          | US-01, FR-006, FR-007, FR-008, FR-009, FR-010, FR-011 | done     |
 | S-03 | bukat-suggestion-learning-loop| Owner validates Bukat suggestions vs per-line history and corrects master data    | S-02          | FR-012                                        | proposed |
 | S-04 | channel-aware-dispatch        | Manager dispatches additional suppliers via portal / phone / manual               | S-02          | FR-013                                        | proposed |
-| S-05 | manager-queue-filters         | Manager filters/narrows the queue by supplier / location / status                 | —             | FR-014                                        | ready    |
+| S-05 | manager-queue-filters         | Manager filters/narrows the queue by supplier / location / status                 | —             | FR-014                                        | done     |
 | S-06 | inventory-count               | Captain counts all location products in one pass → dated snapshot                 | —             | US-02, FR-015, FR-016                         | done     |
 | S-07 | order-prefill-from-inventory  | Order screen offers opt-in pre-fill of stock from the latest inventory snapshot   | S-06          | US-02, FR-017                                 | proposed |
 | S-08 | inventory-manager-view        | (Phase 2) Manager views inventories; Owner browses inventory history/trends       | S-06          | FR-018, FR-019                                | proposed |
@@ -137,7 +137,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** —
 - **Unknowns:** —
 - **Risk:** The FR-006 resolution requires FR-014 *before* multi-supplier/location scale. Plannable now because it only extends the present queue and carries no blocking unknown — the smallest independent slice, a safe parallel track while the pilot path is gated on Open Roadmap Question 2.
-- **Status:** ready
+- **Status:** done
 
 ### S-06: Captain counts the whole location → dated snapshot
 
@@ -216,3 +216,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-01: Captain logs in, selects supplier Bukat, sees the Wola product lines for that supplier, enters current stock, reviews the suggestion math, sets the final purchase quantity (with a reason where deviation rules apply), and submits — the order appears on the Manager queue the same business day.** — Archived 2026-06-05 → `context/archive/2026-06-05-captain-bukat-submit/`. Lesson: a supplier "pivot" is a frontend default + data, not backend branching (1-line `PILOT_SUPPLIER_ID` with `suppliers[0]` fallback); the "lands on Manager queue" proof needs sheet mode (seed submit is in-memory), validated via submit-and-back-out, never dispatch. Unblocks S-02 (north star).
 - **S-02: Manager claims, edits/sends-back, dispatches the Bukat order by email — a ready-to-send Gmail draft in purchase units, per-line history recorded.** — Archived 2026-06-06 → `context/archive/2026-06-06-manager-bukat-email-dispatch/`. Lesson: backend + frontend were already built (validation slice = 1 regression test + conftest + builder NOTEs); north-star proven on the live Wola×Bukat setup (submit→claim→edit→dispatch→draft, backed out unsent, no real order). The smoke surfaced a live-sheet↔`main` drift — `supplier_products.rounding_rule = tenth_kg` (S-09) crashes `main`'s `RoundingRule` enum — which blocks any sheet read until S-09 lands on `main`.
 - **S-09 (subkg-rounding-rule): sub-unit (0.1 kg) rounding for weight goods.** — Landed on `main` 2026-06-06 by merging branch `claude/dreamy-shockley-005215` (reviewed + archived at `context/archive/2026-06-05-subkg-rounding-rule/`). Adds `RoundingRule.TENTH_KG` + `rounding_step()` deviation-gate floor + frontend parity (`compute.ts` `roundPerRule`) + seed mirror. **Resolves the live-sheet↔`main` drift that blocked S-02** — `main` now parses `supplier_products.rounding_rule = tenth_kg`. Not a formal roadmap slice: spun out from F-01/S-01 as a parked engine fix.
+- **S-05: Manager filters/narrows the queue by supplier / location / status** — Archived 2026-06-07 → `context/archive/2026-06-07-manager-queue-filters/`. Lesson: client-side narrowing of the already-fetched queue (supplier dropdown derived from the queue union + status-lane toggles) needs zero backend — `ManagerQueueItem` already carries `supplier_id`/`location_id`; the selected-supplier guard resolves at render (`effectiveSupplierId`) to avoid a `set-state-in-effect` lint regression. Location filter deferred (Wola-only pilot); the param stays plumbed for later.

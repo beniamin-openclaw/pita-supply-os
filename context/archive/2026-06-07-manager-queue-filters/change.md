@@ -1,10 +1,10 @@
 ---
 change_id: manager-queue-filters
 title: Manager queue filters
-status: impl_reviewed
+status: archived
 created: 2026-06-07
 updated: 2026-06-07
-archived_at: null
+archived_at: 2026-06-07T21:12:07Z
 ---
 
 ## Notes
