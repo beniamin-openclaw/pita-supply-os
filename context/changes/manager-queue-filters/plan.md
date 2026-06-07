@@ -139,14 +139,14 @@ None — additive frontend change, no data or API change.
 
 #### Automated
 
-- [x] 1.1 Frontend type-check clean: `npx tsc -p tsconfig.app.json --noEmit`
-- [x] 1.2 Frontend lint adds no new findings vs the S-01 baseline (13 problems): `npm run lint`
-- [x] 1.3 Production build succeeds (Homebrew node): `PATH="/opt/homebrew/opt/node/bin:$PATH" npm run build`
+- [x] 1.1 Frontend type-check clean: `npx tsc -p tsconfig.app.json --noEmit` — e4d0130
+- [x] 1.2 Frontend lint adds no new findings vs the S-01 baseline (13 problems): `npm run lint` — e4d0130
+- [x] 1.3 Production build succeeds (Homebrew node): `PATH="/opt/homebrew/opt/node/bin:$PATH" npm run build` — e4d0130
 
 #### Manual
 
-- [x] 1.4 Supplier select filters all groups; "Wszyscy" restores
-- [x] 1.5 Status chips hide/show groups; default all shown
-- [x] 1.6 Selected order filtered out → detail pane persists; claim/save/dispatch unaffected
-- [x] 1.7 Clear filters resets; reload resets (ephemeral)
-- [x] 1.8 No regression to 60s auto-refresh + unsaved-edit guards
+- [x] 1.4 Supplier select filters all groups; "Wszyscy" restores — e4d0130
+- [x] 1.5 Status chips hide/show groups; default all shown — e4d0130
+- [x] 1.6 Selected order filtered out → detail pane persists; claim/save/dispatch unaffected — e4d0130
+- [x] 1.7 Clear filters resets; reload resets (ephemeral) — e4d0130
+- [x] 1.8 No regression to 60s auto-refresh + unsaved-edit guards — e4d0130
