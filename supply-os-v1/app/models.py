@@ -508,3 +508,25 @@ class InventoryCountDetail(BaseModel):
     line_count: int = 0
     notes: str = ""
     lines: list[InventoryCountDetailLine] = Field(default_factory=list)
+
+
+# ---------- Suggestion learning-loop review (S-03 / FR-012) ----------
+
+class SuggestionReviewItem(BaseModel):
+    """One product's roll-up across the order-line history for the suggestion
+    learning loop (FR-012): how the engine's suggestion compared to the captain/
+    manager finals, and why it was overridden. The endpoint sorts these
+    worst-deviation first so the owner sees the strongest master-data correction
+    candidates. `manager_final` averages include not-yet-dispatched lines (0),
+    surfaced honestly rather than filtered."""
+    product_id: str
+    product_name_pl: str  # joined from products (id fallback)
+    product_category: str
+    inventory_unit: str
+    line_count: int
+    order_count: int  # distinct orders this product appeared in
+    avg_suggested_qty_purchase: float
+    avg_captain_final_qty_purchase: float
+    avg_manager_final_qty_purchase: float
+    avg_abs_deviation_pct: float  # mean |delta_vs_suggestion_pct| over lines that have one
+    reason_code_counts: dict[str, int] = Field(default_factory=dict)

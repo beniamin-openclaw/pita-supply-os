@@ -48,6 +48,7 @@ from .models import (
     OrderStatus,
     Product,
     RoundingRule,
+    SuggestionReviewItem,
     Supplier,
     SupplierProduct,
 )
@@ -1893,3 +1894,90 @@ def manager_inventory_count_detail(
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     location = locations_by_id.get(count.location_id)
     return _enrich_inventory_count_detail(count, products_by_id, location)
+
+
+# ---------- Suggestion learning-loop review (S-03 / FR-012) ----------
+
+
+def _aggregate_suggestion_review(
+    lines: list[OrderLine],
+    products_by_id: dict[str, Product],
+) -> list[SuggestionReviewItem]:
+    """Roll up order_lines per product for the learning-loop review (S-03).
+
+    Pure function (no I/O) so it can be unit-tested directly. Averages are taken
+    over ALL lines in the group; ``avg_abs_deviation_pct`` is the mean of
+    ``|delta_vs_suggestion_pct|`` over only the lines that carry one (0.0 if
+    none). Result is sorted worst-deviation first (tie-break: more lines first).
+    """
+    by_pid: dict[str, list[OrderLine]] = {}
+    for line in lines:
+        by_pid.setdefault(line.product_id, []).append(line)
+
+    items: list[SuggestionReviewItem] = []
+    for pid, group in by_pid.items():
+        n = len(group)
+        product = products_by_id.get(pid)
+        order_ids = {line.order_id for line in group}
+        deviations = [
+            abs(line.delta_vs_suggestion_pct)
+            for line in group
+            if line.delta_vs_suggestion_pct is not None
+        ]
+        reason_counts: dict[str, int] = {}
+        for line in group:
+            if line.reason_code is not None:
+                key = line.reason_code.value
+                reason_counts[key] = reason_counts.get(key, 0) + 1
+        items.append(
+            SuggestionReviewItem(
+                product_id=pid,
+                product_name_pl=product.product_name_pl if product else pid,
+                product_category=product.product_category if product else "",
+                inventory_unit=product.inventory_unit if product else "",
+                line_count=n,
+                order_count=len(order_ids),
+                avg_suggested_qty_purchase=round(
+                    sum(line.suggested_qty_purchase for line in group) / n, 3
+                ),
+                avg_captain_final_qty_purchase=round(
+                    sum(line.captain_final_qty_purchase for line in group) / n, 3
+                ),
+                avg_manager_final_qty_purchase=round(
+                    sum(line.manager_final_qty_purchase for line in group) / n, 3
+                ),
+                avg_abs_deviation_pct=(
+                    round(sum(deviations) / len(deviations), 4) if deviations else 0.0
+                ),
+                reason_code_counts=reason_counts,
+            )
+        )
+    items.sort(key=lambda it: (it.avg_abs_deviation_pct, it.line_count), reverse=True)
+    return items
+
+
+@app.get(
+    "/api/manager/suggestion-review",
+    response_model=list[SuggestionReviewItem],
+)
+def manager_suggestion_review(
+    _: None = Depends(require_manager),
+):
+    """Per-product roll-up of the order-line history for the suggestion learning
+    loop (FR-012): suggested vs captain-final vs manager-final averages, average
+    absolute deviation, and a reason-code histogram — sorted worst-deviation
+    first so the owner sees which master-data rows are the strongest correction
+    candidates. Read-only; never auto-corrects (suggest-only governing rule).
+
+    Sheet-only: order_lines persist only in sheet mode; seed mode and a missing
+    tab both degrade to [] (mirrors manager_queue), never a 500.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        return []
+    try:
+        lines = backend.load_order_lines()
+    except sheets.WorksheetNotFound:
+        return []
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    return _aggregate_suggestion_review(lines, products_by_id)
