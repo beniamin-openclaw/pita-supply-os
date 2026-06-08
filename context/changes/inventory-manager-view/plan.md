@@ -183,9 +183,9 @@ No schema change, no worksheet migration — reads the existing `inventory_count
 ### Phase 3: Frontend — Captain inventory history
 
 #### Automated
-- [x] 3.1 Build passes: `npm run build`
-- [x] 3.2 Lint passes: `npm run lint`
+- [x] 3.1 Build passes: `npm run build` — a188ff5
+- [x] 3.2 Lint passes: `npm run lint` — a188ff5
 
 #### Manual
 - [ ] 3.3 /captain-v2/inventory-history lists snapshots; detail shows product names + stock — sheet-mode positive path, deferred to deploy gate (reuses the existing Captain endpoints, covered there)
-- [x] 3.4 Reachable from Remanent; Remanent tab stays active on the history page (e2e) — e2e verified (live app, mobile 375px): "Historia remanentów →" link on /captain-v2/inventory-count; history page renders with Remanent tab filled-active (broadened /captain-v2/inventory match), empty state, no console errors
+- [x] 3.4 Reachable from Remanent; Remanent tab stays active on the history page (e2e) — e2e verified (live app, mobile 375px): "Historia remanentów →" link on /captain-v2/inventory-count; history page renders with Remanent tab filled-active (broadened /captain-v2/inventory match), empty state, no console errors — a188ff5
