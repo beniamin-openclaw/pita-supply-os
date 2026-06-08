@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../apiClient";
 import { clearToken } from "../auth";
 import { useT } from "../i18n";
+import { AppHeader } from "../components/ui/AppHeader";
 import type {
   ManagerOrderDetail,
   ManagerQueueItem,
@@ -337,7 +338,7 @@ export function ManagerPage() {
         </div>
       )}
 
-      <header className="bg-brand text-white">
+      <AppHeader>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <h1 className="text-base font-semibold">PITA BROS — Manager Dispatch</h1>
           <div className="flex items-center gap-3">
@@ -360,7 +361,7 @@ export function ManagerPage() {
             </button>
           </div>
         </div>
-      </header>
+      </AppHeader>
 
       <main className="mx-auto max-w-7xl px-6 py-6">
         {error && (

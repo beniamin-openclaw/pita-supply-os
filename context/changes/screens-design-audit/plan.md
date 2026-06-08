@@ -302,20 +302,20 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Automated
 
-- [x] 1.1 Build passes: `cd frontend && npm run build`
-- [x] 1.2 Lint passes: `cd frontend && npm run lint`
-- [x] 1.3 No raw brand-hex usages remain (bracket form, excludes the @theme def): `! grep -rn '\[#1a4480\]\|\[#e3eaf3\]' frontend/src`
+- [x] 1.1 Build passes: `cd frontend && npm run build` — 3bde7dc
+- [x] 1.2 Lint passes: `cd frontend && npm run lint` — 3bde7dc
+- [x] 1.3 No raw brand-hex usages remain (bracket form, excludes the @theme def): `! grep -rn '\[#1a4480\]\|\[#e3eaf3\]' frontend/src` — 3bde7dc
 
 #### Manual
 
-- [x] 1.4 AuthGate / both headers / supplier chips render visually identical after the alias swap
+- [x] 1.4 AuthGate / both headers / supplier chips render visually identical after the alias swap — 3bde7dc
 
 ### Phase 2: Base Components + Shared AppHeader
 
 #### Automated
 
-- [ ] 2.1 Build passes: `cd frontend && npm run build`
-- [ ] 2.2 Lint passes: `cd frontend && npm run lint`
+- [x] 2.1 Build passes: `cd frontend && npm run build`
+- [x] 2.2 Lint passes: `cd frontend && npm run lint`
 
 #### Manual
 
