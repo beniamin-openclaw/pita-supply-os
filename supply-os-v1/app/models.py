@@ -414,8 +414,16 @@ class InventoryCountLineSubmit(BaseModel):
 
 class InventoryCountSubmitRequest(BaseModel):
     """Payload for POST /api/captain/inventory/submit. Only entered products are
-    included; an empty list is rejected (min_length=1)."""
+    included; an empty list is rejected (min_length=1).
+
+    `count_user` (who counted) is REQUIRED free-text attribution (FR-021) — it
+    lands in the existing `count_user` field and does NOT authenticate or gate
+    anything (the per-user-identity v0 Non-Goal still holds). `count_date`
+    (FR-020) is optional; when omitted the endpoint defaults it to today in
+    Warsaw local time. A future date is rejected by the endpoint."""
     lines: list[InventoryCountLineSubmit] = Field(min_length=1)
+    count_user: str = Field(min_length=1)
+    count_date: Optional[date] = None
     notes: str = ""
 
 
@@ -440,5 +448,6 @@ class InventoryLatestResponse(BaseModel):
     count_id: str
     count_date: date
     count_submitted_at: Optional[datetime] = None
+    count_user: Optional[str] = None  # who counted (FR-022 banner); may be absent on legacy rows
     line_count: int = 0
     lines: list[InventoryLatestLine] = Field(default_factory=list)

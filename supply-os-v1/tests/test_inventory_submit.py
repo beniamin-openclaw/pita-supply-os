@@ -5,16 +5,21 @@ Auth uses the same env-token model as test_captain_submit.py. Persistence is
 sheet-only (seed = no-op + warning; sheet = append called); the submit endpoint
 maps a missing inventory worksheet to a 503 (F2).
 """
+from datetime import date, datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 from app import seed_loader, sheets
 from app.config import DataBackend
-from app.main import app
+from app.main import _WARSAW_TZ, app
 
 client = TestClient(app)
 
 WOLA_AUTH = {"Authorization": "Bearer test_wola_token"}
 KEN_AUTH = {"Authorization": "Bearer test_ken_token"}
+
+# Every valid submit now carries a required free-text counter (FR-021).
+COUNTED_BY = "Test Captain"
 
 
 # ---------- GET /api/captain/inventory/products ----------
@@ -66,6 +71,7 @@ def test_inventory_submit_happy_path_seed_backend():
                 "count_comment": "half bag",
             },
         ],
+        "count_user": COUNTED_BY,
         "notes": "evening count",
     }
     r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
@@ -81,7 +87,10 @@ def test_inventory_submit_happy_path_seed_backend():
 def test_inventory_submit_unauthorized_no_token():
     r = client.post(
         "/api/captain/inventory/submit",
-        json={"lines": [{"product_id": "P027", "current_stock_qty_base": 5}]},
+        json={
+            "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+            "count_user": COUNTED_BY,
+        },
     )
     assert r.status_code == 401
 
@@ -94,7 +103,10 @@ def test_inventory_submit_empty_lines():
 
 
 def test_inventory_submit_unknown_product():
-    body = {"lines": [{"product_id": "P999", "current_stock_qty_base": 5}]}
+    body = {
+        "lines": [{"product_id": "P999", "current_stock_qty_base": 5}],
+        "count_user": COUNTED_BY,
+    }
     r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
     assert r.status_code == 400
     assert "Unknown product_id" in r.json()["detail"]
@@ -102,7 +114,10 @@ def test_inventory_submit_unknown_product():
 
 def test_inventory_submit_no_setting_for_location():
     # P027 exists in master data but KEN has no setting → 400.
-    body = {"lines": [{"product_id": "P027", "current_stock_qty_base": 5}]}
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": COUNTED_BY,
+    }
     r = client.post("/api/captain/inventory/submit", json=body, headers=KEN_AUTH)
     assert r.status_code == 400
     assert "no location_product_setting" in r.json()["detail"]
@@ -110,7 +125,10 @@ def test_inventory_submit_no_setting_for_location():
 
 def test_inventory_submit_count_id_format():
     """INV-YYYYMMDD-WOL-<6hex>; 5 calls all unique + correct shape."""
-    body = {"lines": [{"product_id": "P027", "current_stock_qty_base": 5}]}
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": COUNTED_BY,
+    }
     seen: set[str] = set()
     for _ in range(5):
         r = client.post(
@@ -157,7 +175,8 @@ def test_inventory_submit_persists_to_sheet(mocker):
         "lines": [
             {"product_id": "P027", "current_stock_qty_base": 5},
             {"product_id": "P019", "current_stock_qty_base": 2},
-        ]
+        ],
+        "count_user": COUNTED_BY,
     }
     r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
     assert r.status_code == 200, r.text
@@ -184,7 +203,74 @@ def test_inventory_submit_worksheets_not_configured_returns_503(mocker):
         "append_inventory_count",
         side_effect=sheets.WorksheetNotFound,
     )
-    body = {"lines": [{"product_id": "P027", "current_stock_qty_base": 5}]}
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": COUNTED_BY,
+    }
     r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
     assert r.status_code == 503, r.text
     assert "not configured" in r.json()["detail"]
+
+
+# ---------- count_user (FR-021) + count_date (FR-020) contract ----------
+
+def test_inventory_submit_missing_count_user_422():
+    """count_user is now required free-text attribution → omitting it is a 422."""
+    body = {"lines": [{"product_id": "P027", "current_stock_qty_base": 5}]}
+    r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 422
+
+
+def test_inventory_submit_blank_count_user_422():
+    """An empty-string count_user fails min_length=1 (no whitespace-only name)."""
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": "",
+    }
+    r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 422
+
+
+def test_inventory_submit_future_date_rejected():
+    """A count_date in the future (Warsaw) → 400 (FR-020)."""
+    future = (datetime.now(_WARSAW_TZ).date() + timedelta(days=2)).isoformat()
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": COUNTED_BY,
+        "count_date": future,
+    }
+    r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 400, r.text
+    assert "future" in r.json()["detail"]
+
+
+def test_inventory_submit_today_warsaw_accepted():
+    """Today's Warsaw date is the boundary and must be accepted, never rejected
+    as future — the F3 near-midnight guard (UTC could still read 'yesterday')."""
+    today_warsaw = datetime.now(_WARSAW_TZ).date().isoformat()
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": COUNTED_BY,
+        "count_date": today_warsaw,
+    }
+    r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+
+
+def test_inventory_submit_past_date_and_user_roundtrip(mocker):
+    """A back-dated count persists with the chosen count_date + count_user."""
+    _patch_sheet_master_data(mocker)
+    appended = mocker.patch.object(sheets, "append_inventory_count")
+    mocker.patch.object(sheets, "append_inventory_count_lines")
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
+        "count_user": "Anna Nowak",
+        "count_date": "2026-06-01",
+    }
+    r = client.post("/api/captain/inventory/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    count_arg = appended.call_args[0][0]
+    assert count_arg.count_date == date(2026, 6, 1)
+    assert count_arg.count_user == "Anna Nowak"
+    # The submit response echoes the chosen (back-dated) count_date.
+    assert r.json()["count_date"] == "2026-06-01"

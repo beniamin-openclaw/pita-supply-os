@@ -1511,8 +1511,18 @@ def captain_inventory_submit(
         if s.location_id == location_id
     }
 
-    today = datetime.now(timezone.utc).date()
-    count_id = _generate_count_id(location_id, today)
+    # Resolve the count date in Warsaw local time (the operator's timezone), so a
+    # legitimate "today" picked just after local midnight is not rejected as a
+    # future date by a UTC comparison (F3). count_date defaults to today when the
+    # client omits it (FR-020); a future date is a 400.
+    today_warsaw = datetime.now(_WARSAW_TZ).date()
+    count_date = req.count_date or today_warsaw
+    if count_date > today_warsaw:
+        raise HTTPException(
+            status_code=400,
+            detail=f"count_date {count_date.isoformat()} is in the future",
+        )
+    count_id = _generate_count_id(location_id, today_warsaw)
 
     count_lines: list[InventoryCountLine] = []
     for idx, line in enumerate(req.lines, start=1):
@@ -1542,8 +1552,8 @@ def captain_inventory_submit(
     count = InventoryCount(
         count_id=count_id,
         location_id=location_id,
-        count_date=today,
-        count_user=location_id,  # proxy — no individual identity in v0
+        count_date=count_date,
+        count_user=req.count_user,  # required free-text attribution (FR-021)
         count_submitted_at=datetime.now(timezone.utc),
         line_count=len(count_lines),
         notes=req.notes,
@@ -1572,7 +1582,7 @@ def captain_inventory_submit(
 
     return InventoryCountSubmitResponse(
         count_id=count_id,
-        count_date=today,
+        count_date=count_date,
         line_count=len(count_lines),
         warnings=warnings,
     )
@@ -1626,6 +1636,7 @@ def captain_inventory_latest(
         count_id=latest.count_id,
         count_date=latest.count_date,
         count_submitted_at=latest.count_submitted_at,
+        count_user=latest.count_user,
         line_count=len(lines),
         lines=lines,
     )

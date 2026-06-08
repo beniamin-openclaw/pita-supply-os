@@ -39,6 +39,7 @@ def _count(
     submitted_at: datetime | None,
     count_date: date,
     lines: list[InventoryCountLine] | None = None,
+    count_user: str | None = None,
 ) -> InventoryCount:
     lines = lines or []
     return InventoryCount(
@@ -46,6 +47,7 @@ def _count(
         location_id=location_id,
         count_date=count_date,
         count_submitted_at=submitted_at,
+        count_user=count_user,
         line_count=len(lines),
         lines=lines,
     )
@@ -128,6 +130,21 @@ def test_latest_null_in_seed_mode():
 def test_latest_unauthorized_no_token():
     r = client.get("/api/captain/inventory/latest")
     assert r.status_code == 401
+
+
+def test_latest_surfaces_count_user(mocker):
+    """count_user (who counted) is exposed so the order pre-fill banner can name
+    the counter (FR-022 order-side)."""
+    c = _count(
+        "INV-WHO", "WOLA",
+        datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc), date(2026, 6, 5),
+        lines=[_line("INV-WHO", "P027", 7)],
+        count_user="Jan Kowalski",
+    )
+    _activate_sheet(mocker, [c])
+    r = client.get("/api/captain/inventory/latest", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["count_user"] == "Jan Kowalski"
 
 
 def test_latest_handles_missing_submitted_at(mocker):
