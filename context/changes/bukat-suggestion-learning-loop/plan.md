@@ -123,9 +123,9 @@ No schema change. Reads existing `order_lines`. Sheet-mode review runs at the de
 ### Phase 2: Frontend — suggestion-review view
 
 #### Automated
-- [x] 2.1 Build passes: `npm run build`
-- [x] 2.2 Lint passes: `npm run lint`
+- [x] 2.1 Build passes: `npm run build` — c6c4258
+- [x] 2.2 Lint passes: `npm run lint` — c6c4258
 
 #### Manual
 - [ ] 2.3 /manager/suggestion-review shows per-product rows sorted by deviation; reason chips; SYSTEM_SUGGESTION_WRONG highlighted — sheet-mode positive path (needs real order history), deferred to deploy gate; aggregation + sort covered by test_suggestion_review.py
-- [x] 2.4 Reachable via "Sugestie" link; seed mode shows graceful empty state — e2e verified (live app, mobile 375px): /manager has Sugestie + Remanenty links; /manager/suggestion-review renders h1 + explainer + "Brak historii zamówień do analizy." empty state, no auth modal, no console errors
+- [x] 2.4 Reachable via "Sugestie" link; seed mode shows graceful empty state — e2e verified (live app, mobile 375px): /manager has Sugestie + Remanenty links; /manager/suggestion-review renders h1 + explainer + "Brak historii zamówień do analizy." empty state, no auth modal, no console errors — c6c4258
