@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Proto — OrderLineTable (responsive card fallback)</title>
+<title>Proto — Manager line table (~10 lines)</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = { theme: { extend: {
@@ -13,32 +13,88 @@
 </script>
 <style>body { font-feature-settings: "tnum"; }</style>
 </head>
-<body class="bg-slate-50 p-4 font-sans">
-  <p class="mx-auto mb-4 max-w-md text-xs text-slate-500">
-    <b>PROPOSAL — OrderLineTable.</b> The 11-column table has zero responsive classes, so the
-    editable Manager qty + comment (the actual work) are off-screen on a tablet/phone
-    (research.md opp #2 manager). Below <code>md</code> it becomes stacked, labeled cards;
-    ≥<code>md</code> keeps the existing table.
-  </p>
-
-  <div class="mx-auto max-w-md space-y-3">
-    <div class="rounded-lg border border-slate-200 bg-white p-3">
-      <div class="flex items-center justify-between">
-        <div class="font-semibold text-slate-900"><span class="text-critical" title="krytyczny">⚠</span> Pita kieszonka 18 cm</div>
-        <span class="rounded bg-orange-100 px-1.5 py-0.5 text-caption font-semibold text-orange-900">Δ +100%</span>
-      </div>
-      <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-        <div><span class="text-caption uppercase tracking-wide text-slate-500">Stan</span><div class="tabular-nums">1 szt</div></div>
-        <div><span class="text-caption uppercase tracking-wide text-slate-500">Sugestia</span><div class="tabular-nums">1 kart.</div></div>
-        <div><span class="text-caption uppercase tracking-wide text-slate-500">Kapitan chce</span><div class="tabular-nums">2 kart.</div></div>
-        <div><span class="text-caption uppercase tracking-wide text-slate-500">Powód</span><div>Weekend — duży ruch</div></div>
-      </div>
-      <label class="mt-3 block"><span class="text-caption font-semibold uppercase tracking-wide text-slate-500">Manager zamawia</span>
-        <input class="mt-1 w-full rounded-lg border border-slate-300 py-3 text-base tabular-nums" value="2" /></label>
-      <label class="mt-2 block"><span class="text-caption uppercase tracking-wide text-slate-500">Komentarz menedżera</span>
-        <input class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" placeholder="opcjonalnie…" /></label>
+<body class="bg-slate-50 font-sans">
+  <header class="bg-brand px-4 py-3 text-white">
+    <div class="mx-auto flex max-w-5xl items-center justify-between">
+      <h1 class="text-base font-semibold">Pita Bros — Manager Dispatch</h1>
+      <div class="flex gap-3 text-xs"><button class="rounded border border-blue-300 px-2 py-1">Odśwież</button><button class="underline opacity-80">Wyloguj</button></div>
     </div>
+  </header>
+
+  <div class="mx-auto max-w-5xl p-4">
+    <div class="mb-3 rounded-lg border border-slate-200 bg-white p-3">
+      <div class="flex items-center justify-between">
+        <div><span class="font-semibold text-slate-900">WOLA → Bukat</span> <span class="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-caption font-bold uppercase tracking-wider text-critical">⚠ 3 krytyczne</span></div>
+        <span class="font-mono text-caption text-slate-400">ORD-20260608-WOL-BUKA</span>
+      </div>
+      <div class="mt-1 text-sm text-slate-600">10 pozycji · 1 980 PLN · cutoff: wt 14:00</div>
+    </div>
+
+    <p class="mb-2 text-xs text-slate-500"><b>PROPOSAL.</b> Desktop ≥ md: existing dense table (below, scroll →). Phone/tablet &lt; md: the same lines as stacked cards so the editable “Manager zamawia” + comment are reachable.</p>
+
+    <!-- DESKTOP TABLE -->
+    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table class="min-w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 bg-slate-50 text-left text-caption uppercase tracking-wide text-slate-600">
+            <th class="px-3 py-2 font-semibold">Produkt</th><th class="px-3 py-2 font-semibold">Jedn.</th>
+            <th class="px-3 py-2 font-semibold">Stan</th><th class="px-3 py-2 font-semibold">Cel</th>
+            <th class="px-3 py-2 font-semibold">Sug.</th><th class="px-3 py-2 font-semibold">Kpt</th>
+            <th class="px-3 py-2 font-semibold">Δ</th><th class="px-3 py-2 font-semibold">Manager zamawia</th>
+            <th class="px-3 py-2 font-semibold">Komentarz</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <!-- MOBILE CARD FALLBACK -->
+    <p class="mb-2 mt-6 text-xs font-semibold text-slate-500">↓ wersja &lt; md (mobile/tablet)</p>
+    <div id="cards" class="max-w-md space-y-3"></div>
   </div>
-  <p class="mx-auto mt-3 max-w-md text-caption text-slate-400">≥ md: istniejąca tabela 11-kolumnowa (bez zmian). To jest fallback &lt; md.</p>
+
+  <script>
+    // [name, unit, stan, cel, sug, kpt, mgr, delta, reason, crit, cancelled]
+    const L = [
+      ['Pita','szt',18,120,9,9,9,0,'',true,false],
+      ['Gyros kurczak','kg',6,25,19,22,22,16,'Weekend — duży ruch',false,false],
+      ['Gyros wieprzowy','kg',11,20,9,9,9,0,'',false,false],
+      ['Sos czosnkowy','szt',15,40,25,25,20,0,'',false,false],
+      ['Frytki','kart.',1,8,7,7,7,0,'',true,false],
+      ['Cola 0,5 l','szt',30,48,18,24,24,33,'Event w okolicy',false,false],
+      ['Sos ostry','szt',22,30,8,8,8,0,'',false,false],
+      ['Sałata lodowa','kg',9,15,6,10,6,67,'Za dużo zapasu',false,false],
+      ['Pomidor','kg',14,20,6,6,0,0,'anulowane',false,true],
+      ['Ser feta','kg',7,10,3,3,3,0,'',true,false],
+    ];
+    const dCol = d => d>=20 ? 'text-orange-700 font-semibold' : 'text-slate-400';
+    document.getElementById('rows').innerHTML = L.map(([n,u,st,c,sug,k,m,d,r,crit,canc]) => `
+      <tr class="border-b border-slate-100 ${canc?'bg-amber-50':(m!==k?'bg-blue-50':'')}">
+        <td class="px-3 py-2 font-medium text-slate-900">${crit?'<span class="text-critical" title="krytyczny">⚠</span> ':''}${n}</td>
+        <td class="px-3 py-2 text-slate-500">${u}</td>
+        <td class="px-3 py-2 tabular-nums">${st}</td><td class="px-3 py-2 tabular-nums">${c}</td>
+        <td class="px-3 py-2 tabular-nums">${sug}</td><td class="px-3 py-2 tabular-nums">${k}</td>
+        <td class="px-3 py-2 tabular-nums ${dCol(d)}">${d?('+'+d+'%'):'—'}</td>
+        <td class="px-3 py-2"><input class="w-20 rounded border border-slate-300 px-2 py-1 text-center tabular-nums ${canc?'line-through text-slate-400':''}" value="${m}" /></td>
+        <td class="px-3 py-2">${r?`<span class="rounded bg-slate-100 px-1.5 py-0.5 text-caption text-slate-700">${r}</span>`:''}</td>
+      </tr>`).join('');
+    document.getElementById('cards').innerHTML = L.slice(0,4).map(([n,u,st,c,sug,k,m,d,r,crit,canc]) => `
+      <div class="rounded-lg border border-slate-200 bg-white p-3 ${canc?'bg-amber-50':''}">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold text-slate-900">${crit?'<span class="text-critical">⚠</span> ':''}${n}</div>
+          ${d?`<span class="rounded bg-orange-100 px-1.5 py-0.5 text-caption font-semibold text-orange-900">Δ +${d}%</span>`:''}
+        </div>
+        <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <div><span class="text-caption uppercase tracking-wide text-slate-500">Stan</span><div class="tabular-nums">${st} ${u}</div></div>
+          <div><span class="text-caption uppercase tracking-wide text-slate-500">Sugestia</span><div class="tabular-nums">${sug} ${u}</div></div>
+          <div><span class="text-caption uppercase tracking-wide text-slate-500">Kapitan chce</span><div class="tabular-nums">${k} ${u}</div></div>
+          ${r?`<div><span class="text-caption uppercase tracking-wide text-slate-500">Powód</span><div>${r}</div></div>`:'<div></div>'}
+        </div>
+        <label class="mt-3 block"><span class="text-caption font-semibold uppercase tracking-wide text-slate-500">Manager zamawia (${u})</span>
+          <input class="mt-1 w-full rounded-lg border border-slate-300 py-3 text-base tabular-nums ${canc?'line-through text-slate-400':''}" value="${m}" /></label>
+        <label class="mt-2 block"><span class="text-caption uppercase tracking-wide text-slate-500">Komentarz menedżera</span>
+          <input class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" placeholder="opcjonalnie…" /></label>
+      </div>`).join('');
+  </script>
 </body>
 </html>
