@@ -177,7 +177,9 @@ export function OrderDetailPage() {
                   </div>
                   {(line.reason_code || line.captain_comment) && (
                     <div className="mt-2 text-xs text-slate-600 italic">
-                      {line.reason_code}
+                      {line.reason_code
+                        ? t(("reason.codes." + line.reason_code) as Parameters<typeof t>[0])
+                        : ""}
                       {line.captain_comment ? ` — ${line.captain_comment}` : ""}
                     </div>
                   )}

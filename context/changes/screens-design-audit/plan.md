@@ -319,34 +319,34 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Manual
 
-- [x] 2.3 Captain header (pills + hamburger + rail) renders identical to before
-- [x] 2.4 Manager header (title + Refresh + Logout) renders identical to before
-- [x] 2.5 Order / inventory / manager screens show no regression
+- [x] 2.3 Captain header (pills + hamburger + rail) renders identical to before — b887520
+- [x] 2.4 Manager header (title + Refresh + Logout) renders identical to before — b887520
+- [x] 2.5 Order / inventory / manager screens show no regression — b887520
 
 ### Phase 3: AuthGate Rebrand + Logo Draw-On Animation
 
 #### Automated
 
-- [x] 3.1 Build passes: `cd frontend && npm run build`
-- [x] 3.2 Lint passes: `cd frontend && npm run lint`
+- [x] 3.1 Build passes: `cd frontend && npm run build` — b887520
+- [x] 3.2 Lint passes: `cd frontend && npm run lint` — b887520
 
 #### Manual
 
 - [ ] 3.3 Logo reveals (fade+scale) once per session; static on re-open
 - [ ] 3.4 Reduce-motion → logo static
-- [x] 3.5 Submit ≥44px; persistence copy user-facing; backdrop reads as welcome
+- [x] 3.5 Submit ≥44px; persistence copy user-facing; backdrop reads as welcome — b887520
 
 ### Phase 4: Trivial i18n Fixes
 
 #### Automated
 
-- [ ] 4.1 Build passes: `cd frontend && npm run build`
-- [ ] 4.2 Lint passes: `cd frontend && npm run lint`
-- [ ] 4.3 No raw reason enum / "poz." literal remains in the two files
+- [x] 4.1 Build passes: `cd frontend && npm run build`
+- [x] 4.2 Lint passes: `cd frontend && npm run lint`
+- [x] 4.3 No raw reason enum / "poz." literal remains in the two files
 
 #### Manual
 
-- [ ] 4.4 OrderDetail translated reason; OrdersList i18n label; EN switch translates both
+- [x] 4.4 OrderDetail translated reason; OrdersList i18n label; EN switch translates both
 
 ### Phase 5: Design Proposals + Cluster-7 Flagging
 

@@ -456,6 +456,7 @@ export const STRINGS = {
   "orders.status.cancelled": { pl: "Anulowane", en: "Cancelled" },
   // Editability line (separate signal from the stage badge).
   "orders.edit.editable": { pl: "można edytować", en: "editable" },
+  "orders.linesShort": { pl: "poz.", en: "items" },
   "orders.edit.locked": { pl: "zablokowane", en: "locked" },
   "orders.editableHint": {
     pl: "Możesz jeszcze edytować — menedżer nie przejął zamówienia",

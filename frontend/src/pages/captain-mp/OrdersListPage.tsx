@@ -96,7 +96,7 @@ export function OrdersListPage() {
                       </span>
                     </div>
                     <div className="text-xs text-slate-600 truncate">
-                      {o.line_count} poz. · {o.total_value_estimate_pln?.toFixed(2) ?? "?"} PLN ·{" "}
+                      {o.line_count} {t("orders.linesShort")} · {o.total_value_estimate_pln?.toFixed(2) ?? "?"} PLN ·{" "}
                       {o.captain_submitted_at ? formatDateTime(o.captain_submitted_at) : "—"}
                       {o.editable && (
                         <span className="ml-1 text-blue-700 font-medium">· {t("orders.edit.editable")}</span>
