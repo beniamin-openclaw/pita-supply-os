@@ -281,22 +281,22 @@ No worksheet migration. One pre-flight: confirm the live `inventory_counts` head
 ### Phase 2: Frontend — inventory count screen
 
 #### Automated
-- [x] 2.1 Build passes: `npm run build`
-- [x] 2.2 Lint passes: `npm run lint`
+- [x] 2.1 Build passes: `npm run build` — 3da3048
+- [x] 2.2 Lint passes: `npm run lint` — 3da3048
 
 #### Manual
-- [x] 2.3 Date picker defaults today; future date blocked — e2e verified (live app, seed backend): default 2026-06-08, future 2026-06-11 snaps back via handler + `max` attr, past 2026-06-05 accepted
-- [x] 2.4 Submit disabled until "counted by" filled — e2e verified: stock-filled+name-empty stays disabled; enables only after name typed
+- [x] 2.3 Date picker defaults today; future date blocked — e2e verified (live app, seed backend): default 2026-06-08, future 2026-06-11 snaps back via handler + `max` attr, past 2026-06-05 accepted — 3da3048
+- [x] 2.4 Submit disabled until "counted by" filled — e2e verified: stock-filled+name-empty stays disabled; enables only after name typed — 3da3048
 - [ ] 2.5 "Last count: who/when" banner shows when a prior snapshot exists — sheet-mode only; seed returns 200 null (banner correctly hidden, graceful degrade verified e2e). Positive case deferred to deploy gate; covered by unit test `test_latest_surfaces_count_user`
-- [x] 2.6 Blank-vs-0 hint visible — e2e verified: "Puste = nie policzone · 0 = brak na stanie" present in sticky bar
+- [x] 2.6 Blank-vs-0 hint visible — e2e verified: "Puste = nie policzone · 0 = brak na stanie" present in sticky bar — 3da3048
 - [ ] 2.7 After submit, last-count banner reflects the just-saved count (F7) — sheet-mode only (same dependency as 2.5); deferred to deploy gate
-- [x] 2.8 Draft resume restores a back-dated count_date (F6) — e2e verified after fixing an autosave clobber bug (blank-mount autosave was overwriting the saved draft before resume); now date+lines restore correctly
+- [x] 2.8 Draft resume restores a back-dated count_date (F6) — e2e verified after fixing an autosave clobber bug (blank-mount autosave was overwriting the saved draft before resume); now date+lines restore correctly — 3da3048
 
 ### Phase 3: Backend — snapshot list + detail endpoints
 
 #### Automated
-- [ ] 3.1 Backend tests pass: `python -m pytest`
-- [ ] 3.2 Lint passes: `ruff check .`
+- [x] 3.1 Backend tests pass: `python -m pytest`
+- [x] 3.2 Lint passes: `ruff check .`
 
 #### Manual
 - [ ] 3.3 curl /inventory/counts returns ≤10 sorted by count_date desc, location-scoped

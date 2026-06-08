@@ -451,3 +451,17 @@ class InventoryLatestResponse(BaseModel):
     count_user: Optional[str] = None  # who counted (FR-022 banner); may be absent on legacy rows
     line_count: int = 0
     lines: list[InventoryLatestLine] = Field(default_factory=list)
+
+
+class InventoryCountSummary(BaseModel):
+    """A compact row in the order-screen snapshot picker (FR-024) — lists an
+    available inventory snapshot WITHOUT its lines (the picker shows date +
+    submitted time + who counted; lines are fetched lazily on select via the
+    detail route). `count_submitted_at` / `count_user` may be absent on legacy
+    rows, so both are optional."""
+    count_id: str
+    location_id: str
+    count_date: date
+    count_submitted_at: Optional[datetime] = None
+    count_user: Optional[str] = None
+    line_count: int = 0

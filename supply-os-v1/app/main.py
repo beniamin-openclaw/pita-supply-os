@@ -23,6 +23,7 @@ from .models import (
     InventoryCountLine,
     InventoryCountSubmitRequest,
     InventoryCountSubmitResponse,
+    InventoryCountSummary,
     InventoryLatestLine,
     InventoryLatestResponse,
     InventoryProduct,
@@ -1637,6 +1638,111 @@ def captain_inventory_latest(
         count_date=latest.count_date,
         count_submitted_at=latest.count_submitted_at,
         count_user=latest.count_user,
+        line_count=len(lines),
+        lines=lines,
+    )
+
+
+@app.get(
+    "/api/captain/inventory/counts",
+    response_model=list[InventoryCountSummary],
+)
+def captain_inventory_counts(
+    location_id: str = Depends(require_captain),
+):
+    """List the most-recent inventory snapshots for this Captain's location, for
+    the order-screen snapshot picker (FR-024). Returns up to 10 compact summaries
+    (no lines), newest `count_date` first (ties broken by `count_submitted_at`).
+
+    Sheet-only: seed mode degrades to ``[]`` — snapshots are not persisted there
+    (mirrors ``captain_inventory_latest`` / ``manager_queue`` degrading
+    off-sheet). The location is derived from the token; cross-location reads are
+    not permitted. Each summary's ``line_count`` is the value persisted on the
+    ``inventory_counts`` row, so listing never fetches per-snapshot lines.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        return []
+
+    counts = [
+        c for c in backend.load_inventory_counts() if c.location_id == location_id
+    ]
+    if not counts:
+        return []
+
+    def _recency_key(c: InventoryCount) -> tuple[date, datetime]:
+        submitted = c.count_submitted_at or datetime.min.replace(tzinfo=timezone.utc)
+        return (c.count_date, submitted)
+
+    counts.sort(key=_recency_key, reverse=True)
+    return [
+        InventoryCountSummary(
+            count_id=c.count_id,
+            location_id=c.location_id,
+            count_date=c.count_date,
+            count_submitted_at=c.count_submitted_at,
+            count_user=c.count_user,
+            line_count=c.line_count,
+        )
+        for c in counts[:10]
+    ]
+
+
+@app.get(
+    "/api/captain/inventory/count/{count_id}",
+    response_model=InventoryLatestResponse,
+)
+def captain_inventory_count_detail(
+    count_id: str,
+    location_id: str = Depends(require_captain),
+):
+    """Fetch one inventory snapshot (with lines) by id, so the order screen can
+    pre-fill stock from a chosen snapshot — not only the latest (FR-024). Reuses
+    ``InventoryLatestResponse`` (which now carries ``count_user``).
+
+    Sheet-only: seed mode → 503 (mirrors ``manager_order_detail``); the picker
+    that calls this is only shown once snapshots exist. Strict location scope:
+    404 if the count is missing OR belongs to another location — we don't
+    differentiate, since the Captain has no business knowing whether other
+    locations hold a given count id. A missing inventory worksheet surfaces as
+    503 (mirrors the submit endpoint), never a raw 500.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Inventory snapshot detail requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+
+    try:
+        count = backend.get_inventory_count(count_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Inventory worksheets not configured — create the "
+                "'inventory_counts' and 'inventory_count_lines' tabs "
+                "(see Migration Notes)."
+            ),
+        )
+    if count is None or count.location_id != location_id:
+        raise HTTPException(
+            status_code=404, detail=f"Inventory count {count_id} not found"
+        )
+
+    lines = [
+        InventoryLatestLine(
+            product_id=line.product_id,
+            current_stock_qty_base=line.current_stock_qty_base,
+            count_comment=line.count_comment,
+        )
+        for line in count.lines
+    ]
+    return InventoryLatestResponse(
+        count_id=count.count_id,
+        count_date=count.count_date,
+        count_submitted_at=count.count_submitted_at,
+        count_user=count.count_user,
         line_count=len(lines),
         lines=lines,
     )
