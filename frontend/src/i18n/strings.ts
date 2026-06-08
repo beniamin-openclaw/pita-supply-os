@@ -588,12 +588,6 @@ export const STRINGS = {
     pl: "Puste = nie policzone · 0 = brak na stanie",
     en: "Blank = not counted · 0 = zero on hand",
   },
-  "captain.prefillBannerTitle": {
-    pl: "Wypełnić stan z inwentaryzacji z {time}?",
-    en: "Pre-fill stock from the inventory count of {time}?",
-  },
-  "captain.prefillBannerAccept": { pl: "Wypełnij stan", en: "Pre-fill stock" },
-  "captain.prefillBannerSkip": { pl: "Pomiń", en: "Skip" },
   "captain.prefillApplied": {
     pl: "Wypełniono stan z inwentaryzacji ({count} poz.)",
     en: "Stock pre-filled from inventory ({count} items)",
