@@ -247,8 +247,8 @@ export const STRINGS = {
   "auth.submitting": { pl: "Weryfikacja…", en: "Verifying…" },
   "auth.placeholder": { pl: "••••••••••••••••", en: "••••••••••••••••" },
   "auth.persistence": {
-    pl: "Kod jest weryfikowany online przed zapisaniem. Możesz wkleić: całą linię z .env (np. SUPPLY_OS_…=WOLA:abc…), format WOLA:abc…, albo sam token — prefiksy są usuwane automatycznie.",
-    en: "Your code is verified online before saving. You can paste: the full .env line (e.g. SUPPLY_OS_…=WOLA:abc…), the WOLA:abc… format, or just the token — prefixes are stripped automatically.",
+    pl: "Kod zapamiętamy na tym urządzeniu — wpiszesz go tylko raz. Dostajesz go od menedżera.",
+    en: "We'll remember your code on this device — you only enter it once. Get it from your manager.",
   },
 
   // Manager page ------------------------------------------------------------

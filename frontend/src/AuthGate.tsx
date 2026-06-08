@@ -6,6 +6,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { AUTH_INVALID_EVENT, validateToken } from "./apiClient";
 import { getToken, sanitizeTokenInput, setToken, type Role } from "./auth";
 import { useT } from "./i18n";
+import { Logo } from "./components/ui/Logo";
+import { Button } from "./components/ui/Button";
 
 interface AuthGateProps {
   role: Role;
@@ -65,11 +67,14 @@ export function AuthGate({ role, children }: AuthGateProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-lg bg-white p-6 shadow-2xl mx-4"
+        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
       >
+        <div className="mb-4 flex justify-center">
+          <Logo animate className="h-32 w-auto" />
+        </div>
         <h1 className="text-lg font-semibold text-slate-900">{label}</h1>
         {hint && <p className="mt-1 text-sm text-slate-600">{hint}</p>}
         <input
@@ -87,13 +92,9 @@ export function AuthGate({ role, children }: AuthGateProps) {
             {error}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={busy}
-          className="mt-4 w-full rounded bg-blue-700 px-4 py-2 text-base font-medium text-white hover:bg-blue-800 active:bg-blue-900 disabled:bg-slate-400 disabled:cursor-not-allowed"
-        >
+        <Button type="submit" disabled={busy} className="mt-4 w-full">
           {busy ? t("auth.submitting") : t("auth.submit")}
-        </button>
+        </Button>
         <p className="mt-3 text-xs text-slate-500">{t("auth.persistence")}</p>
       </form>
     </div>

@@ -54,6 +54,15 @@ body {
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* AuthGate logo: one-shot fade+scale reveal (the supplied logo is fill-only, so
+ * no stroke draw-on — plan-review F1). Gated once-per-session at the call site;
+ * the prefers-reduced-motion block below collapses it to ~instant. */
+@keyframes logo-reveal {
+  from { opacity: 0; transform: translateY(10px) scale(0.85); }
+  to   { opacity: 1; transform: none; }
+}
+.logo-reveal { animation: logo-reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
 /* Respect user motion preference — Toast slide-in and transition-colors
  * degrade to near-instant for users on `prefers-reduced-motion: reduce`. */
 @media (prefers-reduced-motion: reduce) {

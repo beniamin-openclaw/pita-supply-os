@@ -314,27 +314,27 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Automated
 
-- [x] 2.1 Build passes: `cd frontend && npm run build`
-- [x] 2.2 Lint passes: `cd frontend && npm run lint`
+- [x] 2.1 Build passes: `cd frontend && npm run build` — 6dd338d
+- [x] 2.2 Lint passes: `cd frontend && npm run lint` — 6dd338d
 
 #### Manual
 
-- [ ] 2.3 Captain header (pills + hamburger + rail) renders identical to before
-- [ ] 2.4 Manager header (title + Refresh + Logout) renders identical to before
-- [ ] 2.5 Order / inventory / manager screens show no regression
+- [x] 2.3 Captain header (pills + hamburger + rail) renders identical to before
+- [x] 2.4 Manager header (title + Refresh + Logout) renders identical to before
+- [x] 2.5 Order / inventory / manager screens show no regression
 
 ### Phase 3: AuthGate Rebrand + Logo Draw-On Animation
 
 #### Automated
 
-- [ ] 3.1 Build passes: `cd frontend && npm run build`
-- [ ] 3.2 Lint passes: `cd frontend && npm run lint`
+- [x] 3.1 Build passes: `cd frontend && npm run build`
+- [x] 3.2 Lint passes: `cd frontend && npm run lint`
 
 #### Manual
 
 - [ ] 3.3 Logo reveals (fade+scale) once per session; static on re-open
 - [ ] 3.4 Reduce-motion → logo static
-- [ ] 3.5 Submit ≥44px; persistence copy user-facing; backdrop reads as welcome
+- [x] 3.5 Submit ≥44px; persistence copy user-facing; backdrop reads as welcome
 
 ### Phase 4: Trivial i18n Fixes
 
