@@ -647,6 +647,10 @@ export const STRINGS = {
     en: "Every entered stock value will be cleared (blank = not counted). This cannot be undone.",
   },
   "captain.prefillClearConfirm": { pl: "Wyczyść wszystko", en: "Clear all" },
+  // Phase 5 — permanent Captain tab strip (navigation)
+  "tabs.ariaLabel": { pl: "Nawigacja Kapitana", en: "Captain navigation" },
+  "tabs.orders": { pl: "Zamówienia", en: "Orders" },
+  "tabs.inventory": { pl: "Remanent", en: "Inventory" },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

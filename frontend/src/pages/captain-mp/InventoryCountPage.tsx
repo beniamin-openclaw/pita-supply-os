@@ -14,6 +14,7 @@ import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
 import { useT } from "../../i18n";
 
 import { Header } from "./components/Header";
+import { CaptainTabs } from "./components/CaptainTabs";
 import { Toast, type ToastProps } from "./components/Toast";
 
 import type {
@@ -388,6 +389,8 @@ export function InventoryCountPage() {
         onShowOrders={() => navigate("/captain-v2/orders")}
         onShowInventory={() => navigate("/captain-v2/inventory-count")}
       />
+
+      <CaptainTabs />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
         <div className="mb-4">

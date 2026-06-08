@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import type { CaptainOrderListItem } from "../../types";
+import { CaptainTabs } from "./components/CaptainTabs";
 import { statusVisual } from "./lib/orderStatus";
 
 export function OrdersListPage() {
@@ -47,6 +48,8 @@ export function OrdersListPage() {
           <h1 className="font-semibold text-lg tracking-tight">{t("orders.title")}</h1>
         </div>
       </header>
+
+      <CaptainTabs />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
         {error && (

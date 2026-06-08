@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phase 5 — Permanent Captain tab strip mock-up (navigation)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: {
+      brand: '#1a4480',
+      'brand-hover': '#1e3a8a',
+      'brand-subtle': '#e3eaf3',
+    },
+  } } };
+</script>
+<style>
+  body { font-feature-settings: "tnum"; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .variant-panel { display: none; }
+  .variant-panel.active { display: block; }
+</style>
+</head>
+<body class="bg-gray-50 font-sans text-slate-900">
+
+<!-- Explainer + variant picker (not part of the app) -->
+<div class="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
+  <p class="text-xs text-slate-600 max-w-3xl mx-auto mb-2">
+    <b>PROPOSAL — Phase 5: stały pasek zakładek pod nagłówkiem Kapitana.</b>
+    Dwie zakładki — <b>Zamówienia</b> i <b>Remanent</b> — zawsze widoczne, bez wchodzenia w hamburger.
+    Kliknij zakładkę, by zobaczyć stan aktywny. Trzy style.
+  </p>
+  <div class="flex flex-wrap gap-2 max-w-3xl mx-auto" role="tablist" aria-label="Wariant układu">
+    <button type="button" data-variant="a" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-brand text-white">A — podkreślenie (underline)</button>
+    <button type="button" data-variant="b" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700">B — segmentowany pill</button>
+    <button type="button" data-variant="c" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700">C — wypełniony aktywny</button>
+  </div>
+</div>
+
+<!-- Shared phone frame -->
+<div class="min-h-screen flex flex-col max-w-3xl mx-auto w-full">
+
+  <!-- AppHeader (brand bar) -->
+  <header class="bg-brand text-white px-4 py-3">
+    <div class="flex justify-between items-center mb-3">
+      <h1 class="font-semibold text-lg tracking-tight">Pita Bros — Zamówienia</h1>
+      <button type="button" class="p-2.5 -mr-1 rounded-md" aria-label="Menu">≡</button>
+    </div>
+    <div class="flex gap-2 text-xs font-medium overflow-x-auto hide-scrollbar -mx-1 px-1">
+      <span class="bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">📍 Wola</span>
+      <span class="bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">👤 WOLA</span>
+      <span class="bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">📅 pon. 08.06.2026</span>
+    </div>
+  </header>
+
+  <!-- ===== VARIANT A: underline tabs on a white sub-bar ===== -->
+  <div id="panel-a" class="variant-panel active">
+    <nav class="bg-white border-b border-gray-200" aria-label="Nawigacja Kapitana">
+      <div class="flex">
+        <button type="button" data-tab="orders"
+          class="tab-a flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold border-b-2 transition-colors">
+          🧾 Zamówienia
+        </button>
+        <button type="button" data-tab="inv"
+          class="tab-a flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold border-b-2 transition-colors">
+          📋 Remanent
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- ===== VARIANT B: segmented pill control ===== -->
+  <div id="panel-b" class="variant-panel">
+    <nav class="bg-white border-b border-gray-200 px-4 py-2.5" aria-label="Nawigacja Kapitana">
+      <div class="flex gap-1 rounded-xl bg-slate-100 p-1">
+        <button type="button" data-tab="orders"
+          class="tab-b flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors">
+          🧾 Zamówienia
+        </button>
+        <button type="button" data-tab="inv"
+          class="tab-b flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors">
+          📋 Remanent
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- ===== VARIANT C: filled active tab ===== -->
+  <div id="panel-c" class="variant-panel">
+    <nav class="bg-white border-b border-gray-200 px-4 py-2.5" aria-label="Nawigacja Kapitana">
+      <div class="flex gap-2">
+        <button type="button" data-tab="orders"
+          class="tab-c flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border transition-colors">
+          🧾 Zamówienia
+        </button>
+        <button type="button" data-tab="inv"
+          class="tab-c flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border transition-colors">
+          📋 Remanent
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- Body (changes with active tab, to make navigation feel real) -->
+  <main class="flex-1 p-4">
+    <div id="body-orders">
+      <h2 class="text-lg font-bold text-slate-900 mb-1">Zamówienie — Bukat</h2>
+      <p class="text-sm text-slate-600 mb-4">Wpisz stan i ilość do zamówienia per produkt.</p>
+      <div class="space-y-3">
+        <div class="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between">
+          <span class="font-medium">Cytryna <span class="text-xs text-slate-500">kg</span></span>
+          <input type="number" placeholder="—" class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm" />
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-3 flex items-center justify-between">
+          <span class="font-medium">Papryka <span class="text-xs text-slate-500">kg</span></span>
+          <input type="number" placeholder="—" class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm" />
+        </div>
+      </div>
+    </div>
+    <div id="body-inv" class="hidden">
+      <h2 class="text-lg font-bold text-slate-900 mb-1">Inwentaryzacja lokalizacji</h2>
+      <p class="text-sm text-slate-600 mb-4">Policz cały stan w jednym przejściu, potem zatwierdź.</p>
+      <div class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
+        Ostatni remanent: <strong>Anna M.</strong> · 05.06.2026, 14:32
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  let activeVariant = 'a';
+  let activeTab = 'orders';
+
+  function paintTabs() {
+    // Variant A — underline
+    document.querySelectorAll('#panel-a .tab-a').forEach(btn => {
+      const on = btn.dataset.tab === activeTab;
+      btn.className = 'tab-a flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold border-b-2 transition-colors ' +
+        (on ? 'border-brand text-brand' : 'border-transparent text-slate-500');
+    });
+    // Variant B — segmented pill
+    document.querySelectorAll('#panel-b .tab-b').forEach(btn => {
+      const on = btn.dataset.tab === activeTab;
+      btn.className = 'tab-b flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors ' +
+        (on ? 'bg-white text-brand shadow-sm' : 'text-slate-500');
+    });
+    // Variant C — filled active
+    document.querySelectorAll('#panel-c .tab-c').forEach(btn => {
+      const on = btn.dataset.tab === activeTab;
+      btn.className = 'tab-c flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border transition-colors ' +
+        (on ? 'bg-brand text-white border-brand' : 'bg-white text-slate-600 border-gray-300');
+    });
+    document.getElementById('body-orders').classList.toggle('hidden', activeTab !== 'orders');
+    document.getElementById('body-inv').classList.toggle('hidden', activeTab !== 'inv');
+  }
+
+  document.addEventListener('click', e => {
+    const tabBtn = e.target.closest('[data-tab]');
+    if (tabBtn) { activeTab = tabBtn.dataset.tab; paintTabs(); }
+  });
+
+  function setVariant(v) {
+    activeVariant = v;
+    document.querySelectorAll('.variant-panel').forEach(el => el.classList.remove('active'));
+    document.getElementById('panel-' + v).classList.add('active');
+    document.querySelectorAll('.variant-tab').forEach(btn => {
+      const on = btn.dataset.variant === v;
+      btn.className = 'variant-tab rounded-full px-3 py-1.5 text-xs font-semibold ' +
+        (on ? 'bg-brand text-white' : 'bg-slate-200 text-slate-700');
+    });
+    paintTabs();
+  }
+  document.querySelectorAll('.variant-tab').forEach(btn => {
+    btn.addEventListener('click', () => setVariant(btn.dataset.variant));
+  });
+
+  setVariant('a');
+</script>
+</body>
+</html>

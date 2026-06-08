@@ -14,6 +14,7 @@ import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
 import { useT } from "../../i18n";
 
 import { Header } from "./components/Header";
+import { CaptainTabs } from "./components/CaptainTabs";
 import { SupplierPicker } from "./components/SupplierPicker";
 import { ContextStrip } from "./components/ContextStrip";
 import { ProductCard } from "./components/ProductCard";
@@ -483,6 +484,8 @@ export function CaptainMP() {
         onShowOrders={() => navigate("/captain-v2/orders")}
         onShowInventory={() => navigate("/captain-v2/inventory-count")}
       />
+
+      <CaptainTabs />
 
       {isLoadingSuppliers ? (
         <div className="px-4 py-4 text-sm text-slate-600">{t("captain.suppliersLoading")}</div>
