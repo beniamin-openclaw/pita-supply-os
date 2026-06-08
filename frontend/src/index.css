@@ -1,6 +1,39 @@
 @import "tailwindcss";
 
-/* App-level resets / tokens. Keep minimal — design tokens live in components. */
+/* ---------- Design tokens (Tailwind v4 @theme) ----------
+ * Single source of truth for brand color, semantics, type scale, radius and
+ * elevation. Replaces the previous "tokens live in components" convention. */
+@theme {
+  /* Brand */
+  --color-brand: #1a4480;
+  --color-brand-hover: var(--color-blue-900);   /* current darker state — keeps the alias a visual no-op */
+  --color-brand-active: var(--color-blue-900);
+  --color-brand-subtle: #e3eaf3;                 /* ContextStrip wash (was the inline e3eaf3 hex) */
+
+  /* Semantic colors (map onto the de-facto palette already in use) */
+  --color-primary: var(--color-brand);
+  --color-danger: var(--color-red-700);
+  --color-success: var(--color-green-700);
+  --color-warning: var(--color-amber-700);
+  --color-critical: var(--color-red-600);
+
+  /* Neutral aliases (canonical neutral = slate) */
+  --color-surface: #ffffff;
+  --color-surface-muted: var(--color-slate-50);
+  --color-border-subtle: var(--color-slate-200);
+  --color-muted: var(--color-slate-500);
+
+  /* Named type scale (replaces the arbitrary text-[Npx] family; for spin-offs) */
+  --text-caption: 0.6875rem;   /* 11px */
+  --text-label: 0.75rem;       /* 12px */
+  --text-input: 1rem;          /* 16px — iOS-zoom guard */
+
+  /* Radius + elevation */
+  --radius-card: 0.5rem;
+  --shadow-bar: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+/* App-level resets. */
 
 html,
 body,

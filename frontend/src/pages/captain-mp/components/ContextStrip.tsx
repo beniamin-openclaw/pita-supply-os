@@ -37,7 +37,7 @@ export function ContextStrip({ supplier }: ContextStripProps) {
         : "text-slate-700";
 
   return (
-    <div className="bg-[#e3eaf3] px-4 py-2 flex justify-between items-center text-xs">
+    <div className="bg-brand-subtle px-4 py-2 flex justify-between items-center text-xs">
       <div className="text-slate-800 font-medium truncate pr-4">
         {supplier.supplier_name} · {deliveryText}
       </div>

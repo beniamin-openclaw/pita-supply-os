@@ -59,7 +59,7 @@ export function HamburgerMenu({ onShowOrders, onShowInventory }: HamburgerMenuPr
         aria-label={open ? t("header.menuClose") : t("header.menuOpen")}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="p-2.5 -mr-1 active:bg-white/10 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a4480]"
+        className="p-2.5 -mr-1 active:bg-white/10 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-brand"
       >
         {open ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
       </button>

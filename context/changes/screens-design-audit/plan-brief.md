@@ -23,7 +23,7 @@ A token layer in `index.css` (zero raw brand hex left in `src/`); a small token-
 | Fidelity | Red-line + Tailwind-static prototypes | Realistic, same stack, zero prod risk | Plan |
 | Blast-radius | Surgical: tokens + AppHeader + AuthGate; global hex→token alias (no-op) | Each screen verified in its own change; minimal regression risk | Plan |
 | Cluster-7 | Trivial i18n here; money/blank/Gmail flagged separately | Those are product/bug decisions, not styling | Plan |
-| Logo | Draw-on stroke, ≤1s, once/session, reduced-motion; placeholder now | Cleanest for SVG, doesn't block on the real asset | Plan |
+| Logo | Fade+scale reveal, ≤1s, once/session, reduced-motion (real SVG is fill-only → no draw-on) | Works on the supplied asset; reduced-motion-safe | Plan + Review |
 | Proposals breadth | 3 priority screens full + template; rest short red-line | Avoids mocking 7 screens at once | Plan |
 | Proto location | `frontend/design-proto/` scratch (Tailwind CDN, unrouted) | Zero prod-build coupling | Plan |
 

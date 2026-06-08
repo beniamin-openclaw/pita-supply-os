@@ -25,7 +25,7 @@ export function Header({ locationName, token, onShowOrders, onShowInventory }: H
   });
 
   return (
-    <header className="bg-[#1a4480] text-white px-4 py-3 sticky top-0 z-40">
+    <header className="bg-brand text-white px-4 py-3 sticky top-0 z-40">
       <div className="flex justify-between items-center mb-3">
         <h1 className="font-semibold text-lg tracking-tight">{t("header.title")}</h1>
         <HamburgerMenu onShowOrders={onShowOrders} onShowInventory={onShowInventory} />

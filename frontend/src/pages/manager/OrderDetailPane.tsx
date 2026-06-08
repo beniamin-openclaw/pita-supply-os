@@ -168,7 +168,7 @@ export function OrderDetailPane({
               type="button"
               disabled={busy}
               onClick={() => onSave(detail.order_id)}
-              className="sticky bottom-4 rounded-lg bg-[#1a4480] px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              className="sticky bottom-4 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               {busy ? (
                 <span className="inline-flex items-center gap-1.5">
@@ -195,7 +195,7 @@ export function OrderDetailPane({
             <button
               type="button"
               onClick={() => onClaim(detail.order_id)}
-              className="rounded-lg bg-[#1a4480] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
               {t("manager.action.claim")}
             </button>

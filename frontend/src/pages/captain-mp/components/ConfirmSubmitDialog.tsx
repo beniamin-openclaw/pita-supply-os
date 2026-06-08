@@ -193,7 +193,7 @@ export function ConfirmSubmitDialog({
             className={`flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white rounded-lg transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
               hasCriticalWarning
                 ? "bg-amber-700 active:bg-amber-800 focus-visible:ring-amber-500"
-                : "bg-[#1a4480] active:bg-blue-900 focus-visible:ring-blue-500"
+                : "bg-brand active:bg-brand-active focus-visible:ring-blue-500"
             }`}
           >
             <Send size={16} aria-hidden="true" />

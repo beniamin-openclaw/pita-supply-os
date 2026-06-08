@@ -34,7 +34,7 @@ export function OrdersListPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-12">
-      <header className="bg-[#1a4480] text-white px-4 py-3 sticky top-0 z-40">
+      <header className="bg-brand text-white px-4 py-3 sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <button
             type="button"

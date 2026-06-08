@@ -112,7 +112,7 @@ function ConfirmApproveDialog({
             type="button"
             onClick={onConfirm}
             disabled={isSubmitting}
-            className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white rounded-lg bg-[#1a4480] active:bg-blue-900 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white rounded-lg bg-brand active:bg-brand-active transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             {isSubmitting ? t("inventory.submittingBtn") : t("inventory.confirmSend")}
           </button>
@@ -445,7 +445,7 @@ export function InventoryCountPage() {
       </main>
 
       {!isLoading && products.length > 0 && (
-        <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-30">
+        <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
           <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
             <div className="flex-1 min-w-0">
               <div className="text-xs text-slate-700 font-medium mb-1 truncate">
@@ -481,7 +481,7 @@ export function InventoryCountPage() {
                 className={`px-6 py-3 text-sm font-semibold text-white rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   submitDisabled
                     ? "bg-gray-500 cursor-not-allowed"
-                    : "bg-[#1a4480] active:bg-blue-900"
+                    : "bg-brand active:bg-brand-active"
                 }`}
               >
                 {isSubmitting ? t("inventory.submittingBtn") : t("inventory.submitBtn")}

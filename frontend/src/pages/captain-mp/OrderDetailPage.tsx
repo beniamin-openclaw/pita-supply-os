@@ -38,7 +38,7 @@ export function OrderDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-20">
-      <header className="bg-[#1a4480] text-white px-4 py-3 sticky top-0 z-40">
+      <header className="bg-brand text-white px-4 py-3 sticky top-0 z-40">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -190,7 +190,7 @@ export function OrderDetailPage() {
               <button
                 type="button"
                 onClick={() => navigate(`/captain-v2/orders/${order.order_id}/edit`)}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-[#1a4480] rounded-lg active:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-brand rounded-lg active:bg-brand-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <Pencil size={16} aria-hidden="true" />
                 {t("orders.detail.editBtn")}

@@ -1,7 +1,7 @@
 ---
 change_id: screens-design-audit
 title: Design-quality audit of all user-facing screens with visual proposals
-status: planned
+status: implementing
 created: 2026-06-08
 updated: 2026-06-08
 archived_at: null

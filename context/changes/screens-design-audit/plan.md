@@ -27,7 +27,7 @@ From `context/changes/screens-design-audit/research.md` (full audit by three par
 ## Desired End State
 
 - `index.css` carries an `@theme` token layer; **zero raw `#1a4480`/`#e3eaf3` hex** remain in `src/`.
-- A small token-based component set (`Button`, `Input`, `Badge`, `Card`, `Banner`) + a shared `<AppHeader>` exist under `frontend/src/components/ui/`; the Captain header and Manager header both render through `AppHeader` with no visual regression.
+- A token-based `Button` primitive (first of the shared set; Input/Badge/Card/Banner follow per spin-off) + a shared `<AppHeader>` exist under `frontend/src/components/ui/`; the Captain header and Manager header both render through `AppHeader` with no visual regression.
 - The AuthGate shows branding + a draw-on logo (placeholder asset, swappable for the real SVG), animates once per session, honors reduced-motion, and meets the 44px tap-target standard.
 - The two trivial i18n leaks are fixed.
 - `frontend/design-proto/` holds self-contained Tailwind-static "after" prototypes for the 3 highest-impact screens, `proposals.md` holds red-line findings + a token-application template for spin-offs, and `notes/cluster-7.md` + background-task chips capture the 3 deferred product decisions.
@@ -50,8 +50,8 @@ Tokens-first, bottom-up, surgical. Define the token layer (Phase 1) → build th
 ## Critical Implementation Details
 
 - **Brand alias is a visual no-op.** Define `--color-brand` = `#1a4480` exactly; the global utility swap (`bg-[#1a4480]`→`bg-brand`) must not shift any pixel. Confirm with a before/after look at AuthGate + both headers + supplier chips.
-- **Logo draw-on, once per session, reduced-motion-safe.** Author the reveal as a CSS `@keyframes` stroke draw (`stroke-dashoffset`). Gate "first time this session" via a `sessionStorage` flag so re-opening the modal (e.g. after a 401) shows the static logo, not a re-animation. The global `prefers-reduced-motion` reset already collapses the animation to ~instant — do not add a second JS guard for motion preference.
-- **design-proto isolation.** Files live in `frontend/design-proto/` (outside `src/`, so outside `tsconfig` `include` and the Vite entry graph). Make each a self-contained `.html` using the Tailwind Play CDN (`<script src="https://cdn.tailwindcss.com">`) so it renders standalone with zero coupling to the app build. They must never be imported from `src/`.
+- **Logo reveal, once per session, reduced-motion-safe.** The supplied logo is fill-only (0 strokes), so author the reveal as a CSS `@keyframes` **fade + scale** — NOT `stroke-dashoffset` draw-on, which needs strokable paths we don't have. Gate "first time this session" via a `sessionStorage` flag so re-opening the modal (e.g. after a 401) shows the static logo, not a re-animation. The global `prefers-reduced-motion` reset already collapses the animation to ~instant — do not add a second JS guard for motion preference.
+- **design-proto isolation + token fidelity (F3).** Files live in `frontend/design-proto/` (outside `src/`, so outside `tsconfig` `include` and the Vite entry graph). Make each a self-contained `.html` using the Tailwind Play CDN (`<script src="https://cdn.tailwindcss.com">`) so it renders standalone with zero coupling to the app build. They must never be imported from `src/`. **The Play CDN does NOT see the app's `@theme` tokens** — so each proto must inline a `tailwind.config` `<script>` mirroring the token values (brand color, type scale) it uses, or `bg-brand`/`text-caption` won't resolve. The duplicated values mirror `index.css` (flag the drift risk in a comment).
 
 ## Phase 1: Token Layer
 
@@ -67,7 +67,7 @@ Introduce a config-free `@theme` token layer in `index.css` and retire all raw h
 
 **Intent**: Create the single source of truth for color, type, radius, and elevation that the rest of the system references — the audit's root-cause fix.
 
-**Contract**: Add a Tailwind v4 `@theme { … }` block defining: `--color-brand` (= `#1a4480`) + `--color-brand-hover` (a darker step); semantic colors `--color-primary` (brand), `--color-danger`, `--color-success`, `--color-warning`, `--color-critical`; a canonical neutral alias set mapped to the existing slate ramp (`--color-surface`, `--color-border`, `--color-muted`, `--color-text`); a named type scale replacing the arbitrary family (e.g. `--text-caption: 0.6875rem` (11px), `--text-label`, `--text-input: 1rem` (16px, iOS-zoom guard)); `--radius-card`; `--shadow-bar` (= the StickyActionBar custom shadow). Preserve the existing `tnum` and reduced-motion blocks. Do not change the slate/gray usage elsewhere — only define tokens here.
+**Contract**: Add a Tailwind v4 `@theme { … }` block defining: `--color-brand` (= `#1a4480`) + `--color-brand-hover` + `--color-brand-active` (darker steps chosen to match the current `blue-800`/`blue-900` so the swap stays a visual no-op — F6); semantic colors `--color-primary` (brand), `--color-danger`, `--color-success`, `--color-warning`, `--color-critical`; a canonical neutral alias set mapped to the existing slate ramp (`--color-surface`, `--color-border`, `--color-muted`, `--color-text`); a named type scale replacing the arbitrary family (e.g. `--text-caption: 0.6875rem` (11px), `--text-label`, `--text-input: 1rem` (16px, iOS-zoom guard)); `--radius-card`; `--shadow-bar` (= the StickyActionBar custom shadow). Preserve the existing `tnum` and reduced-motion blocks. Do not change the slate/gray usage elsewhere — only define tokens here.
 
 #### 2. Global hex/custom-value → token alias
 
@@ -75,7 +75,7 @@ Introduce a config-free `@theme` token layer in `index.css` and retire all raw h
 
 **Intent**: Remove the raw-hex debt so brand color lives in one place.
 
-**Contract**: 1:1 utility swap (`bg-[#1a4480]`→`bg-brand`, `active:bg-blue-900` left as-is unless it maps to `brand-hover`, `bg-[#e3eaf3]`→a `surface` token utility, `shadow-[0_-4px…]`→`shadow-bar`). Zero visual change. No structural edits (headers are restructured in Phase 2).
+**Contract**: 1:1 utility swap: `bg-[#1a4480]`→`bg-brand`; the brand buttons' `hover:bg-blue-800`/`active:bg-blue-900` → `hover:bg-brand-hover`/`active:bg-brand-active` so brand lives fully in the token layer (F6); `bg-[#e3eaf3]`→a `surface` token utility; `shadow-[0_-4px…]`→`shadow-bar`. Zero visual change (brand-hover/active values match the current blues). No structural edits (headers are restructured in Phase 2).
 
 ### Success Criteria:
 
@@ -83,7 +83,7 @@ Introduce a config-free `@theme` token layer in `index.css` and retire all raw h
 
 - Build passes: `cd frontend && npm run build`
 - Lint passes: `cd frontend && npm run lint`
-- No raw brand hex remains: `! grep -rn "#1a4480\|#e3eaf3" frontend/src`
+- No raw brand-hex *usages* remain (bracket arbitrary-value form — excludes the legitimate `@theme` definition in `index.css`): `! grep -rn '\[#1a4480\]\|\[#e3eaf3\]' frontend/src`
 
 #### Manual Verification:
 
@@ -101,11 +101,11 @@ Codify the recurring component vocabulary as token-based primitives and extract 
 
 #### 1. UI primitives
 
-**File**: `frontend/src/components/ui/Button.tsx`, `Input.tsx`, `Badge.tsx`, `Card.tsx`, `Banner.tsx` (new `components/ui/` directory)
+**File**: `frontend/src/components/ui/Button.tsx` (new `components/ui/` directory)
 
-**Intent**: One source of truth for buttons/inputs/badges/cards/banners so spin-off per-screen changes adopt consistent, token-driven components instead of re-inventing class strings.
+**Intent**: One token-driven `Button` — the only shared primitive this change actually consumes (AuthGate). Input/Badge/Card/Banner are **deferred to the first spin-off that needs each**, so every primitive ships validated against a real screen instead of as speculative scaffolding (F4 — lean).
 
-**Contract**: Explicit TS prop types + return types (strict is off). `Button` variants `primary | secondary | danger | success` + size (default tap target ≥44px / `py-3`); `Banner` tones `error | warning | info | success`; `Badge` tones; `Card`; `Input` (text/number) with the focus-visible ring token. These are **additive** — existing screens are not rewired to them in this change (surgical scope).
+**Contract**: Explicit TS prop types + return types (strict is off). `Button` variants `primary | secondary | danger | success` + size (default tap target ≥44px / `py-3`), built on the Phase 1 tokens. Additive — existing screens are not rewired in this change (surgical scope). Defer Input/Badge/Card/Banner (document them as the planned set for spin-offs).
 
 #### 2. Shared AppHeader
 
@@ -113,7 +113,7 @@ Codify the recurring component vocabulary as token-based primitives and extract 
 
 **Intent**: Replace the copy-pasted `bg-brand text-white` chrome with one shared header.
 
-**Contract**: `AppHeader` renders the brand bar (token bg, height, padding, white text) and exposes slots — a title/brand area, an `actions` slot (Manager: Refresh + Logout), and `children` (Captain: the hamburger + context-pill rail, preserving the `hide-scrollbar` behavior). Captain `Header.tsx` and the Manager header both render through it. Visual parity with today is required; no other screen changes.
+**Contract**: `AppHeader` is the **thin brand-bar chrome only** (token bg, height, padding, white text) with all role-specific content fully slotted — it does NOT absorb role logic (F5). Slots: a title/brand area, an `actions` slot (Manager: Refresh + Logout), and `children` (Captain: the hamburger + context-pill rail, preserving `hide-scrollbar`). Captain `Header.tsx` and the Manager header both render through it. Visual parity required — **capture a `before` screenshot of each header first**, diff manually against `after` (no FE test runner / no visual baseline otherwise). No other screen changes.
 
 ### Success Criteria:
 
@@ -144,12 +144,12 @@ Turn the bare token modal into a branded first impression with a draw-on logo, a
 
 **Intent**: Brand the first screen a Captain sees and give it a tasteful, restrained logo reveal.
 
-**Contract**: Inline SVG logo (placeholder "PITA BROS" wordmark/mark) with a stroke draw-on animation defined as `@keyframes` in `index.css`; animation runs once per session (gated by a `sessionStorage` flag), ≤~1s; the global reduced-motion reset collapses it automatically. Soften the backdrop so it reads as a welcome, not an error modal. Snippet (the non-obvious session gate + keyframe shape):
+**Contract**: Inline SVG logo with a **fade + scale reveal** (default) defined as `@keyframes` in `index.css`; animation runs once per session (gated by a `sessionStorage` flag), ≤~1s; the global reduced-motion reset collapses it automatically. Soften the backdrop so it reads as a welcome, not an error modal. **Asset reality (grounded, F1):** the supplied logo `…/pita bros  blue1.svg` is **fill-only — 0 strokes, 8 paths, ~103 KB** — so `stroke-dashoffset` draw-on is NOT used (it needs strokable outlines we don't have); draw-on is an option only if a stroked-outline variant is later supplied. Run the SVG through SVGO and inline it (103 KB is heavy for a first-paint modal). Snippet (the non-obvious session gate + keyframe shape):
 
 ```
 /* index.css */
-@keyframes logo-draw { from { stroke-dashoffset: var(--logo-len); } to { stroke-dashoffset: 0; } }
-.logo-draw path { stroke-dasharray: var(--logo-len); animation: logo-draw .9s ease forwards; }
+@keyframes logo-reveal { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+.logo-reveal { animation: logo-reveal .8s ease forwards; }
 // AuthGate: const animate = !sessionStorage.getItem("logo_shown"); on first mount set it.
 ```
 
@@ -170,7 +170,7 @@ Turn the bare token modal into a branded first impression with a draw-on logo, a
 
 #### Manual Verification:
 
-- Logo draws once on the first AuthGate of a session; re-opening (e.g. after a 401) shows it static.
+- Logo reveals (fade+scale) once on the first AuthGate of a session; re-opening (e.g. after a 401) shows it static.
 - With OS "reduce motion" on, the logo is static (no draw).
 - Submit control is ≥44px; persistence copy is user-facing; backdrop reads as a welcome.
 
@@ -228,7 +228,7 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 **Intent**: Self-contained "after" prototypes for the three highest-impact screens, applying the new tokens — the visual template spin-offs copy.
 
-**Contract**: Standalone HTML using the Tailwind Play CDN; not routed, not imported from `src/`, not in the prod build. Each demonstrates: ProductCard with promoted visible-math; OrderLineTable with a responsive card fallback below `md`; ManagerQueue card with a surfaced critical-product flag.
+**Contract**: Standalone HTML using the Tailwind Play CDN, each with an **inline `tailwind.config` `<script>` mirroring the `@theme` tokens** (brand color + type scale) so the new tokens resolve (F3); not routed, not imported from `src/`, not in the prod build. Each demonstrates: ProductCard with promoted visible-math; OrderLineTable with a responsive card fallback below `md`; ManagerQueue card with a surfaced critical-product flag.
 
 #### 2. Proposals doc + token-application template
 
@@ -302,13 +302,13 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Automated
 
-- [ ] 1.1 Build passes: `cd frontend && npm run build`
-- [ ] 1.2 Lint passes: `cd frontend && npm run lint`
-- [ ] 1.3 No raw brand hex remains: `! grep -rn "#1a4480\|#e3eaf3" frontend/src`
+- [x] 1.1 Build passes: `cd frontend && npm run build`
+- [x] 1.2 Lint passes: `cd frontend && npm run lint`
+- [x] 1.3 No raw brand-hex usages remain (bracket form, excludes the @theme def): `! grep -rn '\[#1a4480\]\|\[#e3eaf3\]' frontend/src`
 
 #### Manual
 
-- [ ] 1.4 AuthGate / both headers / supplier chips render visually identical after the alias swap
+- [x] 1.4 AuthGate / both headers / supplier chips render visually identical after the alias swap
 
 ### Phase 2: Base Components + Shared AppHeader
 
@@ -332,7 +332,7 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Manual
 
-- [ ] 3.3 Logo draws once per session; static on re-open
+- [ ] 3.3 Logo reveals (fade+scale) once per session; static on re-open
 - [ ] 3.4 Reduce-motion → logo static
 - [ ] 3.5 Submit ≥44px; persistence copy user-facing; backdrop reads as welcome
 

@@ -54,7 +54,7 @@ export function SupplierPicker({
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
                 ${
                   isActive
-                    ? "bg-[#1a4480] text-white"
+                    ? "bg-brand text-white"
                     : isSent
                       ? "bg-gray-100 text-gray-700 border border-gray-300"
                       : "bg-white text-gray-800 border border-gray-300 active:bg-gray-50"
