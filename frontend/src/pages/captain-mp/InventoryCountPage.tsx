@@ -16,11 +16,22 @@ import { useT } from "../../i18n";
 import { Header } from "./components/Header";
 import { Toast, type ToastProps } from "./components/Toast";
 
-import type { InventoryProduct, InventoryCountLineSubmit } from "../../types";
+import type {
+  InventoryProduct,
+  InventoryCountLineSubmit,
+  InventoryLatestResponse,
+} from "../../types";
 
 // Inventory is location-wide (one count per location), so the draft uses a
 // fixed key rather than CaptainMP's per-supplier id.
 const DRAFT_KEY = "__inventory__";
+
+/** Local calendar date as YYYY-MM-DD (matches `<input type="date">`). */
+function localTodayIso(): string {
+  const d = new Date();
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 /** In-memory line — stock stays "" until the user types a number. */
 interface InventoryLineInput {
@@ -30,6 +41,7 @@ interface InventoryLineInput {
 
 interface InventoryDraftState {
   lines: Record<string, InventoryLineInput>;
+  count_date?: string;
   timestamp: number;
 }
 
@@ -130,6 +142,9 @@ export function InventoryCountPage() {
 
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [lines, setLines] = useState<Record<string, InventoryLineInput>>({});
+  const [countDate, setCountDate] = useState<string>(localTodayIso);
+  const [countedBy, setCountedBy] = useState<string>("");
+  const [latestSnapshot, setLatestSnapshot] = useState<InventoryLatestResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [confirmOpen, setConfirmOpen] = useState<boolean>(false);
@@ -138,6 +153,7 @@ export function InventoryCountPage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
   const token = getToken("captain") || "";
+  const todayIso = localTodayIso();
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
     setToast({ message, type, onClose: () => setToast(null) });
@@ -180,14 +196,42 @@ export function InventoryCountPage() {
     };
   }, [showToast, t]);
 
-  // ---- Draft auto-save (debounced) -----------------------------------------
+  // ---- Fetch latest snapshot for the "last count" banner (FR-022) ----------
   useEffect(() => {
-    if (Object.keys(lines).length === 0) return;
+    let cancelled = false;
+    api
+      .inventoryLatest()
+      .then((snap) => {
+        if (!cancelled) setLatestSnapshot(snap);
+      })
+      .catch(() => {
+        // Seed mode / no prior count — banner stays hidden.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---- Draft auto-save (debounced) -----------------------------------------
+  // Guard on "at least one stock value entered", NOT just "lines exist": on
+  // mount the products fetch seeds 52 blank lines, which would otherwise fire a
+  // save 500ms later and CLOBBER a real saved draft with empty data before the
+  // user can resume it (the draft banner would show, but Wznów would restore
+  // nothing). Only persist once the user has actually counted something.
+  useEffect(() => {
+    const hasEntry = Object.values(lines).some(
+      (line) => line.current_stock_qty_base !== "",
+    );
+    if (!hasEntry) return;
     const id = setTimeout(() => {
-      saveDraft<InventoryDraftState>(DRAFT_KEY, { lines, timestamp: Date.now() });
+      saveDraft<InventoryDraftState>(DRAFT_KEY, {
+        lines,
+        count_date: countDate,
+        timestamp: Date.now(),
+      });
     }, 500);
     return () => clearTimeout(id);
-  }, [lines]);
+  }, [lines, countDate]);
 
   // ---- Handlers -------------------------------------------------------------
   const handleStockChange = useCallback((productId: string, raw: string) => {
@@ -213,6 +257,7 @@ export function InventoryCountPage() {
   const acceptDraft = useCallback(() => {
     const draft = loadDraft<InventoryDraftState>(DRAFT_KEY);
     if (draft?.state?.lines) setLines(draft.state.lines);
+    if (draft?.state?.count_date) setCountDate(draft.state.count_date);
     setDraftBanner(null);
   }, []);
 
@@ -222,9 +267,32 @@ export function InventoryCountPage() {
   }, []);
 
   const handleSaveDraft = useCallback(() => {
-    saveDraft<InventoryDraftState>(DRAFT_KEY, { lines, timestamp: Date.now() });
+    saveDraft<InventoryDraftState>(DRAFT_KEY, {
+      lines,
+      count_date: countDate,
+      timestamp: Date.now(),
+    });
     showToast(t("inventory.draftSaved"), "success");
-  }, [lines, showToast, t]);
+  }, [countDate, lines, showToast, t]);
+
+  const handleCountDateChange = useCallback((raw: string) => {
+    if (raw > localTodayIso()) {
+      setCountDate(localTodayIso());
+      return;
+    }
+    setCountDate(raw);
+  }, []);
+
+  const lastCountTime = useMemo((): string | null => {
+    if (!latestSnapshot) return null;
+    if (latestSnapshot.count_submitted_at) {
+      return formatDateTime(latestSnapshot.count_submitted_at, {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    }
+    return formatDateTime(latestSnapshot.count_date, { dateStyle: "short" });
+  }, [formatDateTime, latestSnapshot]);
 
   // Only products with a typed stock value become lines (blank = not counted).
   const countedLines = useMemo<InventoryCountLineSubmit[]>(
@@ -271,8 +339,14 @@ export function InventoryCountPage() {
     setConfirmOpen(false);
     setIsSubmitting(true);
     try {
-      const resp = await api.inventorySubmit({ lines: countedLines, notes: "" });
+      const resp = await api.inventorySubmit({
+        lines: countedLines,
+        count_user: countedBy.trim(),
+        count_date: countDate,
+        notes: "",
+      });
       clearDraft(DRAFT_KEY);
+      setCountedBy("");
       // Reset to a fresh blank pass (append-only — a re-count is a new snapshot).
       setLines((prev) => {
         const reset: Record<string, InventoryLineInput> = {};
@@ -281,6 +355,9 @@ export function InventoryCountPage() {
         });
         return reset;
       });
+      setCountDate(localTodayIso());
+      const snap = await api.inventoryLatest();
+      setLatestSnapshot(snap);
       const notPersisted = resp.warnings.some((w) => w.includes("not persisted"));
       showToast(
         notPersisted
@@ -295,10 +372,11 @@ export function InventoryCountPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [countedLines, showToast, t]);
+  }, [countDate, countedBy, countedLines, showToast, t]);
 
   // ---- Render ---------------------------------------------------------------
-  const submitDisabled = countedCount === 0 || isSubmitting;
+  const submitDisabled =
+    countedCount === 0 || isSubmitting || countedBy.trim().length === 0;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-28">
@@ -316,6 +394,50 @@ export function InventoryCountPage() {
           <h2 className="text-lg font-bold text-slate-900">{t("inventory.title")}</h2>
           <p className="text-sm text-slate-600">{t("inventory.subtitle")}</p>
         </div>
+
+        {/* Variant C — stacked metadata; blank-vs-0 hint lives in the sticky bar */}
+        <div className="mb-4 space-y-3">
+          <div>
+            <label htmlFor="inv-count-date" className="block text-xs font-semibold text-slate-700 mb-1">
+              {t("inventory.countDateLabel")}
+            </label>
+            <input
+              id="inv-count-date"
+              type="date"
+              value={countDate}
+              max={todayIso}
+              onChange={(e) => handleCountDateChange(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="inv-counted-by" className="block text-xs font-semibold text-slate-700 mb-1">
+              {t("inventory.countedByLabel")}
+              <span className="text-red-600" aria-hidden="true">
+                {" "}
+                *
+              </span>
+            </label>
+            <input
+              id="inv-counted-by"
+              type="text"
+              value={countedBy}
+              onChange={(e) => setCountedBy(e.target.value)}
+              autoComplete="name"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-[11px] text-slate-500">{t("inventory.countedByRequired")}</p>
+          </div>
+        </div>
+
+        {latestSnapshot && lastCountTime && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
+            {t("inventory.lastCountBanner", {
+              who: latestSnapshot.count_user?.trim() || "—",
+              time: lastCountTime,
+            })}
+          </div>
+        )}
 
         {draftBanner && (
           <div
@@ -448,6 +570,9 @@ export function InventoryCountPage() {
         <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
           <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
             <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-slate-500 mb-1 truncate">
+                {t("inventory.blankVsZeroHint")}
+              </p>
               <div className="text-xs text-slate-700 font-medium mb-1 truncate">
                 {t("inventory.counted", { counted: countedCount, total: products.length })}
               </div>

@@ -119,6 +119,7 @@ export interface InventoryLatestResponse {
   count_id: string;
   count_date: string;
   count_submitted_at: string | null;
+  count_user?: string | null;
   line_count: number;
   lines: InventoryLatestLine[];
 }
@@ -131,6 +132,8 @@ export interface InventoryCountLineSubmit {
 
 export interface InventoryCountSubmitRequest {
   lines: InventoryCountLineSubmit[];
+  count_user: string;
+  count_date?: string;
   notes?: string;
 }
 

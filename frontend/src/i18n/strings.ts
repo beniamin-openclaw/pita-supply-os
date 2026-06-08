@@ -574,6 +574,20 @@ export const STRINGS = {
   },
   "inventory.categoryCount": { pl: "{counted}/{total}", en: "{counted}/{total}" },
   "inventory.uncategorized": { pl: "Bez kategorii", en: "Uncategorized" },
+  "inventory.countDateLabel": { pl: "Data remanentu", en: "Count date" },
+  "inventory.countedByLabel": { pl: "Kto liczył", en: "Counted by" },
+  "inventory.countedByRequired": {
+    pl: "Wymagane przed zatwierdzeniem",
+    en: "Required before approving",
+  },
+  "inventory.lastCountBanner": {
+    pl: "Ostatni remanent: {who} · {time}",
+    en: "Last count: {who} · {time}",
+  },
+  "inventory.blankVsZeroHint": {
+    pl: "Puste = nie policzone · 0 = brak na stanie",
+    en: "Blank = not counted · 0 = zero on hand",
+  },
   "captain.prefillBannerTitle": {
     pl: "Wypełnić stan z inwentaryzacji z {time}?",
     en: "Pre-fill stock from the inventory count of {time}?",

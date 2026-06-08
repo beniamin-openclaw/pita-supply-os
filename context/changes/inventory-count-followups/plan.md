@@ -270,27 +270,27 @@ No worksheet migration. One pre-flight: confirm the live `inventory_counts` head
 ### Phase 1: Backend — count metadata + latest response
 
 #### Automated
-- [x] 1.1 Backend tests pass: `python -m pytest`
-- [x] 1.2 Lint passes: `ruff check .`
+- [x] 1.1 Backend tests pass: `python -m pytest` — ae2e88c
+- [x] 1.2 Lint passes: `ruff check .` — ae2e88c
 
 #### Manual
-- [x] 1.3 Pre-flight: live inventory_counts header has count_user + count_date columns
+- [x] 1.3 Pre-flight: live inventory_counts header has count_user + count_date columns — ae2e88c
 - [ ] 1.4 curl submit: past count_date + count_user persists; future date → 400; missing count_user → 422
 - [ ] 1.5 curl /inventory/latest returns count_user
 
 ### Phase 2: Frontend — inventory count screen
 
 #### Automated
-- [ ] 2.1 Build passes: `npm run build`
-- [ ] 2.2 Lint passes: `npm run lint`
+- [x] 2.1 Build passes: `npm run build`
+- [x] 2.2 Lint passes: `npm run lint`
 
 #### Manual
-- [ ] 2.3 Date picker defaults today; future date blocked
-- [ ] 2.4 Submit disabled until "counted by" filled
-- [ ] 2.5 "Last count: who/when" banner shows when a prior snapshot exists
-- [ ] 2.6 Blank-vs-0 hint visible
-- [ ] 2.7 After submit, last-count banner reflects the just-saved count (F7)
-- [ ] 2.8 Draft resume restores a back-dated count_date (F6)
+- [x] 2.3 Date picker defaults today; future date blocked — e2e verified (live app, seed backend): default 2026-06-08, future 2026-06-11 snaps back via handler + `max` attr, past 2026-06-05 accepted
+- [x] 2.4 Submit disabled until "counted by" filled — e2e verified: stock-filled+name-empty stays disabled; enables only after name typed
+- [ ] 2.5 "Last count: who/when" banner shows when a prior snapshot exists — sheet-mode only; seed returns 200 null (banner correctly hidden, graceful degrade verified e2e). Positive case deferred to deploy gate; covered by unit test `test_latest_surfaces_count_user`
+- [x] 2.6 Blank-vs-0 hint visible — e2e verified: "Puste = nie policzone · 0 = brak na stanie" present in sticky bar
+- [ ] 2.7 After submit, last-count banner reflects the just-saved count (F7) — sheet-mode only (same dependency as 2.5); deferred to deploy gate
+- [x] 2.8 Draft resume restores a back-dated count_date (F6) — e2e verified after fixing an autosave clobber bug (blank-mount autosave was overwriting the saved draft before resume); now date+lines restore correctly
 
 ### Phase 3: Backend — snapshot list + detail endpoints
 

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phase 2 — Inventory count screen mock-up (FR-020/021/022)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: {
+      brand: '#1a4480',
+      'brand-hover': '#1e3a8a',
+      'brand-active': '#1e3a8a',
+      'brand-subtle': '#e3eaf3',
+      critical: '#dc2626',
+    },
+    boxShadow: { bar: '0 -4px 6px -1px rgba(0,0,0,0.08)' },
+  } } };
+</script>
+<style>
+  body { font-feature-settings: "tnum"; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .variant-panel { display: none; }
+  .variant-panel.active { display: block; }
+</style>
+</head>
+<body class="bg-gray-50 font-sans text-slate-900">
+
+<!-- Explainer + variant picker (not part of the app) -->
+<div class="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
+  <p class="text-xs text-slate-600 max-w-3xl mx-auto mb-2">
+    <b>PROPOSAL — Phase 2 inventory screen.</b>
+    Trzy warianty układu nowych elementów (data remanentu · kto liczył · banner ostatniego remanentu · hint puste vs 0).
+    Reszta ekranu 1:1 z <code>InventoryCountPage.tsx</code>.
+  </p>
+  <div class="flex flex-wrap gap-2 max-w-3xl mx-auto" role="tablist" aria-label="Wariant układu">
+    <button type="button" data-variant="a" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700">A — inline pod tytułem</button>
+    <button type="button" data-variant="b" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700">B — karta metadanych</button>
+    <button type="button" data-variant="c" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-brand text-white">C — stack + hint w sticky ✓ wybrany</button>
+  </div>
+  <div class="flex flex-wrap gap-3 max-w-3xl mx-auto mt-2 text-xs">
+    <label class="flex items-center gap-1.5 text-slate-600">
+      <input type="checkbox" id="toggle-draft" checked class="rounded border-slate-300" />
+      Pokaż banner szkicu (amber)
+    </label>
+    <label class="flex items-center gap-1.5 text-slate-600">
+      <input type="checkbox" id="toggle-last" checked class="rounded border-slate-300" />
+      Pokaż banner ostatniego remanentu (blue)
+    </label>
+  </div>
+</div>
+
+<!-- Shared phone frame -->
+<div id="frame" class="min-h-screen flex flex-col pb-28 max-w-3xl mx-auto w-full">
+
+  <!-- AppHeader (InventoryCountPage + Header.tsx) -->
+  <header class="sticky top-[7.5rem] z-40 bg-brand text-white px-4 py-3">
+    <div class="flex justify-between items-center mb-3">
+      <h1 class="font-semibold text-lg tracking-tight">Pita Bros — Zamówienia</h1>
+      <button type="button" class="p-2.5 -mr-1 rounded-md" aria-label="Menu">≡</button>
+    </div>
+    <div class="flex gap-2 text-xs font-medium overflow-x-auto hide-scrollbar -mx-1 px-1">
+      <span class="bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">📍 Wola</span>
+      <span class="bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">👤 WOLA</span>
+      <span class="bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap shrink-0">📅 nd 08.06.2026</span>
+    </div>
+  </header>
+
+  <main class="flex-1 p-4 w-full">
+
+    <!-- Title block (unchanged) -->
+    <div class="mb-4">
+      <h2 class="text-lg font-bold text-slate-900">Inwentaryzacja lokalizacji</h2>
+      <p class="text-sm text-slate-600">Policz cały stan w jednym przejściu, potem zatwierdź.</p>
+    </div>
+
+    <!-- ===== VARIANT A: inline row under title ===== -->
+    <div id="panel-a" class="variant-panel">
+      <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label for="date-a" class="block text-xs font-semibold text-slate-700 mb-1">Data remanentu</label>
+          <input id="date-a" type="date" value="2026-06-08" max="2026-06-08"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label for="who-a" class="block text-xs font-semibold text-slate-700 mb-1">
+            Kto liczył <span class="text-red-600" aria-hidden="true">*</span>
+          </label>
+          <input id="who-a" type="text" placeholder="np. Jan K."
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <p class="mt-1 text-[11px] text-slate-500">Wymagane przed zatwierdzeniem</p>
+        </div>
+      </div>
+      <p class="mb-4 text-xs text-slate-600 bg-slate-100 rounded-lg px-3 py-2 border border-slate-200">
+        <span class="font-semibold text-slate-700">Puste pole</span> = nie policzone.
+        <span class="font-semibold text-slate-700">0</span> = rzeczywisty brak na stanie.
+      </p>
+    </div>
+
+    <!-- ===== VARIANT B: metadata card ===== -->
+    <div id="panel-b" class="variant-panel">
+      <section class="mb-4 rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <h3 class="text-sm font-semibold text-slate-800">Szczegóły remanentu</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="date-b" class="block text-xs font-semibold text-slate-700 mb-1">Data remanentu</label>
+            <input id="date-b" type="date" value="2026-06-08" max="2026-06-08"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label for="who-b" class="block text-xs font-semibold text-slate-700 mb-1">
+              Kto liczył <span class="text-red-600">*</span>
+            </label>
+            <input id="who-b" type="text" placeholder="np. Jan K."
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+        <p class="text-xs text-slate-600 border-t border-gray-100 pt-3">
+          Puste pole = nie policzone · 0 = rzeczywisty brak na stanie
+        </p>
+      </section>
+    </div>
+
+    <!-- ===== VARIANT C: stacked, hint moves to sticky bar ===== -->
+    <div id="panel-c" class="variant-panel active">
+      <div class="mb-4 space-y-3">
+        <div>
+          <label for="date-c" class="block text-xs font-semibold text-slate-700 mb-1">Data remanentu</label>
+          <input id="date-c" type="date" value="2026-06-08" max="2026-06-08"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label for="who-c" class="block text-xs font-semibold text-slate-700 mb-1">
+            Kto liczył <span class="text-red-600">*</span>
+          </label>
+          <input id="who-c" type="text" placeholder="np. Jan K."
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Last count banner (new — blue/info) -->
+    <div id="banner-last" class="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
+      Ostatni remanent: <strong>Anna M.</strong> · 05.06.2026, 14:32
+    </div>
+
+    <!-- Draft banner (existing — amber) -->
+    <div id="banner-draft" role="dialog" aria-label="Wznowić niezapisaną inwentaryzację"
+      class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+      <div class="text-amber-900">
+        Wykryto niezapisaną inwentaryzację z godziny 08:15. Wznowić?
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button type="button" class="px-3 py-2 rounded-md bg-amber-700 text-white text-xs font-semibold">Wznów</button>
+        <button type="button" class="px-3 py-2 rounded-md bg-white text-amber-900 border border-amber-300 text-xs font-semibold">Odrzuć</button>
+      </div>
+    </div>
+
+    <!-- Category sections (sample from seed) -->
+    <div id="categories" class="space-y-3"></div>
+  </main>
+
+  <!-- Sticky bar (InventoryCountPage) -->
+  <div class="fixed inset-x-0 bottom-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
+    <div class="flex items-center justify-between gap-4 max-w-3xl mx-auto">
+      <div class="flex-1 min-w-0">
+        <p id="hint-c" class="hidden text-[11px] text-slate-500 mb-1 truncate">Puste = nie policzone · 0 = brak</p>
+        <div class="text-xs text-slate-700 font-medium mb-1 truncate">Policzono 3 z 12</div>
+        <div class="text-xs font-semibold text-green-700 flex items-center gap-1">
+          <span class="w-2 h-2 rounded-full bg-green-600" aria-hidden="true"></span>
+          Gotowe do zatwierdzenia
+        </div>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button type="button" class="px-4 py-3 text-sm font-medium text-slate-800 bg-gray-100 rounded-lg">Zapisz roboczo</button>
+        <button type="button" id="submit-btn"
+          class="px-6 py-3 text-sm font-semibold text-white rounded-lg bg-gray-500 cursor-not-allowed">
+          Zatwierdź
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CATEGORIES = [
+    {
+      name: 'Chłodnia',
+      items: [
+        { name: 'Pomidor', unit: 'kg', critical: true, stock: '14' },
+        { name: 'Tzatzyki', unit: 'kg', critical: true, stock: '6' },
+        { name: 'Feta blok', unit: 'kg', critical: true, stock: '' },
+        { name: 'Sałata bolero mix 150gr', unit: 'opak', critical: false, stock: '8' },
+      ],
+    },
+    {
+      name: 'Mrożonki',
+      items: [
+        { name: 'Falafel', unit: 'kg', critical: true, stock: '0' },
+        { name: 'Gyros 15 KG', unit: 'kg', critical: true, stock: '' },
+        { name: 'Frytki Aviko (opakowania)', unit: 'kg', critical: true, stock: '' },
+      ],
+    },
+  ];
+
+  function renderCategories() {
+    document.getElementById('categories').innerHTML = CATEGORIES.map((cat, ci) => {
+      const counted = cat.items.filter(i => i.stock !== '').length;
+      return `
+        <section class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+          <button type="button" class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left">
+            <span class="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+              <span aria-hidden="true">▾</span> ${cat.name}
+            </span>
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums">${counted}/${cat.items.length}</span>
+          </button>
+          <ul class="space-y-2 border-t border-gray-100 p-2">
+            ${cat.items.map((p, pi) => `
+              <li class="bg-white border border-gray-200 rounded-xl p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-slate-900 truncate">${p.name}</span>
+                      ${p.critical ? '<span class="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">Krytyczny</span>' : ''}
+                    </div>
+                    <div class="text-xs text-slate-500">${p.unit}</div>
+                  </div>
+                  <input type="number" inputmode="decimal" min="0" step="any" value="${p.stock}"
+                    placeholder="—"
+                    class="stock-input w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Stan ${p.name}" />
+                </div>
+                <input type="text" placeholder="Komentarz (opcjonalnie)"
+                  class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </li>
+            `).join('')}
+          </ul>
+        </section>`;
+    }).join('');
+  }
+
+  let activeVariant = 'c';
+
+  function setVariant(v) {
+    activeVariant = v;
+    document.querySelectorAll('.variant-panel').forEach(el => el.classList.remove('active'));
+    document.getElementById('panel-' + v).classList.add('active');
+    document.querySelectorAll('.variant-tab').forEach(btn => {
+      const on = btn.dataset.variant === v;
+      btn.className = 'variant-tab rounded-full px-3 py-1.5 text-xs font-semibold ' +
+        (on ? 'bg-brand text-white' : 'bg-slate-200 text-slate-700');
+    });
+    document.getElementById('hint-c').classList.toggle('hidden', v !== 'c');
+    syncSubmit();
+  }
+
+  function activeWhoInput() {
+    return document.querySelector('#panel-' + activeVariant + ' input[type="text"]');
+  }
+
+  function syncSubmit() {
+    const who = activeWhoInput();
+    const filled = who && who.value.trim().length > 0;
+    const btn = document.getElementById('submit-btn');
+    btn.className = filled
+      ? 'px-6 py-3 text-sm font-semibold text-white rounded-lg bg-brand'
+      : 'px-6 py-3 text-sm font-semibold text-white rounded-lg bg-gray-500 cursor-not-allowed';
+    btn.disabled = !filled;
+  }
+
+  document.querySelectorAll('.variant-tab').forEach(btn => {
+    btn.addEventListener('click', () => setVariant(btn.dataset.variant));
+  });
+
+  document.getElementById('toggle-draft').addEventListener('change', e => {
+    document.getElementById('banner-draft').classList.toggle('hidden', !e.target.checked);
+  });
+  document.getElementById('toggle-last').addEventListener('change', e => {
+    document.getElementById('banner-last').classList.toggle('hidden', !e.target.checked);
+  });
+
+  document.addEventListener('input', e => {
+    if (e.target.matches('input[type="text"]')) syncSubmit();
+    if (e.target.type === 'date') {
+      const today = '2026-06-08';
+      if (e.target.value > today) {
+        e.target.value = today;
+        alert('Data z przyszłości jest zablokowana.');
+      }
+    }
+  });
+
+  renderCategories();
+  setVariant('c');
+</script>
+</body>
+</html>
