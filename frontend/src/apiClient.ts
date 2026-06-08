@@ -21,6 +21,7 @@ import type {
   InventoryLatestResponse,
   InventoryProduct,
   Location,
+  SuggestionReviewItem,
   ManagerClaimResponse,
   ManagerDispatchRequest,
   ManagerDispatchResponse,
@@ -250,6 +251,10 @@ export const api = {
       `/api/manager/inventory/count/${encodeURIComponent(count_id)}`,
       "manager",
     ),
+  // Suggestion learning-loop review (S-03 / FR-012). Per-product roll-up sorted
+  // worst-deviation first; [] in seed mode.
+  managerSuggestionReview: () =>
+    apiGet<SuggestionReviewItem[]>("/api/manager/suggestion-review", "manager"),
 };
 
 export { BASE_URL };

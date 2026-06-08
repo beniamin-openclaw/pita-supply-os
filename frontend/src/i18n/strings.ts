@@ -691,6 +691,35 @@ export const STRINGS = {
   "inventory.history.productCol": { pl: "Produkt", en: "Product" },
   "inventory.history.stockCol": { pl: "Stan", en: "Stock" },
   "inventory.history.productRemoved": { pl: "produkt usunięty", en: "removed product" },
+  // S-03 — suggestion learning-loop review (FR-012)
+  "manager.review.title": { pl: "Sugestie — przegląd", en: "Suggestions review" },
+  "manager.review.navLink": { pl: "Sugestie", en: "Suggestions" },
+  "manager.review.back": { pl: "Powrót do menedżera", en: "Back to manager" },
+  "manager.review.explainer": {
+    pl: "Wyższe odchylenie = produkt częściej korygowany ręcznie — kandydat do poprawy danych podstawowych.",
+    en: "Higher deviation = a product overridden more often — a master-data correction candidate.",
+  },
+  "manager.review.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "manager.review.empty": {
+    pl: "Brak historii zamówień do analizy.",
+    en: "No order history to analyze yet.",
+  },
+  "manager.review.fetchError": {
+    pl: "Nie udało się pobrać przeglądu: {detail}",
+    en: "Couldn't load the review: {detail}",
+  },
+  "manager.review.lineOrderCount": {
+    pl: "{lines} poz. · {orders} zam.",
+    en: "{lines} lines · {orders} orders",
+  },
+  "manager.review.colDeviation": {
+    pl: "Średnie odchylenie od sugestii",
+    en: "Average deviation from suggestion",
+  },
+  "manager.review.flow": {
+    pl: "sugestia {suggested} → kapitan {captain} → menedżer {manager} ({unit})",
+    en: "suggested {suggested} → captain {captain} → manager {manager} ({unit})",
+  },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

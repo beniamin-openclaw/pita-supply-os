@@ -169,6 +169,21 @@ export interface InventoryCountDetail {
   lines: InventoryCountDetailLine[];
 }
 
+// Suggestion learning-loop review (S-03 / FR-012) — match supply-os-v1/app/models.py.
+export interface SuggestionReviewItem {
+  product_id: string;
+  product_name_pl: string;
+  product_category: string;
+  inventory_unit: string;
+  line_count: number;
+  order_count: number;
+  avg_suggested_qty_purchase: number;
+  avg_captain_final_qty_purchase: number;
+  avg_manager_final_qty_purchase: number;
+  avg_abs_deviation_pct: number;
+  reason_code_counts: Record<string, number>;
+}
+
 export interface InventoryCountLineSubmit {
   product_id: string;
   current_stock_qty_base: number;

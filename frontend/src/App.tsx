@@ -10,6 +10,7 @@ import { OrderDetailPage } from "./pages/captain-mp/OrderDetailPage";
 import { OrderEditPage } from "./pages/captain-mp/OrderEditPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
+import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
 import { DebugPage } from "./pages/DebugPage";
 import { BASE_URL } from "./apiClient";
 import { LangProvider } from "./i18n";
@@ -109,6 +110,14 @@ export default function App() {
             element={
               <AuthGate role="manager">
                 <ManagerInventoryPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/manager/suggestion-review"
+            element={
+              <AuthGate role="manager">
+                <ManagerSuggestionReviewPage />
               </AuthGate>
             }
           />

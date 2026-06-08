@@ -349,6 +349,12 @@ export function ManagerPage() {
             >
               {t("manager.inventory.navLink")}
             </Link>
+            <Link
+              to="/manager/suggestion-review"
+              className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              {t("manager.review.navLink")}
+            </Link>
             <button
               type="button"
               onClick={loadQueue}

@@ -114,8 +114,8 @@ No schema change. Reads existing `order_lines`. Sheet-mode review runs at the de
 ### Phase 1: Backend — suggestion-review aggregate
 
 #### Automated
-- [x] 1.1 Backend tests pass: `python -m pytest`
-- [x] 1.2 Lint passes: `ruff check .`
+- [x] 1.1 Backend tests pass: `python -m pytest` — b3f99fa
+- [x] 1.2 Lint passes: `ruff check .` — b3f99fa
 
 #### Manual
 - [ ] 1.3 curl /manager/suggestion-review sorted by avg deviation desc; captain rejected; seed → []
@@ -123,9 +123,9 @@ No schema change. Reads existing `order_lines`. Sheet-mode review runs at the de
 ### Phase 2: Frontend — suggestion-review view
 
 #### Automated
-- [ ] 2.1 Build passes: `npm run build`
-- [ ] 2.2 Lint passes: `npm run lint`
+- [x] 2.1 Build passes: `npm run build`
+- [x] 2.2 Lint passes: `npm run lint`
 
 #### Manual
-- [ ] 2.3 /manager/suggestion-review shows per-product rows sorted by deviation; reason chips; SYSTEM_SUGGESTION_WRONG highlighted
-- [ ] 2.4 Reachable via "Sugestie" link; seed mode shows graceful empty state
+- [ ] 2.3 /manager/suggestion-review shows per-product rows sorted by deviation; reason chips; SYSTEM_SUGGESTION_WRONG highlighted — sheet-mode positive path (needs real order history), deferred to deploy gate; aggregation + sort covered by test_suggestion_review.py
+- [x] 2.4 Reachable via "Sugestie" link; seed mode shows graceful empty state — e2e verified (live app, mobile 375px): /manager has Sugestie + Remanenty links; /manager/suggestion-review renders h1 + explainer + "Brak historii zamówień do analizy." empty state, no auth modal, no console errors
