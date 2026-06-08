@@ -316,9 +316,9 @@ No worksheet migration. One pre-flight: confirm the live `inventory_counts` head
 ### Phase 5: Frontend — permanent top-tab navigation
 
 #### Automated
-- [x] 5.1 Build passes: `npm run build`
-- [x] 5.2 Lint passes: `npm run lint`
+- [x] 5.1 Build passes: `npm run build` — 7b7e291
+- [x] 5.2 Lint passes: `npm run lint` — 7b7e291
 
 #### Manual
-- [x] 5.3 Permanent tab strip visible on phone + laptop (Zamówienia / Remanent), active state correct — e2e verified (live app, mobile 375px): strip present on /captain-v2, /captain-v2/orders (Zamówienia filled-active), /captain-v2/inventory-count (Remanent filled-active); no console errors
-- [x] 5.4 Navigate orders ↔ inventory via tabs without opening the hamburger — e2e verified: react-router <Link> tabs route between /captain-v2 and /captain-v2/inventory-count; both destinations render the strip with correct active state, no hamburger needed
+- [x] 5.3 Permanent tab strip visible on phone + laptop (Zamówienia / Remanent), active state correct — e2e verified (live app, mobile 375px): strip present on /captain-v2, /captain-v2/orders (Zamówienia filled-active), /captain-v2/inventory-count (Remanent filled-active); no console errors — 7b7e291
+- [x] 5.4 Navigate orders ↔ inventory via tabs without opening the hamburger — e2e verified: react-router <Link> tabs route between /captain-v2 and /captain-v2/inventory-count; both destinations render the strip with correct active state, no hamburger needed — 7b7e291
