@@ -173,19 +173,19 @@ No schema change, no worksheet migration — reads the existing `inventory_count
 ### Phase 2: Frontend — Manager inventory view
 
 #### Automated
-- [x] 2.1 Build passes: `npm run build`
-- [x] 2.2 Lint passes: `npm run lint`
+- [x] 2.1 Build passes: `npm run build` — 40a3a4c
+- [x] 2.2 Lint passes: `npm run lint` — 40a3a4c
 
 #### Manual
 - [ ] 2.3 /manager/inventory lists counts (location · date · who · lines) newest-first; detail shows product names + stock — sheet-mode positive path, deferred to deploy gate; backend covered by test_inventory_manager.py
-- [x] 2.4 Reachable via "Remanenty" link; seed mode shows graceful empty state — e2e verified (live app, mobile 375px): /manager has Remanenty link → /manager/inventory renders "Brak zatwierdzonych remanentów." empty state, no auth modal, no console errors
+- [x] 2.4 Reachable via "Remanenty" link; seed mode shows graceful empty state — e2e verified (live app, mobile 375px): /manager has Remanenty link → /manager/inventory renders "Brak zatwierdzonych remanentów." empty state, no auth modal, no console errors — 40a3a4c
 
 ### Phase 3: Frontend — Captain inventory history
 
 #### Automated
-- [ ] 3.1 Build passes: `npm run build`
-- [ ] 3.2 Lint passes: `npm run lint`
+- [x] 3.1 Build passes: `npm run build`
+- [x] 3.2 Lint passes: `npm run lint`
 
 #### Manual
-- [ ] 3.3 /captain-v2/inventory-history lists snapshots; detail shows product names + stock
-- [ ] 3.4 Reachable from Remanent; Remanent tab stays active on the history page (e2e)
+- [ ] 3.3 /captain-v2/inventory-history lists snapshots; detail shows product names + stock — sheet-mode positive path, deferred to deploy gate (reuses the existing Captain endpoints, covered there)
+- [x] 3.4 Reachable from Remanent; Remanent tab stays active on the history page (e2e) — e2e verified (live app, mobile 375px): "Historia remanentów →" link on /captain-v2/inventory-count; history page renders with Remanent tab filled-active (broadened /captain-v2/inventory match), empty state, no console errors

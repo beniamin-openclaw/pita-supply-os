@@ -15,10 +15,10 @@ export function CaptainTabs() {
   const { t } = useT();
   const { pathname } = useLocation();
 
-  // The inventory tab owns the inventory-count subtree; everything else under
-  // captain-v2 (the order screen + the orders list/detail/edit) belongs to the
-  // Zamówienia tab.
-  const inventoryActive = pathname.startsWith(INVENTORY_PATH);
+  // The inventory tab owns the whole inventory subtree (`-count` AND the
+  // `-history` sub-page); everything else under captain-v2 (the order screen +
+  // the orders list/detail/edit) belongs to the Zamówienia tab.
+  const inventoryActive = pathname.startsWith("/captain-v2/inventory");
   const ordersActive = !inventoryActive;
 
   const base =

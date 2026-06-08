@@ -671,6 +671,26 @@ export const STRINGS = {
   "manager.inventory.lineCount": { pl: "{count} pozycji", en: "{count} items" },
   "manager.inventory.productCol": { pl: "Produkt", en: "Product" },
   "manager.inventory.stockCol": { pl: "Stan", en: "Stock" },
+  // S-08 — Captain inventory history (FR-019)
+  "inventory.history.title": { pl: "Historia remanentów", en: "Inventory history" },
+  "inventory.history.navLink": { pl: "Historia remanentów", en: "Inventory history" },
+  "inventory.history.back": { pl: "Powrót do remanentu", en: "Back to count" },
+  "inventory.history.detailBack": { pl: "Powrót do listy", en: "Back to list" },
+  "inventory.history.detailTitle": { pl: "Remanent {date}", en: "Count {date}" },
+  "inventory.history.empty": {
+    pl: "Brak remanentów dla tej lokalizacji.",
+    en: "No inventory counts for this location.",
+  },
+  "inventory.history.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "inventory.history.fetchError": {
+    pl: "Nie udało się pobrać historii: {detail}",
+    en: "Couldn't load history: {detail}",
+  },
+  "inventory.history.countedBy": { pl: "Liczył: {who}", en: "Counted by: {who}" },
+  "inventory.history.lineCount": { pl: "{count} pozycji", en: "{count} items" },
+  "inventory.history.productCol": { pl: "Produkt", en: "Product" },
+  "inventory.history.stockCol": { pl: "Stan", en: "Stock" },
+  "inventory.history.productRemoved": { pl: "produkt usunięty", en: "removed product" },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

@@ -396,6 +396,13 @@ export function InventoryCountPage() {
         <div className="mb-4">
           <h2 className="text-lg font-bold text-slate-900">{t("inventory.title")}</h2>
           <p className="text-sm text-slate-600">{t("inventory.subtitle")}</p>
+          <button
+            type="button"
+            onClick={() => navigate("/captain-v2/inventory-history")}
+            className="mt-2 text-sm font-semibold text-brand hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            {t("inventory.history.navLink")} →
+          </button>
         </div>
 
         {/* Variant C — stacked metadata; blank-vs-0 hint lives in the sticky bar */}
