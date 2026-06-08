@@ -598,6 +598,55 @@ export const STRINGS = {
     pl: "Wypełniono stan z inwentaryzacji ({count} poz.)",
     en: "Stock pre-filled from inventory ({count} items)",
   },
+  // Phase 4 — always-available pre-fill control + snapshot picker (FR-022/023/024)
+  "captain.prefillControlTitle": {
+    pl: "Wypełnij stan z remanentu",
+    en: "Fill stock from a count",
+  },
+  "captain.snapshotPickerLabel": {
+    pl: "Remanent (źródło stanu)",
+    en: "Count (stock source)",
+  },
+  "captain.prefillBannerBy": { pl: "liczył: {who}", en: "counted by: {who}" },
+  "captain.snapshotOption": {
+    pl: "{time} · {who} · {count} poz.",
+    en: "{time} · {who} · {count} items",
+  },
+  "captain.snapshotOptionNoWho": {
+    pl: "{time} · {count} poz.",
+    en: "{time} · {count} items",
+  },
+  "captain.prefillFillEmpties": { pl: "Wypełnij puste", en: "Fill empty" },
+  "captain.prefillOverwrite": { pl: "Nadpisz wszystko", en: "Overwrite all" },
+  "captain.prefillClear": { pl: "Wyczyść", en: "Clear all" },
+  "captain.prefillLoading": { pl: "Ładowanie remanentu…", en: "Loading count…" },
+  "captain.prefillOverwriteToast": {
+    pl: "Nadpisano stan z remanentu ({count} poz.)",
+    en: "Stock overwritten from the count ({count} items)",
+  },
+  "captain.prefillClearedToast": {
+    pl: "Wyczyszczono wszystkie pola stanu",
+    en: "Cleared all stock fields",
+  },
+  "captain.prefillOverwriteConfirmTitle": {
+    pl: "Nadpisać wszystkie stany?",
+    en: "Overwrite all stock?",
+  },
+  "captain.prefillOverwriteConfirmBody": {
+    pl: "Stan z remanentu {time} (liczył: {who}) zastąpi wszystkie pola — także te wpisane ręcznie. Tej operacji nie można cofnąć.",
+    en: "Stock from the count {time} (counted by: {who}) will replace every field — including hand-typed values. This cannot be undone.",
+  },
+  "captain.prefillOverwriteConfirm": { pl: "Nadpisz wszystko", en: "Overwrite all" },
+  "captain.prefillOverwriteCancel": { pl: "Anuluj", en: "Cancel" },
+  "captain.prefillClearConfirmTitle": {
+    pl: "Wyczyścić wszystkie pola?",
+    en: "Clear all fields?",
+  },
+  "captain.prefillClearConfirmBody": {
+    pl: "Wszystkie wpisane stany zostaną wyczyszczone (puste = nie policzone). Tej operacji nie można cofnąć.",
+    en: "Every entered stock value will be cleared (blank = not counted). This cannot be undone.",
+  },
+  "captain.prefillClearConfirm": { pl: "Wyczyść wszystko", en: "Clear all" },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

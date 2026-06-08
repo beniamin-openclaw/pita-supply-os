@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phase 4 — Pre-fill controls + snapshot picker mock-up (FR-022/023/024)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: {
+    colors: {
+      brand: '#1a4480',
+      'brand-hover': '#1e3a8a',
+      'brand-subtle': '#e3eaf3',
+      critical: '#dc2626',
+    },
+    boxShadow: { bar: '0 -4px 6px -1px rgba(0,0,0,0.08)' },
+  } } };
+</script>
+<style>
+  body { font-feature-settings: "tnum"; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .variant-panel { display: none; }
+  .variant-panel.active { display: block; }
+</style>
+</head>
+<body class="bg-gray-50 font-sans text-slate-900">
+
+<!-- Explainer + variant picker (not part of the app) -->
+<div class="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur px-4 py-3">
+  <p class="text-xs text-slate-600 max-w-3xl mx-auto mb-2">
+    <b>PROPOSAL — Phase 4: pre-fill z remanentu na ekranie zamówienia.</b>
+    Trzy warianty kontrolki „wypełnij stan z remanentu”: <b>wybór migawki</b> (data · godzina · kto liczył),
+    dwa tryby — <b>Wypełnij puste</b> (bezpieczny, tylko puste) i <b>Nadpisz wszystko</b> (z potwierdzeniem),
+    plus banner „liczył: X”. Reszta ekranu 1:1 z <code>CaptainMP.tsx</code>.
+  </p>
+  <div class="flex flex-wrap gap-2 max-w-3xl mx-auto" role="tablist" aria-label="Wariant układu">
+    <button type="button" data-variant="a" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-brand text-white">A — kompaktowy pasek (sky)</button>
+    <button type="button" data-variant="b" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700">B — ewolucja bannera</button>
+    <button type="button" data-variant="c" class="variant-tab rounded-full px-3 py-1.5 text-xs font-semibold bg-slate-200 text-slate-700">C — karta z trybem (radio)</button>
+  </div>
+  <p class="text-[11px] text-slate-500 max-w-3xl mx-auto mt-2">
+    Zmień migawkę w rozwijanej liście, kliknij <b>Nadpisz wszystko</b> aby zobaczyć dialog potwierdzenia.
+  </p>
+</div>
+
+<!-- Shared phone frame -->
+<div id="frame" class="min-h-screen flex flex-col pb-28 max-w-3xl mx-auto w-full">
+
+  <!-- AppHeader -->
+  <header class="sticky top-[8.5rem] z-40 bg-brand text-white px-4 py-3">
+    <div class="flex justify-between items-center mb-3">
+      <h1 class="font-semibold text-lg tracking-tight">Pita Bros — Zamówienia</h1>
+      <button type="button" class="p-2.5 -mr-1 rounded-md" aria-label="Menu">≡</button>
+    </div>
+    <!-- SupplierPicker (chips) -->
+    <div class="flex gap-2 text-xs font-medium overflow-x-auto hide-scrollbar -mx-1 px-1">
+      <span class="bg-white text-brand px-3 py-1.5 rounded-full whitespace-nowrap shrink-0 font-semibold">Bukat</span>
+      <span class="bg-white/20 px-3 py-1.5 rounded-full whitespace-nowrap shrink-0">Pago</span>
+      <span class="bg-white/20 px-3 py-1.5 rounded-full whitespace-nowrap shrink-0">Blueserv</span>
+    </div>
+  </header>
+
+  <!-- ContextStrip (supplier · delivery · cutoff) -->
+  <div class="bg-brand-subtle px-4 py-2 flex justify-between items-center text-xs">
+    <div class="text-slate-800 font-medium truncate pr-4">Bukat · dostawa: wt, czw</div>
+    <div class="text-slate-700 font-semibold flex items-center gap-1 shrink-0">🕐 do 12:00</div>
+  </div>
+
+  <main class="flex-1 p-4 w-full">
+
+    <!-- ===== VARIANT A: compact sky bar ===== -->
+    <div id="panel-a" class="variant-panel active">
+      <section class="mb-4 rounded-xl border border-sky-300 bg-sky-50 p-3" aria-label="Wypełnij stan z remanentu">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-sky-900 text-sm font-semibold">📋 Wypełnij stan z remanentu</span>
+        </div>
+        <label for="snap-a" class="sr-only">Wybierz remanent</label>
+        <select id="snap-a" data-picker
+          class="w-full rounded-lg border border-sky-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 mb-2"></select>
+        <p class="text-xs text-sky-800 mb-3" data-by>liczył: <strong>Anna M.</strong></p>
+        <div class="flex gap-2">
+          <button type="button" data-fill
+            class="flex-1 px-3 py-2.5 rounded-lg bg-sky-700 text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2">
+            Wypełnij puste
+          </button>
+          <button type="button" data-overwrite
+            class="flex-1 px-3 py-2.5 rounded-lg bg-white text-sky-900 border border-sky-300 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2">
+            Nadpisz wszystko
+          </button>
+        </div>
+        <div class="mt-2 pt-2 border-t border-sky-200 flex justify-end">
+          <button type="button" data-clear
+            class="px-3 py-1.5 rounded-md text-slate-600 hover:text-critical text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-400">
+            ⨯ Wyzeruj wszystkie pola
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== VARIANT B: banner evolution (closest to current) ===== -->
+    <div id="panel-b" class="variant-panel">
+      <section class="mb-4 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm" aria-label="Wypełnij stan z remanentu">
+        <div class="flex flex-col gap-2.5">
+          <div class="text-sky-900">
+            Wypełnij stan z remanentu <span class="font-semibold" data-time>08.06.2026, 14:32</span>
+            <span class="text-sky-800">· liczył: <strong data-by-inline>Anna M.</strong></span>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <label for="snap-b" class="sr-only">Wybierz remanent</label>
+            <select id="snap-b" data-picker
+              class="flex-1 rounded-md border border-sky-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"></select>
+            <div class="flex gap-2 shrink-0">
+              <button type="button" data-fill
+                class="px-3 py-2 rounded-md bg-sky-700 text-white text-xs font-semibold">Wypełnij puste</button>
+              <button type="button" data-overwrite
+                class="px-3 py-2 rounded-md bg-white text-sky-900 border border-sky-300 text-xs font-semibold">Nadpisz wszystko</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===== VARIANT C: white card + radio fill-mode ===== -->
+    <div id="panel-c" class="variant-panel">
+      <section class="mb-4 rounded-xl border border-gray-200 bg-white p-4 space-y-3" aria-label="Wypełnij stan z remanentu">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-slate-800">Wypełnij stan z remanentu</h3>
+          <span class="text-[11px] text-slate-500" data-by>liczył: Anna M.</span>
+        </div>
+        <div>
+          <label for="snap-c" class="block text-xs font-semibold text-slate-700 mb-1">Remanent</label>
+          <select id="snap-c" data-picker
+            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+        </div>
+        <fieldset class="space-y-1.5">
+          <legend class="text-xs font-semibold text-slate-700 mb-1">Tryb</legend>
+          <label class="flex items-start gap-2 text-sm text-slate-700">
+            <input type="radio" name="mode-c" value="empty" checked class="mt-0.5" />
+            <span><span class="font-medium">Tylko puste pola</span> — nie rusza wpisanych wartości <span class="text-slate-400">(bezpieczny)</span></span>
+          </label>
+          <label class="flex items-start gap-2 text-sm text-slate-700">
+            <input type="radio" name="mode-c" value="all" class="mt-0.5" />
+            <span><span class="font-medium">Nadpisz wszystko</span> — zastąpi też ręcznie wpisane <span class="text-amber-700">(wymaga potwierdzenia)</span></span>
+          </label>
+        </fieldset>
+        <button type="button" data-apply-c
+          class="w-full px-3 py-2.5 rounded-lg bg-brand text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+          Zastosuj
+        </button>
+      </section>
+    </div>
+
+    <!-- Sample order rows (one filled, one empty — to show fill-empties vs overwrite) -->
+    <div class="space-y-3">
+      <div class="bg-white border border-gray-200 rounded-xl p-3">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-slate-900 truncate">Pomidor</span>
+              <span class="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">Krytyczny</span>
+            </div>
+            <div class="text-xs text-slate-500">stan w kg</div>
+          </div>
+          <input id="row-tomato" type="number" value="9" inputmode="decimal"
+            class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Stan Pomidor" />
+        </div>
+        <p class="mt-1 text-[11px] text-amber-700" id="note-tomato">Wpisane ręcznie — „Wypełnij puste" tego nie ruszy</p>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-xl p-3">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-slate-900 truncate">Feta blok</span>
+            </div>
+            <div class="text-xs text-slate-500">stan w kg</div>
+          </div>
+          <input id="row-feta" type="number" value="" placeholder="—" inputmode="decimal"
+            class="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Stan Feta blok" />
+        </div>
+        <p class="mt-1 text-[11px] text-slate-400" id="note-feta">Puste — zostanie wypełnione z remanentu (6)</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Sticky action bar (unchanged) -->
+  <div class="fixed inset-x-0 bottom-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
+    <div class="flex items-center justify-between gap-4 max-w-3xl mx-auto">
+      <div class="text-xs text-slate-700 font-medium">2 pozycje</div>
+      <div class="flex gap-2 shrink-0">
+        <button type="button" class="px-4 py-3 text-sm font-medium text-slate-800 bg-gray-100 rounded-lg">Zapisz roboczo</button>
+        <button type="button" class="px-6 py-3 text-sm font-semibold text-white rounded-lg bg-brand">Wyślij zamówienie</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog for "Nadpisz wszystko" (mirrors ConfirmApproveDialog) -->
+<div id="confirm" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/40 p-4">
+  <div role="dialog" aria-modal="true" aria-labelledby="confirm-title"
+    class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+    <h3 id="confirm-title" class="text-base font-bold text-slate-900 mb-1">Nadpisać wszystkie stany?</h3>
+    <p id="confirm-body" class="text-sm text-slate-600 mb-4"></p>
+    <div class="flex gap-2 justify-end">
+      <button type="button" id="confirm-cancel"
+        class="px-4 py-2.5 rounded-lg bg-white text-slate-700 border border-gray-300 text-sm font-semibold">Anuluj</button>
+      <button type="button" id="confirm-ok"
+        class="px-4 py-2.5 rounded-lg bg-critical text-white text-sm font-semibold">Nadpisz wszystko</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] hidden rounded-lg bg-slate-900 text-white text-sm px-4 py-2.5 shadow-lg"></div>
+
+<script>
+  // Synthetic snapshots (newest first) — mirrors InventoryCountSummary rows.
+  const SNAPSHOTS = [
+    { id: 'INV-08', label: '08.06.2026, 14:32 · Anna M. · 12 poz.', time: '08.06.2026, 14:32', who: 'Anna M.' },
+    { id: 'INV-05', label: '05.06.2026, 09:10 · Jan K. · 11 poz.',  time: '05.06.2026, 09:10', who: 'Jan K.' },
+    { id: 'INV-01', label: '01.06.2026, 17:45 · Anna M. · 12 poz.', time: '01.06.2026, 17:45', who: 'Anna M.' },
+  ];
+
+  let activeVariant = 'a';
+
+  function fillPickers() {
+    document.querySelectorAll('select[data-picker]').forEach(sel => {
+      sel.innerHTML = SNAPSHOTS.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    });
+  }
+
+  function selectedSnapshot() {
+    const sel = document.querySelector('#panel-' + activeVariant + ' select[data-picker]');
+    const id = sel ? sel.value : SNAPSHOTS[0].id;
+    return SNAPSHOTS.find(s => s.id === id) || SNAPSHOTS[0];
+  }
+
+  function syncNames() {
+    const s = selectedSnapshot();
+    document.querySelectorAll('[data-by]').forEach(el => { el.innerHTML = 'liczył: <strong>' + s.who + '</strong>'; });
+    document.querySelectorAll('[data-by-inline]').forEach(el => { el.textContent = s.who; });
+    document.querySelectorAll('[data-time]').forEach(el => { el.textContent = s.time; });
+  }
+
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(t._h);
+    t._h = setTimeout(() => t.classList.add('hidden'), 2200);
+  }
+
+  function doFillEmpties() {
+    const s = selectedSnapshot();
+    // Only the empty Feta row gets filled; the typed Tomato row is preserved.
+    const feta = document.getElementById('row-feta');
+    if (feta.value === '') { feta.value = '6'; document.getElementById('note-feta').textContent = '✓ Wypełnione z remanentu'; }
+    toast('Wypełniono 1 puste pole z remanentu (' + s.who + ')');
+  }
+
+  function doOverwriteAll() {
+    const s = selectedSnapshot();
+    document.getElementById('row-tomato').value = '11';
+    document.getElementById('row-feta').value = '6';
+    document.getElementById('note-tomato').textContent = '↻ Nadpisane z remanentu';
+    document.getElementById('note-feta').textContent = '↻ Nadpisane z remanentu';
+    toast('Nadpisano wszystkie 2 pozycje z remanentu (' + s.who + ')');
+  }
+
+  // INTERPRETATION 1 (clear-to-blank): wipe stock fields back to empty (= "not
+  // counted"), so the captain can re-pick a snapshot or count fresh. Safe under
+  // the blank-vs-0 rule. This is what the mock demonstrates.
+  function doClearToBlank() {
+    document.getElementById('row-tomato').value = '';
+    document.getElementById('row-feta').value = '';
+    document.getElementById('note-tomato').textContent = '⨯ Wyczyszczone (puste = nie policzone)';
+    document.getElementById('note-feta').textContent = '⨯ Wyczyszczone (puste = nie policzone)';
+    toast('Wyczyszczono wszystkie pola stanu');
+  }
+
+  // Confirm dialog wiring — parametrized per destructive action.
+  const confirmEl = document.getElementById('confirm');
+  const CONFIRM = {
+    overwrite: {
+      title: 'Nadpisać wszystkie stany?',
+      body: () => {
+        const s = selectedSnapshot();
+        return 'Stan z remanentu <strong>' + s.time + '</strong> (liczył: <strong>' + s.who +
+          '</strong>) zastąpi <b>wszystkie</b> pola — także te wpisane ręcznie. Tej operacji nie można cofnąć.';
+      },
+      ok: 'Nadpisz wszystko', okClass: 'bg-critical',
+      run: doOverwriteAll,
+    },
+    clear: {
+      title: 'Wyzerować wszystkie pola?',
+      body: () => 'Wszystkie wpisane stany zostaną wyczyszczone (puste = nie policzone). ' +
+        'Tej operacji nie można cofnąć.',
+      ok: '⨯ Wyzeruj wszystko', okClass: 'bg-critical',
+      run: doClearToBlank,
+    },
+  };
+  let pendingAction = null;
+  function openConfirm(kind) {
+    const cfg = CONFIRM[kind];
+    pendingAction = cfg.run;
+    document.getElementById('confirm-title').textContent = cfg.title;
+    document.getElementById('confirm-body').innerHTML = cfg.body();
+    const ok = document.getElementById('confirm-ok');
+    ok.textContent = cfg.ok;
+    ok.className = 'px-4 py-2.5 rounded-lg text-white text-sm font-semibold ' + cfg.okClass;
+    confirmEl.classList.remove('hidden'); confirmEl.classList.add('flex');
+  }
+  function closeConfirm() { confirmEl.classList.add('hidden'); confirmEl.classList.remove('flex'); pendingAction = null; }
+  document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
+  document.getElementById('confirm-ok').addEventListener('click', () => { const r = pendingAction; closeConfirm(); if (r) r(); });
+
+  // Delegated buttons
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-fill]')) doFillEmpties();
+    else if (e.target.closest('[data-overwrite]')) openConfirm('overwrite');
+    else if (e.target.closest('[data-clear]')) openConfirm('clear');
+    else if (e.target.closest('[data-apply-c]')) {
+      const mode = document.querySelector('#panel-c input[name="mode-c"]:checked').value;
+      if (mode === 'all') openConfirm('overwrite'); else doFillEmpties();
+    }
+  });
+  document.addEventListener('change', e => { if (e.target.matches('select[data-picker]')) syncNames(); });
+
+  // Variant tabs
+  function setVariant(v) {
+    activeVariant = v;
+    document.querySelectorAll('.variant-panel').forEach(el => el.classList.remove('active'));
+    document.getElementById('panel-' + v).classList.add('active');
+    document.querySelectorAll('.variant-tab').forEach(btn => {
+      const on = btn.dataset.variant === v;
+      btn.className = 'variant-tab rounded-full px-3 py-1.5 text-xs font-semibold ' +
+        (on ? 'bg-brand text-white' : 'bg-slate-200 text-slate-700');
+    });
+    syncNames();
+  }
+  document.querySelectorAll('.variant-tab').forEach(btn => {
+    btn.addEventListener('click', () => setVariant(btn.dataset.variant));
+  });
+
+  fillPickers();
+  setVariant('a');
+</script>
+</body>
+</html>

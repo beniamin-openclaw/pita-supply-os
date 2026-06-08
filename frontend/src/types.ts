@@ -124,6 +124,18 @@ export interface InventoryLatestResponse {
   lines: InventoryLatestLine[];
 }
 
+// Compact picker row (FR-024) — one available snapshot WITHOUT its lines. Lines
+// are fetched lazily on select via GET /api/captain/inventory/count/{id}.
+// `count_submitted_at` / `count_user` are Optional on the backend → optional here.
+export interface InventoryCountSummary {
+  count_id: string;
+  location_id: string;
+  count_date: string;
+  count_submitted_at?: string | null;
+  count_user?: string | null;
+  line_count: number;
+}
+
 export interface InventoryCountLineSubmit {
   product_id: string;
   current_stock_qty_base: number;

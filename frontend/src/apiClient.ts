@@ -15,6 +15,7 @@ import type {
   CaptainSubmitResponse,
   InventoryCountSubmitRequest,
   InventoryCountSubmitResponse,
+  InventoryCountSummary,
   InventoryLatestResponse,
   InventoryProduct,
   Location,
@@ -200,6 +201,17 @@ export const api = {
   // when there is no snapshot / seed mode — the caller treats null as "no offer".
   inventoryLatest: () =>
     apiGet<InventoryLatestResponse | null>("/api/captain/inventory/latest", "captain"),
+  // Recent snapshots for the token's location (FR-024 picker). Up to 10, newest
+  // count_date first; [] in seed mode. Compact rows (no lines).
+  inventoryCounts: () =>
+    apiGet<InventoryCountSummary[]>("/api/captain/inventory/counts", "captain"),
+  // One snapshot with lines, for pre-fill from a chosen count (FR-024). Reuses
+  // the latest-response shape (carries count_user).
+  inventoryCount: (count_id: string) =>
+    apiGet<InventoryLatestResponse>(
+      `/api/captain/inventory/count/${encodeURIComponent(count_id)}`,
+      "captain",
+    ),
   // Manager
   managerQueue: (location_id?: string, status: OrderStatus = "captain_submitted") => {
     const params = new URLSearchParams({ status });

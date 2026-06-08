@@ -19,6 +19,8 @@ import { ContextStrip } from "./components/ContextStrip";
 import { ProductCard } from "./components/ProductCard";
 import { StickyActionBar } from "./components/StickyActionBar";
 import { ConfirmSubmitDialog } from "./components/ConfirmSubmitDialog";
+import { PrefillControl } from "./components/PrefillControl";
+import { ConfirmPrefillDialog } from "./components/ConfirmPrefillDialog";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
 
@@ -26,7 +28,7 @@ import { computeRowState } from "./lib/compute";
 import { getRequestedDeliveryDate } from "./lib/dates";
 
 import type { Supplier, OrderableItem, OrderLine, DraftState } from "./types";
-import type { InventoryLatestResponse } from "../../types";
+import type { InventoryCountSummary, InventoryLatestResponse } from "../../types";
 
 // Pilot supplier for the Wola×Bukat round-trip (S-01). The order screen defaults
 // to this supplier on load instead of suppliers[0] (the first CSV row,
@@ -51,8 +53,17 @@ export function CaptainMP() {
     supplierId: string;
     timestamp: number;
   } | null>(null);
-  const [latestSnapshot, setLatestSnapshot] = useState<InventoryLatestResponse | null>(null);
-  const [prefillDismissed, setPrefillDismissed] = useState<Set<string>>(new Set());
+  // FR-024 snapshot picker model (replaces the single-latestSnapshot of S-07):
+  //  - availableSnapshots: compact rows (no lines) for the picker
+  //  - selectedSnapshotId: defaults to the newest (backend sorts count_date desc)
+  //  - snapshotDetails: lazily-loaded lines, cached by count_id
+  //  - prefillConfirm: which destructive action is awaiting confirmation
+  const [availableSnapshots, setAvailableSnapshots] = useState<InventoryCountSummary[]>([]);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+  const [snapshotDetails, setSnapshotDetails] = useState<
+    Record<string, InventoryLatestResponse>
+  >({});
+  const [prefillConfirm, setPrefillConfirm] = useState<"overwrite" | "clear" | null>(null);
 
   const token = getToken("captain") || "";
 
@@ -82,15 +93,18 @@ export function CaptainMP() {
     };
   }, [showToast, t]);
 
-  // ---- Fetch the latest inventory snapshot once (opt-in prefill source) ------
+  // ---- Fetch available inventory snapshots once (FR-024 picker source) -------
   // Silent on error: prefill is optional and must never block ordering. Seed
-  // mode / no snapshot → null → no banner. Location-wide, so fetched once.
+  // mode / no snapshots → [] → no control. Location-wide, so fetched once;
+  // default the selection to the newest (backend sorts count_date desc).
   useEffect(() => {
     let cancelled = false;
     api
-      .inventoryLatest()
-      .then((snap) => {
-        if (!cancelled) setLatestSnapshot(snap);
+      .inventoryCounts()
+      .then((rows) => {
+        if (cancelled) return;
+        setAvailableSnapshots(rows);
+        if (rows.length > 0) setSelectedSnapshotId(rows[0].count_id);
       })
       .catch(() => {
         /* optional feature — ignore errors */
@@ -99,6 +113,39 @@ export function CaptainMP() {
       cancelled = true;
     };
   }, []);
+
+  // ---- Lazy-load the SELECTED snapshot's lines, cached by id -----------------
+  // The picker rows carry no lines (FR-024); we fetch them only when a snapshot
+  // is selected, and cache by count_id so re-selecting is free. On a (rare)
+  // failed detail fetch we cache an empty result so the fill buttons un-disable
+  // instead of spinning forever — they'll simply match 0 lines.
+  useEffect(() => {
+    if (!selectedSnapshotId) return;
+    if (snapshotDetails[selectedSnapshotId]) return; // cached
+    let cancelled = false;
+    const id = selectedSnapshotId;
+    api
+      .inventoryCount(id)
+      .then((detail) => {
+        if (!cancelled) setSnapshotDetails((prev) => ({ ...prev, [id]: detail }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSnapshotDetails((prev) => ({
+          ...prev,
+          [id]: {
+            count_id: id,
+            count_date: "",
+            count_submitted_at: null,
+            line_count: 0,
+            lines: [],
+          },
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSnapshotId, snapshotDetails]);
 
   // ---- Auto-select the pilot supplier (Bukat) once loaded -------------------
   // Default to the pilot supplier if it's in the (already active-filtered) list,
@@ -222,19 +269,19 @@ export function CaptainMP() {
     showToast(t("toast.draftSaved"), "success");
   }, [activeSupplierId, lines, showToast, t]);
 
-  // Opt-in prefill: fill EMPTY current_stock for orderable lines that were
-  // counted in the latest snapshot (matched by product_id). Non-counted /
-  // non-orderable products, and any value the captain ALREADY typed, are left
-  // untouched. Editable afterwards; dismissed per supplier so the offer doesn't
-  // nag once acted on. Double safeguard (FR-017): opt-in + the banner names the
-  // snapshot date/time; and prefill never clobbers hand-typed stock.
-  const acceptPrefill = useCallback(() => {
-    if (!latestSnapshot || !activeSupplierId) return;
+  // ---- Pre-fill actions (FR-023/024) -----------------------------------------
+  // All three pull from the SELECTED snapshot (lazily-loaded lines). Matching is
+  // by product_id between the snapshot and the orderable lines.
+  //
+  // fillEmpties — SAFE default: fills only fields the captain hasn't typed
+  // (=== ""); a typed 0 is preserved (the blank-vs-0 rule). Never clobbers.
+  const fillEmpties = useCallback(() => {
+    const detail = selectedSnapshotId ? snapshotDetails[selectedSnapshotId] : null;
+    if (!detail) return;
     const stockByPid: Record<string, number> = {};
-    latestSnapshot.lines.forEach((ln) => {
+    detail.lines.forEach((ln) => {
       stockByPid[ln.product_id] = ln.current_stock_qty_base;
     });
-    // Only fill fields the captain hasn't typed (=== ""); a typed 0 is preserved.
     const filled = Object.keys(lines).filter(
       (pid) => pid in stockByPid && lines[pid].current_stock_qty_base === "",
     ).length;
@@ -247,14 +294,53 @@ export function CaptainMP() {
       });
       return next;
     });
-    setPrefillDismissed((prev) => new Set(prev).add(activeSupplierId));
     showToast(t("captain.prefillApplied", { count: filled }), "success");
-  }, [latestSnapshot, activeSupplierId, lines, showToast, t]);
+  }, [selectedSnapshotId, snapshotDetails, lines, showToast, t]);
 
-  const skipPrefill = useCallback(() => {
-    if (!activeSupplierId) return;
-    setPrefillDismissed((prev) => new Set(prev).add(activeSupplierId));
-  }, [activeSupplierId]);
+  // overwriteAll — DESTRUCTIVE: replaces every matched line's stock with the
+  // snapshot value, including hand-typed ones. Confirm-gated by the parent (the
+  // button only opens the dialog; this runs on confirm).
+  const overwriteAll = useCallback(() => {
+    const detail = selectedSnapshotId ? snapshotDetails[selectedSnapshotId] : null;
+    if (!detail) return;
+    const stockByPid: Record<string, number> = {};
+    detail.lines.forEach((ln) => {
+      stockByPid[ln.product_id] = ln.current_stock_qty_base;
+    });
+    const overwritten = Object.keys(lines).filter((pid) => pid in stockByPid).length;
+    setLines((prev) => {
+      const next: Record<string, OrderLine> = { ...prev };
+      Object.keys(next).forEach((pid) => {
+        if (pid in stockByPid) {
+          next[pid] = { ...next[pid], current_stock_qty_base: stockByPid[pid] };
+        }
+      });
+      return next;
+    });
+    showToast(t("captain.prefillOverwriteToast", { count: overwritten }), "success");
+  }, [selectedSnapshotId, snapshotDetails, lines, showToast, t]);
+
+  // clearAll — DESTRUCTIVE: blanks every stock field (blank = not counted, per
+  // the blank-vs-0 rule — NOT a literal 0). Confirm-gated. Needs no snapshot.
+  const clearAll = useCallback(() => {
+    setLines((prev) => {
+      const next: Record<string, OrderLine> = { ...prev };
+      Object.keys(next).forEach((pid) => {
+        next[pid] = { ...next[pid], current_stock_qty_base: "" };
+      });
+      return next;
+    });
+    showToast(t("captain.prefillClearedToast"), "success");
+  }, [showToast, t]);
+
+  const requestOverwrite = useCallback(() => setPrefillConfirm("overwrite"), []);
+  const requestClear = useCallback(() => setPrefillConfirm("clear"), []);
+  const cancelPrefillConfirm = useCallback(() => setPrefillConfirm(null), []);
+  const confirmPrefill = useCallback(() => {
+    if (prefillConfirm === "overwrite") overwriteAll();
+    else if (prefillConfirm === "clear") clearAll();
+    setPrefillConfirm(null);
+  }, [prefillConfirm, overwriteAll, clearAll]);
 
   const handleSubmit = useCallback(async () => {
     if (!activeSupplierId) return;
@@ -361,20 +447,30 @@ export function CaptainMP() {
     return { [activeSupplierId]: orderableItems.length };
   }, [activeSupplierId, orderableItems.length]);
 
-  // ---- Prefill banner: visibility + named source date/time -------------------
-  const prefillTime = useMemo(() => {
-    if (!latestSnapshot) return "";
-    const iso = latestSnapshot.count_submitted_at ?? latestSnapshot.count_date;
-    return formatDateTime(iso);
-  }, [latestSnapshot, formatDateTime]);
+  // ---- Pre-fill control: visibility + selected-snapshot naming ---------------
+  const selectedSummary = useMemo(
+    () => availableSnapshots.find((s) => s.count_id === selectedSnapshotId) ?? null,
+    [availableSnapshots, selectedSnapshotId],
+  );
+  // "Loading" = a snapshot is selected but its lines aren't cached yet (the
+  // fetch caches an empty result even on failure, so this can't hang).
+  const isSnapshotDetailLoading =
+    !!selectedSnapshotId && !snapshotDetails[selectedSnapshotId];
 
-  const showPrefillBanner =
-    !!latestSnapshot &&
+  // Always-available once snapshots exist for the location and items are loaded
+  // (FR-023 promotes the old dismissable banner to a permanent control).
+  const showPrefillControl =
+    availableSnapshots.length > 0 &&
     !!activeSupplierId &&
-    !prefillDismissed.has(activeSupplierId) &&
     !isLoadingItems &&
-    orderableItems.length > 0 &&
-    latestSnapshot.lines.some((ln) => lines[ln.product_id] !== undefined);
+    orderableItems.length > 0;
+
+  // Named source for the overwrite-confirm body (the FR-017 "name the source"
+  // safeguard, carried onto the destructive path).
+  const overwriteConfirmTime = selectedSummary
+    ? formatDateTime(selectedSummary.count_submitted_at ?? selectedSummary.count_date)
+    : "";
+  const overwriteConfirmWho = selectedSummary?.count_user ?? "—";
 
   // ---- Render ---------------------------------------------------------------
   return (
@@ -433,32 +529,16 @@ export function CaptainMP() {
           </div>
         )}
 
-        {showPrefillBanner && (
-          <div
-            role="dialog"
-            aria-label={t("captain.prefillBannerTitle", { time: prefillTime })}
-            className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm"
-          >
-            <div className="text-sky-900">
-              {t("captain.prefillBannerTitle", { time: prefillTime })}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={acceptPrefill}
-                className="px-3 py-2 rounded-md bg-sky-700 text-white text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
-              >
-                {t("captain.prefillBannerAccept")}
-              </button>
-              <button
-                type="button"
-                onClick={skipPrefill}
-                className="px-3 py-2 rounded-md bg-white text-sky-900 border border-sky-300 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
-              >
-                {t("captain.prefillBannerSkip")}
-              </button>
-            </div>
-          </div>
+        {showPrefillControl && (
+          <PrefillControl
+            snapshots={availableSnapshots}
+            selectedId={selectedSnapshotId}
+            onSelect={setSelectedSnapshotId}
+            isDetailLoading={isSnapshotDetailLoading}
+            onFillEmpties={fillEmpties}
+            onOverwrite={requestOverwrite}
+            onClear={requestClear}
+          />
         )}
 
         {isLoadingItems ? (
@@ -519,6 +599,31 @@ export function CaptainMP() {
         onConfirm={handleSubmit}
         onCancel={cancelConfirm}
         isSubmitting={isSubmitting}
+      />
+
+      <ConfirmPrefillDialog
+        open={prefillConfirm !== null}
+        title={
+          prefillConfirm === "clear"
+            ? t("captain.prefillClearConfirmTitle")
+            : t("captain.prefillOverwriteConfirmTitle")
+        }
+        body={
+          prefillConfirm === "clear"
+            ? t("captain.prefillClearConfirmBody")
+            : t("captain.prefillOverwriteConfirmBody", {
+                time: overwriteConfirmTime,
+                who: overwriteConfirmWho,
+              })
+        }
+        confirmLabel={
+          prefillConfirm === "clear"
+            ? t("captain.prefillClearConfirm")
+            : t("captain.prefillOverwriteConfirm")
+        }
+        cancelLabel={t("captain.prefillOverwriteCancel")}
+        onConfirm={confirmPrefill}
+        onCancel={cancelPrefillConfirm}
       />
     </div>
   );

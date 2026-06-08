@@ -295,8 +295,8 @@ No worksheet migration. One pre-flight: confirm the live `inventory_counts` head
 ### Phase 3: Backend — snapshot list + detail endpoints
 
 #### Automated
-- [x] 3.1 Backend tests pass: `python -m pytest`
-- [x] 3.2 Lint passes: `ruff check .`
+- [x] 3.1 Backend tests pass: `python -m pytest` — 6950d2c
+- [x] 3.2 Lint passes: `ruff check .` — 6950d2c
 
 #### Manual
 - [ ] 3.3 curl /inventory/counts returns ≤10 sorted by count_date desc, location-scoped
@@ -305,8 +305,8 @@ No worksheet migration. One pre-flight: confirm the live `inventory_counts` head
 ### Phase 4: Frontend — pre-fill controls + picker + order-banner enrichment
 
 #### Automated
-- [ ] 4.1 Build passes: `npm run build`
-- [ ] 4.2 Lint passes: `npm run lint`
+- [x] 4.1 Build passes: `npm run build`
+- [x] 4.2 Lint passes: `npm run lint`
 
 #### Manual
 - [ ] 4.3 Picker lists snapshots (count date + submitted time + who), sorted by count date
