@@ -20,13 +20,17 @@ from .models import (
     CaptainSubmitRequest,
     CaptainSubmitResponse,
     InventoryCount,
+    InventoryCountDetail,
+    InventoryCountDetailLine,
     InventoryCountLine,
+    InventoryCountManagerItem,
     InventoryCountSubmitRequest,
     InventoryCountSubmitResponse,
     InventoryCountSummary,
     InventoryLatestLine,
     InventoryLatestResponse,
     InventoryProduct,
+    Location,
     LocationProductSetting,
     ManagerClaimResponse,
     ManagerDispatchRequest,
@@ -1753,3 +1757,139 @@ def captain_inventory_count_detail(
         line_count=len(lines),
         lines=lines,
     )
+
+
+# ---------- Manager inventory view (S-08 / FR-018, FR-019) ----------
+
+
+def _enrich_inventory_count_detail(
+    count: InventoryCount,
+    products_by_id: dict[str, Product],
+    location: Optional[Location],
+) -> InventoryCountDetail:
+    """Join product master-data + location_name onto a snapshot for the
+    Manager/owner read view (S-08). Mirrors `manager_order_detail`'s line
+    enrichment; a since-removed product falls back to its id for the name."""
+    enriched: list[InventoryCountDetailLine] = []
+    for line in count.lines:
+        product = products_by_id.get(line.product_id)
+        enriched.append(
+            InventoryCountDetailLine(
+                product_id=line.product_id,
+                product_name_pl=product.product_name_pl if product else line.product_id,
+                product_category=product.product_category if product else "",
+                inventory_unit=product.inventory_unit if product else "",
+                is_critical=bool(product.is_critical) if product else False,
+                current_stock_qty_base=line.current_stock_qty_base,
+                count_comment=line.count_comment,
+            )
+        )
+    return InventoryCountDetail(
+        count_id=count.count_id,
+        location_id=count.location_id,
+        location_name=location.location_name if location else count.location_id,
+        count_date=count.count_date,
+        count_submitted_at=count.count_submitted_at,
+        count_user=count.count_user,
+        line_count=len(enriched),
+        notes=count.notes,
+        lines=enriched,
+    )
+
+
+@app.get(
+    "/api/manager/inventory/counts",
+    response_model=list[InventoryCountManagerItem],
+)
+def manager_inventory_counts(
+    location_id: Optional[str] = None,
+    _: None = Depends(require_manager),
+):
+    """List submitted inventory snapshots across locations for the Manager view
+    (FR-018). Optional `location_id` narrows to one location — NOT token-scoped;
+    the Manager spans locations, mirroring `manager_queue`. Up to 20, newest
+    `count_date` first (tie-broken by `count_submitted_at`).
+
+    Sheet-only: seed mode and a missing inventory tab both degrade to `[]`
+    (mirrors `manager_queue` / the Captain counts route), never a 500.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        return []
+    try:
+        all_counts = backend.load_inventory_counts()
+    except sheets.WorksheetNotFound:
+        return []
+
+    counts = [
+        c for c in all_counts
+        if location_id is None or c.location_id == location_id
+    ]
+    if not counts:
+        return []
+
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+
+    def _recency_key(c: InventoryCount) -> tuple[date, datetime]:
+        submitted = c.count_submitted_at or datetime.min.replace(tzinfo=timezone.utc)
+        return (c.count_date, submitted)
+
+    counts.sort(key=_recency_key, reverse=True)
+    items: list[InventoryCountManagerItem] = []
+    for c in counts[:20]:
+        location = locations_by_id.get(c.location_id)
+        items.append(
+            InventoryCountManagerItem(
+                count_id=c.count_id,
+                location_id=c.location_id,
+                location_name=location.location_name if location else c.location_id,
+                count_date=c.count_date,
+                count_submitted_at=c.count_submitted_at,
+                count_user=c.count_user,
+                line_count=c.line_count,
+            )
+        )
+    return items
+
+
+@app.get(
+    "/api/manager/inventory/count/{count_id}",
+    response_model=InventoryCountDetail,
+)
+def manager_inventory_count_detail(
+    count_id: str,
+    _: None = Depends(require_manager),
+):
+    """One submitted inventory snapshot, product-enriched, for the Manager/owner
+    read view (FR-018/FR-019). No location scope — the Manager reads any
+    location's count (mirrors `manager_order_detail`).
+
+    Sheet-only: seed mode → 503; a missing inventory tab → 503 (stricter than
+    the legacy `manager_order_detail`, which can 500 on a missing tab); unknown
+    count_id → 404.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Inventory detail requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+    try:
+        count = backend.get_inventory_count(count_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Inventory worksheets not configured — create the "
+                "'inventory_counts' and 'inventory_count_lines' tabs."
+            ),
+        )
+    if count is None:
+        raise HTTPException(
+            status_code=404, detail=f"Inventory count {count_id} not found"
+        )
+
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    location = locations_by_id.get(count.location_id)
+    return _enrich_inventory_count_detail(count, products_by_id, location)

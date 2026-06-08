@@ -465,3 +465,46 @@ class InventoryCountSummary(BaseModel):
     count_submitted_at: Optional[datetime] = None
     count_user: Optional[str] = None
     line_count: int = 0
+
+
+# ---------- Manager inventory view (S-08 / FR-018) ----------
+
+class InventoryCountManagerItem(BaseModel):
+    """One row in the Manager's cross-location inventory list (FR-018). Mirrors
+    `InventoryCountSummary` plus the joined `location_name` (the Manager spans
+    locations, so the name must be resolved server-side like `ManagerQueueItem`)."""
+    count_id: str
+    location_id: str
+    location_name: str  # joined from locations
+    count_date: date
+    count_submitted_at: Optional[datetime] = None
+    count_user: Optional[str] = None
+    line_count: int = 0
+
+
+class InventoryCountDetailLine(BaseModel):
+    """One counted product in the Manager/owner inventory detail — enriched with
+    product master-data joins so a human reads names, not opaque ids."""
+    product_id: str
+    product_name_pl: str  # joined from products
+    product_category: str
+    inventory_unit: str
+    is_critical: bool
+    current_stock_qty_base: float = 0
+    count_comment: str = ""
+
+
+class InventoryCountDetail(BaseModel):
+    """A full submitted inventory snapshot for the Manager/owner read view
+    (FR-018/FR-019) — location_name + product-enriched lines. Distinct from the
+    lean `InventoryLatestResponse` (which the Captain order pre-fill picker
+    consumes by product_id and must not change)."""
+    count_id: str
+    location_id: str
+    location_name: str  # joined
+    count_date: date
+    count_submitted_at: Optional[datetime] = None
+    count_user: Optional[str] = None
+    line_count: int = 0
+    notes: str = ""
+    lines: list[InventoryCountDetailLine] = Field(default_factory=list)
