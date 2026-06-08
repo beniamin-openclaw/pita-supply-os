@@ -13,6 +13,8 @@ import type {
   CaptainOrderListItem,
   CaptainSubmitRequest,
   CaptainSubmitResponse,
+  InventoryCountDetail,
+  InventoryCountManagerItem,
   InventoryCountSubmitRequest,
   InventoryCountSubmitResponse,
   InventoryCountSummary,
@@ -236,6 +238,16 @@ export const api = {
     apiPost<ManagerReleaseResponse>(
       `/api/manager/release/${encodeURIComponent(order_id)}`,
       { reason } as ManagerReleaseRequest,
+      "manager",
+    ),
+  // Manager inventory view (S-08 / FR-018). Cross-location; [] in seed mode.
+  managerInventoryCounts: (location_id?: string) => {
+    const qs = location_id ? `?location_id=${encodeURIComponent(location_id)}` : "";
+    return apiGet<InventoryCountManagerItem[]>(`/api/manager/inventory/counts${qs}`, "manager");
+  },
+  managerInventoryCount: (count_id: string) =>
+    apiGet<InventoryCountDetail>(
+      `/api/manager/inventory/count/${encodeURIComponent(count_id)}`,
       "manager",
     ),
 };

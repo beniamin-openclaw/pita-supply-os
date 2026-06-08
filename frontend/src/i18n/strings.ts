@@ -651,6 +651,26 @@ export const STRINGS = {
   "tabs.ariaLabel": { pl: "Nawigacja Kapitana", en: "Captain navigation" },
   "tabs.orders": { pl: "Zamówienia", en: "Orders" },
   "tabs.inventory": { pl: "Remanent", en: "Inventory" },
+  // S-08 — Manager inventory view (FR-018)
+  "manager.inventory.title": { pl: "Remanenty", en: "Inventory counts" },
+  "manager.inventory.navLink": { pl: "Remanenty", en: "Inventory" },
+  "manager.inventory.back": { pl: "Powrót do menedżera", en: "Back to manager" },
+  "manager.inventory.detailBack": { pl: "Powrót do listy", en: "Back to list" },
+  "manager.inventory.detailTitle": { pl: "Remanent — {location}", en: "Count — {location}" },
+  "manager.inventory.locationAll": { pl: "Wszystkie lokalizacje", en: "All locations" },
+  "manager.inventory.empty": {
+    pl: "Brak zatwierdzonych remanentów.",
+    en: "No submitted inventory counts.",
+  },
+  "manager.inventory.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "manager.inventory.fetchError": {
+    pl: "Nie udało się pobrać remanentów: {detail}",
+    en: "Couldn't load inventory counts: {detail}",
+  },
+  "manager.inventory.countedBy": { pl: "Liczył: {who}", en: "Counted by: {who}" },
+  "manager.inventory.lineCount": { pl: "{count} pozycji", en: "{count} items" },
+  "manager.inventory.productCol": { pl: "Produkt", en: "Product" },
+  "manager.inventory.stockCol": { pl: "Stan", en: "Stock" },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

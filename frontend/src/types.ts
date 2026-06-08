@@ -136,6 +136,39 @@ export interface InventoryCountSummary {
   line_count: number;
 }
 
+// Manager inventory view (S-08 / FR-018) — match supply-os-v1/app/models.py.
+export interface InventoryCountManagerItem {
+  count_id: string;
+  location_id: string;
+  location_name: string;
+  count_date: string;
+  count_submitted_at?: string | null;
+  count_user?: string | null;
+  line_count: number;
+}
+
+export interface InventoryCountDetailLine {
+  product_id: string;
+  product_name_pl: string;
+  product_category: string;
+  inventory_unit: string;
+  is_critical: boolean;
+  current_stock_qty_base: number;
+  count_comment: string;
+}
+
+export interface InventoryCountDetail {
+  count_id: string;
+  location_id: string;
+  location_name: string;
+  count_date: string;
+  count_submitted_at?: string | null;
+  count_user?: string | null;
+  line_count: number;
+  notes: string;
+  lines: InventoryCountDetailLine[];
+}
+
 export interface InventoryCountLineSubmit {
   product_id: string;
   current_stock_qty_base: number;

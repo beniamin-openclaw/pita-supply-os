@@ -163,8 +163,8 @@ No schema change, no worksheet migration — reads the existing `inventory_count
 ### Phase 1: Backend — Manager inventory read endpoints
 
 #### Automated
-- [x] 1.1 Backend tests pass: `python -m pytest`
-- [x] 1.2 Lint passes: `ruff check .`
+- [x] 1.1 Backend tests pass: `python -m pytest` — a1e059f
+- [x] 1.2 Lint passes: `ruff check .` — a1e059f
 
 #### Manual
 - [ ] 1.3 curl /manager/inventory/counts cross-location, newest-first, ?location_id narrows, captain token rejected
@@ -173,12 +173,12 @@ No schema change, no worksheet migration — reads the existing `inventory_count
 ### Phase 2: Frontend — Manager inventory view
 
 #### Automated
-- [ ] 2.1 Build passes: `npm run build`
-- [ ] 2.2 Lint passes: `npm run lint`
+- [x] 2.1 Build passes: `npm run build`
+- [x] 2.2 Lint passes: `npm run lint`
 
 #### Manual
-- [ ] 2.3 /manager/inventory lists counts (location · date · who · lines) newest-first; detail shows product names + stock
-- [ ] 2.4 Reachable via "Remanenty" link; seed mode shows graceful empty state
+- [ ] 2.3 /manager/inventory lists counts (location · date · who · lines) newest-first; detail shows product names + stock — sheet-mode positive path, deferred to deploy gate; backend covered by test_inventory_manager.py
+- [x] 2.4 Reachable via "Remanenty" link; seed mode shows graceful empty state — e2e verified (live app, mobile 375px): /manager has Remanenty link → /manager/inventory renders "Brak zatwierdzonych remanentów." empty state, no auth modal, no console errors
 
 ### Phase 3: Frontend — Captain inventory history
 
