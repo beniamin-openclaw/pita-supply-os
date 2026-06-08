@@ -1,10 +1,10 @@
 ---
 change_id: inventory-count-followups
 title: Inventory-count follow-ups: editable date, attribution, snapshot pre-fill picker
-status: impl_reviewed
+status: archived
 created: 2026-06-08
 updated: 2026-06-09
-archived_at: null
+archived_at: 2026-06-08T22:17:11Z
 ---
 
 ## Notes
