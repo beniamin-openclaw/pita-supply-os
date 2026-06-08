@@ -352,12 +352,12 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Automated
 
-- [x] 5.1 Prototypes + docs exist (`design-proto/*.html`, `proposals.md`, `notes/cluster-7.md`)
-- [x] 5.2 Proto not in app build graph: `! grep -rn "design-proto" frontend/src`
-- [x] 5.3 Build still passes: `cd frontend && npm run build`
+- [x] 5.1 Prototypes + docs exist (`design-proto/*.html`, `proposals.md`, `notes/cluster-7.md`) — f51657f
+- [x] 5.2 Proto not in app build graph: `! grep -rn "design-proto" frontend/src` — f51657f
+- [x] 5.3 Build still passes: `cd frontend && npm run build` — f51657f
 
 #### Manual
 
-- [x] 5.4 Each prototype opens standalone and renders the proposed state
-- [x] 5.5 `proposals.md` is a usable spec for spin-offs
-- [x] 5.6 Three Cluster-7 background-task chips spawned
+- [x] 5.4 Each prototype opens standalone and renders the proposed state — f51657f
+- [x] 5.5 `proposals.md` is a usable spec for spin-offs — f51657f
+- [x] 5.6 Three Cluster-7 background-task chips spawned — f51657f
