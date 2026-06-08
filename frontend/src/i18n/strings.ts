@@ -717,8 +717,10 @@ export const STRINGS = {
     en: "Average deviation from suggestion",
   },
   "manager.review.flow": {
-    pl: "sugestia {suggested} → kapitan {captain} → menedżer {manager} ({unit})",
-    en: "suggested {suggested} → captain {captain} → manager {manager} ({unit})",
+    // No unit suffix: these are average PURCHASE-unit quantities, and the unit
+    // can differ by supplier across an all-lines aggregate (impl-review F1).
+    pl: "sugestia {suggested} → kapitan {captain} → menedżer {manager}",
+    en: "suggested {suggested} → captain {captain} → manager {manager}",
   },
 } as const satisfies Record<string, StringEntry>;
 

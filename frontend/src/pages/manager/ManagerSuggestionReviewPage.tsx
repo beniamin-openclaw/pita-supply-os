@@ -116,7 +116,6 @@ export function ManagerSuggestionReviewPage() {
                     suggested: it.avg_suggested_qty_purchase,
                     captain: it.avg_captain_final_qty_purchase,
                     manager: it.avg_manager_final_qty_purchase,
-                    unit: it.inventory_unit,
                   })}
                 </div>
 
