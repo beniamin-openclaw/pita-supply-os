@@ -195,6 +195,20 @@ def test_counts_unauthorized_no_token():
     assert r.status_code == 401
 
 
+def test_counts_worksheet_not_found_empty(mocker):
+    """Sheet mode but the inventory tab doesn't exist → [] (empty picker), never
+    a raw 500 (impl-review F2). The picker is optional; missing tab = no
+    snapshots = the same degraded state as seed mode."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(
+        sheets, "load_inventory_counts", side_effect=sheets.WorksheetNotFound
+    )
+    r = client.get("/api/captain/inventory/counts", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
 # ---------- Detail: /api/captain/inventory/count/{count_id} ----------
 
 def test_count_detail_returns_lines(mocker):

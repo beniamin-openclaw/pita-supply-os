@@ -1664,9 +1664,16 @@ def captain_inventory_counts(
     if backend is not sheets:
         return []
 
-    counts = [
-        c for c in backend.load_inventory_counts() if c.location_id == location_id
-    ]
+    try:
+        all_counts = backend.load_inventory_counts()
+    except sheets.WorksheetNotFound:
+        # The picker is optional — a missing inventory tab means there are no
+        # snapshots to offer, the same degraded state as seed mode. Return []
+        # (empty picker, control hidden) rather than a raw 500 (impl-review F2;
+        # mirrors the detail/submit routes degrading instead of erroring).
+        return []
+
+    counts = [c for c in all_counts if c.location_id == location_id]
     if not counts:
         return []
 
