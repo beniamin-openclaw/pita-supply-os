@@ -1,10 +1,10 @@
 ---
 change_id: bukat-suggestion-learning-loop
 title: Suggestion learning-loop review aggregate (roadmap S-03, FR-012)
-status: impl_reviewed
+status: archived
 created: 2026-06-09
 updated: 2026-06-09
-archived_at: null
+archived_at: 2026-06-08T23:07:42Z
 ---
 
 ## Notes
