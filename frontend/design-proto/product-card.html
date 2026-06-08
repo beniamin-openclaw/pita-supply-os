@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Proto — ProductCard (visible math promoted)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Inline theme mirrors frontend/src/index.css @theme — the Play CDN can't see
+  // the app's tokens (plan-review F3). Keep in sync with index.css.
+  tailwind.config = { theme: { extend: {
+    colors: { brand: '#1a4480', 'brand-hover': '#1e3a8a', 'brand-subtle': '#e3eaf3', critical: '#dc2626' },
+    fontSize: { caption: '0.6875rem', label: '0.75rem' },
+  } } };
+</script>
+<style>body { font-feature-settings: "tnum"; }</style>
+</head>
+<body class="bg-slate-50 p-4 font-sans">
+  <p class="mx-auto mb-4 max-w-md text-xs text-slate-500">
+    <b>PROPOSAL — ProductCard.</b> The PRD's signature “visible math” is promoted from the
+    smallest text on the card to a prominent, high-contrast block (research.md cluster 3 / opp #2).
+  </p>
+
+  <div class="mx-auto max-w-md overflow-hidden rounded-xl border border-l-4 border-slate-200 border-l-critical bg-red-50/40 p-4 shadow-sm">
+    <div class="flex items-center justify-between">
+      <h3 class="font-semibold text-slate-900">Pita kieszonka 18 cm</h3>
+      <span class="rounded-full bg-critical px-2 py-0.5 text-caption font-extrabold uppercase tracking-wider text-white">Krytyczny</span>
+    </div>
+
+    <!-- AFTER: promoted, readable suggestion math (was text-xs, lowest contrast) -->
+    <div class="mt-3 rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200">
+      <div class="text-label font-semibold uppercase tracking-wide text-slate-500">Wyliczenie</div>
+      <div class="mt-0.5 text-base font-semibold text-slate-900">
+        Cel <span class="text-brand">10</span> · masz <span class="text-brand">1</span> · brakuje <span class="text-brand">9</span>
+      </div>
+      <div class="text-sm text-slate-600">→ zamów <span class="font-bold text-slate-900">1 karton</span> &nbsp;(1 karton = 12 szt · max 14)</div>
+    </div>
+
+    <div class="mt-3 grid grid-cols-3 gap-3">
+      <label class="text-center"><span class="block text-caption uppercase tracking-wide text-slate-500">Stan</span>
+        <input class="mt-1 w-full rounded-lg border border-slate-300 py-3 text-center text-base tabular-nums" value="1" /></label>
+      <div class="text-center"><span class="block text-caption uppercase tracking-wide text-slate-500">Sugestia</span>
+        <div class="mt-1 rounded-lg bg-brand-subtle py-3 text-center text-lg font-bold text-brand">1</div></div>
+      <label class="text-center"><span class="block text-caption uppercase tracking-wide text-slate-500">Zamów</span>
+        <input class="mt-1 w-full rounded-lg border-2 border-brand py-3 text-center text-base font-bold tabular-nums" value="1" /></label>
+    </div>
+  </div>
+</body>
+</html>

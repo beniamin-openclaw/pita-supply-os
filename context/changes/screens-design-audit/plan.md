@@ -340,24 +340,24 @@ Produce the red-line + Tailwind-static proposals that seed the spun-off per-scre
 
 #### Automated
 
-- [x] 4.1 Build passes: `cd frontend && npm run build`
-- [x] 4.2 Lint passes: `cd frontend && npm run lint`
-- [x] 4.3 No raw reason enum / "poz." literal remains in the two files
+- [x] 4.1 Build passes: `cd frontend && npm run build` — 9bf26e9
+- [x] 4.2 Lint passes: `cd frontend && npm run lint` — 9bf26e9
+- [x] 4.3 No raw reason enum / "poz." literal remains in the two files — 9bf26e9
 
 #### Manual
 
-- [x] 4.4 OrderDetail translated reason; OrdersList i18n label; EN switch translates both
+- [x] 4.4 OrderDetail translated reason; OrdersList i18n label; EN switch translates both — 9bf26e9
 
 ### Phase 5: Design Proposals + Cluster-7 Flagging
 
 #### Automated
 
-- [ ] 5.1 Prototypes + docs exist (`design-proto/*.html`, `proposals.md`, `notes/cluster-7.md`)
-- [ ] 5.2 Proto not in app build graph: `! grep -rn "design-proto" frontend/src`
-- [ ] 5.3 Build still passes: `cd frontend && npm run build`
+- [x] 5.1 Prototypes + docs exist (`design-proto/*.html`, `proposals.md`, `notes/cluster-7.md`)
+- [x] 5.2 Proto not in app build graph: `! grep -rn "design-proto" frontend/src`
+- [x] 5.3 Build still passes: `cd frontend && npm run build`
 
 #### Manual
 
-- [ ] 5.4 Each prototype opens standalone and renders the proposed state
-- [ ] 5.5 `proposals.md` is a usable spec for spin-offs
-- [ ] 5.6 Three Cluster-7 background-task chips spawned
+- [x] 5.4 Each prototype opens standalone and renders the proposed state
+- [x] 5.5 `proposals.md` is a usable spec for spin-offs
+- [x] 5.6 Three Cluster-7 background-task chips spawned
