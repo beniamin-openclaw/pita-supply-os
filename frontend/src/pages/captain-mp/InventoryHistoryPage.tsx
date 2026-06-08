@@ -5,7 +5,7 @@
 // (a since-removed product falls back to its id with a "removed" badge). No new
 // backend; the order pre-fill contract is untouched.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -70,18 +70,26 @@ export function InventoryHistoryPage() {
     };
   }, []);
 
+  // Guards against a stale detail response (see ManagerInventoryPage): an earlier
+  // fetch resolving after a later one must not overwrite the shown detail.
+  const detailReqRef = useRef<string | null>(null);
   const selectCount = useCallback((countId: string) => {
+    detailReqRef.current = countId;
     setSelectedId(countId);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(true);
     api
       .inventoryCount(countId)
-      .then((d) => setDetail(d))
-      .catch((e: ApiError) => {
-        if (e.status !== 401) setDetailError(e.detail);
+      .then((d) => {
+        if (detailReqRef.current === countId) setDetail(d);
       })
-      .finally(() => setDetailLoading(false));
+      .catch((e: ApiError) => {
+        if (detailReqRef.current === countId && e.status !== 401) setDetailError(e.detail);
+      })
+      .finally(() => {
+        if (detailReqRef.current === countId) setDetailLoading(false);
+      });
   }, []);
 
   const backToList = useCallback(() => {

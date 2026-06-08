@@ -1,7 +1,7 @@
 ---
 change_id: inventory-manager-view
 title: Manager inventory view + Captain inventory history (roadmap S-08, FR-018/FR-019)
-status: implemented
+status: impl_reviewed
 created: 2026-06-09
 updated: 2026-06-09
 archived_at: null

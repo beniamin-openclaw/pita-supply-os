@@ -3,7 +3,7 @@
 // its own route (/manager/inventory) so it doesn't touch the order workspace.
 // Master-detail in one page: list → select → detail panel (mobile-first).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -58,18 +58,26 @@ export function ManagerInventoryPage() {
     [counts, locationFilter],
   );
 
+  // Guards against a stale detail response: rapid row-clicks could otherwise let
+  // an earlier fetch resolve after a later one and overwrite the shown detail.
+  const detailReqRef = useRef<string | null>(null);
   const selectCount = useCallback((countId: string) => {
+    detailReqRef.current = countId;
     setSelectedId(countId);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(true);
     api
       .managerInventoryCount(countId)
-      .then((d) => setDetail(d))
-      .catch((e: ApiError) => {
-        if (e.status !== 401) setDetailError(e.detail);
+      .then((d) => {
+        if (detailReqRef.current === countId) setDetail(d);
       })
-      .finally(() => setDetailLoading(false));
+      .catch((e: ApiError) => {
+        if (detailReqRef.current === countId && e.status !== 401) setDetailError(e.detail);
+      })
+      .finally(() => {
+        if (detailReqRef.current === countId) setDetailLoading(false);
+      });
   }, []);
 
   const backToList = useCallback(() => {
