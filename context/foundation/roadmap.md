@@ -39,6 +39,8 @@ Pita Supply OS is the single structured path from a location's stock counts to s
 | S-07 | order-prefill-from-inventory  | Order screen offers opt-in pre-fill of stock from the latest inventory snapshot   | S-06          | US-02, FR-017                                 | done     |
 | S-08 | inventory-manager-view        | (Phase 2) Manager views inventories; Owner browses inventory history/trends       | S-06          | FR-018, FR-019                                | done     |
 
+> **Milestone — PRD v2 complete (2026-06-09).** All requirements FR-001…FR-024 are shipped across 14 archived changes; the north star (S-02, Wola×Bukat email dispatch) is proven. Horizon 1 (the PRD) is done. The roadmap now enters **Horizon 2 — Rollout Enablement** (Supabase migration, multi-supplier master data, deploy wiring, and the in-store full-run demo) — see the section below. Execution guidance for the next slices is in **## 10x Execution Playbook**.
+
 ## Streams
 
 Navigation aid — groups items that share a Prerequisites chain. Canonical ordering still lives in the dependency graph below; this table is the proposed reading order across parallel tracks.
@@ -60,6 +62,8 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Auth:** present — two-token bearer (`require_captain` / `require_manager` / `require_any_auth`, `app/auth.py`); frontend `AuthGate` validates before rendering protected routes.
 - **Deploy / infra:** partial — Vercel (frontend; `vercel.json` rewrites `/api/*` to the droplet) + DigitalOcean droplet / Caddy / systemd backend (`Procfile`). **No `.github/workflows` CI runs the product** (no pytest / ruff / build gate).
 - **Observability:** absent — PostHog key present in `config.py` but no client wired; no Sentry; stdlib `logging` only.
+
+> **Since baseline (updates as of 2026-06-09):** product CI now runs on every push/PR (`.github/workflows/ci.yml` — backend ruff+pytest, frontend build+lint+vitest); a **frontend test runner (Vitest)** is wired in; the backend suite has grown from 196 to **281 tests**. These close the two HIGH `health-check.md` gaps (CI coverage + FE test runner). Still open: backend lockfile, TS `strict`, mypy/pyright (tracked as **H-01**). Observability remains unwired; data is still Google Sheets (S-10 migrates it).
 
 ## Foundations
 
@@ -175,6 +179,84 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Phase 2 (should-have) — demoted via Socratic challenge: the Manager already sees stock embedded in the order, and snapshots persist regardless, so these consumption surfaces pay off at audit / multi-supplier scale, not on the pilot. Deferred past the must-have core.
 - **Status:** done
 
+## Horizon 2 — Rollout Enablement
+
+Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola×Bukat supplier). Horizon 2 is the bridge from "pilot proven" to "running in the store across suppliers, ready for the gated multi-location rollout." It is **not** new PRD scope — it is the infrastructure + data + operational work that `infrastructure.md` and the four Open Roadmap Questions already flagged as the scale gate. The driving milestone is **M-01: an in-store full-run demo across multiple real suppliers on the production stack.**
+
+**Sequencing rule (from `infrastructure.md`, do not violate):** migrate the data layer and prove it on the single-location pilot until it is boring **before** adding suppliers/locations. Don't stack two big changes (a datastore cutover and a scale-up) in the same step.
+
+### At a glance — Horizon 2
+
+| ID   | Change ID                   | Outcome (user/owner can …)                                                           | Prerequisites    | Refs                            | Status    |
+| ---- | --------------------------- | ------------------------------------------------------------------------------------ | ---------------- | ------------------------------- | --------- |
+| D-01 | deploy-wiring               | (owner-run) Auto-deploy `main`: Vercel re-pointed to the new repo; backend redeployed | —                | `deployment-plan.md`, infra Q3  | next      |
+| S-10 | supabase-backend            | Order + inventory data runs on Supabase (Postgres) behind `_choose_backend()`        | —                | `infrastructure.md`, PRD Open Q3 | proposed  |
+| F-02 | multi-supplier-master-data  | (foundation) Master data verified for suppliers beyond Bukat (Pago + others)         | —                | FR-012, FR-013                  | proposed  |
+| H-01 | quality-hardening           | Backend lockfile + TS strict + mypy/pyright + thicker ruff — reproducible, type-safe  | —                | `health-check.md` #3/#4/#5/#6   | proposed  |
+| M-01 | in-store-demo (milestone)   | Full Captain→Manager→dispatch run in the store, multi-supplier, on the prod stack     | S-10, F-02, D-01 | governing rule; rollout gate    | milestone |
+
+### D-01: Deploy wiring (auto-deploy on `main`)
+
+- **Outcome:** Pushing `main` deploys — Vercel's Git integration re-pointed from the old repo to `beniamin-openclaw/pita-supply-os` (frontend auto-deploy + PR previews), and the droplet backend redeployed to current `main` (closes the S-09 `tenth_kg` drift that is on `main` but not yet on the droplet). Codified in `context/changes/deployment/deployment-plan.md` (§1/§2).
+- **Change ID:** deploy-wiring (documentation already exists — `deployment-plan.md`)
+- **Prerequisites:** —
+- **Owner-run:** SSH to the droplet and Vercel Git settings are owner actions (agent SSH is blocked). The agent prepares; the owner executes.
+- **Risk:** Pure ops, no product code. Hard rule: secrets (`sa.json`, `.env`, Supabase keys) stay off-repo (Lesson 3). Smoke = `/health` + submit-and-back-out, never a real order.
+- **Status:** next — the immediate gate; without it, work on `main` doesn't reach production.
+
+### S-10: Supabase data backend behind `_choose_backend()`
+
+- **Outcome:** A new backend module (e.g. `app/supabase_backend.py`) implements the same function set as `app/sheets.py` (`load_*`, `append_order`, `append_order_lines`, `update_order`, `update_order_lines`, `get_order`, `delete_order_lines`, plus the inventory-count set) and registers in `_choose_backend()`. Transactional order + inventory data moves off Google Sheets onto Supabase (managed Postgres), gaining real transactions and row locks — closing the TOCTOU race windows the code documents as "v0 trade-offs" (captain-edit vs manager-dispatch, the non-transactional append torn write, double-claim/double-dispatch) — and lifting the shared 60-write/min Sheets ceiling.
+- **Change ID:** supabase-backend
+- **Refs:** `infrastructure.md` (decision: Supabase, runner-up Neon; ~1–2 day port); `stack-assessment.md` (`datastore: Supabase`); PRD Open Question 3 (scale gate).
+- **Prerequisites:** — (the seam already exists). Recommended to land + bake on the single-location pilot **before** F-02 data goes live and **before** any new location.
+- **Risk:** The highest-stakes change remaining — it touches every persistence path. **Lesson 2 is load-bearing: never bypass `_choose_backend()`; the new backend registers there, routes never import it.** Documented footguns (`infrastructure.md`): the Supavisor transaction-vs-session pooler + asyncpg prepared-statement caching, misconfigured, fail under exactly the concurrency you can't afford mid-rollout — a long-lived uvicorn wants direct/session port 5432, not the 6543 pooler (session-on-6543 removed Feb 2025). Secrets (connection string, service key) off-repo (Lesson 3); the new backend needs its env set in `conftest.py`, not per-file (Lesson 6); keep migration and scale-up in separate steps.
+- **Status:** proposed — the user's named next move; run as its own session (full 10x chain).
+
+### F-02: Multi-supplier master data ready
+
+- **Outcome:** (foundation) Master data for the suppliers beyond Bukat (Pago + the rest used in the store) — products, `supplier_products` (units-per-purchase-unit, rounding rule, price), Wola `location_product_settings` (min/target/max, critical flags), and each supplier's `ordering_method` + contact (email / portal URL / phone) — is verified and corrected so suggestions hold and channel-aware dispatch (FR-013) routes correctly for the full set. Mirrors F-01 (data-only).
+- **Change ID:** multi-supplier-master-data
+- **Refs:** FR-012 (data correctness), FR-013 (channel-aware dispatch needs per-supplier method + contact — portal URLs aren't in master data yet; this closes that S-04 follow-up).
+- **Prerequisites:** — (data-only; pairs with S-10 for the demo). Populate into Supabase once S-10 lands, so the demo runs on the target stack — not Sheets-then-migrate.
+- **Risk:** Data-only prep, no code change (like F-01). The kg-vs-cartons "unit pain" the PRD calls out recurs per new supplier; each rounding rule must be a real engine rule, not a data hack (the S-09 lesson). Frame as master-data correctness, not operator blame.
+- **Status:** proposed — the user's "populate all data of other suppliers."
+
+### H-01: Quality hardening (reproducible + type-safe)
+
+- **Outcome:** Backend dependency lockfile (byte-reproducible builds), TypeScript `strict` enabled in `tsconfig.app.json`, a static type-checker (mypy/pyright) wired into CI, and a thicker ruff ruleset — closing the remaining `health-check.md` HIGH/MEDIUM gaps now that product CI exists to enforce them.
+- **Change ID:** quality-hardening
+- **Refs:** `health-check.md` Fix #3 (lockfile), #4 (TS strict), #5 (ruff), #6 (formatter); `stack-assessment.md` (mypy/pyright).
+- **Prerequisites:** — (product CI is now in place to gate these). Recommended before company-wide scale; can run parallel to S-10/F-02.
+- **Risk:** Low product risk, high leverage. Enabling TS `strict` will surface latent `any`s (Lesson 7 — mirror Pydantic optionality); stage it so the build stays green.
+- **Status:** proposed.
+
+### M-01: In-store full-run demo (milestone)
+
+- **Outcome:** A complete Captain→Manager→dispatch run performed **in the actual store**, across multiple real suppliers, on the production stack (Supabase data, deployed frontend + backend) — proving the two-role flow end-to-end beyond the single Bukat pilot and rehearsing the gated multi-supplier rollout.
+- **Prerequisites:** S-10 (Supabase) + F-02 (multi-supplier data) + D-01 (deploy wiring).
+- **Hard rule:** unless a real order is genuinely intended and confirmed, the demo backs out on submit / uses safe data — never an accidental live supplier order (the Tier-1 regression contract).
+- **Status:** milestone — the goal the three slices above unlock.
+
+## 10x Execution Playbook
+
+How to execute Horizon 2 for maximum efficiency and lowest rework — the 10x skill chain, the lessons to pre-load, and the verify gate per item. The standard build chain is `/10x-new → /10x-research → /10x-plan → /10x-plan-review → /10x-implement → /10x-impl-review → /10x-archive`, with `/10x-frame` inserted first when *what* to build is uncertain, and `/verify` at every gate. `context/foundation/lessons.md` (7 entries) is read as priors by every review skill — **Lesson 5** (keep skill artifacts in English) and **Lesson 4** (roadmap is the source of truth; `/10x-archive` flips a slice to done) apply to **all** of them.
+
+| Next item | Recommended 10x chain | Lessons to pre-load | Verify gate | Session |
+| --------- | --------------------- | ------------------- | ----------- | ------- |
+| **D-01** deploy wiring | `deployment-plan.md` §1/§2 — no build, owner-run | L3 (secrets off-repo) | `/health` + submit-and-back-out smoke | this / owner |
+| **S-10** Supabase backend | full chain + `/10x-frame` first (pooler/port design risk) → `/10x-research` (the seam's full function set) → `/10x-plan` → `/10x-plan-review` → `/10x-implement` → `/10x-impl-review` → `/10x-archive` | **L2 (seam — load-bearing)**, L3 (secrets), L6 (conftest env for the new backend), L1 (CI must actually run the Supabase path) | `/verify` + a Supabase-mode test path | **separate** |
+| **F-02** multi-supplier data | light chain — `/10x-new` (data slice) → `/10x-implement` → `/10x-archive`; mirror F-01 (data-only, no `/10x-plan` needed) | F-01 lessons (over_max informational; rounding = engine rule, not data hack), L4 | `/verify` — suggestion math holds per SKU | separate (pairs with S-10) |
+| **H-01** quality hardening | `/10x-new` → `/10x-plan` → `/10x-implement` → `/10x-impl-review` | L7 (TS optionality on strict enable), L1 (CI enforces) | `/verify` (build must stay green) | separate |
+| **M-01** in-store demo | rehearse the full Captain→Manager→dispatch flow on the prod stack | **Hard rule: no real order from a test** | end-to-end smoke, back-out-on-submit | with owner |
+
+**Efficiency notes (applied + implied):**
+
+- **Run S-10 as its own session.** It is the single highest-stakes change left; bundling it with anything else violates the "don't stack two big changes" rule from `infrastructure.md`. Give it the full chain incl. `/10x-frame` for the pooler/port decision.
+- **F-02 is a data slice, not a code slice** — it mirrors F-01, which skipped `/10x-plan` (data-only prep). Load it into Supabase *after* S-10 so the demo runs on the target stack.
+- **Pre-load `lessons.md` before each session** — the review skills already do; stating which lessons bite which slice (above) front-loads the catch. New recurring rules → `/10x-lesson`.
+- **Product CI now gates every PR** (`.github/workflows/ci.yml`) — Lesson 1 is satisfied for the existing product paths; extend the workflow to exercise the Supabase backend when S-10 lands.
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID                      | Suggested issue title                                          | Ready for `/10x-plan` | Notes                                            |
@@ -193,13 +275,13 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 1. **Who holds the Manager token at Wola day-to-day — staff vs owner during the pilot?** — Owner: owner. Block: pilot-start (go-live) gate for `S-02`; operational, not a planning blocker. (PRD Open Question 1.)
 2. **Is Bukat master data ready for week 1, or does it need a prep pass before the Captain pilot?** — Owner: owner. Block: `F-01` — and therefore the whole pilot path `S-01 → S-02 → S-03`. This is the single highest-leverage unknown in the roadmap. (PRD Open Question 2.)
-3. **End-state scale — pilot is `small`; company-wide is likely `medium`.** Confirm before scale work. This also gates whether the parked Sheets→Supabase migration + product CI (out of week-1 PRD scope) must start *before* adding suppliers/locations — `infrastructure.md` rates that work urgent on a ~2–3 week company-wide timeline, which is in tension with the PRD's "no migration in week 1". — Owner: owner. Block: roadmap-wide scale stages (not the week-1 slices). (PRD Open Question 3 + `infrastructure.md`.)
+3. **End-state scale — pilot is `small`; company-wide is likely `medium`.** Confirm before scale work. This also gates whether the parked Sheets→Supabase migration + product CI (out of week-1 PRD scope) must start *before* adding suppliers/locations — `infrastructure.md` rates that work urgent on a ~2–3 week company-wide timeline, which is in tension with the PRD's "no migration in week 1". **Update (2026-06-09): PRD complete → the "no migration in week 1" constraint is lifted; the migration is now scheduled as S-10 (Horizon 2), to land + bake on the single-location pilot before any new location.** — Owner: owner. Block: roadmap-wide scale stages (not the week-1 slices). (PRD Open Question 3 + `infrastructure.md`.)
 4. **Token rotation — two tokens were exposed earlier; rotate before wider rollout.** — Owner: owner. Block: rollout gate beyond the pilot (deferred). (PRD Open Question 4.)
 
 ## Parked
 
-- **Sheets → Supabase / Postgres migration** — Why parked: PRD Constraints state "No data migration or backfill in week 1"; the data store stays as-is for the pilot. Urgency for the company-wide stage is tracked in `infrastructure.md` and Open Roadmap Question 3 — not a week-1 roadmap slice.
-- **Product CI (pytest/ruff/build gate) + error-tracking/observability** — Why parked: not in week-1 PRD scope; the present quality floors (no lost stock, same-day queue, inspectable per-line history) are met by the baseline. Tracked in `stack-assessment.md` / `infrastructure.md` for the scale stages.
+- ~~**Sheets → Supabase / Postgres migration**~~ — **Unparked → scheduled as S-10 (Horizon 2).** With the PRD complete, the week-1 "no migration" constraint no longer applies; `infrastructure.md` rates this urgent before any new location. Now a named slice, run in its own session.
+- ~~**Product CI (pytest/ruff/build gate)**~~ — **Done (reconciled 2026-06-09).** `.github/workflows/ci.yml` runs backend ruff + pytest and frontend build + lint + vitest on every push/PR (commits `39885ce`, `a1d7ce4`; pip-cache parity fix `a17b9e0`). Closes `health-check.md` Fix #1 (CI covers the product) + Fix #2 (frontend test runner). **Error-tracking / observability (PostHog/Sentry)** stays parked — wire it alongside the S-10 rollout (per `infrastructure.md`).
 - **Pago internal warehouse pipeline** (master-ordering Excel aggregation, warehouse email, driver delivery plan) — Why parked: PRD Non-Goals (separate future module).
 - **Auto-ordering without a human final** — Why parked: PRD Non-Goals + governing rule — the engine only suggests; Captain and Manager always commit.
 - **Guest / customer-facing restaurant ordering** — Why parked: PRD Non-Goals (Supply OS is internal supplier ordering only).
