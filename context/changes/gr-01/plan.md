@@ -98,7 +98,7 @@ Stand up the persisted goods-receipt entity and its Captain routes, fully testab
 **Contract**:
 - `_generate_receipt_id(location_id, today) -> "RCP-YYYYMMDD-LOC3-6hex"` (mirror `_generate_count_id`, `:1416`).
 - `_persist_receipt(backend, receipt, lines) -> bool` (mirror `_persist_inventory_count`, `:1423`; `getattr` guard → warn + `False` on seed).
-- `POST /api/captain/receipt/submit` (`require_captain`) → resolve `order = backend.get_order(order_id)`; **404** if `None` or `order.location_id != location_id`; **409** if `order.status != manager_sent`; for each `ReceiptLineSubmit`, find the matching `order` line (**400** if `order_line_id` not in the order), snapshot `ordered_qty_purchase` = effective qty, compute `variance = received − ordered`; build `ReceiptLine` rows; `discrepancy_count` = lines with `variance != 0`; `received_with_missing_wz = True`; `receipt_date` defaults to Warsaw today, future → **400**; persist; seed mode → warning. Sheet mode without the tabs → **503** (catch `WorksheetNotFound`, mirror `captain_inventory_submit`, `:1496`).
+- `POST /api/captain/receipt/submit` (`require_captain`) → resolve `order = backend.get_order(order_id)`; **404** if `None` or `order.location_id != location_id`; **409** if `order.status != manager_sent`; for each `ReceiptLineSubmit`, find the matching `order` line (**400** if `order_line_id` not in the order), snapshot `ordered_qty_purchase` = effective qty, compute `variance = received − ordered`; build `ReceiptLine` rows; `discrepancy_count` = lines with `variance != 0`; `received_with_missing_wz = True`; `receipt_date` defaults to Warsaw today, future → **400**; **sheet-only — seed mode → 503** (the order lives only in the sheet, mirroring `captain_order_detail`); persist via `_persist_receipt`; sheet mode without the tabs → **503** (catch `WorksheetNotFound`).
 - `GET /api/captain/receipt/{receipt_id}` (`require_captain`) → location-scoped enriched `ReceiptDetail`; seed → **503**; `WorksheetNotFound` → **503**; missing/wrong-location → **404**.
 - `GET /api/captain/receipts?order_id=` (`require_captain`) → location-scoped `list[ReceiptSummary]`, newest first; seed → `[]`; `WorksheetNotFound` → `[]`.
 
@@ -120,7 +120,7 @@ Stand up the persisted goods-receipt entity and its Captain routes, fully testab
 #### Manual Verification:
 - With `receipts`/`receipt_lines` tabs created and `SUPPLY_OS_DATA_BACKEND=sheet`, `POST /api/captain/receipt/submit` on a `manager_sent` order writes both tabs; detail + list return it.
 - Submitting against a non-`manager_sent` order returns 409; against another location's order returns 404.
-- Seed mode returns the in-memory warning (no crash).
+- Seed mode returns 503 (goods receiving is sheet-only, like order detail).
 
 **Implementation Note**: After automated verification passes, pause for human confirmation of the manual steps before Phase 2.
 
@@ -310,21 +310,21 @@ Owner-run, one-time (document in the change folder; the agent cannot do these):
 ### Phase 1: Backend — receipts entity
 
 #### Automated
-- [ ] 1.1 Lint passes: `cd supply-os-v1 && ruff check .`
-- [ ] 1.2 Full test suite passes: `cd supply-os-v1 && python -m pytest`
-- [ ] 1.3 New receipt tests pass: `test_receipt_submit.py test_receipt_detail.py test_receipt_sheets.py`
+- [x] 1.1 Lint passes: `cd supply-os-v1 && ruff check .` — 24a5a68
+- [x] 1.2 Full test suite passes: `cd supply-os-v1 && python -m pytest` (313 passed) — 24a5a68
+- [x] 1.3 New receipt tests pass: `test_receipt_submit.py test_receipt_detail.py test_receipt_sheets.py` (32) — 24a5a68
 
 #### Manual
 - [ ] 1.4 Sheet mode: submit on a manager_sent order writes both tabs; detail + list return it
 - [ ] 1.5 Non-manager_sent order → 409; another location's order → 404
-- [ ] 1.6 Seed mode returns the in-memory warning (no crash)
+- [ ] 1.6 Seed mode returns 503 (goods receiving is sheet-only, like order detail)
 
 ### Phase 2: Backend — Google Drive WZ photo upload
 
 #### Automated
-- [ ] 2.1 Deps install: `cd supply-os-v1 && pip install -e ".[dev]"`
-- [ ] 2.2 Lint passes: `cd supply-os-v1 && ruff check .`
-- [ ] 2.3 Tests pass (Drive mocked): `cd supply-os-v1 && python -m pytest`
+- [x] 2.1 Deps declared in pyproject (google-api-python-client, python-multipart); Drive client lazy-imported so tests pass without it installed — 0b9a60b
+- [x] 2.2 Lint passes: `cd supply-os-v1 && ruff check .` — 0b9a60b
+- [x] 2.3 Tests pass (Drive mocked): full suite 326 — 0b9a60b
 
 #### Manual
 - [ ] 2.4 Real Drive folder: upload creates a per-order subfolder, returns a working link, flips the flag
@@ -334,10 +334,10 @@ Owner-run, one-time (document in the change folder; the agent cannot do these):
 ### Phase 3: Frontend — delivery-confirm screen + photo upload
 
 #### Automated
-- [ ] 3.1 Install: `cd frontend && npm install`
-- [ ] 3.2 Build passes: `cd frontend && npm run build`
-- [ ] 3.3 Lint passes: `cd frontend && npm run lint`
-- [ ] 3.4 Unit tests pass (if added): `cd frontend && npm run test`
+- [x] 3.1 Install (Homebrew node): `cd frontend && npm install browser-image-compression` — 80bea05
+- [x] 3.2 Build passes: `cd frontend && npm run build` (tsc + vite, 1641 modules) — 80bea05
+- [x] 3.3 Lint passes: `cd frontend && npm run lint` (0 problems) — 80bea05
+- [ ] 3.4 Vitest: BLOCKED by a pre-existing node-25/jsdom `localStorage.clear` failure in `src/test/setup.ts` (commit a17b9e0) that fails all 11 existing tests, unrelated to GR-01 — flagged as a separate task
 
 #### Manual
 - [ ] 3.5 Mobile: camera capture → compress → preview works
