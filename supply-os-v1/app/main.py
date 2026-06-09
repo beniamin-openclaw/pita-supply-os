@@ -5,11 +5,11 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import gmail_url, seed_loader, sheets
+from . import drive, gmail_url, seed_loader, sheets
 from .auth import require_any_auth, require_captain, require_manager
 from .config import DataBackend, settings
 from .models import (
@@ -51,6 +51,7 @@ from .models import (
     ReceiptDetail,
     ReceiptDetailLine,
     ReceiptLine,
+    ReceiptPhotoUploadResponse,
     ReceiptSubmitRequest,
     ReceiptSubmitResponse,
     ReceiptSummary,
@@ -2278,4 +2279,91 @@ def captain_receipt_detail(
         wz_photo_count=receipt.wz_photo_count,
         notes=receipt.notes,
         lines=enriched,
+    )
+
+
+@app.post(
+    "/api/captain/receipt/{receipt_id}/photos",
+    response_model=ReceiptPhotoUploadResponse,
+)
+def captain_receipt_photos(
+    receipt_id: str,
+    files: list[UploadFile] = File(...),
+    location_id: str = Depends(require_captain),
+):
+    """Upload one or more WZ delivery-note photos for a receipt to its order's
+    Google Drive folder (GR-01, Phase 2).
+
+    Persist-first contract: the receipt already exists (created by submit); this
+    endpoint only ATTACHES photos, so a photo failure never loses the confirmed
+    delivery. Requires sheet backend AND Drive configured (else 503).
+    Location-scoped via the receipt's location. On success, flips
+    ``received_with_missing_wz`` off and records the per-order folder ref +
+    cumulative photo count. Non-image files are rejected (400).
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Photo upload requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+    if not drive.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Google Drive not configured — set SUPPLY_OS_GDRIVE_WZ_FOLDER_ID "
+                "(WZ photo folder shared with the service account)."
+            ),
+        )
+    try:
+        receipt = backend.get_receipt(receipt_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Goods-receipt worksheets not configured — create the "
+                "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
+            ),
+        )
+    if receipt is None or receipt.location_id != location_id:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    folder_id, folder_url = drive.ensure_order_folder(receipt.order_id)
+    uploaded: list[dict] = []
+    for idx, f in enumerate(files, start=1):
+        content = f.file.read()
+        if not content:
+            continue
+        ctype = f.content_type or ""
+        if not ctype.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{f.filename}' is not an image ({ctype or 'unknown'})",
+            )
+        ext = ""
+        if f.filename and "." in f.filename:
+            ext = "." + f.filename.rsplit(".", 1)[1]
+        name = f"{receipt.receipt_id}-{idx:02d}{ext}"
+        file_id, file_url = drive.upload_photo(folder_id, name, content, ctype)
+        uploaded.append({"file_id": file_id, "file_url": file_url, "name": name})
+
+    if not uploaded:
+        raise HTTPException(status_code=400, detail="No valid image files uploaded")
+
+    new_count = (receipt.wz_photo_count or 0) + len(uploaded)
+    backend.update_receipt(
+        receipt_id,
+        wz_photo_folder_id=folder_id,
+        wz_photo_folder_url=folder_url,
+        wz_photo_count=new_count,
+        received_with_missing_wz=False,
+    )
+    return ReceiptPhotoUploadResponse(
+        receipt_id=receipt_id,
+        wz_photo_count=new_count,
+        wz_photo_folder_url=folder_url,
+        received_with_missing_wz=False,
+        uploaded=uploaded,
     )
