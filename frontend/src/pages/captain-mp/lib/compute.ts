@@ -76,13 +76,6 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   const final = Number(line.captain_final_qty_purchase);
   const { purchase: suggested } = computeSuggestion(item, current);
 
-  // Critical products are NOT special-cased here. Ordering 0 when the suggestion
-  // is also 0 is "matches suggestion" (green) — not a forced-reason case
-  // (operator decision 2026-06-09: a critical at 0 vs a 0 suggestion was pure
-  // friction). Real under-orders are still caught by the >20% deviation rule
-  // below, and the confirm-submit dialog separately surfaces any critical left
-  // at 0 as a soft, non-blocking warning (CaptainMP `criticalMissing`).
-
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);
 
@@ -91,6 +84,31 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
       !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
     const pct = formatPctSigned(deviation);
 
+    if (!hasReason) {
+      return {
+        state: "red",
+        messageKey: "state.devNoReason",
+        messageVars: { pct },
+        requiresReason: true,
+        deviationPct: deviation,
+      };
+    }
+    return {
+      state: "orange",
+      messageKey: "state.devReason",
+      messageVars: { pct },
+      requiresReason: true,
+      deviationPct: deviation,
+    };
+  }
+
+  // Critical products: any under-order (even ≤20%) requires a reason —
+  // mirrors the backend gate in captain_submit / captain_order_edit.
+  // Exception: suggested === 0 means nothing to order, no reason needed.
+  if (item.is_critical && final < suggested && suggested > 0) {
+    const hasReason =
+      !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
+    const pct = formatPctSigned(deviation);
     if (!hasReason) {
       return {
         state: "red",

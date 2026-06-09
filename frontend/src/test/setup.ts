@@ -9,7 +9,8 @@ import "@testing-library/jest-dom/vitest";
 // reads supply_os_lang) are not contaminated by a prior test that set
 // a different language.
 beforeEach(() => {
-  localStorage.clear();
+  // Guard: some jsdom builds expose localStorage without a .clear() method.
+  try { localStorage.clear(); } catch { /* noop */ }
 });
 
 afterEach(() => {

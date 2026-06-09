@@ -104,6 +104,38 @@ describe("computeRowState — critical product, real under-order", () => {
   });
 });
 
+describe("computeRowState — critical product, small under-order (≤20%)", () => {
+  it("critical + 2% under-order, no reason → red + requiresReason (P006 Pomidor case)", () => {
+    // target=42, stock=3, suggestion=ceil(39/1)=39, order=38 → -2.6% deviation
+    // Backend rejects this without a reason_code — frontend must match.
+    const item = makeItem({ is_critical: true, target_stock_qty_base: 42, units_per_purchase_unit: 1 });
+    const line = makeLine({ current_stock_qty_base: 3, captain_final_qty_purchase: 38 });
+    const { state, requiresReason } = computeRowState(item, line);
+    expect(state).toBe("red");
+    expect(requiresReason).toBe(true);
+  });
+
+  it("critical + 2% under-order, with reason → orange + requiresReason", () => {
+    const item = makeItem({ is_critical: true, target_stock_qty_base: 42, units_per_purchase_unit: 1 });
+    const line = makeLine({
+      current_stock_qty_base: 3,
+      captain_final_qty_purchase: 38,
+      reason_code: "LOW_STORAGE",
+    });
+    const { state, requiresReason } = computeRowState(item, line);
+    expect(state).toBe("orange");
+    expect(requiresReason).toBe(true);
+  });
+
+  it("non-critical + 2% under-order, no reason → yellow (unchanged)", () => {
+    const item = makeItem({ is_critical: false, target_stock_qty_base: 42, units_per_purchase_unit: 1 });
+    const line = makeLine({ current_stock_qty_base: 3, captain_final_qty_purchase: 38 });
+    const { state, requiresReason } = computeRowState(item, line);
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+  });
+});
+
 describe("computeRowState — small deviation", () => {
   it("≤20% deviation without reason → yellow, no requiresReason", () => {
     // target=50, stock=40 → need 10 → 10/10 = 1 purchase unit (suggestion)
