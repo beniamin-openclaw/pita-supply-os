@@ -497,6 +497,18 @@ export function CaptainMP() {
       <ContextStrip supplier={activeSupplier} />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
+        {/* Order-history link — mirrors the Remanent screen's "Historia →"
+            so order history is reachable here under Zamówienia, not only
+            from the hamburger. */}
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => navigate("/captain-v2/orders")}
+            className="text-sm font-semibold text-brand hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            {t("orders.history.navLink")} →
+          </button>
+        </div>
         {draftBanner && (
           <div
             role="dialog"

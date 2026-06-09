@@ -436,6 +436,7 @@ export const STRINGS = {
 
   // Captain "My orders" view (Phase E4) -------------------------------------
   "orders.title": { pl: "Moje zamówienia", en: "My orders" },
+  "orders.history.navLink": { pl: "Historia zamówień", en: "Order history" },
   "orders.back": { pl: "Wróć do zamówienia", en: "Back to order form" },
   "orders.empty": {
     pl: "Brak zamówień. Wyślij pierwsze z ekranu zamówienia.",

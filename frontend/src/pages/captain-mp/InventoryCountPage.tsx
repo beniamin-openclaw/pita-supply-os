@@ -177,6 +177,14 @@ export function InventoryCountPage() {
         });
         setLines(initial);
 
+        // Categories start COLLAPSED by default so the Captain can scan the
+        // whole list fast and open only the sections they need. Seed the
+        // collapsed set with every category name (same derivation as
+        // groupedProducts) once products load.
+        setCollapsedCategories(
+          new Set(items.map((p) => p.product_category || t("inventory.uncategorized"))),
+        );
+
         // Surface a draft banner if a recent count is in progress; don't auto-load.
         const draft = loadDraft<InventoryDraftState>(DRAFT_KEY);
         if (draft?.state?.lines && Object.keys(draft.state.lines).length > 0) {
