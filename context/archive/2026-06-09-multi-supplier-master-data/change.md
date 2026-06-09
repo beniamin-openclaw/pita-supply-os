@@ -1,10 +1,10 @@
 ---
 change_id: multi-supplier-master-data
 title: Verify & complete master data for suppliers beyond Bukat (Pago + the rest)
-status: impl_reviewed
+status: archived
 created: 2026-06-09
 updated: 2026-06-09
-archived_at: null
+archived_at: 2026-06-09T14:04:15Z
 ---
 
 ## Notes
