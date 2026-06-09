@@ -269,3 +269,81 @@ def test_manager_queue_rejects_invalid_status_enum():
         headers=MANAGER_AUTH,
     )
     assert r.status_code == 422
+
+
+# ---------- Master-data GETs route through the backend seam ----------
+
+def test_master_data_reads_through_choose_backend(monkeypatch):
+    """`/api/products`, `/api/suppliers`, `/api/locations` and
+    `/api/captain/orderable` MUST read through `_choose_backend()`, never
+    `seed_loader` directly.
+
+    Regression for the empty-order-screen bug: in production (sheet mode) the
+    droplet's seed CSVs are a stale fallback. When these endpoints read
+    `seed_loader` directly they served that stale snapshot — whole suppliers
+    showed zero orderable products because the old `location_product_settings`
+    CSV lacked the newer rows — while sheet-backed screens (Remanent) were
+    complete. We assert by pointing `_choose_backend()` at a sentinel backend
+    and checking the response reflects IT, not the seed CSVs.
+    """
+    from app import main as main_mod
+    from app.models import (
+        Location,
+        LocationProductSetting,
+        Product,
+        Supplier,
+        SupplierProduct,
+    )
+
+    sentinel_product = Product(
+        product_id="PZZZ", product_name_pl="Sentinel", product_category="x",
+        inventory_unit="szt",
+    )
+    sentinel_supplier = Supplier(supplier_id="SUP_SENTINEL", supplier_name="Sentinel Co")
+    sentinel_location = Location(location_id="WOLA", location_name="Sentinel Loc")
+    sentinel_setting = LocationProductSetting(
+        setting_id="S1", location_id="WOLA", product_id="PZZZ",
+        target_stock_qty_base=5,
+    )
+    sentinel_sp = SupplierProduct(
+        supplier_product_id="SP_SENTINEL", supplier_id="SUP_SENTINEL",
+        product_id="PZZZ", supplier_product_name="Sentinel SP", purchase_unit="szt",
+    )
+
+    class FakeBackend:
+        @staticmethod
+        def load_products():
+            return [sentinel_product]
+
+        @staticmethod
+        def load_suppliers():
+            return [sentinel_supplier]
+
+        @staticmethod
+        def load_locations():
+            return [sentinel_location]
+
+        @staticmethod
+        def load_location_product_settings():
+            return [sentinel_setting]
+
+        @staticmethod
+        def load_supplier_products():
+            return [sentinel_sp]
+
+    monkeypatch.setattr(main_mod, "_choose_backend", lambda: FakeBackend)
+
+    r = client.get("/api/products", headers=WOLA_AUTH)
+    assert r.status_code == 200
+    assert [p["product_id"] for p in r.json()] == ["PZZZ"]
+
+    r = client.get("/api/suppliers", headers=WOLA_AUTH)
+    assert [s["supplier_id"] for s in r.json()] == ["SUP_SENTINEL"]
+
+    r = client.get(
+        "/api/captain/orderable",
+        params={"supplier_id": "SUP_SENTINEL"},
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200
+    assert [i["product_id"] for i in r.json()] == ["PZZZ"]

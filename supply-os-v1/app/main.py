@@ -106,17 +106,17 @@ def health_internal(_: None = Depends(require_manager)):
 
 @app.get("/api/products")
 def products(_actor: str = Depends(require_any_auth)):
-    return seed_loader.load_products()
+    return _choose_backend().load_products()
 
 
 @app.get("/api/suppliers")
 def suppliers(_actor: str = Depends(require_any_auth)):
-    return seed_loader.load_suppliers()
+    return _choose_backend().load_suppliers()
 
 
 @app.get("/api/locations")
 def locations(_actor: str = Depends(require_any_auth)):
-    return seed_loader.load_locations()
+    return _choose_backend().load_locations()
 
 
 # ---------- Captain Submit (auth required) ----------
@@ -153,16 +153,24 @@ def captain_orderable(
 ):
     """Products this Captain can order from `supplier_id`. The location is
     derived from the authenticated Captain's token; cross-location access
-    is not permitted in v0."""
-    products_by_id = {p.product_id: p for p in seed_loader.load_products()}
+    is not permitted in v0.
+
+    Reads through `_choose_backend()` so production (sheet mode) serves live
+    master data. Reading `seed_loader` directly here was a production bug: the
+    droplet's seed CSVs are a stale fallback, so the order screen silently
+    dropped any product missing from the old `location_product_settings` snapshot
+    (e.g. whole suppliers showed zero products) while sheet-backed screens were
+    complete."""
+    backend = _choose_backend()
+    products_by_id = {p.product_id: p for p in backend.load_products()}
     settings_by_pid = {
         s.product_id: s
-        for s in seed_loader.load_location_product_settings()
+        for s in backend.load_location_product_settings()
         if s.location_id == location_id
     }
     sps = [
         sp
-        for sp in seed_loader.load_supplier_products()
+        for sp in backend.load_supplier_products()
         if sp.supplier_id == supplier_id and sp.product_id in settings_by_pid
     ]
     return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
