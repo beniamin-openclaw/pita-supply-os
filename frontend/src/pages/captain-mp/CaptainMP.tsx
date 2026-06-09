@@ -62,7 +62,7 @@ export function CaptainMP() {
   const [availableSnapshots, setAvailableSnapshots] = useState<InventoryCountSummary[]>([]);
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
   const [snapshotDetails, setSnapshotDetails] = useState<
-    Record<string, InventoryLatestResponse>
+    Record<string, InventoryLatestResponse | null>
   >({});
   const [prefillConfirm, setPrefillConfirm] = useState<"overwrite" | "clear" | null>(null);
 
@@ -122,7 +122,7 @@ export function CaptainMP() {
   // instead of spinning forever — they'll simply match 0 lines.
   useEffect(() => {
     if (!selectedSnapshotId) return;
-    if (snapshotDetails[selectedSnapshotId]) return; // cached
+    if (selectedSnapshotId in snapshotDetails) return; // cached (null = error result, also cached)
     let cancelled = false;
     const id = selectedSnapshotId;
     api
@@ -132,16 +132,10 @@ export function CaptainMP() {
       })
       .catch(() => {
         if (cancelled) return;
-        setSnapshotDetails((prev) => ({
-          ...prev,
-          [id]: {
-            count_id: id,
-            count_date: "",
-            count_submitted_at: null,
-            line_count: 0,
-            lines: [],
-          },
-        }));
+        // Store null (not a type-violating sentinel) so the cache key exists
+        // and the loading state clears, while consumers' `if (!detail) return`
+        // guard keeps the fill buttons no-op on an errored snapshot.
+        setSnapshotDetails((prev) => ({ ...prev, [id]: null }));
       });
     return () => {
       cancelled = true;
@@ -455,8 +449,9 @@ export function CaptainMP() {
   );
   // "Loading" = a snapshot is selected but its lines aren't cached yet (the
   // fetch caches an empty result even on failure, so this can't hang).
+  // Loading = selected but not yet in the cache. null = fetch failed (done loading).
   const isSnapshotDetailLoading =
-    !!selectedSnapshotId && !snapshotDetails[selectedSnapshotId];
+    !!selectedSnapshotId && !(selectedSnapshotId in snapshotDetails);
 
   // Always-available once snapshots exist for the location and items are loaded
   // (FR-023 promotes the old dismissable banner to a permanent control).

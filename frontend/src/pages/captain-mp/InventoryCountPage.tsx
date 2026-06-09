@@ -557,8 +557,15 @@ export function InventoryCountPage() {
                                 />
                               </div>
                             </div>
+                            <label
+                              htmlFor={`comment-${p.product_id}`}
+                              className="sr-only"
+                            >
+                              {t("inventory.commentPlaceholder")}
+                            </label>
                             <input
                               type="text"
+                              id={`comment-${p.product_id}`}
                               value={line.count_comment}
                               onChange={(e) => handleCommentChange(p.product_id, e.target.value)}
                               placeholder={t("inventory.commentPlaceholder")}

@@ -15,7 +15,7 @@ import type {
 } from "../../types";
 
 export function ManagerInventoryPage() {
-  const { t, formatDateTime } = useT();
+  const { t, tPlural, formatDateTime } = useT();
   const navigate = useNavigate();
 
   const [counts, setCounts] = useState<InventoryCountManagerItem[] | null>(null);
@@ -26,21 +26,23 @@ export function ManagerInventoryPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  useEffect(() => {
+    let cancelled = false;
     api
       .managerInventoryCounts()
       .then((data) => {
+        if (cancelled) return;
         setCounts(data);
         setError(null);
       })
       .catch((e: ApiError) => {
+        if (cancelled) return;
         if (e.status !== 401) setError(e.detail);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   // Location options derived from the fetched rows (mirrors ManagerFilterBar's
   // derive-from-data approach); filtering is client-side over the union.
@@ -239,7 +241,7 @@ export function ManagerInventoryPage() {
                       {c.count_user ? ` · ${c.count_user}` : ""}
                     </div>
                     <div className="text-xs text-slate-500">
-                      {t("manager.inventory.lineCount", { count: c.line_count })}
+                      {tPlural("manager.inventory.lineCount", "items", c.line_count)}
                     </div>
                   </div>
                   <ChevronRight size={18} className="shrink-0 text-slate-400" aria-hidden="true" />

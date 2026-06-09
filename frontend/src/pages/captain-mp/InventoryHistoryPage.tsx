@@ -22,7 +22,7 @@ import { CaptainTabs } from "./components/CaptainTabs";
 import { getToken } from "../../auth";
 
 export function InventoryHistoryPage() {
-  const { t, formatDateTime } = useT();
+  const { t, tPlural, formatDateTime } = useT();
   const navigate = useNavigate();
   const token = getToken("captain") || "";
 
@@ -34,21 +34,23 @@ export function InventoryHistoryPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  useEffect(() => {
+    let cancelled = false;
     api
       .inventoryCounts()
       .then((data) => {
+        if (cancelled) return;
         setCounts(data);
         setError(null);
       })
       .catch((e: ApiError) => {
+        if (cancelled) return;
         if (e.status !== 401) setError(e.detail);
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   // Product name map for the client-side join (silent on error — names degrade
   // to product_id with a "removed" badge).
@@ -261,7 +263,7 @@ export function InventoryHistoryPage() {
                     </div>
                     <div className="text-xs text-slate-600">
                       {c.count_user ? `${c.count_user} · ` : ""}
-                      {t("inventory.history.lineCount", { count: c.line_count })}
+                      {tPlural("inventory.history.lineCount", "items", c.line_count)}
                     </div>
                   </div>
                   <ChevronRight size={18} className="shrink-0 text-slate-400" aria-hidden="true" />

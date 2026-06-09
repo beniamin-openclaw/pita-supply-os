@@ -9,7 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
-import { useT, type StringKey } from "../../i18n";
+import { STRINGS, useT, type StringKey } from "../../i18n";
 import type { SuggestionReviewItem } from "../../types";
 
 const SYSTEM_WRONG = "SYSTEM_SUGGESTION_WRONG";
@@ -130,7 +130,10 @@ export function ManagerSuggestionReviewPage() {
                             : "bg-slate-100 text-slate-600"
                         }`}
                       >
-                        {t(`reason.codes.${code}` as StringKey)} ×{count}
+                        {((): string => {
+                          const key = `reason.codes.${code}`;
+                          return key in STRINGS ? t(key as StringKey) : code;
+                        })()} ×{count}
                       </span>
                     ))}
                   </div>

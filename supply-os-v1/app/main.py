@@ -1468,9 +1468,10 @@ def captain_inventory_products(
     list would otherwise surface products the per-supplier order screen never
     showed.
     """
-    products_by_id = {p.product_id: p for p in seed_loader.load_products()}
+    backend = _choose_backend()
+    products_by_id = {p.product_id: p for p in backend.load_products()}
     items: list[InventoryProduct] = []
-    for setting in seed_loader.load_location_product_settings():
+    for setting in backend.load_location_product_settings():
         if setting.location_id != location_id:
             continue
         product = products_by_id.get(setting.product_id)
@@ -1615,9 +1616,12 @@ def captain_inventory_latest(
     if backend is not sheets:
         return None
 
-    counts = [
-        c for c in backend.load_inventory_counts() if c.location_id == location_id
-    ]
+    try:
+        all_counts = backend.load_inventory_counts()
+    except sheets.WorksheetNotFound:
+        # Inventory tabs not yet created — no snapshot to offer.
+        return None
+    counts = [c for c in all_counts if c.location_id == location_id]
     if not counts:
         return None
 
