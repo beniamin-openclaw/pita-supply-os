@@ -38,6 +38,8 @@ from .models import (
     OrderLine,
     OrderStatus,
     Product,
+    Receipt,
+    ReceiptLine,
     Supplier,
     SupplierProduct,
 )
@@ -743,3 +745,93 @@ def get_inventory_count(count_id: str) -> InventoryCount | None:
         line for line in load_inventory_count_lines() if line.count_id == count_id
     ]
     return match.model_copy(update={"lines": lines})
+
+
+# ---------- Goods-receipt read + append/update API (GR-01) ----------
+
+def load_receipts() -> list[Receipt]:
+    """Read 'receipts' worksheet, return Receipt instances (no lines populated)."""
+    return _read_with_ttl("receipts", Receipt)
+
+
+def load_receipt_lines() -> list[ReceiptLine]:
+    """Read 'receipt_lines' worksheet, return ReceiptLine instances."""
+    return _read_with_ttl("receipt_lines", ReceiptLine)
+
+
+def append_receipt(receipt: Receipt) -> None:
+    """Append one row to 'receipts', then invalidate the read cache.
+
+    Mirrors ``append_inventory_count``. Receipts are append-only snapshots; the
+    only post-write mutation is ``update_receipt`` attaching WZ photo refs.
+    """
+    ws = _open_worksheet("receipts")
+    column_order = _get_column_order(ws)
+    row = _model_to_row(receipt, column_order)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    invalidate_cache("receipts")
+
+
+def append_receipt_lines(lines: list[ReceiptLine]) -> None:
+    """Batch-append ReceiptLine rows to 'receipt_lines' in one call.
+
+    All lines must share the same ``receipt_id`` (mirrors ``append_order_lines``);
+    raises ValueError otherwise. A no-op when ``lines`` is empty. Invalidates the
+    'receipt_lines' read cache after a successful write.
+    """
+    if not lines:
+        return
+    receipt_ids = {line.receipt_id for line in lines}
+    if len(receipt_ids) > 1:
+        raise ValueError(
+            f"append_receipt_lines: all lines must share receipt_id; "
+            f"got {sorted(receipt_ids)}"
+        )
+    ws = _open_worksheet("receipt_lines")
+    column_order = _get_column_order(ws)
+    rows = [_model_to_row(line, column_order) for line in lines]
+    ws.append_rows(rows, value_input_option="USER_ENTERED")
+    invalidate_cache("receipt_lines")
+
+
+def get_receipt(receipt_id: str) -> Receipt | None:
+    """Return the Receipt with ``receipt_id`` and its lines populated, or None.
+
+    Uses the cached read paths (load_receipts + load_receipt_lines). Mirrors
+    ``get_inventory_count`` / ``get_order``.
+    """
+    receipts = load_receipts()
+    match = next((r for r in receipts if r.receipt_id == receipt_id), None)
+    if match is None:
+        return None
+    lines = [line for line in load_receipt_lines() if line.receipt_id == receipt_id]
+    return match.model_copy(update={"lines": lines})
+
+
+def update_receipt(receipt_id: str, **kwargs) -> None:
+    """Update specific fields on the 'receipts' row matching ``receipt_id``.
+
+    Mirrors ``update_order`` minus the dispatch concurrency guard (receipts have
+    no status transitions). Used by the photo-upload endpoint to attach the WZ
+    Drive folder reference + photo count. Raises OrderNotFoundError if the
+    receipt is absent. No-op when ``kwargs`` is empty.
+    """
+    if not kwargs:
+        return
+    ws = _open_worksheet("receipts")
+    column_order = _get_column_order(ws)
+    row_idx = _find_row_index(ws, "receipt_id", receipt_id)
+    if row_idx is None:
+        raise OrderNotFoundError(
+            f"receipt_id={receipt_id!r} not found in 'receipts' sheet"
+        )
+    updates: list[dict] = []
+    for field_name, raw_value in kwargs.items():
+        if field_name not in column_order:
+            continue
+        col_idx = column_order.index(field_name) + 1
+        a1 = rowcol_to_a1(row_idx, col_idx)
+        updates.append({"range": a1, "values": [[_cell_value(raw_value)]]})
+    if updates:
+        ws.batch_update(updates, value_input_option="USER_ENTERED")
+    invalidate_cache("receipts")
