@@ -189,7 +189,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 
 | ID   | Change ID                   | Outcome (user/owner can …)                                                           | Prerequisites    | Refs                            | Status    |
 | ---- | --------------------------- | ------------------------------------------------------------------------------------ | ---------------- | ------------------------------- | --------- |
-| D-01 | deploy-wiring               | (owner-run) Auto-deploy `main`: Vercel re-pointed to the new repo; backend redeployed | —                | `deployment-plan.md`, infra Q3  | next      |
+| D-01 | deploy-wiring               | (owner-run) Auto-deploy `main`: Vercel re-pointed to the new repo; backend redeployed | —                | `deployment-plan.md`, infra Q3  | done |
 | S-10 | supabase-backend            | Order + inventory data runs on Supabase (Postgres) behind `_choose_backend()`        | —                | `infrastructure.md`, PRD Open Q3 | proposed  |
 | F-02 | multi-supplier-master-data  | (foundation) Master data verified for suppliers beyond Bukat (Pago + others)         | —                | FR-012, FR-013                  | proposed  |
 | H-01 | quality-hardening           | Backend lockfile + TS strict + mypy/pyright + thicker ruff — reproducible, type-safe  | —                | `health-check.md` #3/#4/#5/#6   | proposed  |
@@ -202,7 +202,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 - **Prerequisites:** —
 - **Owner-run:** SSH to the droplet and Vercel Git settings are owner actions (agent SSH is blocked). The agent prepares; the owner executes.
 - **Risk:** Pure ops, no product code. Hard rule: secrets (`sa.json`, `.env`, Supabase keys) stay off-repo (Lesson 3). Smoke = `/health` + submit-and-back-out, never a real order.
-- **Status:** next — the immediate gate; without it, work on `main` doesn't reach production.
+- **Status:** done (2026-06-09) — §1 Vercel Git integration re-pointed to `beniamin-openclaw/pita-supply-os`, production branch `main`, auto-deploy confirmed. §2 backend droplet updated via `git remote add origin` + `git reset --hard origin/main` + `pip install -e .` + `systemctl restart jarvis-supply-os`; smoke `/health` → `{"status":"ok"}`. S-09 `tenth_kg` drift closed. Production stack fully on `main@7b5f2c0`.
 
 ### S-10: Supabase data backend behind `_choose_backend()`
 
