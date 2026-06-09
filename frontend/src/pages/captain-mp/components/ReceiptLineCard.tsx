@@ -27,9 +27,9 @@ export function ReceiptLineCard({ line, ordered, delivered, onChange }: ReceiptL
         <span className="truncate">{line.product_name_pl}</span>
       </div>
       <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="text-xs text-slate-600">
+        <div className="text-sm text-slate-600">
           {t("delivery.ordered")}:{" "}
-          <span className="font-semibold text-slate-800 tabular-nums">
+          <span className="font-bold text-slate-900 tabular-nums text-base">
             {ordered} {line.purchase_unit}
           </span>
         </div>

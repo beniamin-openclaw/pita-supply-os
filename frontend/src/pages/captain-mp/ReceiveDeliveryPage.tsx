@@ -126,19 +126,26 @@ export function ReceiveDeliveryPage() {
       {toast && <Toast {...toast} />}
 
       <header className="bg-brand text-white px-4 py-3 sticky top-0 z-40">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={() => navigate(`/captain-v2/orders/${order_id}`)}
             aria-label={t("orders.title")}
-            className="p-2 -ml-2 active:bg-white/10 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="shrink-0 p-2 -ml-2 active:bg-white/10 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
-          <h1 className="font-semibold text-lg tracking-tight truncate">
-            {t("delivery.pageTitle")}
-            {order ? ` · ${order.supplier_name}` : ""}
-          </h1>
+          <div className="min-w-0">
+            <h1 className="font-semibold text-lg tracking-tight truncate leading-tight">
+              {t("delivery.pageTitle")}
+              {order ? ` · ${order.supplier_name}` : ""}
+            </h1>
+            {order && (
+              <p className="text-xs text-white/70 font-mono truncate leading-tight">
+                {order.order_id} · {order.order_date}
+              </p>
+            )}
+          </div>
         </div>
       </header>
 
