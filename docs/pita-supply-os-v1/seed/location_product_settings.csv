@@ -25,7 +25,7 @@ WOLA__P023,WOLA,P023,0.5,1.5,1.5,FALSE,FALSE,Fasolka Szparagowa
 WOLA__P024,WOLA,P024,2,10,10,TRUE,FALSE,Gyros 15 KG — core menu gyros
 WOLA__P025,WOLA,P025,0,0,0,FALSE,FALSE,Gyros 25 KG — not used at Wola (Wzór min=max=0)
 WOLA__P026,WOLA,P026,1,5,5,TRUE,FALSE,Pita opakowania szt 10 — verify Wzór range with Captain (17_05 actual was 52 opak)
-WOLA__P027,WOLA,P027,4,12,12,TRUE,FALSE,Souvlaki Kurczak — verify Wzór range with Captain (17_05 actual was 53.16 kg, far above max)
+WOLA__P027,WOLA,P027,4,12,12,TRUE,FALSE,"Souvlaki Kurczak — verify Wzór range with Captain (17_05 actual was 53.16 kg, far above max)"
 WOLA__P028,WOLA,P028,2,4,4,TRUE,TRUE,Souvlaki Wieprz — 1 karton = 5 kg > max 4 kg → packaging overage permitted
 WOLA__P038,WOLA,P038,1,2,2,FALSE,FALSE,Frytura Eppo 15L
 WOLA__P039,WOLA,P039,0.5,1.5,1.5,FALSE,FALSE,Ocet spirytusowy
@@ -51,3 +51,85 @@ WOLA__P058,WOLA,P058,0.5,1.5,1.5,FALSE,FALSE,Pieprz w saszetkach 5g
 WOLA__P075,WOLA,P075,10,48,48,FALSE,FALSE,Lemoniada Lemon
 WOLA__P076,WOLA,P076,10,48,48,FALSE,FALSE,Lemoniada Orange
 WOLA__P077,WOLA,P077,10,48,48,FALSE,FALSE,Lemoniada Grapefruit
+WOLA__P063,WOLA,P063,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P064,WOLA,P064,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P065,WOLA,P065,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P066,WOLA,P066,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P067,WOLA,P067,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P068,WOLA,P068,24,120,96,TRUE,FALSE,ESTIM - verify after first order cycle
+WOLA__P069,WOLA,P069,24,120,96,TRUE,FALSE,ESTIM - verify after first order cycle
+WOLA__P070,WOLA,P070,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P071,WOLA,P071,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P074,WOLA,P074,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P078,WOLA,P078,6,48,24,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P079,WOLA,P079,6,48,24,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P080,WOLA,P080,6,48,24,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P081,WOLA,P081,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P059,WOLA,P059,3,6,6,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P060,WOLA,P060,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P061,WOLA,P061,3,6,6,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P062,WOLA,P062,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P072,WOLA,P072,6,48,24,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P073,WOLA,P073,12,72,48,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P089,WOLA,P089,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P090,WOLA,P090,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P091,WOLA,P091,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P092,WOLA,P092,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P098,WOLA,P098,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P127,WOLA,P127,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P128,WOLA,P128,3,10,10,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P129,WOLA,P129,3,10,10,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P130,WOLA,P130,3,10,10,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P131,WOLA,P131,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P132,WOLA,P132,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P133,WOLA,P133,3,8,8,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P029,WOLA,P029,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P030,WOLA,P030,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P031,WOLA,P031,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P032,WOLA,P032,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P033,WOLA,P033,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P034,WOLA,P034,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P035,WOLA,P035,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P036,WOLA,P036,2,8,8,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P037,WOLA,P037,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P082,WOLA,P082,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P083,WOLA,P083,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P084,WOLA,P084,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P085,WOLA,P085,5,15,15,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P086,WOLA,P086,10,30,30,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P087,WOLA,P087,10,30,30,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P088,WOLA,P088,10,30,30,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P093,WOLA,P093,5,20,20,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P094,WOLA,P094,10,30,30,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P095,WOLA,P095,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P096,WOLA,P096,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P097,WOLA,P097,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P099,WOLA,P099,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P100,WOLA,P100,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P101,WOLA,P101,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P102,WOLA,P102,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P103,WOLA,P103,2,6,6,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P104,WOLA,P104,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P105,WOLA,P105,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P106,WOLA,P106,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P107,WOLA,P107,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P108,WOLA,P108,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P109,WOLA,P109,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P110,WOLA,P110,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P111,WOLA,P111,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P112,WOLA,P112,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P113,WOLA,P113,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P114,WOLA,P114,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P115,WOLA,P115,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P116,WOLA,P116,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P117,WOLA,P117,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P118,WOLA,P118,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P119,WOLA,P119,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P120,WOLA,P120,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P121,WOLA,P121,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P122,WOLA,P122,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P123,WOLA,P123,2,4,4,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P124,WOLA,P124,1,3,3,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P125,WOLA,P125,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P126,WOLA,P126,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle
+WOLA__P134,WOLA,P134,1,2,2,FALSE,FALSE,ESTIM - verify after first order cycle

@@ -118,7 +118,9 @@ def test_captain_orderable_rejects_manager_token():
     assert r.status_code == 401
 
 
-def test_captain_orderable_wola_pago_returns_6_food_items():
+def test_captain_orderable_wola_pago_returns_18_items():
+    # F-02: added Wola par-levels for 12 Pago packaging+office SKUs — now 18 orderable.
+    # Core food items (P019, P024–P028) must still be present.
     r = client.get(
         "/api/captain/orderable",
         params={"supplier_id": "SUP_PAGO"},
@@ -126,9 +128,13 @@ def test_captain_orderable_wola_pago_returns_6_food_items():
     )
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 6
+    assert len(items) == 18
     pids = {item["product_id"] for item in items}
-    assert {"P019", "P024", "P025", "P026", "P027", "P028"} == pids
+    # Core food items still present
+    assert {"P019", "P024", "P025", "P026", "P027", "P028"}.issubset(pids)
+    # Packaging + office items now also orderable
+    assert {"P089", "P090", "P091", "P092", "P098", "P127", "P128",
+            "P129", "P130", "P131", "P132", "P133"}.issubset(pids)
 
 
 def test_captain_orderable_bukat_exposes_tenth_kg_rule():
