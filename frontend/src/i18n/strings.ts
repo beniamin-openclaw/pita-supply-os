@@ -95,14 +95,6 @@ export const STRINGS = {
 
   // Row state messages (compute.ts) -----------------------------------------
   "state.empty": { pl: "Wpisz stan i zamówienie", en: "Enter stock and order qty" },
-  "state.criticalZeroNoReason": {
-    pl: "Produkt krytyczny — wymagany powód dla 0",
-    en: "Critical item — reason required for zero order",
-  },
-  "state.criticalZeroReason": {
-    pl: "0 na krytycznym — powód podany",
-    en: "Zero on critical — reason provided",
-  },
   "state.devNoReason": {
     pl: "{pct} odchylenia — wymagany powód",
     en: "{pct} deviation — reason required",

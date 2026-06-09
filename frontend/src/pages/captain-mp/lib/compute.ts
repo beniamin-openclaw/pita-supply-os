@@ -76,25 +76,12 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   const final = Number(line.captain_final_qty_purchase);
   const { purchase: suggested } = computeSuggestion(item, current);
 
-  // Critical product, zero ordered — always requires reason.
-  if (final === 0 && item.is_critical) {
-    const hasReason =
-      !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
-    if (!hasReason) {
-      return {
-        state: "red",
-        messageKey: "state.criticalZeroNoReason",
-        requiresReason: true,
-        deviationPct: -100,
-      };
-    }
-    return {
-      state: "orange",
-      messageKey: "state.criticalZeroReason",
-      requiresReason: true,
-      deviationPct: -100,
-    };
-  }
+  // Critical products are NOT special-cased here. Ordering 0 when the suggestion
+  // is also 0 is "matches suggestion" (green) — not a forced-reason case
+  // (operator decision 2026-06-09: a critical at 0 vs a 0 suggestion was pure
+  // friction). Real under-orders are still caught by the >20% deviation rule
+  // below, and the confirm-submit dialog separately surfaces any critical left
+  // at 0 as a soft, non-blocking warning (CaptainMP `criticalMissing`).
 
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);

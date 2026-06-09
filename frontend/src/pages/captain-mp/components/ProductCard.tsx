@@ -129,8 +129,8 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
             {item.product_name_pl}
           </h3>
           {item.is_critical && (
-            <span className="flex items-center gap-1 bg-red-600 text-white text-xs font-extrabold uppercase tracking-wider px-2 py-1 rounded shrink-0">
-              <AlertOctagon size={12} aria-hidden="true" />
+            <span className="flex items-center gap-1 bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">
+              <AlertOctagon size={10} aria-hidden="true" />
               {t("card.critical")}
             </span>
           )}
