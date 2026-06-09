@@ -721,6 +721,45 @@ export const STRINGS = {
     pl: "sugestia {suggested} → kapitan {captain} → menedżer {manager}",
     en: "suggested {suggested} → captain {captain} → manager {manager}",
   },
+
+  // Goods receiving (GR-01) ---------------------------------------------------
+  "delivery.confirmBtn": { pl: "Potwierdź dostawę", en: "Confirm delivery" },
+  "delivery.pageTitle": { pl: "Potwierdzenie dostawy", en: "Confirm delivery" },
+  "delivery.loading": { pl: "Wczytywanie zamówienia…", en: "Loading order…" },
+  "delivery.intro": {
+    pl: "Wpisz ilości faktycznie dostarczone i dodaj zdjęcie WZ.",
+    en: "Enter the quantities actually delivered and attach the WZ photo.",
+  },
+  "delivery.ordered": { pl: "Zamówiono", en: "Ordered" },
+  "delivery.delivered": { pl: "Dostarczono", en: "Delivered" },
+  "delivery.variance": { pl: "Różnica: {value}", en: "Variance: {value}" },
+  "delivery.receivedByLabel": { pl: "Kto odebrał", en: "Received by" },
+  "delivery.receivedByPlaceholder": { pl: "Imię i nazwisko", en: "Full name" },
+  "delivery.photosLabel": { pl: "Zdjęcia WZ", en: "WZ photos" },
+  "delivery.addPhoto": { pl: "Dodaj zdjęcie", en: "Add photo" },
+  "delivery.photoHint": {
+    pl: "Zalecane zdjęcie WZ. Możesz dodać kilka.",
+    en: "A WZ photo is recommended. You can add several.",
+  },
+  "delivery.removePhoto": { pl: "Usuń zdjęcie", en: "Remove photo" },
+  "delivery.compressing": { pl: "Przetwarzanie zdjęć…", en: "Processing photos…" },
+  "delivery.submitBtn": { pl: "Zatwierdź odbiór", en: "Confirm receipt" },
+  "delivery.submittingBtn": { pl: "Zapisywanie…", en: "Saving…" },
+  "delivery.successToast": { pl: "Dostawa potwierdzona", en: "Delivery confirmed" },
+  "delivery.errorToast": { pl: "Błąd zapisu: {detail}", en: "Save error: {detail}" },
+  "delivery.photoErrorToast": {
+    pl: "Odbiór zapisany, ale nie udało się wgrać zdjęć: {detail}",
+    en: "Receipt saved, but photo upload failed: {detail}",
+  },
+  "delivery.retryPhotos": { pl: "Spróbuj ponownie wgrać zdjęcia", en: "Retry photo upload" },
+  "delivery.statusConfirmed": { pl: "Dostawa potwierdzona", en: "Delivery confirmed" },
+  "delivery.confirmedAt": { pl: "Potwierdzono: {value}", en: "Confirmed: {value}" },
+  "delivery.discrepancies": { pl: "Rozbieżności: {count}", en: "Discrepancies: {count}" },
+  "delivery.openFolder": {
+    pl: "Otwórz zdjęcia WZ (Google Drive)",
+    en: "Open WZ photos (Google Drive)",
+  },
+  "delivery.missingWz": { pl: "Brak zdjęcia WZ", en: "Missing WZ photo" },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

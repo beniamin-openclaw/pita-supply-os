@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "browser-image-compression": "^2.0.2",
     "lucide-react": "^0.469.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

@@ -8,6 +8,7 @@ import { InventoryHistoryPage } from "./pages/captain-mp/InventoryHistoryPage";
 import { OrdersListPage } from "./pages/captain-mp/OrdersListPage";
 import { OrderDetailPage } from "./pages/captain-mp/OrderDetailPage";
 import { OrderEditPage } from "./pages/captain-mp/OrderEditPage";
+import { ReceiveDeliveryPage } from "./pages/captain-mp/ReceiveDeliveryPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
 import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
@@ -94,6 +95,14 @@ export default function App() {
             element={
               <AuthGate role="captain">
                 <OrderEditPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/captain-v2/orders/:order_id/receive"
+            element={
+              <AuthGate role="captain">
+                <ReceiveDeliveryPage />
               </AuthGate>
             }
           />
