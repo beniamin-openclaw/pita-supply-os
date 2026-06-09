@@ -5,11 +5,11 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import gmail_url, seed_loader, sheets
+from . import drive, gmail_url, seed_loader, sheets
 from .auth import require_any_auth, require_captain, require_manager
 from .config import DataBackend, settings
 from .models import (
@@ -47,6 +47,14 @@ from .models import (
     OrderingMethod,
     OrderStatus,
     Product,
+    Receipt,
+    ReceiptDetail,
+    ReceiptDetailLine,
+    ReceiptLine,
+    ReceiptPhotoUploadResponse,
+    ReceiptSubmitRequest,
+    ReceiptSubmitResponse,
+    ReceiptSummary,
     RoundingRule,
     SuggestionReviewItem,
     Supplier,
@@ -1985,3 +1993,377 @@ def manager_suggestion_review(
         return []
     products_by_id = {p.product_id: p for p in backend.load_products()}
     return _aggregate_suggestion_review(lines, products_by_id)
+
+
+# ---------- Captain goods receiving (GR-01) ----------
+
+
+def _generate_receipt_id(location_id: str, today: date) -> str:
+    """RCP-YYYYMMDD-<LOC3>-<6hex> (mirrors `_generate_count_id`)."""
+    loc = (location_id or "XXX")[:3].upper()
+    rand = secrets.token_hex(3)
+    return f"RCP-{today.strftime('%Y%m%d')}-{loc}-{rand}"
+
+
+def _persist_receipt(backend, receipt: Receipt, lines: list[ReceiptLine]) -> bool:
+    """Write receipt + lines to backend. Returns True on persistent write, False
+    on in-memory-only fallback (seed backend). Mirrors `_persist_inventory_count`."""
+    appender = getattr(backend, "append_receipt", None)
+    lines_appender = getattr(backend, "append_receipt_lines", None)
+    if appender is None or lines_appender is None:
+        log.warning(
+            "Receipt %s submitted to read-only backend %s — not persisted",
+            receipt.receipt_id,
+            getattr(backend, "__name__", "?"),
+        )
+        return False
+    try:
+        appender(receipt)
+        lines_appender(lines)
+    except NotImplementedError:
+        log.warning(
+            "Receipt %s — backend %s raised NotImplementedError on write",
+            receipt.receipt_id,
+            getattr(backend, "__name__", "?"),
+        )
+        return False
+    return True
+
+
+def _effective_ordered_qty(line: OrderLine) -> float:
+    """Effective ordered purchase qty for receiving: manager_final if > 0 else
+    captain_final — the quantity actually ordered (mirrors
+    `gmail_url._effective_qty`, the same rule the dispatch email uses)."""
+    if line.manager_final_qty_purchase and line.manager_final_qty_purchase > 0:
+        return line.manager_final_qty_purchase
+    return line.captain_final_qty_purchase
+
+
+@app.post("/api/captain/receipt/submit", response_model=ReceiptSubmitResponse)
+def captain_receipt_submit(
+    req: ReceiptSubmitRequest,
+    location_id: str = Depends(require_captain),
+):
+    """Validate + persist a Captain goods-receipt against a dispatched order (GR-01).
+
+    Sheet-only: a receipt is built FROM a real dispatched order, which lives only
+    in the sheet backend — seed mode returns 503 (mirrors `captain_order_detail`).
+
+    Gates (deterministic):
+      - order must exist AND belong to this Captain's location -> 404.
+      - order status must be manager_sent -> 409.
+      - every line's order_line_id must belong to the order -> 400.
+      - receipt_date defaults to Warsaw-today; a future date -> 400.
+
+    Append-only: every submit creates a new receipt_id (no edit/upsert) and does
+    NOT change the order's status. Photos are attached later via
+    POST /api/captain/receipt/{id}/photos, so the receipt starts
+    `received_with_missing_wz=True`.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Goods receiving requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+
+    order = backend.get_order(req.order_id)
+    if order is None or order.location_id != location_id:
+        raise HTTPException(status_code=404, detail=f"Order {req.order_id} not found")
+    if order.status != OrderStatus.MANAGER_SENT:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {req.order_id} status is {order.status.value}, "
+                f"expected manager_sent (cannot confirm delivery)"
+            ),
+        )
+
+    today_warsaw = datetime.now(_WARSAW_TZ).date()
+    receipt_date = req.receipt_date or today_warsaw
+    if receipt_date > today_warsaw:
+        raise HTTPException(
+            status_code=400,
+            detail=f"receipt_date {receipt_date.isoformat()} is in the future",
+        )
+    receipt_id = _generate_receipt_id(location_id, today_warsaw)
+
+    lines_by_id = {ln.order_line_id: ln for ln in order.lines}
+    receipt_lines: list[ReceiptLine] = []
+    discrepancy_count = 0
+    for idx, line in enumerate(req.lines, start=1):
+        order_line = lines_by_id.get(line.order_line_id)
+        if order_line is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"order_line '{line.order_line_id}' does not belong to "
+                    f"order {req.order_id}"
+                ),
+            )
+        ordered = _effective_ordered_qty(order_line)
+        variance = line.received_qty_purchase - ordered
+        if variance != 0:
+            discrepancy_count += 1
+        receipt_lines.append(
+            ReceiptLine(
+                receipt_line_id=f"RL-{receipt_id}-{idx:03d}",
+                receipt_id=receipt_id,
+                order_id=req.order_id,
+                order_line_id=line.order_line_id,
+                product_id=order_line.product_id,
+                supplier_product_id=order_line.supplier_product_id,
+                ordered_qty_purchase=ordered,
+                received_qty_purchase=line.received_qty_purchase,
+                variance_qty_purchase=variance,
+                receipt_comment=line.receipt_comment,
+            )
+        )
+
+    receipt = Receipt(
+        receipt_id=receipt_id,
+        order_id=req.order_id,
+        location_id=location_id,
+        supplier_id=order.supplier_id,
+        receipt_date=receipt_date,
+        received_by=req.received_by,
+        received_submitted_at=datetime.now(timezone.utc),
+        line_count=len(receipt_lines),
+        discrepancy_count=discrepancy_count,
+        received_with_missing_wz=True,
+        notes=req.notes,
+    )
+
+    warnings: list[str] = []
+    try:
+        persisted = _persist_receipt(backend, receipt, receipt_lines)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Goods-receipt worksheets not configured — create the "
+                "'receipts' and 'receipt_lines' tabs (see Migration Notes) "
+                "before confirming a delivery."
+            ),
+        )
+    if not persisted:
+        warnings.append(
+            "Receipt was not persisted (read-only backend) — data is in-memory only."
+        )
+
+    return ReceiptSubmitResponse(
+        receipt_id=receipt_id,
+        order_id=req.order_id,
+        receipt_date=receipt_date,
+        line_count=len(receipt_lines),
+        discrepancy_count=discrepancy_count,
+        received_with_missing_wz=True,
+        warnings=warnings,
+    )
+
+
+@app.get("/api/captain/receipts", response_model=list[ReceiptSummary])
+def captain_receipts(
+    order_id: Optional[str] = None,
+    location_id: str = Depends(require_captain),
+):
+    """List goods-receipts for this Captain's location, optionally narrowed to one
+    ``order_id``, newest `received_submitted_at` first. Sheet-only: seed mode and
+    a missing tab both degrade to `[]` (mirrors `captain_inventory_counts`)."""
+    backend = _choose_backend()
+    if backend is not sheets:
+        return []
+    try:
+        all_receipts = backend.load_receipts()
+    except sheets.WorksheetNotFound:
+        return []
+    receipts = [
+        r for r in all_receipts
+        if r.location_id == location_id
+        and (order_id is None or r.order_id == order_id)
+    ]
+    if not receipts:
+        return []
+
+    def _recency_key(r: Receipt) -> datetime:
+        return r.received_submitted_at or datetime.min.replace(tzinfo=timezone.utc)
+
+    receipts.sort(key=_recency_key, reverse=True)
+    return [
+        ReceiptSummary(
+            receipt_id=r.receipt_id,
+            order_id=r.order_id,
+            location_id=r.location_id,
+            receipt_date=r.receipt_date,
+            received_submitted_at=r.received_submitted_at,
+            received_by=r.received_by,
+            line_count=r.line_count,
+            discrepancy_count=r.discrepancy_count,
+            received_with_missing_wz=r.received_with_missing_wz,
+            wz_photo_count=r.wz_photo_count,
+            wz_photo_folder_url=r.wz_photo_folder_url,
+        )
+        for r in receipts
+    ]
+
+
+@app.get("/api/captain/receipt/{receipt_id}", response_model=ReceiptDetail)
+def captain_receipt_detail(
+    receipt_id: str,
+    location_id: str = Depends(require_captain),
+):
+    """One goods-receipt with product-enriched lines, location-scoped. Sheet-only:
+    seed mode -> 503; missing tab -> 503; missing/wrong-location -> 404 (we don't
+    differentiate — the Captain has no business knowing other locations' ids)."""
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Goods-receipt detail requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+    try:
+        receipt = backend.get_receipt(receipt_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Goods-receipt worksheets not configured — create the "
+                "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
+            ),
+        )
+    if receipt is None or receipt.location_id != location_id:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    supplier = suppliers_by_id.get(receipt.supplier_id)
+    location = locations_by_id.get(receipt.location_id)
+
+    enriched: list[ReceiptDetailLine] = []
+    for line in receipt.lines:
+        product = products_by_id.get(line.product_id)
+        sp = sps_by_id.get(line.supplier_product_id)
+        enriched.append(
+            ReceiptDetailLine(
+                receipt_line_id=line.receipt_line_id,
+                order_line_id=line.order_line_id,
+                product_id=line.product_id,
+                product_name_pl=product.product_name_pl if product else line.product_id,
+                inventory_unit=product.inventory_unit if product else "",
+                purchase_unit=sp.purchase_unit if sp else "",
+                is_critical=bool(product.is_critical) if product else False,
+                ordered_qty_purchase=line.ordered_qty_purchase,
+                received_qty_purchase=line.received_qty_purchase,
+                variance_qty_purchase=line.variance_qty_purchase,
+                receipt_comment=line.receipt_comment,
+            )
+        )
+
+    return ReceiptDetail(
+        receipt_id=receipt.receipt_id,
+        order_id=receipt.order_id,
+        location_id=receipt.location_id,
+        location_name=location.location_name if location else receipt.location_id,
+        supplier_id=receipt.supplier_id,
+        supplier_name=supplier.supplier_name if supplier else receipt.supplier_id,
+        receipt_date=receipt.receipt_date,
+        received_by=receipt.received_by,
+        received_submitted_at=receipt.received_submitted_at,
+        line_count=receipt.line_count,
+        discrepancy_count=receipt.discrepancy_count,
+        received_with_missing_wz=receipt.received_with_missing_wz,
+        wz_photo_folder_id=receipt.wz_photo_folder_id,
+        wz_photo_folder_url=receipt.wz_photo_folder_url,
+        wz_photo_count=receipt.wz_photo_count,
+        notes=receipt.notes,
+        lines=enriched,
+    )
+
+
+@app.post(
+    "/api/captain/receipt/{receipt_id}/photos",
+    response_model=ReceiptPhotoUploadResponse,
+)
+def captain_receipt_photos(
+    receipt_id: str,
+    files: list[UploadFile] = File(...),
+    location_id: str = Depends(require_captain),
+):
+    """Upload one or more WZ delivery-note photos for a receipt to its order's
+    Google Drive folder (GR-01, Phase 2).
+
+    Persist-first contract: the receipt already exists (created by submit); this
+    endpoint only ATTACHES photos, so a photo failure never loses the confirmed
+    delivery. Requires sheet backend AND Drive configured (else 503).
+    Location-scoped via the receipt's location. On success, flips
+    ``received_with_missing_wz`` off and records the per-order folder ref +
+    cumulative photo count. Non-image files are rejected (400).
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Photo upload requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+    if not drive.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Google Drive not configured — set SUPPLY_OS_GDRIVE_WZ_FOLDER_ID "
+                "(WZ photo folder shared with the service account)."
+            ),
+        )
+    try:
+        receipt = backend.get_receipt(receipt_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Goods-receipt worksheets not configured — create the "
+                "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
+            ),
+        )
+    if receipt is None or receipt.location_id != location_id:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    folder_id, folder_url = drive.ensure_order_folder(receipt.order_id)
+    uploaded: list[dict] = []
+    for idx, f in enumerate(files, start=1):
+        content = f.file.read()
+        if not content:
+            continue
+        ctype = f.content_type or ""
+        if not ctype.startswith("image/"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"File '{f.filename}' is not an image ({ctype or 'unknown'})",
+            )
+        ext = ""
+        if f.filename and "." in f.filename:
+            ext = "." + f.filename.rsplit(".", 1)[1]
+        name = f"{receipt.receipt_id}-{idx:02d}{ext}"
+        file_id, file_url = drive.upload_photo(folder_id, name, content, ctype)
+        uploaded.append({"file_id": file_id, "file_url": file_url, "name": name})
+
+    if not uploaded:
+        raise HTTPException(status_code=400, detail="No valid image files uploaded")
+
+    new_count = (receipt.wz_photo_count or 0) + len(uploaded)
+    backend.update_receipt(
+        receipt_id,
+        wz_photo_folder_id=folder_id,
+        wz_photo_folder_url=folder_url,
+        wz_photo_count=new_count,
+        received_with_missing_wz=False,
+    )
+    return ReceiptPhotoUploadResponse(
+        receipt_id=receipt_id,
+        wz_photo_count=new_count,
+        wz_photo_folder_url=folder_url,
+        received_with_missing_wz=False,
+        uploaded=uploaded,
+    )

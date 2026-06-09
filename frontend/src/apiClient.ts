@@ -33,6 +33,11 @@ import type {
   OrderLineManagerFinal,
   OrderableItem,
   Product,
+  ReceiptDetail,
+  ReceiptPhotoUploadResponse,
+  ReceiptSubmitRequest,
+  ReceiptSubmitResponse,
+  ReceiptSummary,
   Supplier,
   OrderStatus,
 } from "./types";
@@ -168,6 +173,50 @@ export function apiPatch<T>(path: string, body: unknown, role: Role): Promise<T>
   return request<T>("PATCH", path, role, body);
 }
 
+/**
+ * Multipart POST (e.g. WZ photo upload). Parallel to request() but bypasses
+ * JSON: we deliberately do NOT set Content-Type — the browser sets
+ * multipart/form-data + boundary itself. Same Bearer + 401 handling as request().
+ */
+export async function apiPostFormData<T>(
+  path: string,
+  form: FormData,
+  role: Role,
+): Promise<T> {
+  const tokenAtRequest = getToken(role);
+  const headers: Record<string, string> = {};
+  if (tokenAtRequest) headers["Authorization"] = `Bearer ${tokenAtRequest}`;
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${BASE_URL}${path}`, { method: "POST", headers, body: form });
+  } catch (err) {
+    throw new ApiError(0, (err as Error).message || "Network error");
+  }
+
+  if (resp.status === 401) {
+    const currentToken = getToken(role);
+    if (currentToken === tokenAtRequest) fireAuthInvalid(role);
+    throw new ApiError(401, "Bearer token invalid — please re-enter the code");
+  }
+
+  let payload: unknown = null;
+  try {
+    payload = await resp.json();
+  } catch {
+    if (!resp.ok) throw new ApiError(resp.status, resp.statusText);
+    return payload as T;
+  }
+  if (!resp.ok) {
+    const detail =
+      (payload && typeof payload === "object" && "detail" in payload
+        ? String((payload as { detail: unknown }).detail)
+        : null) || resp.statusText;
+    throw new ApiError(resp.status, detail);
+  }
+  return payload as T;
+}
+
 // Typed shortcuts ------------------------------------------------------------
 
 export const api = {
@@ -215,6 +264,24 @@ export const api = {
       `/api/captain/inventory/count/${encodeURIComponent(count_id)}`,
       "captain",
     ),
+  // Captain goods receiving (GR-01)
+  receiptSubmit: (req: ReceiptSubmitRequest) =>
+    apiPost<ReceiptSubmitResponse>("/api/captain/receipt/submit", req, "captain"),
+  captainReceipts: (order_id?: string) => {
+    const qs = order_id ? `?order_id=${encodeURIComponent(order_id)}` : "";
+    return apiGet<ReceiptSummary[]>(`/api/captain/receipts${qs}`, "captain");
+  },
+  receipt: (receipt_id: string) =>
+    apiGet<ReceiptDetail>(`/api/captain/receipt/${encodeURIComponent(receipt_id)}`, "captain"),
+  receiptUploadPhotos: (receipt_id: string, files: File[]) => {
+    const form = new FormData();
+    for (const f of files) form.append("files", f);
+    return apiPostFormData<ReceiptPhotoUploadResponse>(
+      `/api/captain/receipt/${encodeURIComponent(receipt_id)}/photos`,
+      form,
+      "captain",
+    );
+  },
   // Manager
   managerQueue: (location_id?: string, status: OrderStatus = "captain_submitted") => {
     const params = new URLSearchParams({ status });

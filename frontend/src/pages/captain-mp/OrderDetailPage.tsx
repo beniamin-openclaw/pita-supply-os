@@ -5,11 +5,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertOctagon, ChevronLeft, Lock, Pencil } from "lucide-react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  ChevronLeft,
+  Image as ImageIcon,
+  Lock,
+  PackageCheck,
+  Pencil,
+} from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
-import type { CaptainOrderDetail } from "../../types";
+import type { CaptainOrderDetail, ReceiptSummary } from "../../types";
 import { statusVisual } from "./lib/orderStatus";
 
 export function OrderDetailPage() {
@@ -18,6 +26,7 @@ export function OrderDetailPage() {
   const { order_id } = useParams<{ order_id: string }>();
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptSummary[]>([]);
 
   const load = useCallback(() => {
     if (!order_id) return;
@@ -26,6 +35,14 @@ export function OrderDetailPage() {
       .then((data) => {
         setOrder(data);
         setError(null);
+        if (data.status === "manager_sent") {
+          api
+            .captainReceipts(data.order_id)
+            .then(setReceipts)
+            .catch(() => setReceipts([]));
+        } else {
+          setReceipts([]);
+        }
       })
       .catch((e: ApiError) => {
         if (e.status !== 401) setError(e.detail);
@@ -186,6 +203,60 @@ export function OrderDetailPage() {
                 </li>
               ))}
             </ul>
+
+            {/* Goods receiving (GR-01): confirm delivery, or show the receipt. */}
+            {order.status === "manager_sent" && (
+              <div className="mb-6">
+                {receipts.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/captain-v2/orders/${order.order_id}/receive`)
+                    }
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-brand rounded-lg active:bg-brand-active focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  >
+                    <PackageCheck size={16} aria-hidden="true" />
+                    {t("delivery.confirmBtn")}
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <PackageCheck size={16} aria-hidden="true" />
+                      {t("delivery.statusConfirmed")}
+                    </div>
+                    {receipts[0].received_submitted_at && (
+                      <div className="mt-1 text-xs">
+                        {t("delivery.confirmedAt", {
+                          value: formatDateTime(receipts[0].received_submitted_at),
+                        })}
+                      </div>
+                    )}
+                    <div className="mt-1 text-xs">
+                      {t("delivery.discrepancies", {
+                        count: receipts[0].discrepancy_count,
+                      })}
+                    </div>
+                    {receipts[0].wz_photo_folder_url && (
+                      <a
+                        href={receipts[0].wz_photo_folder_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline"
+                      >
+                        <ImageIcon size={14} aria-hidden="true" />
+                        {t("delivery.openFolder")}
+                      </a>
+                    )}
+                    {receipts[0].received_with_missing_wz && (
+                      <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-amber-800">
+                        <AlertTriangle size={14} aria-hidden="true" />
+                        {t("delivery.missingWz")}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Edit / locked button */}
             {order.editable ? (

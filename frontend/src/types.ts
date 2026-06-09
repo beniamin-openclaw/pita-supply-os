@@ -384,3 +384,85 @@ export interface ApiError {
   detail: string;
   status: number;
 }
+
+// Goods receiving (GR-01) — match supply-os-v1/app/models.py -----------------
+
+export interface ReceiptLineSubmit {
+  order_line_id: string;
+  received_qty_purchase: number;
+  receipt_comment?: string;
+}
+
+export interface ReceiptSubmitRequest {
+  order_id: string;
+  received_by: string;
+  receipt_date?: string; // ISO date "YYYY-MM-DD"
+  lines: ReceiptLineSubmit[];
+  notes?: string;
+}
+
+export interface ReceiptSubmitResponse {
+  receipt_id: string;
+  order_id: string;
+  receipt_date: string;
+  line_count: number;
+  discrepancy_count: number;
+  received_with_missing_wz: boolean;
+  warnings: string[];
+}
+
+export interface ReceiptDetailLine {
+  receipt_line_id: string;
+  order_line_id: string;
+  product_id: string;
+  product_name_pl: string;
+  inventory_unit: string;
+  purchase_unit: string;
+  is_critical: boolean;
+  ordered_qty_purchase: number;
+  received_qty_purchase: number;
+  variance_qty_purchase: number;
+  receipt_comment: string;
+}
+
+export interface ReceiptDetail {
+  receipt_id: string;
+  order_id: string;
+  location_id: string;
+  location_name: string;
+  supplier_id: string;
+  supplier_name: string;
+  receipt_date: string;
+  received_by?: string | null;
+  received_submitted_at?: string | null;
+  line_count: number;
+  discrepancy_count: number;
+  received_with_missing_wz: boolean;
+  wz_photo_folder_id?: string | null;
+  wz_photo_folder_url?: string | null;
+  wz_photo_count: number;
+  notes: string;
+  lines: ReceiptDetailLine[];
+}
+
+export interface ReceiptSummary {
+  receipt_id: string;
+  order_id: string;
+  location_id: string;
+  receipt_date: string;
+  received_submitted_at?: string | null;
+  received_by?: string | null;
+  line_count: number;
+  discrepancy_count: number;
+  received_with_missing_wz: boolean;
+  wz_photo_count: number;
+  wz_photo_folder_url?: string | null;
+}
+
+export interface ReceiptPhotoUploadResponse {
+  receipt_id: string;
+  wz_photo_count: number;
+  wz_photo_folder_url?: string | null;
+  received_with_missing_wz: boolean;
+  uploaded: { file_id: string; file_url: string; name: string }[];
+}

@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     google_service_account_json_file: str = ""
     google_service_account_json: SecretStr = SecretStr("")
 
+    # Google Drive (WZ goods-receipt photos, GR-01) — id of the "WZ Photos"
+    # parent folder shared with the service account. Empty => photo upload is
+    # disabled (the receipt still persists, flagged received_with_missing_wz).
+    # Reuses the service-account creds above with the drive.file scope.
+    gdrive_wz_folder_id: str = ""
+
     # PostHog
     posthog_api_key: SecretStr = SecretStr("")
     posthog_host: str = "https://eu.i.posthog.com"

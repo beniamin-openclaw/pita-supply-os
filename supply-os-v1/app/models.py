@@ -530,3 +530,134 @@ class SuggestionReviewItem(BaseModel):
     avg_manager_final_qty_purchase: float
     avg_abs_deviation_pct: float  # mean |delta_vs_suggestion_pct| over lines that have one
     reason_code_counts: dict[str, int] = Field(default_factory=dict)
+
+
+# ---------- Goods receiving (GR-01) ----------
+
+class ReceiptLine(BaseModel):
+    """One delivered line within a goods-receipt — delivered vs. ordered for a
+    single order line. ``ordered_qty_purchase`` is the effective ordered qty
+    snapshotted at confirm (manager_final if > 0 else captain_final);
+    ``variance_qty_purchase`` = received − ordered."""
+    receipt_line_id: str
+    receipt_id: str
+    order_id: str
+    order_line_id: str
+    product_id: str
+    supplier_product_id: str
+    ordered_qty_purchase: float = 0
+    received_qty_purchase: float = 0
+    variance_qty_purchase: float = 0
+    receipt_comment: str = ""
+
+
+class Receipt(BaseModel):
+    """A Captain's confirmation that a dispatched order was delivered (GR-01).
+    Append-only, standalone child of an order — it never changes the order's
+    status. WZ delivery-note photos live in a per-order Google Drive folder
+    referenced here; ``received_with_missing_wz`` starts True and is flipped
+    False once at least one photo is attached."""
+    receipt_id: str
+    order_id: str
+    location_id: str
+    supplier_id: str
+    receipt_date: date
+    received_by: Optional[str] = None  # free-text attribution (no per-user identity in v0)
+    received_submitted_at: Optional[datetime] = None
+    line_count: int = 0
+    discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
+    received_with_missing_wz: bool = True
+    wz_photo_folder_id: Optional[str] = None
+    wz_photo_folder_url: Optional[str] = None
+    wz_photo_count: int = 0
+    notes: str = ""
+    lines: list[ReceiptLine] = Field(default_factory=list)
+
+
+class ReceiptLineSubmit(BaseModel):
+    order_line_id: str
+    received_qty_purchase: float = Field(ge=0)
+    receipt_comment: str = ""
+
+
+class ReceiptSubmitRequest(BaseModel):
+    """Payload for POST /api/captain/receipt/submit. ``received_by`` is required
+    free-text attribution (mirrors inventory ``count_user``); ``receipt_date``
+    defaults to Warsaw-today when omitted (a future date is rejected)."""
+    order_id: str
+    received_by: str = Field(min_length=1)
+    receipt_date: Optional[date] = None
+    lines: list[ReceiptLineSubmit] = Field(min_length=1)
+    notes: str = ""
+
+
+class ReceiptSubmitResponse(BaseModel):
+    receipt_id: str
+    order_id: str
+    receipt_date: date
+    line_count: int
+    discrepancy_count: int
+    received_with_missing_wz: bool
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ReceiptDetailLine(BaseModel):
+    """One enriched receipt line for the Captain detail view (product joins)."""
+    receipt_line_id: str
+    order_line_id: str
+    product_id: str
+    product_name_pl: str  # joined from products (id fallback)
+    inventory_unit: str
+    purchase_unit: str  # joined from supplier_products
+    is_critical: bool
+    ordered_qty_purchase: float
+    received_qty_purchase: float
+    variance_qty_purchase: float
+    receipt_comment: str = ""
+
+
+class ReceiptDetail(BaseModel):
+    """A full goods-receipt for the Captain detail view — location/supplier names
+    joined, product-enriched lines, and the WZ Drive folder reference."""
+    receipt_id: str
+    order_id: str
+    location_id: str
+    location_name: str  # joined
+    supplier_id: str
+    supplier_name: str  # joined
+    receipt_date: date
+    received_by: Optional[str] = None
+    received_submitted_at: Optional[datetime] = None
+    line_count: int = 0
+    discrepancy_count: int = 0
+    received_with_missing_wz: bool = True
+    wz_photo_folder_id: Optional[str] = None
+    wz_photo_folder_url: Optional[str] = None
+    wz_photo_count: int = 0
+    notes: str = ""
+    lines: list[ReceiptDetailLine] = Field(default_factory=list)
+
+
+class ReceiptSummary(BaseModel):
+    """Compact list row for GET /api/captain/receipts?order_id= (no lines)."""
+    receipt_id: str
+    order_id: str
+    location_id: str
+    receipt_date: date
+    received_submitted_at: Optional[datetime] = None
+    received_by: Optional[str] = None
+    line_count: int = 0
+    discrepancy_count: int = 0
+    received_with_missing_wz: bool = True
+    wz_photo_count: int = 0
+    wz_photo_folder_url: Optional[str] = None
+
+
+class ReceiptPhotoUploadResponse(BaseModel):
+    """Result of POST /api/captain/receipt/{id}/photos — the attached WZ photos
+    and the updated folder reference on the receipt (GR-01, Phase 2)."""
+    receipt_id: str
+    wz_photo_count: int
+    wz_photo_folder_url: Optional[str] = None
+    received_with_missing_wz: bool
+    uploaded: list[dict] = Field(default_factory=list)  # [{file_id, file_url, name}]
