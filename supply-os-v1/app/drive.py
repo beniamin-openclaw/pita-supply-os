@@ -2,8 +2,15 @@
 
 Uploads delivery-note (WZ) photos into a per-order subfolder under a parent
 "WZ Photos" folder that the operator shares with the service account. Reuses the
-same service-account credentials as ``app.sheets`` with the ``drive.file`` scope
-(already declared in ``sheets.SCOPES``).
+same service-account credentials as ``app.sheets`` with the full ``drive`` scope.
+
+Scope note: this needs the FULL ``drive`` scope, not ``drive.file``. The narrow
+``drive.file`` scope only grants access to files the app itself created (or that
+were opened via the Google Picker) — a folder the operator shares with the
+service-account email through the Drive "Share" UI is invisible to it and every
+request 404s ("File not found: <folder_id>"). Full ``drive`` lets the service
+account reach exactly the files/folders explicitly shared with its email (and
+nothing else — it does not expose anyone's wider Drive).
 
 This is a SIDE service, not a data backend — routes call it directly (after
 resolving persistence via ``_choose_backend()``), and it degrades via
@@ -25,7 +32,7 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 _FOLDER_MIME = "application/vnd.google-apps.folder"
 
 _service = None  # cached Drive v3 service singleton
