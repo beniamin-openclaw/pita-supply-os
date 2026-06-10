@@ -50,3 +50,10 @@
 - **Problem**: A backend optional-with-default field was mirrored as a *required* TS field. It was safe only because the server always emits it; the type contract still disagrees with the model — latent drift that bites the day a code path omits the field.
 - **Rule**: When mirroring a Pydantic model in TS, match optionality to the source — a field with a default or `Optional[...]` becomes `field?: T`. Only mark a TS field required when the backend guarantees it on every response.
 - **Applies to**: implement, impl-review
+
+## Verify what production actually runs — "merged" / "pushed" / "done" ≠ live
+
+- **Context**: Any change you believe is deployed — after a merge to `main`, a `git push`, a roadmap item flipped to `done`, or a "deploy" step — especially the droplet backend, whose deploy is manual and currently disconnected from git.
+- **Problem**: D-01 was marked `done` and GR-01 was merged to `main`, yet production ran pre-GR-01 code from a flat rsync copy of `app/` that is NOT the git working tree — `git push` / droplet `git reset` updates `supply-os-v1/app/` (not even checked out there), never the running `app/`. Separately, the order-screen endpoints served stale droplet seed CSVs while the Sheet was correct, and the bug still passed all 327 dev (seed-mode) tests. "It's on main", "I pushed", and "dev is green" were all false signals for "it's live and correct in prod".
+- **Rule**: Before trusting a change is live, verify the running artifact itself — hit the real prod endpoint, check the running code/version on the host, and confirm which backend/data source it actually serves. Never infer "deployed" from "merged / pushed / marked done", nor "prod-correct" from "dev-green" when dev (seed) and prod (sheet) resolve `_choose_backend()` to different sources. Backend deploy here is manual: rsync `supply-os-v1/app/` → droplet `app/` + `systemctl restart jarvis-supply-os.service`, not git-push.
+- **Applies to**: implement, impl-review
