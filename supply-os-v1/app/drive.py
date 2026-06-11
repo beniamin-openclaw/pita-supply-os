@@ -22,13 +22,11 @@ installed (seed/dev or the test environment, which mocks the service).
 from __future__ import annotations
 
 import io
-import json
 import logging
-from pathlib import Path
 
 from google.oauth2.service_account import Credentials
 
-from .config import settings
+from .config import has_service_account_creds, resolve_service_account_info, settings
 
 log = logging.getLogger(__name__)
 
@@ -40,11 +38,7 @@ _service = None  # cached Drive v3 service singleton
 
 def is_configured() -> bool:
     """True when a WZ parent-folder id AND service-account creds are present."""
-    has_creds = (
-        bool(settings.google_service_account_json_file)
-        or bool(settings.google_service_account_json.get_secret_value())
-    )
-    return bool(settings.gdrive_wz_folder_id and has_creds)
+    return bool(settings.gdrive_wz_folder_id and has_service_account_creds())
 
 
 def reset_service() -> None:
@@ -54,22 +48,13 @@ def reset_service() -> None:
 
 
 def _credentials() -> Credentials:
-    """Load the service-account credentials (file path preferred, else inline
-    JSON) — mirrors ``app.sheets._client``'s source order, scoped to drive.file."""
-    sa_file = settings.google_service_account_json_file
-    sa_json_inline = settings.google_service_account_json.get_secret_value()
-    if sa_file:
-        path = Path(sa_file)
-        if not path.is_file():
-            raise RuntimeError(
-                f"google_service_account_json_file points to a missing file: {sa_file}"
-            )
-        creds_info = json.loads(path.read_text(encoding="utf-8"))
-    elif sa_json_inline:
-        creds_info = json.loads(sa_json_inline)
-    else:
-        raise RuntimeError("no service-account credentials configured for Drive")
-    return Credentials.from_service_account_info(creds_info, scopes=DRIVE_SCOPES)
+    """Load the service-account credentials via the shared resolver
+    (``config.resolve_service_account_info``), scoped to the full ``drive``
+    scope. Sharing the resolver with ``app.sheets`` keeps every credential
+    source — including the base64 form used on Railway — working for Drive too."""
+    return Credentials.from_service_account_info(
+        resolve_service_account_info(), scopes=DRIVE_SCOPES
+    )
 
 
 def _drive_service():

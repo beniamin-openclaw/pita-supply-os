@@ -15,7 +15,6 @@ will be implemented in Phase C2.
 """
 from __future__ import annotations
 
-import json
 import logging
 import time
 from datetime import date, datetime
@@ -28,7 +27,7 @@ from gspread.utils import rowcol_to_a1
 from google.oauth2.service_account import Credentials
 from pydantic import BaseModel
 
-from .config import settings
+from .config import has_service_account_creds, resolve_service_account_info, settings
 from .models import (
     InventoryCount,
     InventoryCountLine,
@@ -85,11 +84,7 @@ class OrderAlreadyDispatchedError(Exception):
 # ---------- Configuration helpers ----------
 
 def is_configured() -> bool:
-    has_creds = (
-        bool(settings.google_service_account_json_file)
-        or bool(settings.google_service_account_json.get_secret_value())
-    )
-    return bool(settings.google_sheet_id and has_creds)
+    return bool(settings.google_sheet_id and has_service_account_creds())
 
 
 def warn_if_unconfigured() -> None:
@@ -105,39 +100,18 @@ def warn_if_unconfigured() -> None:
 def _client() -> gspread.Client:
     """Return a singleton authorized gspread client.
 
-    Source order for service-account credentials:
-      1) `google_service_account_json_file` — path to a JSON file on disk
-         (preferred for production; sidesteps EnvironmentFile escape-sequence
-         issues that can corrupt inline JSON containing `\\n`)
-      2) `google_service_account_json` — inline JSON string (dev/docker)
+    Credentials are resolved by `config.resolve_service_account_info()`
+    (file -> base64 -> inline), then scoped to `SCOPES`. Sharing that resolver
+    is the single source of truth so every consumer (Sheets + Drive) honors the
+    same credential sources — including the base64 form used on Railway.
     """
     global _client_instance
     if _client_instance is not None:
         return _client_instance
 
-    sa_file = settings.google_service_account_json_file
-    sa_json_inline = settings.google_service_account_json.get_secret_value()
-
-    if sa_file:
-        from pathlib import Path
-        path = Path(sa_file)
-        if not path.is_file():
-            raise RuntimeError(
-                f"google_service_account_json_file points to a missing file: {sa_file}"
-            )
-        creds_info = json.loads(path.read_text(encoding="utf-8"))
-        log.info("gspread credentials loaded from file: %s", sa_file)
-    elif sa_json_inline:
-        creds_info = json.loads(sa_json_inline)
-        log.info("gspread credentials loaded from inline JSON env var")
-    else:
-        raise RuntimeError(
-            "no service-account credentials configured — set either "
-            "SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_FILE or "
-            "SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON"
-        )
-
-    creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    creds = Credentials.from_service_account_info(
+        resolve_service_account_info(), scopes=SCOPES
+    )
     _client_instance = gspread.authorize(creds)
     log.info("gspread client created (singleton)")
     return _client_instance

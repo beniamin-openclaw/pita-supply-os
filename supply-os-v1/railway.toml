@@ -1,0 +1,17 @@
+# Railway service config for the Supply OS backend.
+#
+# The Railway service's Root Directory must be set to this folder (supply-os-v1/)
+# so Railway finds the Procfile + pyproject.toml. The Procfile owns the start
+# command (uvicorn app.main:app --host 0.0.0.0 --port $PORT) — do NOT duplicate
+# it here.
+
+[build]
+# Pin the builder so a routine redeploy can't silently flip Nixpacks -> Railpack
+# (which could change how env vars / the service-account JSON are parsed).
+builder = "NIXPACKS"
+
+[deploy]
+# Gate the deploy on a real boot: a release that can't serve /health is held
+# back instead of replacing a working one.
+healthcheckPath = "/health"
+healthcheckTimeout = 100

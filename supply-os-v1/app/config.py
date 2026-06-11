@@ -1,4 +1,6 @@
 """Pydantic settings — env-driven config for the v0 backend."""
+import base64
+import json
 from enum import Enum
 from pathlib import Path
 
@@ -31,6 +33,11 @@ class Settings(BaseSettings):
     #     long values correctly)
     google_service_account_json_file: str = ""
     google_service_account_json: SecretStr = SecretStr("")
+    # base64-encoded inline JSON — a CLI-safe single-line form for platforms
+    # whose env handling mangles multi-line values (e.g. `railway variables
+    # --set`). Decoded by resolve_service_account_info(); preferred over the raw
+    # inline var, after the file path.
+    google_service_account_json_b64: SecretStr = SecretStr("")
 
     # Google Drive (WZ goods-receipt photos, GR-01) — id of the "WZ Photos"
     # parent folder shared with the service account. Empty => photo upload is
@@ -55,3 +62,45 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def has_service_account_creds() -> bool:
+    """True when any service-account credential source is configured (file /
+    base64 / inline). Single source of truth for the Sheets + Drive config
+    gates, so a base64-only setup (Railway) satisfies both."""
+    return bool(
+        settings.google_service_account_json_file
+        or settings.google_service_account_json_b64.get_secret_value()
+        or settings.google_service_account_json.get_secret_value()
+    )
+
+
+def resolve_service_account_info() -> dict:
+    """Parse the service-account credentials dict from the configured source.
+
+    Preference order: file path -> base64 inline -> raw inline JSON. Raises
+    RuntimeError when none is set. Scopes are NOT applied here — each caller
+    (sheets -> SCOPES, drive -> DRIVE_SCOPES) wraps the result with
+    Credentials.from_service_account_info, so this is the one place credential
+    SOURCES are resolved for every consumer.
+    """
+    sa_file = settings.google_service_account_json_file
+    sa_b64 = settings.google_service_account_json_b64.get_secret_value()
+    sa_inline = settings.google_service_account_json.get_secret_value()
+    if sa_file:
+        path = Path(sa_file)
+        if not path.is_file():
+            raise RuntimeError(
+                f"google_service_account_json_file points to a missing file: {sa_file}"
+            )
+        return json.loads(path.read_text(encoding="utf-8"))
+    if sa_b64:
+        return json.loads(base64.b64decode(sa_b64))
+    if sa_inline:
+        return json.loads(sa_inline)
+    raise RuntimeError(
+        "no service-account credentials configured — set one of "
+        "SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_FILE, "
+        "SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_B64, or "
+        "SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON"
+    )
