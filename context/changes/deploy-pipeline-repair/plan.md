@@ -428,29 +428,29 @@ imposes a body-size limit.
 
 #### Automated
 
-- [x] 1.1 Backend tests pass: `cd supply-os-v1 && python -m pytest`
-- [x] 1.2 Lint clean: `cd supply-os-v1 && ruff check .`
-- [x] 1.3 Resolver test: b64 round-trips; preference file → b64 → inline holds
-- [x] 1.4 With b64-only creds, sheets.is_configured() AND drive.is_configured() both True
-- [x] 1.5 `supply-os-v1/railway.toml` exists, valid TOML, sets healthcheckPath=/health
+- [x] 1.1 Backend tests pass: `cd supply-os-v1 && python -m pytest` — 4d69be4
+- [x] 1.2 Lint clean: `cd supply-os-v1 && ruff check .` — 4d69be4
+- [x] 1.3 Resolver test: b64 round-trips; preference file → b64 → inline holds — 4d69be4
+- [x] 1.4 With b64-only creds, sheets.is_configured() AND drive.is_configured() both True — 4d69be4
+- [x] 1.5 `supply-os-v1/railway.toml` exists, valid TOML, sets healthcheckPath=/health — 4d69be4
 
 #### Manual
 
-- [x] 1.6 `railway.toml` builder value matches current Railway-recommended builder
+- [x] 1.6 `railway.toml` builder value matches current Railway-recommended builder — 4d69be4
 
 ### Phase 2: Deploy runbook + smoke kit
 
 #### Automated
 
-- [ ] 2.1 Runbook names all env vars + base64 command + rollback section (`grep -c SUPPLY_OS_` ≥ 8)
-- [ ] 2.2 Smoke script passes `bash -n` syntax check
-- [ ] 2.3 Smoke script contains no submit/dispatch call
-- [ ] 2.4 Smoke script asserts the live backend via /health/internal (data_backend==sheet)
+- [x] 2.1 Runbook names all env vars + base64 command + rollback section (`grep -c SUPPLY_OS_` ≥ 8)
+- [x] 2.2 Smoke script passes `bash -n` syntax check
+- [x] 2.3 Smoke script contains no submit/dispatch call
+- [x] 2.4 Smoke script asserts the live backend via /health/internal (data_backend==sheet)
 
 #### Manual
 
-- [ ] 2.5 Owner reads runbook end-to-end; every command copy-pasteable, no agent-secret access
-- [ ] 2.6 Env checklist matches the owner's actual droplet `.env` keys
+- [x] 2.5 Owner reads runbook end-to-end; every command copy-pasteable, no agent-secret access
+- [x] 2.6 Env checklist matches the owner's actual droplet `.env` keys
 
 ### Phase 3: Production cutover
 
