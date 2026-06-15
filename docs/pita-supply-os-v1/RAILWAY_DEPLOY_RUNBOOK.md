@@ -40,8 +40,10 @@ service → Settings → Root Directory). This is required so Railway finds the
 `Procfile`, `pyproject.toml`, and `railway.toml` in this subfolder — the repo
 root is a monorepo. `railway.toml` already pins the builder (RAILPACK — now
 Railway's default; Nixpacks is legacy) and the `/health` healthcheck; the
-`Procfile` owns the start command (`uvicorn app.main:app --host 0.0.0.0 --port
-$PORT`). Note: Railway reads `railway.toml` by **absolute path from the repo
+`Procfile` owns the start command (`python -m uvicorn app.main:app --host
+0.0.0.0 --port $PORT` — invoked as a module so it works even when the `uvicorn`
+console script isn't on PATH in the build image). Note: Railway reads
+`railway.toml` by **absolute path from the repo
 root** (`/supply-os-v1/railway.toml`) — it does NOT follow the Root Directory
 setting.
 
