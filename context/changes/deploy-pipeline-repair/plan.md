@@ -459,14 +459,14 @@ dead end), so the multipart-body-size concern does not apply for this change.
 #### Automated
 
 - [x] 3.1 `frontend/vercel.json` valid JSON; `/api/:path*` destination points at Railway host
-- [x] 3.2 Frontend builds with the edit: `cd frontend && npm run build`
+- [x] 3.2 Frontend builds with the edit: `cd frontend && npm run build` — 8e49d5d
 
 #### Manual
 
 - [x] 3.3 Owner: `railway up` succeeds; `railway logs` shows clean uvicorn boot
 - [x] 3.4 Owner: smoke kit green against Railway URL (health, live-Sheet products, queue)
 - [x] 3.5 Owner: after merge/push, Vercel domain `/api/*` resolves through Railway
-- [x] 3.6 Owner: one back-out captain submit completes end-to-end (no real order)
+- [x] 3.6 Owner: one back-out captain submit completes end-to-end (no real order) — 8e49d5d
 - [ ] 3.7 Owner: Manager queue loads; GR-01 receive confirms through Railway (WZ photos disabled — Supabase later)
 - [ ] 3.8 Owner: rollback rehearsed — reverting vercel.json returns traffic to droplet in ~1 min
 
@@ -474,7 +474,7 @@ dead end), so the multipart-body-size concern does not apply for this change.
 
 #### Automated
 
-- [x] 4.1 `roadmap.md` references Railway as backend host / auto-deploy + links runbook
+- [x] 4.1 `roadmap.md` references Railway as backend host / auto-deploy + links runbook — 8e49d5d
 
 #### Manual
 
