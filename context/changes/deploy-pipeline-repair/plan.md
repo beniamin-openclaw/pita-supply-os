@@ -459,14 +459,14 @@ dead end), so the multipart-body-size concern does not apply for this change.
 #### Automated
 
 - [x] 3.1 `frontend/vercel.json` valid JSON; `/api/:path*` destination points at Railway host
-- [ ] 3.2 Frontend builds with the edit: `cd frontend && npm run build`
+- [x] 3.2 Frontend builds with the edit: `cd frontend && npm run build`
 
 #### Manual
 
 - [x] 3.3 Owner: `railway up` succeeds; `railway logs` shows clean uvicorn boot
 - [x] 3.4 Owner: smoke kit green against Railway URL (health, live-Sheet products, queue)
-- [ ] 3.5 Owner: after merge/push, Vercel domain `/api/*` resolves through Railway
-- [ ] 3.6 Owner: one back-out captain submit completes end-to-end (no real order)
+- [x] 3.5 Owner: after merge/push, Vercel domain `/api/*` resolves through Railway
+- [x] 3.6 Owner: one back-out captain submit completes end-to-end (no real order)
 - [ ] 3.7 Owner: Manager queue loads; GR-01 receive confirms through Railway (WZ photos disabled — Supabase later)
 - [ ] 3.8 Owner: rollback rehearsed — reverting vercel.json returns traffic to droplet in ~1 min
 
@@ -474,10 +474,41 @@ dead end), so the multipart-body-size concern does not apply for this change.
 
 #### Automated
 
-- [ ] 4.1 `roadmap.md` references Railway as backend host / auto-deploy + links runbook
+- [x] 4.1 `roadmap.md` references Railway as backend host / auto-deploy + links runbook
 
 #### Manual
 
 - [ ] 4.2 One green Wola×Bukat pilot cycle completed on Railway before decommission
 - [ ] 4.3 Owner: droplet service stopped + disabled; prod still serves via Railway after
 - [ ] 4.4 Owner: droplet code/venv left intact as a fallback
+
+## Close-out note (2026-06-15)
+
+Migration is **functionally complete**: Railway backend is live (`env=prod`,
+`data_backend=sheet`, live Sheet served — 134 products, manager queue 200, Bukat
+orderable), Vercel `/api/*` flows through Railway (verified via the
+`x-railway-edge` header), and a real Captain submit landed on the Manager queue
+end-to-end (3.6). The remaining Progress items are owner-run or have degraded into
+no-ops:
+
+- **3.7 (GR-01 receive through Railway)** — Manager queue load is confirmed; the
+  goods-receipt path was not exercised this cycle. WZ photo upload stays disabled
+  by design (Drive dead-end → Supabase Storage later). Low risk: the receive route
+  is unchanged code, host-agnostic.
+- **3.8 (rollback rehearsal to droplet)** — **degraded.** The droplet's HTTPS is
+  down (TLS handshake fails), so the documented one-commit `vercel.json` revert no
+  longer has a live target. Rollback at the proxy layer still works mechanically;
+  the fallback host is just not currently serving. Railway prod is healthy, so this
+  does not block close-out.
+- **4.2 (one green pilot cycle)** — owner judgment; gates decommission, not the
+  migration itself.
+- **4.3 / 4.4 (droplet stop+disable / leave code intact)** — **moot in practice.**
+  The droplet already stopped serving; a clean `systemctl stop/disable` is optional
+  cleanup the owner can do via SSH whenever convenient. Code/venv remain in place as
+  a cold fallback.
+
+Net: the broken-deploy-pipeline problem this change was opened to fix is resolved —
+git (`main`) is now the deployable source of truth via Railway auto-deploy. Datastore
+(Sheets → Supabase) is the next change (**S-10**), per the `infrastructure.md`
+sequencing rule (host first, prove it boring, then datastore — never two big changes
+in one step).

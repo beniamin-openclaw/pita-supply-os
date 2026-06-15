@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-09
+updated: 2026-06-15
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -64,6 +64,8 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Observability:** absent — PostHog key present in `config.py` but no client wired; no Sentry; stdlib `logging` only.
 
 > **Since baseline (updates as of 2026-06-09):** product CI now runs on every push/PR (`.github/workflows/ci.yml` — backend ruff+pytest, frontend build+lint+vitest); a **frontend test runner (Vitest)** is wired in; the backend suite has grown from 196 to **281 tests**. These close the two HIGH `health-check.md` gaps (CI coverage + FE test runner). Still open: backend lockfile, TS `strict`, mypy/pyright (tracked as **H-01**). Observability remains unwired; data is still Google Sheets (S-10 migrates it).
+
+> **Backend host migrated to Railway (2026-06-15, change `deploy-pipeline-repair`):** the FastAPI backend now runs on **Railway**, auto-deploying from `main` (GitHub-connected; Root Directory `supply-os-v1`, Railpack builder, base64 service-account creds, `/health` healthcheck). This supersedes the DigitalOcean droplet, whose deploy was a flat rsync copy disconnected from git (D-01's documented gap — `git push` did not deploy). Google Sheets stays the datastore behind `_choose_backend()`; only the host changed (datastore → Supabase is sequenced separately as **S-10**). Vercel still serves the frontend and rewrites `/api/*` — now to the Railway URL. Owner runbook: `docs/pita-supply-os-v1/RAILWAY_DEPLOY_RUNBOOK.md`. WZ photo upload stays disabled (Drive dead-end → Supabase Storage later). Droplet left intact as a cold fallback (currently not serving).
 
 ## Foundations
 
@@ -203,6 +205,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 - **Owner-run:** SSH to the droplet and Vercel Git settings are owner actions (agent SSH is blocked). The agent prepares; the owner executes.
 - **Risk:** Pure ops, no product code. Hard rule: secrets (`sa.json`, `.env`, Supabase keys) stay off-repo (Lesson 3). Smoke = `/health` + submit-and-back-out, never a real order.
 - **Status:** done (2026-06-09) — §1 Vercel Git integration re-pointed to `beniamin-openclaw/pita-supply-os`, production branch `main`, auto-deploy confirmed. §2 backend droplet updated via `git remote add origin` + `git reset --hard origin/main` + `pip install -e .` + `systemctl restart jarvis-supply-os`; smoke `/health` → `{"status":"ok"}`. S-09 `tenth_kg` drift closed. Production stack fully on `main@7b5f2c0`.
+  - **Superseded (2026-06-15) — backend host migrated to Railway (`deploy-pipeline-repair`).** D-01's §2 backend mechanism was effectively incomplete: the running droplet backend was a flat rsync copy of `app/` disconnected from the git checkout, so `git push` / `git reset` did **not** deploy (GR-01 went live only after a manual rsync+restart). The repair migrates the backend host to **Railway with real auto-deploy from `main`** (GitHub-connected, Root Directory `supply-os-v1`, Railpack, base64 SA creds, `/health` healthcheck). Frontend `vercel.json` `/api/*` rewrite now points at the Railway URL; Sheets stays the datastore (host-only migration — Supabase is **S-10**, sequenced separately). Runbook: `docs/pita-supply-os-v1/RAILWAY_DEPLOY_RUNBOOK.md`. Droplet stopped serving (HTTPS down) and is left intact as a cold fallback; a clean `systemctl stop/disable` is the only remaining owner cleanup.
 
 ### S-10: Supabase data backend behind `_choose_backend()`
 
