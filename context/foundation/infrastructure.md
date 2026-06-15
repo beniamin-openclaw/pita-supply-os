@@ -17,6 +17,8 @@ element_decisions:
   ci_cd: "GitHub Actions — add a product workflow (backend ruff+pytest; frontend tsc+eslint+build+vitest)"
   secrets: "No change; migration off Sheets removes the inline-JSON \\n footgun"
 scale_note: "Owner now expects company-wide rollout in ~2-3 weeks (was 'small pilot') — elevates datastore/CI/monitoring to urgent and fires the backend-host 'scale arrives' trigger"
+updated: 2026-06-12
+update_note: "Focused update — backend-host trigger FIRED (deploy pipeline confirmed broken this week → Railway now, not 'if/when'); added WZ photo storage → Supabase Storage (Drive service-account-quota dead end); refreshed Railway deploy shape (Railpack now default, IPv6/Hypercorn footgun, spend caps); re-sequenced host-first."
 ---
 
 ## Recommendation
@@ -29,6 +31,75 @@ scale_note: "Owner now expects company-wide rollout in ~2-3 weeks (was 'small pi
 **Railway is a documented *upgrade path*, not an assumed migration.** The FastAPI process's hard constraint (a long-running ASGI server) eliminates JS-edge/serverless hosts (Cloudflare Workers, Netlify) and makes Vercel awkward for the backend, so the only viable upgrade targets are container PaaS. Among those, **Railway** leads: it honors the existing `Procfile` unchanged (lowest migration friction), is covered by an existing paid premium subscription (≈$0 marginal on the $5 Hobby credit), has a strong CLI + `llms.txt` docs, and offers managed Postgres for the future datastore move. **Render** is #2 (cleanest 5/5, GA MCP) if mature agent tooling outweighs $7/mo; **Fly.io** #3.
 
 **You migrate off the droplet only when a trigger fires** (see *Decision Triggers* below) — not on a timeline. Until then the droplet is the answer.
+
+---
+
+## Update — 2026-06-12 (focused: triggers fired + photo storage)
+
+*Layered on the 2026-06-04 base (m1l5 — `git 92ec804`). The **platform decision is unchanged** — Railway + Supabase still win; this records what this week's lived evidence changed. It **supersedes the "wait for a trigger" timing** for the backend host and **adds WZ photo storage**, an element the base doc predates (GR-01 shipped after).*
+
+### Status change — the backend-host trigger has FIRED (act now, not "if/when")
+
+The base doc treated the Railway move as an upgrade taken "only when a trigger fires." Two fired for real this week:
+
+- **Trigger #2 (real ops toil) + #3 (want agent-owned deploys):** the droplet deploy pipeline is **confirmed broken** — `git push` does **not** deploy, the running `app/` is a flat copy disconnected from git, and the only working deploy is a manual `git clone` to `/tmp` + `cp` + `systemctl restart` (memory `prod-deploy-pipeline-broken`). Every backend change this week needed hand-piloted SSH. That *is* the toil the trigger names.
+- **Shared-box risk:** the droplet also runs Caddy, Postgres and unrelated dashboards — an agent can't safely operate it, capping agent-owned deploys.
+
+**Net: backend → Railway is now near-term and recommended, not hypothetical.** Frontend stays on Vercel. Crucially the host move is **data-agnostic** — Railway runs the existing `Procfile`/Sheets backend unchanged, so it lands **before** the datastore migration and immediately gives git-push deploy for every later change (including the Supabase migration itself). See re-sequencing below.
+
+### NEW element — WZ photo storage → Supabase Storage (private bucket + signed URLs)
+
+**Decision: WZ delivery-note photos go to a private Supabase Storage bucket, uploaded server-side from FastAPI with the `service_role` key, viewed via short-lived signed URLs.** Same Supabase project as the datastore migration.
+
+**Why Drive is a structural dead end:** a Google **service account has no Drive storage quota**, so it can't own uploaded files in a normal Drive → `403 storageQuotaExceeded`, confirmed in prod 2026-06-10 (memory `gr-01-wz-photos-supabase`). Drive escapes (Shared Drive / domain-wide delegation) were rejected. **Supabase Storage bills to the project, not an identity**, so the whole quota/scope/sharing class of problem vanishes (GA, checked 2026-06-12).
+
+**Mapping onto `app/drive.py` (drop-in-ish):**
+
+| Today (`drive.py`) | Supabase Storage |
+|---|---|
+| `ensure_order_folder(order_id)` | **Gone** — no folder objects; just a key prefix `wz/<order_id>/` |
+| `upload_photo(folder_id, name, bytes, mime)` | `supabase.storage.from_("wz-photos").upload(path=f"wz/{order_id}/{name}", file=bytes, file_options={"content-type": mime})` |
+| receipt stores `wz_photo_folder_id/url` | store `wz_photo_path_prefix` (`wz/<order_id>`) + `wz_photo_count`; sign a URL per photo at view time (`create_signed_url(path, expires_in=…)`) |
+| re-enable | flip `WZ_PHOTOS_ENABLED=true` in `frontend/src/pages/captain-mp/ReceiveDeliveryPage.tsx` |
+
+**Limits/pricing (Pro, 2026-06-12):** 100 GB storage + 250 GB egress included, overage $0.0213/GB; standard upload handles multi-MB phone JPEGs (max file 500 GB). Trivially enough.
+
+**Anti-bias (Supabase Storage):**
+- *Devil's advocate:* (1) GR-01's end goal is a WZ photo reaching the **GoStock accountant by email** — a signed URL expires, so that path must either **attach the image bytes to the dispatch email** or use a re-signable link, not a raw bucket URL. Decide explicitly. (2) `service_role` key is all-powerful — server-side only, never in the SPA. (3) content-type must be set explicitly or files serve as `text/html`. (4) use the current `sb_secret_…` key format.
+- *Pre-mortem:* shipped with a **public** bucket "to keep it simple" → delivery notes (supplier + price data) become guessable-URL public business documents = leak; or signed URLs at 1h expiry, accountant opens the mail next morning → dead links. → **Mitigation: private bucket; decide accountant delivery (attach bytes on dispatch, or re-sign on demand).**
+- *Unknown unknowns:* `service_role` bypasses RLS on `storage.objects`, but if the client is ever inited with the **anon** key by mistake, uploads silently fail under RLS; and **never persist a signed URL** (it expires) — store the path, sign on demand.
+
+**Decoupling win:** photos-on-Supabase touches only the receipt photo path, not order data — so it can ship as a **small standalone change even before** the full Sheets→Postgres move, re-enabling GR-01 photos quickly.
+
+### Railway deploy shape — 2026-06-12 refresh (fresh research)
+
+Deltas vs the base runbook:
+- **Builder churn resolved:** **Railpack is now the default** (Nixpacks → maintenance). Pin `builder = "RAILPACK"` in `railway.toml`. **Gotcha:** `railway.toml` is referenced by **absolute path from repo root** (`/supply-os-v1/railway.toml`) — it does NOT follow the Root Directory setting.
+- **Monorepo:** set service **Root Directory = `supply-os-v1/`** so Railway builds only the backend (frontend stays on Vercel). GitHub link is a **one-time dashboard step**; after that `git push` deploys — precisely what fixes the broken pipeline.
+- **NEW footgun — IPv6:** Railway's private network is IPv6-only and uvicorn can't dual-stack bind from the CLI. `uvicorn --host 0.0.0.0 --port $PORT` is fine for **public HTTP** (all the pilot needs); Railway's own FastAPI guide now recommends **Hypercorn** (`hypercorn app.main:app --bind 0.0.0.0:$PORT`) — keep as fallback if health checks flake. A hardcoded port fails the health check.
+- **Secrets:** base64-encode the Google SA JSON to one line (`base64 -i sa.json | tr -d '\n'`) to dodge newline escaping; the Supabase Postgres connection string is plain single-line.
+- **Cost safety:** Hobby is **always-on by default**; keep **App Sleeping OFF** for prod. Spend caps are **NOT on by default** — set a $10–20 hard limit + email alerts (75/90/100%).
+- **Region:** EU West (**Amsterdam**); ~15–20 ms to Warsaw. No PL/Frankfurt option.
+- **Ops loop:** rollback via dashboard (three-dot → Rollback, restores image + vars) or `railway redeploy`; logs via `railway logs`. MCP server still **beta**.
+
+### Re-sequencing (updated by this week's evidence)
+
+The base doc led with "datastore first." The acute pain now is the **broken deploy pipeline** + **blocked photos**, both independent of the DB. Recommended order:
+
+1. **Backend host → Railway FIRST** — stops the bleeding (git-push deploy), data-agnostic (keep the Sheets backend + `Procfile`), lowest-risk. Every later step then deploys cleanly.
+2. **WZ photos → Supabase Storage** — small, standalone, re-enables GR-01 photos; stands up the Supabase project.
+3. **Datastore Sheets → Postgres (Supabase)** — the bigger move, behind `_choose_backend()`; keep the base pre-mortem rule (don't cut over the datastore *and* go multi-location in one step).
+4. **In parallel (low-risk):** product CI (GitHub Actions) + PostHog error tracking, per the base doc.
+
+### Risk register — additions (2026-06-12)
+
+| Risk | Source | Likelihood | Impact | Mitigation |
+|---|---|---|---|---|
+| uvicorn IPv6/dual-stack → Railway health check fails | Research (Railway) | M | M | Bind `--host 0.0.0.0 --port $PORT`; fall back to Hypercorn `--bind 0.0.0.0:$PORT` |
+| `railway.toml` ignored (expected at Root Directory, not repo root) | Research (Railway) | M | M | Reference it by absolute path `/supply-os-v1/railway.toml` |
+| Public Storage bucket leaks WZ business docs | Pre-mortem (Storage) | L | H | Private bucket + signed URLs; `service_role` server-side only |
+| Signed-URL expiry breaks async accountant viewing | Devil's advocate (Storage) | M | M | Attach image bytes to the dispatch email, or re-sign on demand; never persist a signed URL |
+| Two big changes stacked (host + datastore) during rollout | Base pre-mortem, reaffirmed | M | H | Sequence host → photos → datastore; one change per pilot cycle |
 
 ## Decision Triggers — when to take the Railway upgrade
 
