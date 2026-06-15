@@ -25,13 +25,13 @@ function effectiveOrdered(line: ManagerOrderLineDetail): number {
     : line.captain_final_qty_purchase;
 }
 
-// WZ photo upload is OFF until storage moves to Supabase. The Drive path is a
-// dead end: a service account has no Drive storage quota, so it can't own
-// uploaded files in a normal My Drive (403 storageQuotaExceeded). Re-enable
-// (flip to true) once the receipt-photos endpoint writes to Supabase Storage.
-// Until then we hide the control so the Captain never hits the failing upload —
-// the receipt itself still saves (quantities + variances), flagged missing-WZ.
-const WZ_PHOTOS_ENABLED = false;
+// WZ photo upload writes to a private Supabase Storage bucket (server-side,
+// service_role key); photos are viewed via short-lived signed URLs. Enabled now
+// that the receipt-photos endpoint targets Supabase (the old Drive path was a
+// dead end — a service account has no Drive storage quota, 403 storageQuotaExceeded).
+// If storage is unconfigured the backend 503s and the receipt still saves
+// (quantities + variances), flagged missing-WZ.
+const WZ_PHOTOS_ENABLED = true;
 
 export function ReceiveDeliveryPage() {
   const { t } = useT();

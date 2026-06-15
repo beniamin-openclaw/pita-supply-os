@@ -438,8 +438,7 @@ export interface ReceiptDetail {
   line_count: number;
   discrepancy_count: number;
   received_with_missing_wz: boolean;
-  wz_photo_folder_id?: string | null;
-  wz_photo_folder_url?: string | null;
+  wz_photo_path_prefix?: string | null;
   wz_photo_count: number;
   notes: string;
   lines: ReceiptDetailLine[];
@@ -456,13 +455,16 @@ export interface ReceiptSummary {
   discrepancy_count: number;
   received_with_missing_wz: boolean;
   wz_photo_count: number;
-  wz_photo_folder_url?: string | null;
+}
+
+export interface ReceiptPhotoItem {
+  name: string;
+  signed_url: string;
 }
 
 export interface ReceiptPhotoUploadResponse {
   receipt_id: string;
   wz_photo_count: number;
-  wz_photo_folder_url?: string | null;
   received_with_missing_wz: boolean;
-  uploaded: { file_id: string; file_url: string; name: string }[];
+  uploaded: ReceiptPhotoItem[];
 }

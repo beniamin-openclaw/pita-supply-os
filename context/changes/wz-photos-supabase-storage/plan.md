@@ -452,8 +452,8 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [x] 2.1 Backend tests pass after field-reference updates: `python -m pytest`
-- [x] 2.2 Lint passes: `ruff check .`
+- [x] 2.1 Backend tests pass after field-reference updates: `python -m pytest` — 758f191
+- [x] 2.2 Lint passes: `ruff check .` — 758f191
 
 #### Manual
 
@@ -463,10 +463,10 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [x] 3.1 Full backend suite passes: `python -m pytest`
-- [x] 3.2 No Drive references remain (grep `app/` + dep files)
-- [x] 3.3 Lint passes: `ruff check .`
-- [x] 3.4 App imports: `python -c "import app.main"`
+- [x] 3.1 Full backend suite passes: `python -m pytest` — 758f191
+- [x] 3.2 No Drive references remain (grep `app/` + dep files) — 758f191
+- [x] 3.3 Lint passes: `ruff check .` — 758f191
+- [x] 3.4 App imports: `python -c "import app.main"` — 758f191
 
 #### Manual
 
@@ -477,9 +477,9 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [ ] 4.1 Frontend builds: `npm run build`
-- [ ] 4.2 Lint passes: `npm run lint`
-- [ ] 4.3 No Drive copy remains (grep `frontend/src`)
+- [x] 4.1 Frontend builds: `npm run build`
+- [x] 4.2 Lint passes: `npm run lint`
+- [x] 4.3 No Drive copy remains (grep `frontend/src`)
 
 #### Manual
 
