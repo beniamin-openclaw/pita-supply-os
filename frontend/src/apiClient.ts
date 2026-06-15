@@ -69,6 +69,56 @@ function fireAuthInvalid(role: Role) {
   window.dispatchEvent(new CustomEvent(AUTH_INVALID_EVENT, { detail: { role } }));
 }
 
+/**
+ * Turn a response body's `detail` into a readable string for an ApiError.
+ *
+ * A string `detail` passes through unchanged. A FastAPI 422 validation error
+ * carries `detail` as an ARRAY of `{loc, msg, type}` objects — `String(...)` on
+ * that yields "[object Object]", which is exactly the bug this fixes. We map each
+ * entry to "<field>: <msg>" (field = the `loc` path minus the leading
+ * body/query/path segment) and join with "; ". Any other shape (or an empty
+ * result) falls back to `fallback` (usually `resp.statusText`).
+ */
+export function formatErrorDetail(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object" || !("detail" in payload)) {
+    return fallback;
+  }
+  const detail = (payload as { detail: unknown }).detail;
+
+  if (typeof detail === "string") return detail.trim() ? detail : fallback;
+
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item): string => {
+        if (!item || typeof item !== "object") return item != null ? String(item) : "";
+        const obj = item as { loc?: unknown; msg?: unknown };
+        const msg = typeof obj.msg === "string" ? obj.msg : "";
+        let field = "";
+        if (Array.isArray(obj.loc)) {
+          const segs = obj.loc.filter(
+            (s) => s !== "body" && s !== "query" && s !== "path",
+          );
+          if (segs.length) field = segs.map((s) => String(s)).join(".");
+        }
+        if (msg && field) return `${field}: ${msg}`;
+        return msg || "";
+      })
+      .filter((s) => s.length > 0);
+    if (parts.length) return parts.join("; ");
+  }
+
+  // Non-string, non-array object detail — stringify readably, never "[object Object]".
+  if (detail && typeof detail === "object") {
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallback;
+    }
+  }
+
+  return detail != null ? String(detail) : fallback;
+}
+
 async function request<T>(
   method: "GET" | "POST" | "PATCH",
   path: string,
@@ -117,11 +167,7 @@ async function request<T>(
   }
 
   if (!resp.ok) {
-    const detail =
-      (payload && typeof payload === "object" && "detail" in payload
-        ? String((payload as { detail: unknown }).detail)
-        : null) || resp.statusText;
-    throw new ApiError(resp.status, detail);
+    throw new ApiError(resp.status, formatErrorDetail(payload, resp.statusText));
   }
 
   return payload as T;
@@ -208,11 +254,7 @@ export async function apiPostFormData<T>(
     return payload as T;
   }
   if (!resp.ok) {
-    const detail =
-      (payload && typeof payload === "object" && "detail" in payload
-        ? String((payload as { detail: unknown }).detail)
-        : null) || resp.statusText;
-    throw new ApiError(resp.status, detail);
+    throw new ApiError(resp.status, formatErrorDetail(payload, resp.statusText));
   }
   return payload as T;
 }
