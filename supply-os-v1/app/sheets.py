@@ -54,6 +54,13 @@ SCOPES = [
 
 DEFAULT_TTL_SECONDS = 60
 
+# Orders + order_lines change far more often than master data and drive the
+# Manager queue's freshness, so they refresh on a shorter TTL — a newly submitted
+# order then surfaces within ~20s instead of up to 60s. Master-data reads keep
+# DEFAULT_TTL_SECONDS (they change rarely; no reason to add Sheet reads). At one
+# manager this is ~3 queue reads/min, well under the Sheets ~60/min/user quota.
+ORDERS_TTL_SECONDS = 20
+
 # Module-level singletons. Cleared via invalidate_cache().
 _client_instance: gspread.Client | None = None
 _sheet_instance = None  # gspread.Spreadsheet
@@ -312,12 +319,12 @@ def invalidate_cache(worksheet_name: str | None = None) -> None:
 
 def load_orders() -> list[Order]:
     """Read 'orders' worksheet, return Order instances without lines populated."""
-    return _read_with_ttl("orders", Order)
+    return _read_with_ttl("orders", Order, ORDERS_TTL_SECONDS)
 
 
 def load_order_lines() -> list[OrderLine]:
     """Read 'order_lines' worksheet, return OrderLine instances."""
-    return _read_with_ttl("order_lines", OrderLine)
+    return _read_with_ttl("order_lines", OrderLine, ORDERS_TTL_SECONDS)
 
 
 # ---------- Write-side helpers (Phase C2) ----------

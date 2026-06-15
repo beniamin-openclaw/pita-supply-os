@@ -86,11 +86,13 @@ export function ManagerPage() {
       });
   }, []);
 
-  // 60s auto-refresh of the queue. Selection is independent state, so it
-  // survives the refresh; the detail pane is reloaded separately on selection.
+  // 20s auto-refresh of the queue — matched to the backend orders TTL
+  // (ORDERS_TTL_SECONDS) so a newly submitted order surfaces within ~20s. A
+  // slower poll would mask the shorter cache. Selection is independent state, so
+  // it survives the refresh; the detail pane is reloaded separately on selection.
   useEffect(() => {
     loadQueue();
-    const interval = setInterval(loadQueue, 60_000);
+    const interval = setInterval(loadQueue, 20_000);
     return () => clearInterval(interval);
   }, [loadQueue]);
 

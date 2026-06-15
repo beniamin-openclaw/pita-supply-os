@@ -632,22 +632,13 @@ def manager_queue(
             )
         )
 
-    # Sort: pending queues by earliest deadline first; sent queues by most
-    # recently dispatched first.
-    _FAR_FUTURE = datetime.max.replace(tzinfo=timezone.utc)
-    _EPOCH = datetime.min.replace(tzinfo=timezone.utc)
-    if status == OrderStatus.CAPTAIN_SUBMITTED:
-        items.sort(
-            key=lambda it: (
-                it.cutoff_iso or _FAR_FUTURE,
-                -(it.captain_submitted_at.timestamp()
-                  if it.captain_submitted_at else 0.0),
-            )
-        )
-    elif status == OrderStatus.MANAGER_SENT:
-        # Manager_sent ordering uses captain_submitted_at as proxy since the
-        # queue model doesn't carry manager_sent_at; the dashboard pulls
-        # full detail via /order/{id} when it needs the sent timestamp.
+    # Sort newest-first: the most recently submitted order sits at the TOP of the
+    # queue (an "inbox"). cutoff_iso still rides on each item as a badge but is no
+    # longer the primary sort key — a supplier without a parseable cutoff must not
+    # sink a fresh order to the bottom. manager_sent uses captain_submitted_at as
+    # a proxy (the queue model doesn't carry manager_sent_at; the dashboard pulls
+    # full detail via /order/{id} when it needs the sent timestamp).
+    if status in (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_SENT):
         items.sort(
             key=lambda it: -(it.captain_submitted_at.timestamp()
                              if it.captain_submitted_at else 0.0)
