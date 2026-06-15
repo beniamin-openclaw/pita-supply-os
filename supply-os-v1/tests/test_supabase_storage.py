@@ -68,8 +68,9 @@ def test_upload_photo_sets_content_type_and_returns_path(mocker):
     assert kwargs["path"] == "wz/ORD-1/RCP-01.jpg"
     assert kwargs["file"] == b"jpegbytes"
     assert kwargs["file_options"]["content-type"] == "image/jpeg"
-    # upsert must be the STRING "false", not a bool (SDK serialises it verbatim).
-    assert kwargs["file_options"]["upsert"] == "false"
+    # upsert is the STRING "true", not a bool (SDK serialises it verbatim) — makes
+    # the frontend retry-photos path idempotent (receipt-scoped keys, see module).
+    assert kwargs["file_options"]["upsert"] == "true"
 
 
 def test_upload_photo_falls_back_content_type(mocker):

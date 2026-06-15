@@ -1,7 +1,7 @@
 ---
 change_id: wz-photos-supabase-storage
 title: WZ delivery-note photo upload via Supabase Storage
-status: implementing
+status: impl_reviewed
 created: 2026-06-16
 updated: 2026-06-16
 archived_at: null

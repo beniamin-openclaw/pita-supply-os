@@ -79,15 +79,19 @@ def upload_photo(object_path: str, content: bytes, mime_type: str) -> str:
     """Upload one photo to ``object_path`` in the WZ bucket; return that path.
 
     ``content-type`` MUST be explicit — Supabase otherwise serves the object as
-    ``text/html`` and browsers refuse to render it. ``upsert='false'`` so a
-    re-confirm never silently overwrites a prior receipt's photo.
+    ``text/html`` and browsers refuse to render it. ``upsert='true'`` keeps a
+    retry idempotent: the object key is receipt-scoped
+    (``wz/<order_id>/<receipt_id>-NN``) and receipts are append-only, so the only
+    file an overwrite can ever hit is the SAME one on a re-upload of the same
+    batch — i.e. the frontend's retry-photos path after a transient failure,
+    which we want to overwrite cleanly rather than 409 on a half-uploaded batch.
     """
     _bucket().upload(
         path=object_path,
         file=content,
         file_options={
             "content-type": mime_type or "application/octet-stream",
-            "upsert": "false",
+            "upsert": "true",
         },
     )
     return object_path
