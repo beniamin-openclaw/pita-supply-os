@@ -637,7 +637,9 @@ def manager_queue(
     # longer the primary sort key — a supplier without a parseable cutoff must not
     # sink a fresh order to the bottom. manager_sent uses captain_submitted_at as
     # a proxy (the queue model doesn't carry manager_sent_at; the dashboard pulls
-    # full detail via /order/{id} when it needs the sent timestamp).
+    # full detail via /order/{id} when it needs the sent timestamp). Other statuses
+    # (e.g. manager_claimed) are intentionally left in sheet/append order — fine at
+    # pilot volume; revisit if the claimed lane grows.
     if status in (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_SENT):
         items.sort(
             key=lambda it: -(it.captain_submitted_at.timestamp()

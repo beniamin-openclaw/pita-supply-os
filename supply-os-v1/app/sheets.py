@@ -58,7 +58,8 @@ DEFAULT_TTL_SECONDS = 60
 # Manager queue's freshness, so they refresh on a shorter TTL — a newly submitted
 # order then surfaces within ~20s instead of up to 60s. Master-data reads keep
 # DEFAULT_TTL_SECONDS (they change rarely; no reason to add Sheet reads). At one
-# manager this is ~3 queue reads/min, well under the Sheets ~60/min/user quota.
+# manager this is ~6 reads/min (orders + order_lines, one cache-miss each per 20s
+# TTL period), well under the Sheets ~60/min/user quota.
 ORDERS_TTL_SECONDS = 20
 
 # Module-level singletons. Cleared via invalidate_cache().

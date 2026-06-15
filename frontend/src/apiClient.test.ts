@@ -39,6 +39,10 @@ describe("formatErrorDetail", () => {
     expect(formatErrorDetail({ detail: "" }, "Bad Request")).toBe("Bad Request");
   });
 
+  it("falls back (not '[]') for an empty detail array", () => {
+    expect(formatErrorDetail({ detail: [] }, "Bad Request")).toBe("Bad Request");
+  });
+
   it("never returns '[object Object]' for an object detail", () => {
     const out = formatErrorDetail({ detail: { weird: 1 } }, "fb");
     expect(out).not.toContain("[object Object]");

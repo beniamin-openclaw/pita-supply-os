@@ -104,7 +104,9 @@ export function formatErrorDetail(payload: unknown, fallback: string): string {
         return msg || "";
       })
       .filter((s) => s.length > 0);
-    if (parts.length) return parts.join("; ");
+    // An array always resolves here (never falls through to JSON.stringify): a
+    // non-empty 422 list joins, an empty/garbage one returns the fallback.
+    return parts.length ? parts.join("; ") : fallback;
   }
 
   // Non-string, non-array object detail — stringify readably, never "[object Object]".

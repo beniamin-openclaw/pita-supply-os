@@ -1,7 +1,7 @@
 ---
 change_id: manager-queue-ux
 title: Fix three Manager/Captain queue UX bugs (error copy, claim strikethrough, queue ordering)
-status: implemented
+status: impl_reviewed
 created: 2026-06-16
 updated: 2026-06-16
 archived_at: null

@@ -1,5 +1,5 @@
 // Manager dispatch — two-pane shell.
-//   - left pane  : ManagerQueue (3 status groups, 60s auto-refresh)
+//   - left pane  : ManagerQueue (3 status groups, 20s auto-refresh)
 //   - right pane : OrderDetailPane (editable per-line table + channel dispatch)
 //
 // G2: per-line draft state (qty + comment) lives HERE, keyed by order_line_id,
