@@ -1,10 +1,10 @@
 ---
 change_id: deploy-pipeline-repair
 title: Repair the broken droplet backend deploy pipeline
-status: impl_reviewed
+status: archived
 created: 2026-06-10
-updated: 2026-06-12
-archived_at: null
+updated: 2026-06-15
+archived_at: 2026-06-15T20:54:14Z
 ---
 
 ## Notes
