@@ -6,10 +6,11 @@ Supabase Storage bucket instead — uploaded server-side with the ``service_role
 key and viewed via short-lived signed URLs that are minted on demand and NEVER
 persisted.
 
-Like ``app.drive`` this is a SIDE service, not a data backend — routes call it
-directly (after resolving persistence via ``_choose_backend()``), and it degrades
-via ``is_configured()`` when no Supabase URL / key is set. The ``supabase`` client
-is imported LAZILY inside ``_get_client`` so this module (and ``app.main``) import
+Like the former Drive adapter, this is a SIDE service, not a data backend —
+routes call it directly (after resolving persistence via ``_choose_backend()``),
+and it degrades via ``is_configured()`` when no Supabase URL / key is set. The
+``supabase`` client is imported LAZILY inside ``_get_client`` so this module (and
+``app.main``) import
 cleanly even where the SDK is not installed (seed/dev or the test environment,
 which mocks the client).
 
@@ -51,7 +52,8 @@ def reset_client() -> None:
 
 def _get_client():
     """Return a cached supabase ``Client``. Imports ``supabase`` lazily so the
-    module imports without the SDK installed (mirrors ``app.drive``)."""
+    module imports without the SDK installed (same lazy pattern the Drive
+    adapter used)."""
     global _client
     if _client is not None:
         return _client

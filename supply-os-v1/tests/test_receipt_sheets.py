@@ -28,8 +28,7 @@ RECEIPT_HEADERS = [
     "line_count",
     "discrepancy_count",
     "received_with_missing_wz",
-    "wz_photo_folder_id",
-    "wz_photo_folder_url",
+    "wz_photo_path_prefix",
     "wz_photo_count",
     "notes",
 ]
@@ -289,15 +288,14 @@ def test_update_receipt_writes_changed_cells(mocker):
 
     sheets.update_receipt(
         "RCP001",
-        wz_photo_folder_id="FOLDER1",
-        wz_photo_folder_url="https://drive/FOLDER1",
+        wz_photo_path_prefix="wz/ORD001",
         wz_photo_count=3,
         received_with_missing_wz=False,
     )
     ws.batch_update.assert_called_once()
     updates = ws.batch_update.call_args[0][0]
     written_values = [u["values"][0][0] for u in updates]
-    assert "FOLDER1" in written_values
+    assert "wz/ORD001" in written_values
     assert "3" in written_values
     assert "FALSE" in written_values  # bool serialized
 

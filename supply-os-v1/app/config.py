@@ -43,12 +43,6 @@ class Settings(BaseSettings):
     # inline var, after the file path.
     google_service_account_json_b64: SecretStr = SecretStr("")
 
-    # Google Drive (WZ goods-receipt photos, GR-01) — id of the "WZ Photos"
-    # parent folder shared with the service account. Empty => photo upload is
-    # disabled (the receipt still persists, flagged received_with_missing_wz).
-    # Reuses the service-account creds above with the drive.file scope.
-    gdrive_wz_folder_id: str = ""
-
     # Supabase Storage (WZ goods-receipt photos, GR-01) — PRIVATE bucket for
     # delivery-note photos, replacing the Drive dead-end. The service_role key is
     # all-powerful: server-side only, NEVER in the SPA. Empty => photo upload
@@ -93,7 +87,7 @@ def resolve_service_account_info() -> dict:
 
     Preference order: file path -> base64 inline -> raw inline JSON. Raises
     RuntimeError when none is set. Scopes are NOT applied here — each caller
-    (sheets -> SCOPES, drive -> DRIVE_SCOPES) wraps the result with
+    (e.g. sheets -> SCOPES) wraps the result with
     Credentials.from_service_account_info, so this is the one place credential
     SOURCES are resolved for every consumer.
     """

@@ -554,9 +554,9 @@ class ReceiptLine(BaseModel):
 class Receipt(BaseModel):
     """A Captain's confirmation that a dispatched order was delivered (GR-01).
     Append-only, standalone child of an order — it never changes the order's
-    status. WZ delivery-note photos live in a per-order Google Drive folder
-    referenced here; ``received_with_missing_wz`` starts True and is flipped
-    False once at least one photo is attached."""
+    status. WZ delivery-note photos live under a per-order Supabase Storage key
+    prefix (``wz_photo_path_prefix``); ``received_with_missing_wz`` starts True
+    and is flipped False once at least one photo is attached."""
     receipt_id: str
     order_id: str
     location_id: str
@@ -567,8 +567,7 @@ class Receipt(BaseModel):
     line_count: int = 0
     discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
     received_with_missing_wz: bool = True
-    wz_photo_folder_id: Optional[str] = None
-    wz_photo_folder_url: Optional[str] = None
+    wz_photo_path_prefix: Optional[str] = None  # Supabase Storage prefix: wz/<order_id>
     wz_photo_count: int = 0
     notes: str = ""
     lines: list[ReceiptLine] = Field(default_factory=list)
@@ -618,7 +617,7 @@ class ReceiptDetailLine(BaseModel):
 
 class ReceiptDetail(BaseModel):
     """A full goods-receipt for the Captain detail view — location/supplier names
-    joined, product-enriched lines, and the WZ Drive folder reference."""
+    joined, product-enriched lines, and the WZ photo storage prefix."""
     receipt_id: str
     order_id: str
     location_id: str
@@ -631,8 +630,7 @@ class ReceiptDetail(BaseModel):
     line_count: int = 0
     discrepancy_count: int = 0
     received_with_missing_wz: bool = True
-    wz_photo_folder_id: Optional[str] = None
-    wz_photo_folder_url: Optional[str] = None
+    wz_photo_path_prefix: Optional[str] = None
     wz_photo_count: int = 0
     notes: str = ""
     lines: list[ReceiptDetailLine] = Field(default_factory=list)
@@ -650,14 +648,19 @@ class ReceiptSummary(BaseModel):
     discrepancy_count: int = 0
     received_with_missing_wz: bool = True
     wz_photo_count: int = 0
-    wz_photo_folder_url: Optional[str] = None
+
+
+class ReceiptPhotoItem(BaseModel):
+    """One WZ photo with a freshly-minted, short-lived signed URL. NEVER
+    persisted — re-signed on every read."""
+    name: str
+    signed_url: str
 
 
 class ReceiptPhotoUploadResponse(BaseModel):
-    """Result of POST /api/captain/receipt/{id}/photos — the attached WZ photos
-    and the updated folder reference on the receipt (GR-01, Phase 2)."""
+    """Result of POST /api/captain/receipt/{id}/photos — the just-uploaded WZ
+    photos (each with a fresh signed URL for immediate display) + the new count."""
     receipt_id: str
     wz_photo_count: int
-    wz_photo_folder_url: Optional[str] = None
     received_with_missing_wz: bool
-    uploaded: list[dict] = Field(default_factory=list)  # [{file_id, file_url, name}]
+    uploaded: list[ReceiptPhotoItem] = Field(default_factory=list)

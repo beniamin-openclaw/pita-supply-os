@@ -440,9 +440,9 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [x] 1.1 Backend tests pass: `python -m pytest`
-- [x] 1.2 Module imports without SDK at import time: `python -c "import app.supabase_storage"`
-- [x] 1.3 Lint passes: `ruff check .`
+- [x] 1.1 Backend tests pass: `python -m pytest` — eb01efd
+- [x] 1.2 Module imports without SDK at import time: `python -c "import app.supabase_storage"` — eb01efd
+- [x] 1.3 Lint passes: `ruff check .` — eb01efd
 
 #### Manual
 
@@ -452,8 +452,8 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [ ] 2.1 Backend tests pass after field-reference updates: `python -m pytest`
-- [ ] 2.2 Lint passes: `ruff check .`
+- [x] 2.1 Backend tests pass after field-reference updates: `python -m pytest`
+- [x] 2.2 Lint passes: `ruff check .`
 
 #### Manual
 
@@ -463,10 +463,10 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [ ] 3.1 Full backend suite passes: `python -m pytest`
-- [ ] 3.2 No Drive references remain (grep `app/` + dep files)
-- [ ] 3.3 Lint passes: `ruff check .`
-- [ ] 3.4 App imports: `python -c "import app.main"`
+- [x] 3.1 Full backend suite passes: `python -m pytest`
+- [x] 3.2 No Drive references remain (grep `app/` + dep files)
+- [x] 3.3 Lint passes: `ruff check .`
+- [x] 3.4 App imports: `python -c "import app.main"`
 
 #### Manual
 
