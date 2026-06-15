@@ -31,3 +31,8 @@ os.environ.setdefault("SUPPLY_OS_DATA_BACKEND", "seed")
 os.environ.setdefault("SUPPLY_OS_GOOGLE_SHEET_ID", "")
 os.environ.setdefault("SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_FILE", "")
 os.environ.setdefault("SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON", "")
+# Blank Supabase Storage creds so a real .env can't make is_configured() true in
+# unit tests (the WZ-photo side-service degrades off when these are empty).
+os.environ.setdefault("SUPPLY_OS_SUPABASE_URL", "")
+os.environ.setdefault("SUPPLY_OS_SUPABASE_SERVICE_ROLE_KEY", "")
+os.environ.setdefault("SUPPLY_OS_SUPABASE_WZ_BUCKET", "wz-photos")

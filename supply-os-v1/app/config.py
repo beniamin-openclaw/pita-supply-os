@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     # Reuses the service-account creds above with the drive.file scope.
     gdrive_wz_folder_id: str = ""
 
+    # Supabase Storage (WZ goods-receipt photos, GR-01) — PRIVATE bucket for
+    # delivery-note photos, replacing the Drive dead-end. The service_role key is
+    # all-powerful: server-side only, NEVER in the SPA. Empty => photo upload
+    # degrades (the receipt still persists, flagged received_with_missing_wz).
+    # Signed URLs are minted on demand at view time (never persisted).
+    supabase_url: str = ""
+    supabase_service_role_key: SecretStr = SecretStr("")
+    supabase_wz_bucket: str = "wz-photos"
+
     # PostHog
     posthog_api_key: SecretStr = SecretStr("")
     posthog_host: str = "https://eu.i.posthog.com"
