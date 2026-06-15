@@ -162,9 +162,11 @@ keeps working under b64-only creds on Railway (the regression F1 names).
 and gate the deploy on a real boot via a healthcheck so a bad release (e.g. an
 auth/Sheets misconfig) is held back instead of replacing a working one.
 
-**Contract**: `[build] builder = "NIXPACKS"` (no `startCommand` — Procfile owns
-it); `[deploy] healthcheckPath = "/health"` with a sane `healthcheckTimeout`
-(e.g. 100s). Lives at the service Root Directory (`supply-os-v1/`).
+**Contract**: `[build] builder = "RAILPACK"` (Railway's current default; Nixpacks
+is legacy — corrected per infrastructure.md 2026-06-12) (no `startCommand` —
+Procfile owns it); `[deploy] healthcheckPath = "/health"` with a sane
+`healthcheckTimeout` (e.g. 100s). Lives at `supply-os-v1/railway.toml` — Railway
+reads it by absolute path from the repo root, not via the Root Directory setting.
 
 #### 5. Document the new var + prod values
 
@@ -318,8 +320,9 @@ owner's `railway up` output). JSON stays valid; SPA fallback rewrite unchanged.
 - Owner: after merge/push, a request to the **Vercel domain** `/api/health`
   resolves through Railway (not the droplet)
 - Owner: one **back-out** captain submit completes end-to-end (no real order placed)
-- Owner: Manager queue loads the submitted order; GR-01 receive screen + a WZ-photo
-  upload to Drive succeeds through Railway
+- Owner: Manager queue loads the submitted order; GR-01 receive screen confirms a
+  delivery through Railway (WZ photo upload is disabled by design — Drive is a
+  dead end; photos return via Supabase Storage as a separate change)
 - Owner: rollback rehearsed — reverting the vercel.json commit returns traffic to
   the droplet within ~1 minute
 
@@ -396,11 +399,10 @@ backend host with auto-deploy; add a one-line pointer to the runbook.
 
 ## Performance Considerations
 
-Railway Hobby is resource-metered; the long-lived uvicorn process should be
-watched for memory creep (set a Railway usage alert per the runbook). GR-01 WZ
-photos are client-side compressed before multipart upload, so request bodies stay
-small — but verify one real upload through Railway (Phase 3) in case the proxy
-imposes a body-size limit.
+Railway Hobby is always-on and resource-metered; keep App Sleeping OFF (no pilot
+cold-starts) and set a $10–20 hard spend cap + alerts (per the runbook). Watch the
+long-lived uvicorn process for memory creep. WZ photo upload is disabled (Drive
+dead end), so the multipart-body-size concern does not apply for this change.
 
 ## Migration Notes
 
@@ -465,7 +467,7 @@ imposes a body-size limit.
 - [ ] 3.4 Owner: smoke kit green against Railway URL (health, live-Sheet products, queue)
 - [ ] 3.5 Owner: after merge/push, Vercel domain `/api/*` resolves through Railway
 - [ ] 3.6 Owner: one back-out captain submit completes end-to-end (no real order)
-- [ ] 3.7 Owner: Manager queue loads; GR-01 receive + WZ-photo Drive upload works through Railway
+- [ ] 3.7 Owner: Manager queue loads; GR-01 receive confirms through Railway (WZ photos disabled — Supabase later)
 - [ ] 3.8 Owner: rollback rehearsed — reverting vercel.json returns traffic to droplet in ~1 min
 
 ### Phase 4: Decommission + close-out

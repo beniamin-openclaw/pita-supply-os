@@ -6,9 +6,12 @@
 # it here.
 
 [build]
-# Pin the builder so a routine redeploy can't silently flip Nixpacks -> Railpack
-# (which could change how env vars / the service-account JSON are parsed).
-builder = "NIXPACKS"
+# Pin the builder so a routine redeploy can't silently flip builders and change
+# how env vars / the service-account JSON are parsed. Railpack is now Railway's
+# default (Nixpacks -> legacy/maintenance), so we pin Railpack.
+# NOTE: Railway reads this file by absolute path from the repo root
+# (/supply-os-v1/railway.toml); it does NOT follow the Root Directory setting.
+builder = "RAILPACK"
 
 [deploy]
 # Gate the deploy on a real boot: a release that can't serve /health is held

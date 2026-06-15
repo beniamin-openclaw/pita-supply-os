@@ -38,9 +38,12 @@ railway link            # link to an existing project/service
 **Set the service Root Directory to `supply-os-v1`** (Railway dashboard →
 service → Settings → Root Directory). This is required so Railway finds the
 `Procfile`, `pyproject.toml`, and `railway.toml` in this subfolder — the repo
-root is a monorepo. `railway.toml` already pins the builder (NIXPACKS) and the
-`/health` healthcheck; the `Procfile` owns the start command
-(`uvicorn app.main:app --host 0.0.0.0 --port $PORT`).
+root is a monorepo. `railway.toml` already pins the builder (RAILPACK — now
+Railway's default; Nixpacks is legacy) and the `/health` healthcheck; the
+`Procfile` owns the start command (`uvicorn app.main:app --host 0.0.0.0 --port
+$PORT`). Note: Railway reads `railway.toml` by **absolute path from the repo
+root** (`/supply-os-v1/railway.toml`) — it does NOT follow the Root Directory
+setting.
 
 ## 2. Encode the service-account JSON as base64
 
@@ -54,8 +57,8 @@ base64 -i sa.json | tr -d '\n'        # macOS / BSD
 ```
 
 Copy the single-line output — it becomes `SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_B64`
-below. The backend decodes it at startup for BOTH the Sheets backend and Drive
-(GR-01) via the shared resolver.
+below. The backend decodes it at startup via the shared credential resolver (used
+by the Sheets backend, and by Drive if it is ever re-enabled).
 
 ## 3. Set the environment variables
 
@@ -67,7 +70,6 @@ railway variables \
   --set 'SUPPLY_OS_DATA_BACKEND=sheet' \
   --set 'SUPPLY_OS_GOOGLE_SHEET_ID=<sheet id>' \
   --set 'SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_B64=<base64 from §2>' \
-  --set 'SUPPLY_OS_GDRIVE_WZ_FOLDER_ID=<WZ photos folder id>' \
   --set 'SUPPLY_OS_CAPTAIN_TOKENS=WOLA:<token>' \
   --set 'SUPPLY_OS_MANAGER_TOKEN=<token>' \
   --set 'SUPPLY_OS_CORS_ALLOW_ORIGINS=https://pita-supply-os.vercel.app'
@@ -82,15 +84,28 @@ railway variables \
 ```
 
 **Do NOT set `SUPPLY_OS_SEED_DIR`** — there is no seed dir on Railway; sheet mode
-does not need it. **Never commit any of these values** — only `.env.example`
+does not need it. **Do NOT set `SUPPLY_OS_GDRIVE_WZ_FOLDER_ID`** — WZ photo upload
+is disabled: the Google Drive path is a structural dead end (a service account
+has no Drive storage quota → 403), so photos return later via Supabase Storage as
+a separate change. Leaving it unset keeps `drive.is_configured()` False, so
+receiving still works (the receipt persists, flagged `received_with_missing_wz`)
+— just without photos. **Never commit any of these values** — only `.env.example`
 lives in the repo.
 
-Env checklist (matches the droplet `.env`): `SUPPLY_OS_ENV`,
+**Token rotation:** the Captain + Manager tokens were exposed earlier — this
+cutover is the moment to rotate them. Generate fresh values
+(`python3 -c "import secrets; print(secrets.token_urlsafe(24))"`), set them on
+Railway here, and hand the new codes to the Captain/Manager.
+
+**Cost safety (dashboard):** keep **App Sleeping OFF** so the pilot never
+cold-starts a 502, and set a **hard spend cap of $10–20** + email alerts at
+75/90/100% (Hobby is always-on by default; spend caps are NOT on by default).
+
+Env checklist (sheet mode, photos disabled): `SUPPLY_OS_ENV`,
 `SUPPLY_OS_DATA_BACKEND`, `SUPPLY_OS_GOOGLE_SHEET_ID`,
-`SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_B64`, `SUPPLY_OS_GDRIVE_WZ_FOLDER_ID`,
-`SUPPLY_OS_CAPTAIN_TOKENS`, `SUPPLY_OS_MANAGER_TOKEN`,
-`SUPPLY_OS_CORS_ALLOW_ORIGINS`, (optional) `SUPPLY_OS_POSTHOG_API_KEY`,
-`SUPPLY_OS_POSTHOG_HOST`.
+`SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_B64`, `SUPPLY_OS_CAPTAIN_TOKENS`,
+`SUPPLY_OS_MANAGER_TOKEN`, `SUPPLY_OS_CORS_ALLOW_ORIGINS`, (optional)
+`SUPPLY_OS_POSTHOG_API_KEY`, `SUPPLY_OS_POSTHOG_HOST`.
 
 ## 4. First deploy + smoke (Railway URL directly)
 
@@ -111,6 +126,13 @@ bash supply-os-v1/scripts/smoke_railway.sh
 Expect: `/health` 200, **`/health/internal` data_backend=sheet** (proves it is
 serving the live Sheet, not a silent seed fallback), `/api/products` >0 items,
 orderable + manager queue 200.
+
+If the Railway health check flakes (Railway's private network is IPv6-only and
+uvicorn can't dual-stack bind from the CLI — `--host 0.0.0.0 --port $PORT` is
+fine for the public HTTP the pilot needs, so try uvicorn first), fall back to
+**Hypercorn**: change the `Procfile` to
+`web: hypercorn app.main:app --bind 0.0.0.0:$PORT` and add `hypercorn` to
+`pyproject.toml` deps.
 
 ## 5. Enable auto-deploy on `main`
 
@@ -137,8 +159,9 @@ curl -s https://pita-supply-os.vercel.app/api/health
 ```
 
 Then, via the app UI (still no real order): a back-out captain submit, the
-manager queue loads it, and a GR-01 goods-receipt + one WZ photo upload to Drive
-succeeds.
+manager queue loads it, and a GR-01 goods-receipt confirms a delivery (WZ photo
+upload stays **disabled** by design — returning via Supabase Storage as a
+separate change).
 
 ## 7. Rollback rehearsal (do this BEFORE the first real order)
 
@@ -173,10 +196,14 @@ to record Railway as the backend host with auto-deploy.
 
 - **`$PORT`** is injected by Railway; the `Procfile` already binds it. Do not
   hardcode 8001.
-- **Builder pin**: `railway.toml` pins NIXPACKS so a redeploy can't silently flip
-  to Railpack and change env parsing. Revisit if Railway deprecates NIXPACKS.
-- **WZ photo upload** (GR-01) streams to Drive in-memory; photos are
-  client-compressed, so request bodies stay small — but confirm one real upload
-  through Railway in §6 in case the proxy imposes a body-size limit.
-- **Usage alert**: set a Railway spend/usage alert — the long-lived uvicorn
-  process should be watched for memory creep.
+- **Builder pin**: `railway.toml` pins RAILPACK (Railway's current default;
+  Nixpacks is legacy) so a redeploy can't silently flip builders and change env
+  parsing. `railway.toml` is read by absolute path from the repo root, not the
+  Root Directory.
+- **WZ photos disabled**: the Google Drive path is a structural dead end (a
+  service account has no Drive storage quota → 403). Photos return via Supabase
+  Storage as a separate change; for now `SUPPLY_OS_GDRIVE_WZ_FOLDER_ID` stays
+  unset and receiving works without photos.
+- **App Sleeping OFF + spend cap**: keep App Sleeping off (no pilot cold-starts);
+  set a $10–20 hard spend cap + 75/90/100% email alerts (not on by default).
+  Watch the long-lived uvicorn process for RAM creep against the cap.
