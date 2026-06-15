@@ -442,15 +442,15 @@ imposes a body-size limit.
 
 #### Automated
 
-- [x] 2.1 Runbook names all env vars + base64 command + rollback section (`grep -c SUPPLY_OS_` ≥ 8)
-- [x] 2.2 Smoke script passes `bash -n` syntax check
-- [x] 2.3 Smoke script contains no submit/dispatch call
-- [x] 2.4 Smoke script asserts the live backend via /health/internal (data_backend==sheet)
+- [x] 2.1 Runbook names all env vars + base64 command + rollback section (`grep -c SUPPLY_OS_` ≥ 8) — 9c9ec5f
+- [x] 2.2 Smoke script passes `bash -n` syntax check — 9c9ec5f
+- [x] 2.3 Smoke script contains no submit/dispatch call — 9c9ec5f
+- [x] 2.4 Smoke script asserts the live backend via /health/internal (data_backend==sheet) — 9c9ec5f
 
 #### Manual
 
-- [x] 2.5 Owner reads runbook end-to-end; every command copy-pasteable, no agent-secret access
-- [x] 2.6 Env checklist matches the owner's actual droplet `.env` keys
+- [x] 2.5 Owner reads runbook end-to-end; every command copy-pasteable, no agent-secret access — 9c9ec5f
+- [x] 2.6 Env checklist matches the owner's actual droplet `.env` keys — 9c9ec5f
 
 ### Phase 3: Production cutover
 

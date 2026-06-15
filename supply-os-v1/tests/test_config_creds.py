@@ -86,6 +86,19 @@ def test_resolve_raises_when_none_set(_clear_creds):
         config.resolve_service_account_info()
 
 
+def test_resolve_invalid_base64_raises_clear_error(_clear_creds, mocker):
+    """A malformed base64 blob (e.g. pasted with stray newlines) must fail at
+    startup with an actionable message, not a cryptic downstream google.auth
+    error (impl-review F1)."""
+    mocker.patch.object(
+        config.settings,
+        "google_service_account_json_b64",
+        SecretStr("!!! not base64 !!!"),
+    )
+    with pytest.raises(RuntimeError, match="not valid base64"):
+        config.resolve_service_account_info()
+
+
 def test_resolve_missing_file_raises(_clear_creds, mocker, tmp_path):
     mocker.patch.object(
         config.settings,

@@ -1,11 +1,15 @@
 """Pydantic settings — env-driven config for the v0 backend."""
 import base64
+import binascii
 import json
+import logging
 from enum import Enum
 from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+log = logging.getLogger(__name__)
 
 
 class DataBackend(str, Enum):
@@ -93,10 +97,20 @@ def resolve_service_account_info() -> dict:
             raise RuntimeError(
                 f"google_service_account_json_file points to a missing file: {sa_file}"
             )
+        log.info("service-account credentials loaded from file: %s", sa_file)
         return json.loads(path.read_text(encoding="utf-8"))
     if sa_b64:
-        return json.loads(base64.b64decode(sa_b64))
+        try:
+            decoded = base64.b64decode(sa_b64, validate=True)
+        except binascii.Error as e:
+            raise RuntimeError(
+                "SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON_B64 is not valid base64 "
+                "(encode with `base64 -i sa.json | tr -d '\\n'`)"
+            ) from e
+        log.info("service-account credentials loaded from base64 env var")
+        return json.loads(decoded)
     if sa_inline:
+        log.info("service-account credentials loaded from inline JSON env var")
         return json.loads(sa_inline)
     raise RuntimeError(
         "no service-account credentials configured — set one of "
