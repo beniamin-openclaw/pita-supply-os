@@ -7,7 +7,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://supply.46-101-213-61.nip.io/api/:path*"
+      "destination": "https://pita-supply-os-production.up.railway.app/api/:path*"
     },
     {
       "source": "/(.*)",
