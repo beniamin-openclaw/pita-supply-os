@@ -62,12 +62,26 @@ export function lineVisualStateWithQty(
   return effectiveQty !== captainQty ? "changed" : "neutral";
 }
 
-/** Persisted-line convenience wrapper (G1 read-only callers). */
-export function lineVisualState(line: ManagerOrderLineDetail): LineVisualState {
-  // Preserve the G1 persisted semantics exactly: explicit manager_final == 0
-  // is the only "cancelled" trigger (effectiveManagerQtyPurchase would fall
-  // back to captain_final for a 0, so cancellation is keyed off the raw value).
-  if (line.manager_final_qty_purchase === 0 && line.captain_final_qty_purchase > 0) {
+/**
+ * Persisted-line visual state (read-only callers).
+ *
+ * A raw `manager_final == 0` means "manager dropped this line" ONLY once the
+ * order was actually dispatched (`dispatched === true`). Before dispatch
+ * (captain_submitted / manager_claimed) a 0 means "manager hasn't set it yet",
+ * so the line must read as the captain's quantity (neutral) — otherwise every
+ * line of a freshly-opened order renders struck-through "Anulowane przez
+ * managera" (the bug this guards). When not dispatched we fall through to the
+ * effective-qty rule (manager_final 0 → captain fallback → neutral).
+ */
+export function lineVisualState(
+  line: ManagerOrderLineDetail,
+  dispatched: boolean,
+): LineVisualState {
+  if (
+    dispatched &&
+    line.manager_final_qty_purchase === 0 &&
+    line.captain_final_qty_purchase > 0
+  ) {
     return "cancelled";
   }
   return lineVisualStateWithQty(
@@ -87,11 +101,14 @@ export interface ManagerSummary {
  * Aggregate "Manager summary" strip (spec §4): how many lines the manager
  * changed vs the captain and the net PLN swing. `effectiveQtyFor` lets the edit
  * table feed live draft quantities; omit it for persisted-line behavior.
+ * `dispatched` is forwarded to `lineVisualState` so a not-yet-dispatched order's
+ * untouched (manager_final 0) lines don't count as cancelled changes.
  * price_estimate_pln is per purchase unit (same basis as the order total).
  */
 export function managerSummary(
   lines: ManagerOrderLineDetail[],
   effectiveQtyFor?: (line: ManagerOrderLineDetail) => number,
+  dispatched: boolean = false,
 ): ManagerSummary {
   let changeCount = 0;
   let valueDeltaPln = 0;
@@ -102,7 +119,7 @@ export function managerSummary(
     const captainQty = line.captain_final_qty_purchase;
     const visual = effectiveQtyFor
       ? lineVisualStateWithQty(captainQty, effectiveQty)
-      : lineVisualState(line);
+      : lineVisualState(line, dispatched);
     if (visual !== "neutral") changeCount += 1;
     const price = line.price_estimate_pln ?? 0;
     valueDeltaPln += (effectiveQty - captainQty) * price;

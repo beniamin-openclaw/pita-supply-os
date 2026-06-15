@@ -39,6 +39,12 @@ interface OrderLineTableProps {
   lines: ManagerOrderLineDetail[];
   /** When true, qty + comment cells are inputs (status === manager_claimed). */
   editable?: boolean;
+  /**
+   * True only once the order was dispatched (manager_sent / closed). Gates the
+   * read-only "cancelled" (strike + amber) visual: a persisted manager_final 0
+   * means "line dropped" only after dispatch — before that it's "not set yet".
+   */
+  dispatched?: boolean;
   /** Live draft state keyed by order_line_id; required when `editable`. */
   drafts?: DraftMap;
   onQtyChange?: (orderLineId: string, qty: number) => void;
@@ -48,6 +54,7 @@ interface OrderLineTableProps {
 export function OrderLineTable({
   lines,
   editable = false,
+  dispatched = false,
   drafts,
   onQtyChange,
   onCommentChange,
@@ -93,7 +100,7 @@ export function OrderLineTable({
             const visual =
               editable && drafts
                 ? lineVisualStateWithQty(captainQty, managerQty)
-                : lineVisualState(line);
+                : lineVisualState(line, dispatched);
             const dvc =
               editable && drafts
                 ? deltaVsCaptainWithQty(captainQty, managerQty)

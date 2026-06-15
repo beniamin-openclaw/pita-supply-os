@@ -87,10 +87,13 @@ export function OrderDetailPane({
   const visual = statusVisual(detail.status);
   const cutoffPast = isCutoffPast(cutoffIso);
   const editable = detail.status === "manager_claimed";
+  // Dispatched orders are the only ones where a persisted manager_final 0 means
+  // a deliberately-dropped line; before that, 0 = "not set yet" → neutral.
+  const dispatched = detail.status === "manager_sent" || detail.status === "closed";
   // Summary + Δ axes use the live draft when editable, else the persisted line.
   const summary = editable
     ? managerSummary(detail.lines, (line) => draftQty(drafts, line))
-    : managerSummary(detail.lines);
+    : managerSummary(detail.lines, undefined, dispatched);
   const dirty = editable && hasDirtyDrafts(drafts, detail.lines);
   const busy = busyId === detail.order_id;
 
@@ -148,6 +151,7 @@ export function OrderDetailPane({
         <OrderLineTable
           lines={detail.lines}
           editable={editable}
+          dispatched={dispatched}
           drafts={drafts}
           onQtyChange={onQtyChange}
           onCommentChange={onCommentChange}
