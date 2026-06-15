@@ -477,9 +477,9 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Automated
 
-- [x] 4.1 Frontend builds: `npm run build`
-- [x] 4.2 Lint passes: `npm run lint`
-- [x] 4.3 No Drive copy remains (grep `frontend/src`)
+- [x] 4.1 Frontend builds: `npm run build` — ab74b35
+- [x] 4.2 Lint passes: `npm run lint` — ab74b35
+- [x] 4.3 No Drive copy remains (grep `frontend/src`) — ab74b35
 
 #### Manual
 
