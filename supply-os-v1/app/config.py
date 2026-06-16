@@ -15,6 +15,7 @@ log = logging.getLogger(__name__)
 class DataBackend(str, Enum):
     SEED = "seed"
     SHEET = "sheet"
+    SUPABASE = "supabase"
 
 
 class Settings(BaseSettings):
@@ -42,6 +43,13 @@ class Settings(BaseSettings):
     # --set`). Decoded by resolve_service_account_info(); preferred over the raw
     # inline var, after the file path.
     google_service_account_json_b64: SecretStr = SecretStr("")
+
+    # Supabase Postgres data backend (S-10) — Supavisor Session Pooler DSN, shape:
+    #   postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+    # Empty => the supabase data backend is unconfigured and _choose_backend()
+    # falls back to sheet/seed. SecretStr so the password never leaks into logs;
+    # server-side only (the backend connects as the postgres role, bypassing RLS).
+    database_url: SecretStr = SecretStr("")
 
     # Supabase Storage (WZ goods-receipt photos, GR-01) — PRIVATE bucket for
     # delivery-note photos, replacing the Drive dead-end. The service_role key is

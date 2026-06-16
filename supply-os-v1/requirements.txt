@@ -14,3 +14,6 @@ python-multipart>=0.0.9
 posthog>=3.5
 # Supabase Storage — private bucket for WZ goods-receipt photos (GR-01); pulls httpx.
 supabase>=2.10,<3
+# S-10 Supabase Postgres data backend — sync Postgres driver + SQLAlchemy Core.
+psycopg2-binary>=2.9
+SQLAlchemy>=2.0,<3

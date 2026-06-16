@@ -17,3 +17,11 @@ class OrderNotFoundError(Exception):
 
 class OrderAlreadyDispatchedError(Exception):
     """Raised when an update would transition an already-dispatched order back."""
+
+
+class OrderStatusConflictError(Exception):
+    """Raised when an atomic status-transition UPDATE matches 0 rows — the order
+    was not in the expected status (a concurrent change won the race). Routes map
+    it to HTTP 409. The Supabase backend raises this from a conditional
+    ``UPDATE … WHERE status = :expected``; Sheets enforces the same contract via
+    each route's preflight re-read + its dispatch guard and never raises it."""

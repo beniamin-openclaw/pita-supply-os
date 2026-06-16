@@ -484,7 +484,12 @@ def update_order(order_id: str, **kwargs) -> None:
       again, raises OrderAlreadyDispatchedError. Callers should still do their
       own preflight read.
     - Calls invalidate_cache('orders') after a successful write.
+    - ``expected_status`` is a Supabase-only atomicity hint (a conditional-UPDATE
+      guard); it is popped here and never written as a column. Sheets enforces the
+      same status-transition contract via each route's preflight re-read + the
+      dispatch guard below, so the seam signature stays uniform across backends.
     """
+    kwargs.pop("expected_status", None)
     if not kwargs:
         return
 

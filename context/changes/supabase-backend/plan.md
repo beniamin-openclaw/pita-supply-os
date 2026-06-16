@@ -535,23 +535,23 @@ worker at pilot scale.
 
 #### Automated
 
-- [x] 2.1 Migration files exist (0001_initial_schema.sql, 0002_rls_deny_all.sql)
-- [x] 2.2 All 12 tables present in public schema (list_tables)
-- [x] 2.3 Security advisor clear of RLS-disabled lints
+- [x] 2.1 Migration files exist (0001_initial_schema.sql, 0002_rls_deny_all.sql) — cc75084
+- [x] 2.2 All 12 tables present in public schema (list_tables) — cc75084
+- [x] 2.3 Security advisor clear of RLS-disabled lints — cc75084
 
 #### Manual
 
-- [x] 2.4 Human approves the migration apply
-- [x] 2.5 Spot-check 2 tables in Table Editor (columns/types/constraints)
+- [x] 2.4 Human approves the migration apply — cc75084
+- [x] 2.5 Spot-check 2 tables in Table Editor (columns/types/constraints) — cc75084
 
 ### Phase 3: Supabase backend module + config + driver
 
 #### Automated
 
-- [ ] 3.1 Deps install (pip install -e ".[dev]")
-- [ ] 3.2 Linting passes (ruff)
-- [ ] 3.3 Mocked backend tests + seam-parity check pass
-- [ ] 3.4 Full suite green (seed default unaffected)
+- [x] 3.1 Deps install (pip install -e ".[dev]")
+- [x] 3.2 Linting passes (ruff)
+- [x] 3.3 Mocked backend tests + seam-parity check pass
+- [x] 3.4 Full suite green (seed default unaffected)
 
 #### Manual
 

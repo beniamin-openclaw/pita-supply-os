@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import errors, gmail_url, seed_loader, sheets, supabase_storage
+from . import errors, gmail_url, seed_loader, sheets, supabase_backend, supabase_storage
 from .auth import require_any_auth, require_captain, require_manager
 from .config import DataBackend, settings
 from .models import (
@@ -221,10 +221,13 @@ def captain_suggest(
 def _choose_backend():
     """Return the data backend module to use for this request.
 
-    Sheet backend only when configured AND selected via settings; otherwise
-    fall back to the seed loader (keeps tests + local dev working without
-    Google credentials).
+    Resolution order (first selected AND configured wins): Supabase, then Sheets,
+    then the seed loader as the always-available fallback (keeps tests + local dev
+    working without any cloud credentials). The Supabase branch is checked first
+    so a misconfigured DSN cleanly falls through to sheet/seed rather than erroring.
     """
+    if settings.data_backend == DataBackend.SUPABASE and supabase_backend.is_configured():
+        return supabase_backend
     if settings.data_backend == DataBackend.SHEET and sheets.is_configured():
         return sheets
     return seed_loader
@@ -1085,15 +1088,30 @@ def captain_order_edit(
     backend.delete_order_lines(order_id)
     if new_lines:
         backend.append_order_lines(new_lines)
-    backend.update_order(
-        order_id,
-        total_value_estimate_pln=total_value_rounded,
-        requested_delivery_date=req.requested_delivery_date or existing.requested_delivery_date,
-        notes=req.notes,
-        # Stamp the edit time so captain + manager can see this order was
-        # corrected and when (captain_submitted_at stays = original submit).
-        last_edited_at=datetime.now(timezone.utc),
-    )
+    # `expected_status` makes the final write atomic on Supabase: a conditional
+    # UPDATE … WHERE status='captain_submitted' guards the window between this
+    # route's preflight and the write (a manager claiming concurrently → 0 rows →
+    # 409). The line replacement above stays the documented non-transactional v0
+    # window (unchanged from Sheets, which ignores expected_status).
+    try:
+        backend.update_order(
+            order_id,
+            total_value_estimate_pln=total_value_rounded,
+            requested_delivery_date=req.requested_delivery_date or existing.requested_delivery_date,
+            notes=req.notes,
+            # Stamp the edit time so captain + manager can see this order was
+            # corrected and when (captain_submitted_at stays = original submit).
+            last_edited_at=datetime.now(timezone.utc),
+            expected_status=OrderStatus.CAPTAIN_SUBMITTED.value,
+        )
+    except errors.OrderStatusConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} is no longer editable (it was claimed or "
+                f"changed concurrently). Skontaktuj się z menedżerem."
+            ),
+        )
 
     return CaptainEditResponse(
         order_id=order_id,
@@ -1141,7 +1159,20 @@ def manager_claim(
             ),
         )
 
-    backend.update_order(order_id, status=OrderStatus.MANAGER_CLAIMED.value)
+    try:
+        backend.update_order(
+            order_id,
+            status=OrderStatus.MANAGER_CLAIMED.value,
+            expected_status=OrderStatus.CAPTAIN_SUBMITTED.value,
+        )
+    except errors.OrderStatusConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} was claimed or changed concurrently "
+                f"(expected captain_submitted)"
+            ),
+        )
     return ManagerClaimResponse(
         order_id=order_id, status=OrderStatus.MANAGER_CLAIMED
     )
@@ -1179,11 +1210,21 @@ def manager_release(
             ),
         )
 
-    backend.update_order(
-        order_id,
-        status=OrderStatus.CAPTAIN_SUBMITTED.value,
-        notes=req.reason.strip(),
-    )
+    try:
+        backend.update_order(
+            order_id,
+            status=OrderStatus.CAPTAIN_SUBMITTED.value,
+            notes=req.reason.strip(),
+            expected_status=OrderStatus.MANAGER_CLAIMED.value,
+        )
+    except errors.OrderStatusConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} was changed concurrently "
+                f"(expected manager_claimed)"
+            ),
+        )
     return ManagerReleaseResponse(
         order_id=order_id, status=OrderStatus.CAPTAIN_SUBMITTED
     )
@@ -1319,11 +1360,12 @@ def manager_dispatch(
             manager_sent_at=datetime.now(timezone.utc).isoformat(),
             sent_method=req.sent_method,
             total_value_estimate_pln=round(total, 2),
+            expected_status=OrderStatus.MANAGER_CLAIMED.value,
         )
-    except errors.OrderAlreadyDispatchedError:
+    except (errors.OrderAlreadyDispatchedError, errors.OrderStatusConflictError):
         raise HTTPException(
             status_code=409,
-            detail=f"Order {req.order_id} was already dispatched concurrently",
+            detail=f"Order {req.order_id} was already dispatched or changed concurrently",
         )
 
     return ManagerDispatchResponse(
@@ -1421,8 +1463,23 @@ def manager_order_save(
     if line_updates:
         backend.update_order_lines(order_id, line_updates)
         # Persist the recomputed total only; never pass `status`, so the order
-        # stays manager_claimed (no dispatch).
-        backend.update_order(order_id, total_value_estimate_pln=total_rounded)
+        # stays manager_claimed (no dispatch). `expected_status` makes the write
+        # atomic on Supabase — a concurrent dispatch/release that already moved
+        # the order off manager_claimed yields 0 rows → 409 (Sheets ignores it).
+        try:
+            backend.update_order(
+                order_id,
+                total_value_estimate_pln=total_rounded,
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except errors.OrderStatusConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Order {order_id} is no longer manager_claimed (it may have "
+                    f"been dispatched or released — refresh the queue)"
+                ),
+            )
 
     return ManagerSaveResponse(
         order_id=order_id,

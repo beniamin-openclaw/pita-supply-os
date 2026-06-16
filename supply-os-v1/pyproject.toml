@@ -14,6 +14,9 @@ dependencies = [
   "python-multipart>=0.0.9",
   "posthog>=3.5",
   "supabase>=2.10,<3",
+  # S-10 Supabase Postgres data backend — sync driver + SQLAlchemy Core query/pool layer.
+  "psycopg2-binary>=2.9",
+  "SQLAlchemy>=2.0,<3",
 ]
 
 [project.optional-dependencies]
