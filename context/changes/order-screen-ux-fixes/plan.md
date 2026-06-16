@@ -234,9 +234,9 @@ None — no schema, data, or API-contract change. Each phase is revertible by re
 
 #### Automated
 
-- [x] 2.1 Build passes: `cd frontend && npm run build`
-- [x] 2.2 Lint passes: `cd frontend && npm run lint`
-- [x] 2.3 Unit tests pass: `cd frontend && npm run test`
+- [x] 2.1 Build passes: `cd frontend && npm run build` — e12f10d
+- [x] 2.2 Lint passes: `cd frontend && npm run lint` — e12f10d
+- [x] 2.3 Unit tests pass: `cd frontend && npm run test` — e12f10d
 
 #### Manual
 
@@ -248,9 +248,9 @@ None — no schema, data, or API-contract change. Each phase is revertible by re
 
 #### Automated
 
-- [ ] 3.1 Build passes: `cd frontend && npm run build`
-- [ ] 3.2 Lint passes: `cd frontend && npm run lint`
-- [ ] 3.3 Unit tests pass: `cd frontend && npm run test`
+- [x] 3.1 Build passes: `cd frontend && npm run build`
+- [x] 3.2 Lint passes: `cd frontend && npm run lint`
+- [x] 3.3 Unit tests pass: `cd frontend && npm run test`
 
 #### Manual
 
