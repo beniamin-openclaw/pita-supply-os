@@ -562,7 +562,7 @@ worker at pilot scale.
 
 #### Automated
 
-- [x] 4.1 Default suite still excludes integration tests (green, seed mode)
+- [x] 4.1 Default suite still excludes integration tests (green, seed mode) — d8b0d4b
 - [ ] 4.2 Integration tests pass against real Postgres
 - [ ] 4.3 CI backend-integration job green on the branch
 

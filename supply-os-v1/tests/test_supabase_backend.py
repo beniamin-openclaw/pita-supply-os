@@ -499,3 +499,98 @@ def test_route_captain_edit_passes_expected_status(mocker):
     assert r.status_code == 200, r.text
     _, kwargs = upd.call_args
     assert kwargs.get("expected_status") == OrderStatus.CAPTAIN_SUBMITTED.value
+
+
+# ---------- route wiring: OrderStatusConflictError → 409 for the remaining 3 ----------
+
+def test_route_manager_release_status_conflict_returns_409(mocker):
+    _select_supabase(mocker)
+    order = _claimable_order(status=OrderStatus.MANAGER_CLAIMED)
+    mocker.patch.object(supabase_backend, "get_order", return_value=order)
+    mocker.patch.object(
+        supabase_backend, "update_order",
+        side_effect=errors.OrderStatusConflictError("boom"),
+    )
+    r = client.post(
+        f"/api/manager/release/{order.order_id}",
+        json={"reason": "popraw ilości"}, headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 409
+
+
+def test_route_manager_save_status_conflict_returns_409(mocker):
+    _select_supabase(mocker)
+    order = Order(
+        order_id="ORD-SAVE-2", location_id="WOLA", supplier_id="SUP_X",
+        order_date=date(2026, 6, 16), status=OrderStatus.MANAGER_CLAIMED,
+        lines=[
+            OrderLine(
+                order_line_id="OL-1", order_id="ORD-SAVE-2", product_id="P1",
+                supplier_product_id="SP1", captain_final_qty_purchase=5,
+            )
+        ],
+    )
+    mocker.patch.object(supabase_backend, "get_order", return_value=order)
+    mocker.patch.object(
+        supabase_backend, "load_supplier_products",
+        return_value=[
+            SupplierProduct(
+                supplier_product_id="SP1", supplier_id="SUP_X", product_id="P1",
+                supplier_product_name="Pita", purchase_unit="szt", units_per_purchase_unit=1.0,
+            )
+        ],
+    )
+    mocker.patch.object(supabase_backend, "update_order_lines")
+    mocker.patch.object(
+        supabase_backend, "update_order",
+        side_effect=errors.OrderStatusConflictError("boom"),
+    )
+    body = {"manager_finals": [{"order_line_id": "OL-1", "manager_final_qty_purchase": 3}]}
+    r = client.patch("/api/manager/order/ORD-SAVE-2", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 409
+
+
+def test_route_captain_edit_status_conflict_returns_409(mocker):
+    _select_supabase(mocker)
+    order = _claimable_order(order_id="ORD-EDIT-2")  # captain_submitted, WOLA
+    mocker.patch.object(supabase_backend, "get_order", return_value=order)
+    mocker.patch.object(
+        supabase_backend, "load_products",
+        return_value=[Product(product_id="P1", product_name_pl="Pita", product_category="B", inventory_unit="szt")],
+    )
+    mocker.patch.object(
+        supabase_backend, "load_suppliers",
+        return_value=[Supplier(supplier_id="SUP_X", supplier_name="X", email="x@example.com")],
+    )
+    mocker.patch.object(
+        supabase_backend, "load_supplier_products",
+        return_value=[
+            SupplierProduct(
+                supplier_product_id="SP1", supplier_id="SUP_X", product_id="P1",
+                supplier_product_name="Pita", purchase_unit="szt", units_per_purchase_unit=1.0,
+            )
+        ],
+    )
+    mocker.patch.object(
+        supabase_backend, "load_location_product_settings",
+        return_value=[
+            LocationProductSetting(
+                setting_id="S1", location_id="WOLA", product_id="P1",
+                target_stock_qty_base=0, max_stock_qty_base=0,
+            )
+        ],
+    )
+    mocker.patch.object(supabase_backend, "delete_order_lines")
+    mocker.patch.object(supabase_backend, "append_order_lines")
+    mocker.patch.object(
+        supabase_backend, "update_order",
+        side_effect=errors.OrderStatusConflictError("boom"),
+    )
+    body = {
+        "lines": [
+            {"product_id": "P1", "supplier_product_id": "SP1",
+             "current_stock_qty_base": 0, "captain_final_qty_purchase": 0}
+        ]
+    }
+    r = client.patch("/api/captain/order/ORD-EDIT-2", json=body, headers=CAPTAIN_AUTH)
+    assert r.status_code == 409

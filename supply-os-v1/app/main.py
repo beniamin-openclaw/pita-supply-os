@@ -1,6 +1,7 @@
 """FastAPI app — Captain Submit + Manager Dispatch backend."""
 import logging
 import secrets
+from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -65,10 +66,22 @@ from .suggestion import SuggestionInput, compute_suggestion, rounding_step
 
 log = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # At boot, warn if the SELECTED data backend can't be used and the app will
+    # silently fall back (seed = nothing persisted). Cheap insurance against a
+    # misconfigured DSN/credentials going unnoticed — notably at the S-10 cutover,
+    # where a bad SUPPLY_OS_DATABASE_URL would otherwise quietly serve seed data.
+    sheets.warn_if_unconfigured()
+    supabase_backend.warn_if_unconfigured()
+    yield
+
+
 app = FastAPI(
     title="Pita Bros Supply OS",
     version="0.1.0",
     description="Captain Submit + Manager Dispatch backend (v0).",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -674,7 +687,7 @@ def manager_order_detail(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Order details require SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Order details require a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     order = backend.get_order(order_id)
@@ -879,7 +892,7 @@ def captain_order_detail(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Order details require SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Order details require a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
     order = backend.get_order(order_id)
     if order is None or order.location_id != location_id:
@@ -947,7 +960,7 @@ def captain_order_edit(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Order edit requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Order edit requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     # Force a fresh read so we don't trust a stale TTL snapshot here. This
@@ -1088,11 +1101,17 @@ def captain_order_edit(
     backend.delete_order_lines(order_id)
     if new_lines:
         backend.append_order_lines(new_lines)
-    # `expected_status` makes the final write atomic on Supabase: a conditional
-    # UPDATE … WHERE status='captain_submitted' guards the window between this
-    # route's preflight and the write (a manager claiming concurrently → 0 rows →
-    # 409). The line replacement above stays the documented non-transactional v0
-    # window (unchanged from Sheets, which ignores expected_status).
+    # `expected_status` makes the FINAL status write atomic on Supabase (conditional
+    # UPDATE … WHERE status='captain_submitted'; 0 rows → 409). It does NOT make the
+    # whole edit atomic: delete_order_lines + append_order_lines above have ALREADY
+    # committed by the time the guard runs, so a manager-claim landing in this window
+    # leaves the line set replaced under a now-claimed order and the captain still
+    # gets a 409. This is the documented non-transactional v0 window — no worse than
+    # Sheets (which has no captain-edit status guard at all; Supabase at least 409s).
+    # The clean fix (wrap all three writes in one transaction) is deferred to before
+    # multi-location rollout — see context/changes/supabase-backend/follow-ups/
+    # review-fixes.md — since at single-location pilot scale the race is near-
+    # impossible and a combined transactional method would break the uniform seam.
     try:
         backend.update_order(
             order_id,
@@ -1143,7 +1162,7 @@ def manager_claim(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Claim requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Claim requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     backend.invalidate_cache("orders")
@@ -1194,7 +1213,7 @@ def manager_release(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Release requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Release requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     backend.invalidate_cache("orders")
@@ -1246,7 +1265,7 @@ def manager_dispatch(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Dispatch requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Dispatch requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     backend.invalidate_cache("orders")
@@ -1411,7 +1430,7 @@ def manager_order_save(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Save requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Save requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     # Own preflight (see docstring): fresh read + status gate before any write.
@@ -1806,7 +1825,7 @@ def captain_inventory_count_detail(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Inventory snapshot detail requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Inventory snapshot detail requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     try:
@@ -1956,7 +1975,7 @@ def manager_inventory_count_detail(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Inventory detail requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Inventory detail requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
     try:
         count = backend.get_inventory_count(count_id)
@@ -2135,7 +2154,7 @@ def captain_receipt_submit(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Goods receiving requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Goods receiving requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
 
     order = backend.get_order(req.order_id)
@@ -2289,7 +2308,7 @@ def captain_receipt_detail(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Goods-receipt detail requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Goods-receipt detail requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
     try:
         receipt = backend.get_receipt(receipt_id)
@@ -2375,7 +2394,7 @@ def captain_receipt_photos(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Photo upload requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Photo upload requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
     if not supabase_storage.is_configured():
         raise HTTPException(
@@ -2460,7 +2479,7 @@ def captain_receipt_photo_urls(
     if not _is_persistent(backend):
         raise HTTPException(
             status_code=503,
-            detail="Photo viewing requires SUPPLY_OS_DATA_BACKEND=sheet",
+            detail="Photo viewing requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
         )
     if not supabase_storage.is_configured():
         raise HTTPException(

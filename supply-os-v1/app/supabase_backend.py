@@ -35,6 +35,7 @@ exactly, so rows round-trip to the same models as ``sheets.py``.
 from __future__ import annotations
 
 import logging
+import threading
 from enum import Enum
 from typing import Optional, Type, TypeVar
 
@@ -68,6 +69,10 @@ SUPPORTS_PERSISTENCE = True
 # Lazy singleton SQLAlchemy Engine (built on first data access, not at import —
 # so seed/sheet modes never construct a pool or import psycopg2). Reset by tests.
 _engine = None
+# Guards lazy engine creation: sync routes run in Starlette's threadpool, so two
+# concurrent first-requests can race in _get_engine; the lock makes init exactly-once
+# (without it the loser leaks a connection pool). Matches the double-checked pattern.
+_engine_lock = threading.Lock()
 
 
 # ---------- Column maps (source of truth = migrations/0001_initial_schema.sql) ----------
@@ -177,22 +182,25 @@ def _get_engine():
     global _engine
     if _engine is not None:
         return _engine
-    url = settings.database_url.get_secret_value()
-    if not url:
-        raise RuntimeError(
-            "SUPPLY_OS_DATABASE_URL is empty — supabase backend is not configured"
+    with _engine_lock:
+        if _engine is not None:  # re-check inside the lock (another thread won)
+            return _engine
+        url = settings.database_url.get_secret_value()
+        if not url:
+            raise RuntimeError(
+                "SUPPLY_OS_DATABASE_URL is empty — supabase backend is not configured"
+            )
+        if url.startswith("postgresql://"):
+            url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+        _engine = create_engine(
+            url,
+            pool_size=3,
+            max_overflow=5,
+            pool_pre_ping=True,
+            pool_recycle=1800,
+            future=True,
         )
-    if url.startswith("postgresql://"):
-        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
-    _engine = create_engine(
-        url,
-        pool_size=3,
-        max_overflow=5,
-        pool_pre_ping=True,
-        pool_recycle=1800,
-        future=True,
-    )
-    log.info("SQLAlchemy engine created (singleton, Session Pooler)")
+        log.info("SQLAlchemy engine created (singleton, Session Pooler)")
     return _engine
 
 

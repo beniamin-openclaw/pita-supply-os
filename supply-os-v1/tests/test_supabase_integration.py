@@ -15,6 +15,7 @@ to the 12 product tables — point ``SUPPLY_OS_DATABASE_URL`` at a throwaway DB 
 """
 from __future__ import annotations
 
+import os
 import threading
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -62,6 +63,19 @@ def _schema():
     if settings.data_backend != DataBackend.SUPABASE or not supabase_backend.is_configured():
         pytest.skip(
             "integration tests need SUPPLY_OS_DATA_BACKEND=supabase + SUPPLY_OS_DATABASE_URL"
+        )
+    # DATA-SAFETY GUARD (impl-review F3): this fixture DROPs + recreates the 12
+    # tables. Refuse unless the DSN clearly points at a local/throwaway DB OR the
+    # operator has explicitly opted in — so a stray PROD DSN in
+    # SUPPLY_OS_DATABASE_URL can never silently drop production tables.
+    dsn = settings.database_url.get_secret_value()
+    is_local = "@localhost" in dsn or "@127.0.0.1" in dsn
+    confirmed = os.environ.get("SUPPLY_OS_INTEGRATION_DB_CONFIRMED") == "1"
+    if not (is_local or confirmed):
+        pytest.skip(
+            "refusing to DROP/recreate tables on a non-local DB — point "
+            "SUPPLY_OS_DATABASE_URL at localhost/127.0.0.1, or set "
+            "SUPPLY_OS_INTEGRATION_DB_CONFIRMED=1 to confirm a throwaway DB"
         )
     eng = supabase_backend._get_engine()
     ddl = (MIGRATIONS_DIR / "0001_initial_schema.sql").read_text()
