@@ -432,8 +432,8 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Manual
 
-- [ ] 0.1 `wz-photos` bucket exists and is private
-- [ ] 0.2 Project URL + `service_role` key captured in operator secret store
+- [x] 0.1 `wz-photos` bucket exists and is private
+- [x] 0.2 Project URL + `service_role` key captured in operator secret store
 - [ ] 0.3 Key format confirmed `sb_secret_…` (or noted for rotation)
 
 ### Phase 1: Backend foundation — config, deps, Supabase side-service
@@ -446,7 +446,7 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Manual
 
-- [ ] 1.4 `supabase_storage.py` mirrors `drive.py` gate/singleton/lazy-import shape
+- [x] 1.4 `supabase_storage.py` mirrors `drive.py` gate/singleton/lazy-import shape
 
 ### Phase 2: Backend schema reshape (models)
 
@@ -457,7 +457,7 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Manual
 
-- [ ] 2.3 No `wz_photo_folder_id` / `wz_photo_folder_url` references remain in `app/` (grep clean)
+- [x] 2.3 No `wz_photo_folder_id` / `wz_photo_folder_url` references remain in `app/` (grep clean)
 
 ### Phase 3: Backend endpoint swap + viewing endpoint + Drive removal
 
@@ -470,8 +470,8 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Manual
 
-- [ ] 3.5 No signed URL passed to `update_receipt` (only path prefix persisted)
-- [ ] 3.6 Viewing endpoint degrades (503/404/empty) like sibling receipt routes
+- [x] 3.5 No signed URL passed to `update_receipt` (only path prefix persisted)
+- [x] 3.6 Viewing endpoint degrades (503/404/empty) like sibling receipt routes
 
 ### Phase 4: Frontend — re-enable flag + signed-URL viewing grid
 
@@ -483,15 +483,15 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 
 #### Manual
 
-- [ ] 4.4 Receive screen shows photo control; attach + confirm uploads succeed (Supabase configured)
-- [ ] 4.5 Order detail renders photo grid; tap enlarges; reload re-signs and still shows
+- [x] 4.4 Receive screen shows photo control; attach + confirm uploads succeed (Supabase configured)
+- [x] 4.5 Order detail renders photo grid; tap enlarges; reload re-signs and still shows
 - [ ] 4.6 No-photo receipt shows amber badge, no broken images
 
 ### Phase 5: Production cutover
 
 #### Manual
 
-- [ ] 5.1 Railway env vars set; `GDRIVE_WZ_FOLDER_ID` gone; no Supabase-config warning in prod logs
+- [x] 5.1 Railway env vars set; `GDRIVE_WZ_FOLDER_ID` gone; no Supabase-config warning in prod logs
 - [ ] 5.2 Live Sheet `receipts` header renamed `wz_photo_folder_id` → `wz_photo_path_prefix`
-- [ ] 5.3 Real upload on a safe test order lands in `wz/<order_id>/` and renders via signed URL in prod
-- [ ] 5.4 Verified against the running prod endpoint (not just a green deploy)
+- [x] 5.3 Real upload on a safe test order lands in `wz/<order_id>/` and renders via signed URL in prod — verified `wz/ORD-20260615-WOL-BUKA-c091f5/RCP-...-01` (image/png)
+- [x] 5.4 Verified against the running prod endpoint (not just a green deploy)
