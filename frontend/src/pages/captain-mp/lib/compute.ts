@@ -39,6 +39,12 @@ export function computeSuggestion(
   return { base: suggestedBase, purchase: suggestedPurchase };
 }
 
+// Backend-parity note: the backend deviation gate (captain_submit) floors the
+// denominator at rounding_step(rule), so suggested=0 → denom=step and any
+// positive order trips the >20% reason gate. Here we use Infinity for
+// suggested=0 instead — the observable outcome is identical (any positive order
+// against a 0 suggestion requires a reason on both sides), so the gates never
+// disagree. Keep them in sync if the backend formula changes.
 export function computeDeviation(suggestedPurchase: number, finalPurchase: number): number {
   if (suggestedPurchase === 0) {
     return finalPurchase > 0 ? Infinity : 0;
