@@ -110,8 +110,8 @@ def _client() -> gspread.Client:
 
     Credentials are resolved by `config.resolve_service_account_info()`
     (file -> base64 -> inline), then scoped to `SCOPES`. Sharing that resolver
-    is the single source of truth so every consumer (Sheets + Drive) honors the
-    same credential sources — including the base64 form used on Railway.
+    is the single source of truth so the consumer (Sheets) honors the same
+    credential sources — including the base64 form used on Railway.
     """
     global _client_instance
     if _client_instance is not None:
@@ -795,7 +795,7 @@ def update_receipt(receipt_id: str, **kwargs) -> None:
 
     Mirrors ``update_order`` minus the dispatch concurrency guard (receipts have
     no status transitions). Used by the photo-upload endpoint to attach the WZ
-    Drive folder reference + photo count. Raises OrderNotFoundError if the
+    Supabase Storage path prefix + photo count. Raises OrderNotFoundError if the
     receipt is absent. No-op when ``kwargs`` is empty.
     """
     if not kwargs:

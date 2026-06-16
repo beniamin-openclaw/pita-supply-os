@@ -747,9 +747,10 @@ export const STRINGS = {
   "delivery.statusConfirmed": { pl: "Dostawa potwierdzona", en: "Delivery confirmed" },
   "delivery.confirmedAt": { pl: "Potwierdzono: {value}", en: "Confirmed: {value}" },
   "delivery.discrepancies": { pl: "Rozbieżności: {count}", en: "Discrepancies: {count}" },
-  "delivery.openFolder": {
-    pl: "Otwórz zdjęcia WZ (Google Drive)",
-    en: "Open WZ photos (Google Drive)",
+  "delivery.photoCount": { pl: "Zdjęcia WZ: {count}", en: "WZ photos: {count}" },
+  "delivery.photoLoadError": {
+    pl: "Nie udało się wczytać zdjęć WZ",
+    en: "Could not load WZ photos",
   },
   "delivery.missingWz": { pl: "Brak zdjęcia WZ", en: "Missing WZ photo" },
 } as const satisfies Record<string, StringEntry>;

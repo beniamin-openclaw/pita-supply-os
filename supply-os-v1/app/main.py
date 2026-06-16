@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import drive, gmail_url, seed_loader, sheets
+from . import gmail_url, seed_loader, sheets, supabase_storage
 from .auth import require_any_auth, require_captain, require_manager
 from .config import DataBackend, settings
 from .models import (
@@ -51,6 +51,7 @@ from .models import (
     ReceiptDetail,
     ReceiptDetailLine,
     ReceiptLine,
+    ReceiptPhotoItem,
     ReceiptPhotoUploadResponse,
     ReceiptSubmitRequest,
     ReceiptSubmitResponse,
@@ -2202,7 +2203,6 @@ def captain_receipts(
             discrepancy_count=r.discrepancy_count,
             received_with_missing_wz=r.received_with_missing_wz,
             wz_photo_count=r.wz_photo_count,
-            wz_photo_folder_url=r.wz_photo_folder_url,
         )
         for r in receipts
     ]
@@ -2275,8 +2275,7 @@ def captain_receipt_detail(
         line_count=receipt.line_count,
         discrepancy_count=receipt.discrepancy_count,
         received_with_missing_wz=receipt.received_with_missing_wz,
-        wz_photo_folder_id=receipt.wz_photo_folder_id,
-        wz_photo_folder_url=receipt.wz_photo_folder_url,
+        wz_photo_path_prefix=receipt.wz_photo_path_prefix,
         wz_photo_count=receipt.wz_photo_count,
         notes=receipt.notes,
         lines=enriched,
@@ -2293,14 +2292,15 @@ def captain_receipt_photos(
     location_id: str = Depends(require_captain),
 ):
     """Upload one or more WZ delivery-note photos for a receipt to its order's
-    Google Drive folder (GR-01, Phase 2).
+    Supabase Storage prefix ``wz/<order_id>/`` (GR-01).
 
     Persist-first contract: the receipt already exists (created by submit); this
     endpoint only ATTACHES photos, so a photo failure never loses the confirmed
-    delivery. Requires sheet backend AND Drive configured (else 503).
+    delivery. Requires sheet backend AND Supabase Storage configured (else 503).
     Location-scoped via the receipt's location. On success, flips
-    ``received_with_missing_wz`` off and records the per-order folder ref +
-    cumulative photo count. Non-image files are rejected (400).
+    ``received_with_missing_wz`` off and records the per-order path prefix +
+    cumulative photo count. Non-image files are rejected (400). The response
+    carries fresh signed URLs for immediate display; URLs are never persisted.
     """
     backend = _choose_backend()
     if backend is not sheets:
@@ -2308,12 +2308,12 @@ def captain_receipt_photos(
             status_code=503,
             detail="Photo upload requires SUPPLY_OS_DATA_BACKEND=sheet",
         )
-    if not drive.is_configured():
+    if not supabase_storage.is_configured():
         raise HTTPException(
             status_code=503,
             detail=(
-                "Google Drive not configured — set SUPPLY_OS_GDRIVE_WZ_FOLDER_ID "
-                "(WZ photo folder shared with the service account)."
+                "Supabase Storage not configured — set SUPPLY_OS_SUPABASE_URL "
+                "and SUPPLY_OS_SUPABASE_SERVICE_ROLE_KEY."
             ),
         )
     try:
@@ -2331,8 +2331,8 @@ def captain_receipt_photos(
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
 
-    folder_id, folder_url = drive.ensure_order_folder(receipt.order_id)
-    uploaded: list[dict] = []
+    prefix = supabase_storage.order_prefix(receipt.order_id)
+    uploaded: list[ReceiptPhotoItem] = []
     for idx, f in enumerate(files, start=1):
         content = f.file.read()
         if not content:
@@ -2347,8 +2347,14 @@ def captain_receipt_photos(
         if f.filename and "." in f.filename:
             ext = "." + f.filename.rsplit(".", 1)[1]
         name = f"{receipt.receipt_id}-{idx:02d}{ext}"
-        file_id, file_url = drive.upload_photo(folder_id, name, content, ctype)
-        uploaded.append({"file_id": file_id, "file_url": file_url, "name": name})
+        object_path = f"{prefix}/{name}"
+        supabase_storage.upload_photo(object_path, content, ctype)
+        uploaded.append(
+            ReceiptPhotoItem(
+                name=name,
+                signed_url=supabase_storage.create_signed_url(object_path),
+            )
+        )
 
     if not uploaded:
         raise HTTPException(status_code=400, detail="No valid image files uploaded")
@@ -2356,15 +2362,65 @@ def captain_receipt_photos(
     new_count = (receipt.wz_photo_count or 0) + len(uploaded)
     backend.update_receipt(
         receipt_id,
-        wz_photo_folder_id=folder_id,
-        wz_photo_folder_url=folder_url,
+        wz_photo_path_prefix=prefix,
         wz_photo_count=new_count,
         received_with_missing_wz=False,
     )
     return ReceiptPhotoUploadResponse(
         receipt_id=receipt_id,
         wz_photo_count=new_count,
-        wz_photo_folder_url=folder_url,
         received_with_missing_wz=False,
         uploaded=uploaded,
     )
+
+
+@app.get(
+    "/api/captain/receipt/{receipt_id}/photos",
+    response_model=list[ReceiptPhotoItem],
+)
+def captain_receipt_photo_urls(
+    receipt_id: str,
+    location_id: str = Depends(require_captain),
+):
+    """List short-lived signed URLs for a receipt's WZ photos (GR-01), minted on
+    demand. Sheet-only (503 in seed mode); Supabase Storage must be configured
+    (503); location-scoped (404 on missing/foreign). URLs are never persisted —
+    every call re-signs. Empty list when the receipt has no photos.
+    """
+    backend = _choose_backend()
+    if backend is not sheets:
+        raise HTTPException(
+            status_code=503,
+            detail="Photo viewing requires SUPPLY_OS_DATA_BACKEND=sheet",
+        )
+    if not supabase_storage.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Supabase Storage not configured — set SUPPLY_OS_SUPABASE_URL "
+                "and SUPPLY_OS_SUPABASE_SERVICE_ROLE_KEY."
+            ),
+        )
+    try:
+        receipt = backend.get_receipt(receipt_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Goods-receipt worksheets not configured — create the "
+                "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
+            ),
+        )
+    if receipt is None or receipt.location_id != location_id:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+
+    prefix = receipt.wz_photo_path_prefix or supabase_storage.order_prefix(
+        receipt.order_id
+    )
+    return [
+        ReceiptPhotoItem(
+            name=path.rsplit("/", 1)[-1],
+            signed_url=supabase_storage.create_signed_url(path),
+        )
+        for path in supabase_storage.list_photos(prefix)
+    ]

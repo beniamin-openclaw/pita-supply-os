@@ -32,7 +32,7 @@ def _fake_receipt(*, receipt_id="RCP-20260605-WOL-abc123", order_id="ORD-1",
         line_count=1,
         discrepancy_count=1,
         received_with_missing_wz=False,
-        wz_photo_folder_url="https://drive.google.com/drive/folders/FAKE",
+        wz_photo_path_prefix="wz/ORD-1",
         wz_photo_count=2,
         lines=[
             ReceiptLine(
@@ -118,7 +118,7 @@ def test_receipt_detail_happy(mocker):
     assert out["location_name"]  # WOLA resolved to a human name
     assert out["received_with_missing_wz"] is False
     assert out["wz_photo_count"] == 2
-    assert out["wz_photo_folder_url"].startswith("https://drive.google.com")
+    assert out["wz_photo_path_prefix"] == "wz/ORD-1"
     assert len(out["lines"]) == 1
     line = out["lines"][0]
     assert line["product_name_pl"]  # P027 resolved from seed master data

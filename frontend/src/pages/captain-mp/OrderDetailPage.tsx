@@ -17,7 +17,7 @@ import {
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
-import type { CaptainOrderDetail, ReceiptSummary } from "../../types";
+import type { CaptainOrderDetail, ReceiptPhotoItem, ReceiptSummary } from "../../types";
 import { statusVisual } from "./lib/orderStatus";
 
 export function OrderDetailPage() {
@@ -27,6 +27,8 @@ export function OrderDetailPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<ReceiptSummary[]>([]);
+  const [photos, setPhotos] = useState<ReceiptPhotoItem[]>([]);
+  const [photoError, setPhotoError] = useState(false);
 
   const load = useCallback(() => {
     if (!order_id) return;
@@ -38,10 +40,23 @@ export function OrderDetailPage() {
         if (data.status === "manager_sent") {
           api
             .captainReceipts(data.order_id)
-            .then(setReceipts)
+            .then((rs) => {
+              setReceipts(rs);
+              setPhotoError(false);
+              const first = rs[0];
+              if (first && first.wz_photo_count > 0) {
+                api
+                  .receiptPhotoUrls(first.receipt_id)
+                  .then(setPhotos)
+                  .catch(() => setPhotoError(true));
+              } else {
+                setPhotos([]);
+              }
+            })
             .catch(() => setReceipts([]));
         } else {
           setReceipts([]);
+          setPhotos([]);
         }
       })
       .catch((e: ApiError) => {
@@ -236,16 +251,37 @@ export function OrderDetailPage() {
                         count: receipts[0].discrepancy_count,
                       })}
                     </div>
-                    {receipts[0].wz_photo_folder_url && (
-                      <a
-                        href={receipts[0].wz_photo_folder_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 underline"
-                      >
-                        <ImageIcon size={14} aria-hidden="true" />
-                        {t("delivery.openFolder")}
-                      </a>
+                    {receipts[0].wz_photo_count > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center gap-1 text-xs font-semibold text-slate-700">
+                          <ImageIcon size={14} aria-hidden="true" />
+                          {t("delivery.photoCount", { count: receipts[0].wz_photo_count })}
+                        </div>
+                        {photoError ? (
+                          <div className="mt-1 text-xs text-red-700">
+                            {t("delivery.photoLoadError")}
+                          </div>
+                        ) : (
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {photos.map((p) => (
+                              <a
+                                key={p.name}
+                                href={p.signed_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block aspect-square overflow-hidden rounded-md border border-slate-200"
+                              >
+                                <img
+                                  src={p.signed_url}
+                                  alt={p.name}
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     )}
                     {receipts[0].received_with_missing_wz && (
                       <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-amber-800">

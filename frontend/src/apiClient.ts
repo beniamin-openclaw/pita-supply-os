@@ -34,6 +34,7 @@ import type {
   OrderableItem,
   Product,
   ReceiptDetail,
+  ReceiptPhotoItem,
   ReceiptPhotoUploadResponse,
   ReceiptSubmitRequest,
   ReceiptSubmitResponse,
@@ -326,6 +327,13 @@ export const api = {
       "captain",
     );
   },
+  // Signed URLs for a receipt's WZ photos (GR-01), minted on demand (1h TTL).
+  // [] when the receipt has no photos; never cached — re-fetch to re-sign.
+  receiptPhotoUrls: (receipt_id: string) =>
+    apiGet<ReceiptPhotoItem[]>(
+      `/api/captain/receipt/${encodeURIComponent(receipt_id)}/photos`,
+      "captain",
+    ),
   // Manager
   managerQueue: (location_id?: string, status: OrderStatus = "captain_submitted") => {
     const params = new URLSearchParams({ status });

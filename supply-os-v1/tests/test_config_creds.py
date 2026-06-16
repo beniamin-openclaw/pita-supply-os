@@ -1,11 +1,11 @@
 """Unit tests for the shared service-account credential resolver (`app.config`).
 
 Guards the F1 regression caught in plan-review: base64-only credentials must
-satisfy BOTH the Sheets backend gate and the Drive (GR-01) gate, and the
-resolver must honor the file -> base64 -> inline preference order. Before the
-resolver was centralized, drive.py duplicated sheets.py's loader and neither knew
-about the base64 source — so a Railway (b64-only) deploy would silently fall back
-to seed and disable WZ photo upload.
+satisfy the Sheets backend gate, and the resolver must honor the
+file -> base64 -> inline preference order. (Historically a second consumer, the
+Drive WZ-photo adapter, shared these creds; WZ photos have since moved to
+Supabase Storage with its own service-role key, so only Sheets consumes this
+resolver now.)
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import json
 import pytest
 from pydantic import SecretStr
 
-from app import config, drive, sheets
+from app import config, sheets
 
 _FAKE_SA = {
     "type": "service_account",
@@ -122,16 +122,15 @@ def test_has_creds_false_when_all_blank(_clear_creds):
     assert config.has_service_account_creds() is False
 
 
-# ---------- F1 guard: b64-only satisfies BOTH gates ----------
+# ---------- F1 guard: b64-only satisfies the Sheets gate ----------
 
-def test_b64_only_satisfies_sheets_and_drive_gates(_clear_creds, mocker):
-    """The exact F1 failure mode: with creds supplied ONLY via base64, both the
-    Sheets backend gate (drives _choose_backend) and the Drive gate (drives
-    GR-01 WZ upload) must report configured."""
+def test_b64_only_satisfies_sheets_gate(_clear_creds, mocker):
+    """The F1 failure mode: with creds supplied ONLY via base64, the Sheets
+    backend gate (which drives _choose_backend) must report configured. The
+    former Drive gate was removed when WZ photos moved to Supabase Storage
+    (which authenticates with its own service-role key, not these creds)."""
     mocker.patch.object(
         config.settings, "google_service_account_json_b64", SecretStr(_b64(_FAKE_SA))
     )
     mocker.patch.object(config.settings, "google_sheet_id", "SHEET123")
-    mocker.patch.object(config.settings, "gdrive_wz_folder_id", "FOLDER123")
     assert sheets.is_configured() is True
-    assert drive.is_configured() is True
