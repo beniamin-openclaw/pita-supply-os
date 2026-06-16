@@ -522,10 +522,10 @@ worker at pilot scale.
 
 #### Automated
 
-- [x] 1.1 Linting passes (ruff)
-- [x] 1.2 Full suite green, no behavior change (281 tests)
-- [x] 1.3 Zero `is not sheets` guards remain in app/
-- [x] 1.4 Shared errors importable from app.errors
+- [x] 1.1 Linting passes (ruff) — b163d76
+- [x] 1.2 Full suite green, no behavior change (281 tests) — b163d76
+- [x] 1.3 Zero `is not sheets` guards remain in app/ — b163d76
+- [x] 1.4 Shared errors importable from app.errors — b163d76
 
 #### Manual
 
@@ -535,14 +535,14 @@ worker at pilot scale.
 
 #### Automated
 
-- [ ] 2.1 Migration files exist (0001_initial_schema.sql, 0002_rls_deny_all.sql)
-- [ ] 2.2 All 12 tables present in public schema (list_tables)
-- [ ] 2.3 Security advisor clear of RLS-disabled lints
+- [x] 2.1 Migration files exist (0001_initial_schema.sql, 0002_rls_deny_all.sql)
+- [x] 2.2 All 12 tables present in public schema (list_tables)
+- [x] 2.3 Security advisor clear of RLS-disabled lints
 
 #### Manual
 
-- [ ] 2.4 Human approves the migration apply
-- [ ] 2.5 Spot-check 2 tables in Table Editor (columns/types/constraints)
+- [x] 2.4 Human approves the migration apply
+- [x] 2.5 Spot-check 2 tables in Table Editor (columns/types/constraints)
 
 ### Phase 3: Supabase backend module + config + driver
 
