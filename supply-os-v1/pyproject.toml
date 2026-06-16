@@ -38,3 +38,13 @@ include = ["app*"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.pytest.ini_options]
+# `integration` tests hit a REAL Postgres (the Supabase backend) and are EXCLUDED
+# from the default run via addopts; opt in with `pytest -m integration` (they need
+# SUPPLY_OS_DATA_BACKEND=supabase + SUPPLY_OS_DATABASE_URL and skip otherwise). A
+# CLI `-m integration` overrides the addopts marker expression (last `-m` wins).
+markers = [
+  "integration: exercises a real Postgres via the Supabase backend (excluded by default; run with -m integration)",
+]
+addopts = "-m 'not integration'"
