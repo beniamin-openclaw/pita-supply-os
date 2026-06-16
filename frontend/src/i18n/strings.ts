@@ -108,6 +108,20 @@ export const STRINGS = {
     pl: "Drobna korekta ({pct})",
     en: "Minor adjustment ({pct})",
   },
+  // Blank-stock variants (Bug A): the order is evaluated as if stock=0, but the
+  // suggestion shows "—", so these carry no "%".
+  "state.devNoReasonNoStock": {
+    pl: "Zamówienie bez stanu — wymagany powód",
+    en: "Order without current stock — reason required",
+  },
+  "state.devReasonNoStock": {
+    pl: "Zamówienie bez stanu — powód podany",
+    en: "Order without current stock — reason provided",
+  },
+  "state.smallAdjNoStock": {
+    pl: "Zamówienie bez stanu",
+    en: "Order without current stock",
+  },
 
   // Reason picker -----------------------------------------------------------
   "reason.label": {
