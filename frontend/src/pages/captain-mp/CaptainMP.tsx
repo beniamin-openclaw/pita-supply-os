@@ -26,6 +26,7 @@ import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
 
 import { computeRowState } from "./lib/compute";
+import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
 
 import type { Supplier, OrderableItem, OrderLine, DraftState } from "./types";
@@ -344,18 +345,7 @@ export function CaptainMP() {
     setConfirmOpen(false);
     setIsSubmitting(true);
     try {
-      const payloadLines = Object.values(lines)
-        .filter(
-          (l) => l.current_stock_qty_base !== "" && l.captain_final_qty_purchase !== "",
-        )
-        .map((l) => ({
-          product_id: l.product_id,
-          supplier_product_id: l.supplier_product_id,
-          current_stock_qty_base: Number(l.current_stock_qty_base),
-          captain_final_qty_purchase: Number(l.captain_final_qty_purchase),
-          reason_code: l.reason_code || null,
-          captain_comment: l.captain_comment || undefined,
-        }));
+      const payloadLines = buildPayloadLines(lines);
 
       await api.captainSubmit({
         supplier_id: activeSupplierId,

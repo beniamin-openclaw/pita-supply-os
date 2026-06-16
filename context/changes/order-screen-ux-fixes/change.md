@@ -1,7 +1,7 @@
 ---
 change_id: order-screen-ux-fixes
 title: Order-screen UX fixes — optional current stock, over-max alert, pre-claim manager label
-status: planned
+status: implementing
 created: 2026-06-16
 updated: 2026-06-16
 archived_at: null
