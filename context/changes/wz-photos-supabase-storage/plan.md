@@ -492,6 +492,6 @@ Per-page-load signing adds one Supabase call per photo on the order detail view 
 #### Manual
 
 - [x] 5.1 Railway env vars set; `GDRIVE_WZ_FOLDER_ID` gone; no Supabase-config warning in prod logs
-- [ ] 5.2 Live Sheet `receipts` header renamed `wz_photo_folder_id` → `wz_photo_path_prefix`
+- [x] 5.2 Live Sheet `receipts` header renamed `wz_photo_folder_id` → `wz_photo_path_prefix` — operator-confirmed 2026-06-16
 - [x] 5.3 Real upload on a safe test order lands in `wz/<order_id>/` and renders via signed URL in prod — verified `wz/ORD-20260615-WOL-BUKA-c091f5/RCP-...-01` (image/png)
 - [x] 5.4 Verified against the running prod endpoint (not just a green deploy)
