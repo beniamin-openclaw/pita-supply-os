@@ -1,11 +1,13 @@
 ---
 change_id: gr-01
 title: Goods receiving — Captain confirms delivery, uploads WZ photo, triggers auto-email
-status: planned
+status: archived
 created: 2026-06-09
-updated: 2026-06-09
-archived_at: null
+updated: 2026-06-17
+archived_at: 2026-06-17T15:05:06Z
 ---
+
+> **Shipped & archived 2026-06-17.** GR-01 landed in production: the Captain goods-receipt endpoints (`captain_receipt_submit` / detail / list) live in `supply-os-v1/app/main.py` with `tests/test_receipt_submit.py`; WZ photo storage was delivered via the separate **[[wz-photos-supabase-storage]]** change (Supabase Storage + signed URLs, archived 2026-06-16). This early planning folder is closed for the record; the photo-storage decision (Drive vs Supabase) noted below was resolved in favour of Supabase.
 
 ## Notes
 
