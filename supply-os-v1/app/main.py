@@ -618,9 +618,12 @@ def manager_queue(
     if not filtered:
         return []
 
-    all_lines = backend.load_order_lines()
+    # F-7: load only the lines for the orders we're displaying — a targeted
+    # `WHERE order_id = ANY(...)` on Supabase (one cached read on Sheets), not a
+    # full order_lines table scan that grows with every order ever placed.
+    order_ids = [o.order_id for o in filtered]
     lines_by_order: dict[str, list[OrderLine]] = {}
-    for line in all_lines:
+    for line in backend.load_order_lines_for_orders(order_ids):
         lines_by_order.setdefault(line.order_id, []).append(line)
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
@@ -839,9 +842,10 @@ def captain_orders(
     )
     filtered = filtered[:limit]
 
-    all_lines = backend.load_order_lines()
+    # F-7: targeted load for just these orders (see manager_queue).
+    order_ids = [o.order_id for o in filtered]
     lines_by_order: dict[str, list[OrderLine]] = {}
-    for line in all_lines:
+    for line in backend.load_order_lines_for_orders(order_ids):
         lines_by_order.setdefault(line.order_id, []).append(line)
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}

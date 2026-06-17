@@ -191,6 +191,18 @@ def test_update_order_lines_and_delete():
     assert supabase_backend.get_order(oid).lines == []
 
 
+def test_load_order_lines_for_orders_targeted():
+    """F-7: the targeted loader returns only the requested orders' lines, and an
+    empty id list short-circuits to [] (no full-table scan)."""
+    a = _make_order(order_id="ORD-LL-A")
+    b = _make_order(order_id="ORD-LL-B")
+    assert {ln.order_id for ln in supabase_backend.load_order_lines_for_orders([a])} == {"ORD-LL-A"}
+    assert {
+        ln.order_id for ln in supabase_backend.load_order_lines_for_orders([a, b])
+    } == {"ORD-LL-A", "ORD-LL-B"}
+    assert supabase_backend.load_order_lines_for_orders([]) == []
+
+
 def test_inventory_count_roundtrip():
     cid = "INV-IT-1"
     supabase_backend.append_inventory_count(
