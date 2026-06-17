@@ -145,8 +145,8 @@ None — no schema/data change. Uncounted persists as `0`; the request models ar
 
 #### Automated
 
-- [ ] 1.1 ruff clean
-- [ ] 1.2 pytest green (incl. new uncounted + over-MAX cases)
+- [x] 1.1 ruff clean — d802cd7
+- [x] 1.2 pytest green (incl. new uncounted + over-MAX cases) — d802cd7
 
 #### Manual
 
@@ -156,11 +156,11 @@ None — no schema/data change. Uncounted persists as `0`; the request models ar
 
 #### Automated
 
-- [ ] 2.1 build passes
-- [ ] 2.2 lint passes
-- [ ] 2.3 unit tests pass
+- [x] 2.1 build passes — bc8fcfb
+- [x] 2.2 lint passes — bc8fcfb
+- [x] 2.3 unit tests pass (49) — bc8fcfb
 
-#### Manual
+#### Manual (owner, on deploy)
 
 - [ ] 2.4 blank stock + normal order → no reason required, submits
 - [ ] 2.5 blank stock + over-MAX → reason required, then submits

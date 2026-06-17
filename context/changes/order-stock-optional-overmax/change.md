@@ -1,7 +1,7 @@
 ---
 change_id: order-stock-optional-overmax
 title: Current stock truly optional — over-MAX is the only reason gate when stock is uncounted
-status: implementing
+status: implemented
 created: 2026-06-17
 updated: 2026-06-17
 archived_at: null
