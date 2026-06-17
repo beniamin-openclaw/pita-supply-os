@@ -70,6 +70,31 @@ export const STRINGS = {
     en: "Error loading products: {detail}",
   },
 
+  // API validation errors (FastAPI 422) — PL templates keyed by Pydantic `type`,
+  // localized in apiClient via i18n/apiErrors.ts (Tier 1: form validations).
+  // Business-rule 400s stay English (Tier 2 — needs backend error codes).
+  "apiError.required": { pl: "pole wymagane", en: "field required" },
+  "apiError.minItems": { pl: "wymagane min. {min}", en: "at least {min} required" },
+  "apiError.maxItems": { pl: "maksymalnie {max}", en: "at most {max} allowed" },
+  "apiError.gte": { pl: "wartość musi być ≥ {limit}", en: "must be ≥ {limit}" },
+  "apiError.gt": { pl: "wartość musi być > {limit}", en: "must be > {limit}" },
+  "apiError.lte": { pl: "wartość musi być ≤ {limit}", en: "must be ≤ {limit}" },
+  "apiError.lt": { pl: "wartość musi być < {limit}", en: "must be < {limit}" },
+  "apiError.invalid": { pl: "nieprawidłowa wartość", en: "invalid value" },
+  "apiError.orderEmpty": {
+    pl: "Dodaj przynajmniej jedną pozycję do zamówienia.",
+    en: "Add at least one item to the order.",
+  },
+  // "<field>: <message>" — friendly field labels for the few user-facing fields.
+  "apiError.withField": { pl: "{field}: {message}", en: "{field}: {message}" },
+  "apiError.field.lines": { pl: "Pozycje zamówienia", en: "Order lines" },
+  "apiError.field.current_stock_qty_base": { pl: "Obecny stan", en: "Current stock" },
+  "apiError.field.captain_final_qty_purchase": { pl: "Zamawiasz", en: "Order qty" },
+  "apiError.field.count_user": { pl: "Kto liczył", en: "Counted by" },
+  "apiError.field.received_by": { pl: "Kto przyjął", en: "Received by" },
+  "apiError.field.reason_code": { pl: "Powód", en: "Reason" },
+  "apiError.field.requested_delivery_date": { pl: "Data dostawy", en: "Delivery date" },
+
   // ProductCard -------------------------------------------------------------
   "card.targetLine": {
     pl: "target {target} {inventoryUnit} · max {max} · 1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",

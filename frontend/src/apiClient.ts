@@ -6,6 +6,8 @@
 //   const resp = await apiPost<CaptainSubmitResponse>("/api/captain/submit", body, "captain");
 
 import { clearToken, getToken, type Role } from "./auth";
+import { getStoredLang } from "./i18n";
+import { localizeValidationDetail } from "./i18n/apiErrors";
 import type {
   CaptainEditRequest,
   CaptainEditResponse,
@@ -122,6 +124,20 @@ export function formatErrorDetail(payload: unknown, fallback: string): string {
   return detail != null ? String(detail) : fallback;
 }
 
+/**
+ * Localized error message for a failed response: a recognized FastAPI 422
+ * validation array → PL/EN copy (i18n/apiErrors); otherwise the English
+ * `formatErrorDetail` fallback (string detail / business-rule 400 → Tier 2).
+ */
+function localizedErrorDetail(payload: unknown, fallbackText: string): string {
+  const fallback = formatErrorDetail(payload, fallbackText);
+  const detail =
+    payload && typeof payload === "object" && "detail" in payload
+      ? (payload as { detail: unknown }).detail
+      : undefined;
+  return localizeValidationDetail(detail, getStoredLang()) ?? fallback;
+}
+
 async function request<T>(
   method: "GET" | "POST" | "PATCH",
   path: string,
@@ -170,7 +186,7 @@ async function request<T>(
   }
 
   if (!resp.ok) {
-    throw new ApiError(resp.status, formatErrorDetail(payload, resp.statusText));
+    throw new ApiError(resp.status, localizedErrorDetail(payload, resp.statusText));
   }
 
   return payload as T;
@@ -257,7 +273,7 @@ export async function apiPostFormData<T>(
     return payload as T;
   }
   if (!resp.ok) {
-    throw new ApiError(resp.status, formatErrorDetail(payload, resp.statusText));
+    throw new ApiError(resp.status, localizedErrorDetail(payload, resp.statusText));
   }
   return payload as T;
 }

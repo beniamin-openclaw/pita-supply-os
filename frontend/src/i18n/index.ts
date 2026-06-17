@@ -172,3 +172,19 @@ export function useT(): LangContextValue {
 
 export { STRINGS };
 export type { StringKey };
+
+/** Active language for non-React modules (e.g. apiClient localizing a thrown
+ *  error). Reads the same persisted value the provider initializes from, so it
+ *  stays in sync with the UI (setLang persists immediately). */
+export function getStoredLang(): Lang {
+  return readStoredLang();
+}
+
+/** Interpolate `{var}` placeholders — exported for non-hook localizers that
+ *  look up STRINGS directly (mirrors the in-provider `t`). */
+export function interpolateTemplate(
+  template: string,
+  vars?: Record<string, string | number>,
+): string {
+  return interpolate(template, vars);
+}
