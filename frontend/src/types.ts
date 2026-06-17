@@ -273,6 +273,15 @@ export interface ManagerReleaseResponse {
   status: OrderStatus;
 }
 
+export interface ManagerCancelRequest {
+  reason: string;
+}
+
+export interface ManagerCancelResponse {
+  order_id: string;
+  status: OrderStatus; // "cancelled" on success
+}
+
 // Manager Queue --------------------------------------------------------------
 
 export interface ManagerQueueItem {

@@ -40,6 +40,8 @@ interface OrderDetailPaneProps {
   drafts: DraftMap;
   onClaim: (orderId: string) => void;
   onRelease: (orderId: string) => void;
+  /** Cancel (soft-delete) a pre-dispatch order with a required reason. */
+  onCancel: (orderId: string) => void;
   /** Save (PATCH) the dirty draft lines without dispatching. */
   onSave: (orderId: string) => void;
   /** Dispatch with the full draft line set + the channel sent_method. */
@@ -59,6 +61,7 @@ export function OrderDetailPane({
   drafts,
   onClaim,
   onRelease,
+  onCancel,
   onSave,
   onDispatch,
   onQtyChange,
@@ -200,13 +203,22 @@ export function OrderDetailPane({
               {t("manager.action.working")}
             </span>
           ) : (
-            <button
-              type="button"
-              onClick={() => onClaim(detail.order_id)}
-              className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-            >
-              {t("manager.action.claim")}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onClaim(detail.order_id)}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+              >
+                {t("manager.action.claim")}
+              </button>
+              <button
+                type="button"
+                onClick={() => onCancel(detail.order_id)}
+                className="rounded-lg border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+              >
+                {t("manager.action.cancel")}
+              </button>
+            </>
           )}
         </div>
       ) : editable ? (
@@ -220,6 +232,14 @@ export function OrderDetailPane({
               className="rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
             >
               {t("manager.action.release")}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onCancel(detail.order_id)}
+              className="rounded-lg border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+            >
+              {t("manager.action.cancel")}
             </button>
           </div>
           <DispatchPanel

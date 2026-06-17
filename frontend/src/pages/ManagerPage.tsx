@@ -220,6 +220,29 @@ export function ManagerPage() {
     [confirmDiscardIfDirty, refreshAll, showToast, t],
   );
 
+  // Cancel (soft-delete) a pre-dispatch order with a required reason trace.
+  // Mirrors release; on success the order leaves the queue (status → cancelled).
+  const handleCancel = useCallback(
+    async (orderId: string) => {
+      if (!confirmDiscardIfDirty()) return;
+      if (!window.confirm(t("manager.cancelConfirm"))) return;
+      const reason = window.prompt(t("manager.cancelPrompt"));
+      if (!reason || reason.trim() === "") return;
+      setBusyId(orderId);
+      try {
+        await api.managerCancel(orderId, reason.trim());
+        showToast(t("manager.cancelledOk"), true);
+        refreshAll(orderId);
+      } catch (e) {
+        const detailMsg = e instanceof ApiError ? e.detail : String(e);
+        showToast(t("manager.actionError", { detail: detailMsg }), false);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [confirmDiscardIfDirty, refreshAll, showToast, t],
+  );
+
   // Save (PATCH) — full read-modify-write payload for DIRTY lines only; stays
   // manager_claimed. Empty payload is a no-op (allowed by the contract). On
   // success the detail reloads (reseeding the draft baseline → clears dirty).
@@ -424,6 +447,7 @@ export function ManagerPage() {
               drafts={drafts}
               onClaim={handleClaim}
               onRelease={handleRelease}
+              onCancel={handleCancel}
               onSave={handleSave}
               onDispatch={handleDispatch}
               onQtyChange={handleQtyChange}

@@ -24,6 +24,8 @@ import type {
   InventoryProduct,
   Location,
   SuggestionReviewItem,
+  ManagerCancelRequest,
+  ManagerCancelResponse,
   ManagerClaimResponse,
   ManagerDispatchRequest,
   ManagerDispatchResponse,
@@ -374,6 +376,13 @@ export const api = {
     apiPost<ManagerReleaseResponse>(
       `/api/manager/release/${encodeURIComponent(order_id)}`,
       { reason } as ManagerReleaseRequest,
+      "manager",
+    ),
+  // Cancel (soft-delete) a pre-dispatch order with a required reason trace.
+  managerCancel: (order_id: string, reason: string) =>
+    apiPost<ManagerCancelResponse>(
+      `/api/manager/cancel/${encodeURIComponent(order_id)}`,
+      { reason } as ManagerCancelRequest,
       "manager",
     ),
   // Manager inventory view (S-08 / FR-018). Cross-location; [] in seed mode.

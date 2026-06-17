@@ -341,14 +341,24 @@ export const STRINGS = {
   },
   "manager.action.claim": { pl: "Przejmij", en: "Claim" },
   "manager.action.release": { pl: "Odrzuć do poprawy", en: "Send back" },
+  "manager.action.cancel": { pl: "Anuluj zamówienie", en: "Cancel order" },
   "manager.action.dispatch": { pl: "Zamów", en: "Order" },
   "manager.action.working": { pl: "Pracuję…", en: "Working…" },
   "manager.releasePrompt": {
     pl: "Powód odesłania do kapitana (kapitan to zobaczy):",
     en: "Reason to send back to the captain (they will see it):",
   },
+  "manager.cancelConfirm": {
+    pl: "Anulować to zamówienie? Zniknie z kolejki (zapisujemy powód, kto i kiedy).",
+    en: "Cancel this order? It leaves the queue (we store the reason, who and when).",
+  },
+  "manager.cancelPrompt": {
+    pl: "Powód anulowania (zapisany jako trwały ślad):",
+    en: "Cancellation reason (stored as a durable trace):",
+  },
   "manager.claimedOk": { pl: "Przejęto zamówienie", en: "Order claimed" },
   "manager.releasedOk": { pl: "Odesłano do poprawy", en: "Sent back to captain" },
+  "manager.cancelledOk": { pl: "Zamówienie anulowane", en: "Order cancelled" },
   "manager.dispatchedOk": {
     pl: "Zamówione — otwieram email do dostawcy",
     en: "Ordered — opening supplier email",
