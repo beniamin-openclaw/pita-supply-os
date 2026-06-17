@@ -69,10 +69,8 @@ function formatPctSigned(deviation: number): string {
 }
 
 export function computeRowState(item: OrderableItem, line: OrderLine): RowState {
-  // The order quantity is what makes a row evaluable. A blank CURRENT STOCK is
-  // optional — treat it as 0 (the Captain may order without counting). Because
-  // the UI then shows the suggestion as "—", blank-stock messages carry no "%".
-  // Only a blank ORDER qty short-circuits to the empty/grey state.
+  // The order quantity is what makes a row evaluable. Only a blank ORDER qty
+  // short-circuits to the empty/grey state.
   if (line.captain_final_qty_purchase === "") {
     return {
       state: "grey",
@@ -82,30 +80,49 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  const stockBlank = line.current_stock_qty_base === "";
-  const current = stockBlank ? 0 : Number(line.current_stock_qty_base);
   const final = Number(line.captain_final_qty_purchase);
+  const hasReason =
+    !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
+
+  // Blank CURRENT STOCK = not counted. There is no real suggestion to deviate
+  // from (the UI shows "—"), so the deviation + critical gates are skipped. A
+  // reason is forced only on an over-MAX order — the storage ceiling, the one
+  // stock-independent concern. Mirrors the backend `_evaluate_submit_line`
+  // uncounted branch; no "%" (nothing to compare against).
+  if (line.current_stock_qty_base === "") {
+    const orderBase = final * item.units_per_purchase_unit;
+    const overMax =
+      item.max_stock_qty_base > 0 &&
+      !item.allow_over_max_due_to_packaging &&
+      orderBase > item.max_stock_qty_base;
+    if (overMax) {
+      return {
+        state: hasReason ? "orange" : "red",
+        messageKey: hasReason ? "state.overMaxNoStockReason" : "state.overMaxNoStock",
+        requiresReason: true,
+        deviationPct: null,
+      };
+    }
+    return {
+      state: "yellow",
+      messageKey: "state.smallAdjNoStock",
+      requiresReason: false,
+      deviationPct: null,
+    };
+  }
+
+  // Counted path — unchanged.
+  const current = Number(line.current_stock_qty_base);
   const { purchase: suggested } = computeSuggestion(item, current);
 
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);
-  const hasReason =
-    !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
 
-  // Reason-required result (>20% deviation, or a critical under-order). With a
-  // blank stock we swap to no-"%" message keys and omit the pct var (the
-  // suggestion is shown as "—"); the red/orange + requiresReason gate is
-  // identical, mirroring the backend's deviation gate on stock=0.
+  // Reason-required result (>20% deviation, or a critical under-order).
   const reasonResult = (): RowState => ({
     state: hasReason ? "orange" : "red",
-    messageKey: hasReason
-      ? stockBlank
-        ? "state.devReasonNoStock"
-        : "state.devReason"
-      : stockBlank
-        ? "state.devNoReasonNoStock"
-        : "state.devNoReason",
-    messageVars: stockBlank ? undefined : { pct: formatPctSigned(deviation) },
+    messageKey: hasReason ? "state.devReason" : "state.devNoReason",
+    messageVars: { pct: formatPctSigned(deviation) },
     requiresReason: true,
     deviationPct: deviation,
   });
@@ -121,9 +138,7 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     return reasonResult();
   }
 
-  // Exact match → green; but with blank stock we never claim a "match" (the
-  // suggestion renders as "—"), so fall through to the neutral no-stock label.
-  if (final === suggested && !stockBlank) {
+  if (final === suggested) {
     return {
       state: "green",
       messageKey: "state.match",
@@ -132,12 +147,11 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  // Small deviation (≤20%) — show the % normally; neutral no-"%" label when the
-  // stock is blank.
+  // Small deviation (≤20%).
   return {
     state: "yellow",
-    messageKey: stockBlank ? "state.smallAdjNoStock" : "state.smallAdj",
-    messageVars: stockBlank ? undefined : { pct: formatPctSigned(deviation) },
+    messageKey: "state.smallAdj",
+    messageVars: { pct: formatPctSigned(deviation) },
     requiresReason: false,
     deviationPct: deviation,
   };

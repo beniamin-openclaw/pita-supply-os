@@ -48,43 +48,64 @@ describe("computeRowState — empty inputs", () => {
   });
 });
 
-describe("computeRowState — blank stock, order entered (Bug A)", () => {
-  // makeItem default: target=50, units=10 → suggestion at stock=0 is ceil(50/10)=5.
-  it("blank stock + order ≫ target, no reason → red + requiresReason, no-% message", () => {
-    const { state, requiresReason, messageKey, messageVars } = computeRowState(
+describe("computeRowState — blank stock = uncounted, over-MAX is the only gate", () => {
+  // makeItem default: units=10, max=100, allow_over_max=false → over MAX when
+  // order * 10 > 100, i.e. order > 10.
+  it("blank stock + order over MAX, no reason → red + requiresReason, no %", () => {
+    const { state, requiresReason, messageKey, messageVars, deviationPct } = computeRowState(
       makeItem(),
-      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 21 }),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 11 }), // base 110 > 100
     );
     expect(state).toBe("red");
     expect(requiresReason).toBe(true);
-    expect(messageKey).toBe("state.devNoReasonNoStock");
+    expect(messageKey).toBe("state.overMaxNoStock");
     expect(messageVars).toBeUndefined();
+    expect(deviationPct).toBeNull();
   });
 
-  it("blank stock + over-order with a reason → orange + requiresReason, no-% message", () => {
-    const { state, requiresReason, messageKey, messageVars } = computeRowState(
+  it("blank stock + over MAX with a reason → orange + requiresReason, no %", () => {
+    const { state, requiresReason, messageKey } = computeRowState(
       makeItem(),
       makeLine({
         current_stock_qty_base: "",
-        captain_final_qty_purchase: 21,
-        reason_code: "EVENT_HIGH_TRAFFIC",
+        captain_final_qty_purchase: 11,
+        reason_code: "PACKAGING_LIMITATION",
       }),
     );
     expect(state).toBe("orange");
     expect(requiresReason).toBe(true);
-    expect(messageKey).toBe("state.devReasonNoStock");
-    expect(messageVars).toBeUndefined();
+    expect(messageKey).toBe("state.overMaxNoStockReason");
   });
 
-  it("blank stock + order ≈ target (≤20%) → yellow, no reason, no-% message", () => {
-    // order 5 = stock-0 suggestion; blank stock must NOT show green (suggestion is "—").
-    const { state, requiresReason, messageKey } = computeRowState(
+  it("blank stock + normal order within MAX → yellow, NO reason (the key win)", () => {
+    // order 9 → base 90 <= 100. Counted as 0 this would trip the >20% gate vs
+    // suggested 5; uncounted it needs no reason.
+    const { state, requiresReason, messageKey, deviationPct } = computeRowState(
       makeItem(),
-      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 5 }),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 9 }),
     );
     expect(state).toBe("yellow");
     expect(requiresReason).toBe(false);
     expect(messageKey).toBe("state.smallAdjNoStock");
+    expect(deviationPct).toBeNull();
+  });
+
+  it("blank stock + allow_over_max → never over MAX → yellow, no reason", () => {
+    const { state, requiresReason } = computeRowState(
+      makeItem({ allow_over_max_due_to_packaging: true }),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 50 }), // base 500
+    );
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+  });
+
+  it("blank stock + max unset (0) → no ceiling → yellow, no reason", () => {
+    const { state, requiresReason } = computeRowState(
+      makeItem({ max_stock_qty_base: 0 }),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 99 }),
+    );
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
   });
 });
 

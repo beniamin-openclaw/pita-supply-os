@@ -108,15 +108,16 @@ export const STRINGS = {
     pl: "Drobna korekta ({pct})",
     en: "Minor adjustment ({pct})",
   },
-  // Blank-stock variants (Bug A): the order is evaluated as if stock=0, but the
-  // suggestion shows "—", so these carry no "%".
-  "state.devNoReasonNoStock": {
-    pl: "Zamówienie bez stanu — wymagany powód",
-    en: "Order without current stock — reason required",
+  // Blank-stock variants: stock not counted → no real suggestion (shows "—"), so
+  // these carry no "%". A reason is forced only when the order exceeds MAX (the
+  // storage ceiling); otherwise the order is neutral and needs no reason.
+  "state.overMaxNoStock": {
+    pl: "Powyżej MAX — wymagany powód",
+    en: "Above MAX — reason required",
   },
-  "state.devReasonNoStock": {
-    pl: "Zamówienie bez stanu — powód podany",
-    en: "Order without current stock — reason provided",
+  "state.overMaxNoStockReason": {
+    pl: "Powyżej MAX — powód podany",
+    en: "Above MAX — reason provided",
   },
   "state.smallAdjNoStock": {
     pl: "Zamówienie bez stanu",

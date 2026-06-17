@@ -361,6 +361,135 @@ def test_submit_in_seed_mode_does_not_raise():
     assert any("not persisted" in w for w in r.json()["warnings"])
 
 
+# ---------- Uncounted stock — over-MAX is the only reason gate ----------
+# (change: order-stock-optional-overmax) When current_stock_qty_base is omitted
+# (None = not counted), the deviation + critical-under reason gates are skipped;
+# only an over-MAX order forces a reason. P027 @ WOLA: max=12, units_per_pu=5,
+# critical, target=12 → suggestion-at-0 = ceil(12/5) = 3.
+
+def test_submit_uncounted_normal_order_needs_no_reason():
+    """Omit current stock, order 2 kartons (order_base 10 <= max 12). Today this
+    would 400 (critical under-order of 2 < suggested 3, ~33% deviation); with
+    stock uncounted there is no suggestion to deviate from, so it must pass with
+    no reason_code."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                # current_stock_qty_base intentionally omitted → None (uncounted)
+                "captain_final_qty_purchase": 2,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["status"] == "captain_submitted"
+    assert out["line_count"] == 1
+    # No deviation/critical/over-MAX complaint — only the seed non-persist note.
+    assert not any("deviation" in w or "MAX" in w for w in out["warnings"])
+    assert out["total_value_estimate_pln"] == pytest.approx(2 * 145.0)
+
+
+def test_submit_uncounted_over_max_no_reason_rejected():
+    """Omit current stock, order 3 kartons (order_base 15 > max 12) → over-MAX
+    without a reason_code → 400."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "captain_final_qty_purchase": 3,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "over MAX" in r.json()["detail"]
+
+
+def test_submit_uncounted_over_max_with_reason_warns():
+    """Same over-MAX order WITH a reason_code → 200 + an over-MAX warning."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "captain_final_qty_purchase": 3,
+                "reason_code": "PACKAGING_LIMITATION",
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert any("over MAX" in w for w in out["warnings"])
+
+
+def test_submit_uncounted_persists_zero_stock_and_null_delta(mocker):
+    """An uncounted line persists current_stock_qty_base=0 (column stays NOT
+    NULL) and delta_vs_suggestion_pct=None (so it never inflates deviation
+    roll-ups)."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(sheets, "append_order")
+    mocked_append_lines = mocker.patch.object(sheets, "append_order_lines")
+
+    from app import seed_loader
+
+    mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
+    mocker.patch.object(
+        sheets, "load_supplier_products", side_effect=seed_loader.load_supplier_products
+    )
+    mocker.patch.object(
+        sheets,
+        "load_location_product_settings",
+        side_effect=seed_loader.load_location_product_settings,
+    )
+
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "captain_final_qty_purchase": 2,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    appended = mocked_append_lines.call_args[0][0]
+    assert len(appended) == 1
+    assert appended[0].current_stock_qty_base == 0
+    assert appended[0].delta_vs_suggestion_pct is None
+
+
+def test_submit_counted_zero_still_gates_as_before():
+    """Regression guard: a counted 0 (not omitted) is distinct from uncounted —
+    P027 stock=0 → suggested 3, ordering 0 is a critical under-order → 400. This
+    must NOT be loosened by the uncounted branch."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "current_stock_qty_base": 0,
+                "captain_final_qty_purchase": 0,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "Critical product" in r.json()["detail"]
+
+
 def test_submit_location_derived_from_auth_not_request():
     """Body has no location_id — auth provides it. KEN gets KEN's settings."""
     # KEN has no settings → P027 fails location-setting check.

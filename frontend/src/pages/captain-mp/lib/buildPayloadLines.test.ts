@@ -14,12 +14,12 @@ function row(over: Partial<OrderLine>): OrderLine {
 }
 
 describe("buildPayloadLines", () => {
-  it("includes a row with order qty > 0 and blank stock, coercing stock to 0", () => {
+  it("includes a row with order qty > 0 and blank stock, sending stock as null (uncounted)", () => {
     const out = buildPayloadLines({
       P1: row({ product_id: "P1", captain_final_qty_purchase: 5 }),
     });
     expect(out).toHaveLength(1);
-    expect(out[0].current_stock_qty_base).toBe(0);
+    expect(out[0].current_stock_qty_base).toBeNull();
     expect(out[0].captain_final_qty_purchase).toBe(5);
   });
 
