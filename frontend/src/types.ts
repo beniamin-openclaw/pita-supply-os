@@ -78,7 +78,10 @@ export interface OrderableItem {
 export interface OrderLineSubmit {
   product_id: string;
   supplier_product_id: string;
-  current_stock_qty_base: number;
+  // null = stock NOT counted (distinct from a counted 0). When null, the backend
+  // skips the deviation/critical reason gate and forces a reason only on an
+  // over-MAX order. A typed 0 is a real counted 0.
+  current_stock_qty_base: number | null;
   captain_final_qty_purchase: number;
   reason_code?: ReasonCode | null;
   captain_comment?: string;
