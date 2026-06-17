@@ -324,6 +324,17 @@ def load_order_lines() -> list[OrderLine]:
     return _read_with_ttl("order_lines", OrderLine, ORDERS_TTL_SECONDS)
 
 
+def load_order_lines_for_orders(order_ids: list[str]) -> list[OrderLine]:
+    """Sheets has no targeted query — read all (TTL-cached) and filter to
+    ``order_ids`` in Python. Still one cached read; preserves today's behavior.
+    Mirrors the Supabase targeted loader's signature so the seam stays uniform
+    (F-7). Empty id list → ``[]``."""
+    if not order_ids:
+        return []
+    wanted = set(order_ids)
+    return [line for line in load_order_lines() if line.order_id in wanted]
+
+
 # ---------- Write-side helpers (Phase C2) ----------
 
 # TTL cache for worksheet header order. Keyed by (sheet_id, worksheet_name) and

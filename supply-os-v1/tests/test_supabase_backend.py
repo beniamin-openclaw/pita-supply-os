@@ -227,6 +227,20 @@ def test_delete_order_lines_single_statement(mocker):
     assert params == {"oid": "ORD-1"}
 
 
+def test_load_order_lines_for_orders_targeted(mocker):
+    # Empty id list short-circuits — no query (F-7).
+    fetch = mocker.patch.object(supabase_backend, "_fetch_all")
+    assert supabase_backend.load_order_lines_for_orders([]) == []
+    fetch.assert_not_called()
+    # Non-empty → one targeted ANY(:ids) query carrying the id list.
+    fetch.return_value = ["sentinel"]
+    out = supabase_backend.load_order_lines_for_orders(["ORD-A", "ORD-B"])
+    assert out == ["sentinel"]
+    args, _ = fetch.call_args
+    assert "ANY(:ids)" in args[0]
+    assert args[2] == {"ids": ["ORD-A", "ORD-B"]}
+
+
 # ---------- reads + get_* assembly ----------
 
 def test_load_products_maps_rows_to_models(mocker):

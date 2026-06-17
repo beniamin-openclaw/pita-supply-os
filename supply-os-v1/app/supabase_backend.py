@@ -310,6 +310,22 @@ def load_order_lines() -> list[OrderLine]:
     return _fetch_all("SELECT * FROM order_lines ORDER BY order_line_id", OrderLine)
 
 
+def load_order_lines_for_orders(order_ids: list[str]) -> list[OrderLine]:
+    """Order lines for a specific set of orders — a targeted query, not a
+    full-table scan (F-7). The queue / captain-list endpoints only need the lines
+    for the orders they display. ``order_id`` is indexed; an empty id list
+    short-circuits to ``[]`` (no query). psycopg2 adapts the Python list to a
+    Postgres array for ``= ANY(:ids)``. (suggestion-review still uses
+    ``load_order_lines`` — it aggregates the full history.)"""
+    if not order_ids:
+        return []
+    return _fetch_all(
+        "SELECT * FROM order_lines WHERE order_id = ANY(:ids) ORDER BY order_line_id",
+        OrderLine,
+        {"ids": list(order_ids)},
+    )
+
+
 def get_order(order_id: str) -> Order | None:
     """Return the Order with its lines populated, or None (mirrors sheets.get_order)."""
     orders = _fetch_all(
