@@ -419,6 +419,81 @@ def delete_order_lines(order_id: str) -> int:
         return result.rowcount or 0
 
 
+def replace_order_lines_atomic(
+    order_id: str,
+    new_lines: list[OrderLine],
+    *,
+    order_updates: Optional[dict] = None,
+    expected_status=None,
+) -> None:
+    """Atomically replace an order's full line set AND apply ``order_updates``,
+    guarded by ``expected_status`` — all in ONE Postgres transaction (F1 fix).
+
+    Sequence inside the single transaction:
+      1. Conditional ``UPDATE orders SET <order_updates> WHERE order_id=:id
+         [AND status=:expected] RETURNING order_id``. 0 matched rows raises
+         ``OrderStatusConflictError`` (with ``expected_status``) or
+         ``OrderNotFoundError`` (without) — and because we raise INSIDE the
+         ``begin()`` block, the whole transaction rolls back, so the line set is
+         NEVER touched when the guard fails. This closes the captain-edit window
+         where a concurrent manager-claim could land the delete+insert under a
+         now-claimed order.
+      2. ``DELETE FROM order_lines WHERE order_id``.
+      3. Batch-``INSERT`` ``new_lines`` (skipped when empty).
+
+    ``new_lines`` must all share ``order_id`` (mirrors ``append_order_lines``).
+    Field selection mirrors ``update_order`` (unknown order_updates keys ignored).
+    """
+    order_updates = order_updates or {}
+    exp = expected_status.value if isinstance(expected_status, Enum) else expected_status
+    if new_lines:
+        ids = {line.order_id for line in new_lines}
+        if ids != {order_id}:
+            raise ValueError(
+                f"replace_order_lines_atomic: all new_lines must share "
+                f"order_id={order_id!r}; got {sorted(ids)}"
+            )
+
+    set_cols = [c for c in order_updates if c in _ORDER_COLUMNS and c != "order_id"]
+    params = {c: _to_db(order_updates[c]) for c in set_cols}
+    params["_order_id"] = order_id
+    where = "order_id = :_order_id"
+    if exp is not None:
+        where += " AND status = :_expected_status"
+        params["_expected_status"] = exp
+    if set_cols:
+        set_sql = ", ".join(f"{c} = {_bind(c)}" for c in set_cols)
+        order_sql = f"UPDATE orders SET {set_sql} WHERE {where} RETURNING order_id"
+    else:
+        # Guard-only (no order-field updates): verify status without mutating.
+        order_sql = f"UPDATE orders SET order_id = order_id WHERE {where} RETURNING order_id"
+
+    line_payload = [
+        {c: _to_db(line.model_dump().get(c)) for c in _ORDER_LINE_COLUMNS}
+        for line in new_lines
+    ]
+
+    with _get_engine().begin() as conn:
+        rows = conn.execute(text(order_sql), params).fetchall()
+        if not rows:
+            if exp is not None:
+                raise OrderStatusConflictError(
+                    f"order_id={order_id!r} was not in expected status {exp!r} "
+                    f"(concurrent change)"
+                )
+            raise OrderNotFoundError(f"order_id={order_id!r} not found in 'orders'")
+        conn.execute(
+            text("DELETE FROM order_lines WHERE order_id = :oid"), {"oid": order_id}
+        )
+        if line_payload:
+            cols_sql = ", ".join(_ORDER_LINE_COLUMNS)
+            vals_sql = ", ".join(_bind(c) for c in _ORDER_LINE_COLUMNS)
+            conn.execute(
+                text(f"INSERT INTO order_lines ({cols_sql}) VALUES ({vals_sql})"),
+                line_payload,
+            )
+
+
 # ---------- Inventory counts ----------
 
 def load_inventory_counts() -> list[InventoryCount]:

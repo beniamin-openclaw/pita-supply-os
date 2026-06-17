@@ -485,9 +485,8 @@ def test_route_captain_edit_passes_expected_status(mocker):
             )
         ],
     )
-    mocker.patch.object(supabase_backend, "delete_order_lines")
-    mocker.patch.object(supabase_backend, "append_order_lines")
-    upd = mocker.patch.object(supabase_backend, "update_order")
+    # F1: the route now does the edit through one atomic seam call.
+    repl = mocker.patch.object(supabase_backend, "replace_order_lines_atomic")
     # qty == suggestion (0) → no deviation/critical gate fires.
     body = {
         "lines": [
@@ -497,7 +496,8 @@ def test_route_captain_edit_passes_expected_status(mocker):
     }
     r = client.patch("/api/captain/order/ORD-EDIT-1", json=body, headers=CAPTAIN_AUTH)
     assert r.status_code == 200, r.text
-    _, kwargs = upd.call_args
+    args, kwargs = repl.call_args
+    assert args[0] == "ORD-EDIT-1"
     assert kwargs.get("expected_status") == OrderStatus.CAPTAIN_SUBMITTED.value
 
 
@@ -580,10 +580,8 @@ def test_route_captain_edit_status_conflict_returns_409(mocker):
             )
         ],
     )
-    mocker.patch.object(supabase_backend, "delete_order_lines")
-    mocker.patch.object(supabase_backend, "append_order_lines")
     mocker.patch.object(
-        supabase_backend, "update_order",
+        supabase_backend, "replace_order_lines_atomic",
         side_effect=errors.OrderStatusConflictError("boom"),
     )
     body = {

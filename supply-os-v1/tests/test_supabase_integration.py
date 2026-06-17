@@ -283,6 +283,56 @@ def test_unconditional_update_missing_order_raises_not_found():
         supabase_backend.update_order("ORD-DOES-NOT-EXIST", notes="x")
 
 
+# ---------- F1: atomic captain-edit (guard + replace lines + update in one txn) ----------
+
+def test_replace_order_lines_atomic_success():
+    oid = _make_order(OrderStatus.CAPTAIN_SUBMITTED)
+    new = [
+        OrderLine(
+            order_line_id=f"{oid}-OL-NEW", order_id=oid, product_id="P1",
+            supplier_product_id="SP1", current_stock_qty_base=1,
+            suggested_qty_purchase=4, captain_final_qty_purchase=4,
+            captain_final_qty_base=4, delta_vs_suggestion_pct=0.0,
+        )
+    ]
+    supabase_backend.replace_order_lines_atomic(
+        oid, new,
+        order_updates={"total_value_estimate_pln": 12.5, "notes": "edited"},
+        expected_status="captain_submitted",
+    )
+    got = supabase_backend.get_order(oid)
+    assert got.status is OrderStatus.CAPTAIN_SUBMITTED
+    assert [ln.order_line_id for ln in got.lines] == [f"{oid}-OL-NEW"]  # old line replaced
+    assert got.total_value_estimate_pln == 12.5
+    assert got.notes == "edited"
+
+
+def test_replace_order_lines_atomic_conflict_leaves_lines_intact():
+    """The F1 proof: when the status guard fails (order no longer captain_submitted),
+    the WHOLE edit rolls back — the existing line set is NOT deleted/replaced and the
+    order fields are untouched. This is the window the fix closes (a concurrent
+    manager-claim could previously land the delete+insert under a claimed order)."""
+    oid = _make_order(OrderStatus.MANAGER_CLAIMED)  # NOT captain_submitted
+    assert len(supabase_backend.get_order(oid).lines) == 1
+    new = [
+        OrderLine(
+            order_line_id=f"{oid}-OL-NEW", order_id=oid, product_id="P1",
+            supplier_product_id="SP1", captain_final_qty_purchase=9,
+            captain_final_qty_base=9,
+        )
+    ]
+    with pytest.raises(errors.OrderStatusConflictError):
+        supabase_backend.replace_order_lines_atomic(
+            oid, new,
+            order_updates={"notes": "should not persist"},
+            expected_status="captain_submitted",
+        )
+    after = supabase_backend.get_order(oid)
+    assert [ln.order_line_id for ln in after.lines] == [f"{oid}-OL-1"]  # original intact
+    assert after.status is OrderStatus.MANAGER_CLAIMED
+    assert after.notes != "should not persist"
+
+
 # ---------- the marquee proof: concurrent double-claim, exactly one 409 ----------
 
 def test_concurrent_double_claim_exactly_one_409():
