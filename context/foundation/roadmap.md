@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-15
+updated: 2026-06-17
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -192,7 +192,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 | ID   | Change ID                   | Outcome (user/owner can …)                                                           | Prerequisites    | Refs                            | Status    |
 | ---- | --------------------------- | ------------------------------------------------------------------------------------ | ---------------- | ------------------------------- | --------- |
 | D-01 | deploy-wiring               | (owner-run) Auto-deploy `main`: Vercel re-pointed to the new repo; backend redeployed | —                | `deployment-plan.md`, infra Q3  | done |
-| S-10 | supabase-backend            | Order + inventory data runs on Supabase (Postgres) behind `_choose_backend()`        | —                | `infrastructure.md`, PRD Open Q3 | proposed  |
+| S-10 | supabase-backend            | Order + inventory data runs on Supabase (Postgres) behind `_choose_backend()`        | —                | `infrastructure.md`, PRD Open Q3 | done      |
 | F-02 | multi-supplier-master-data  | (foundation) Master data verified for suppliers beyond Bukat (Pago + others)         | —                | FR-012, FR-013                  | done      |
 | H-01 | quality-hardening           | Backend lockfile + TS strict + mypy/pyright + thicker ruff — reproducible, type-safe  | —                | `health-check.md` #3/#4/#5/#6   | proposed  |
 | M-01 | in-store-demo (milestone)   | Full Captain→Manager→dispatch run in the store, multi-supplier, on the prod stack     | S-10, F-02, D-01 | governing rule; rollout gate    | milestone |
@@ -214,7 +214,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 - **Refs:** `infrastructure.md` (decision: Supabase, runner-up Neon; ~1–2 day port); `stack-assessment.md` (`datastore: Supabase`); PRD Open Question 3 (scale gate).
 - **Prerequisites:** — (the seam already exists). Recommended to land + bake on the single-location pilot **before** F-02 data goes live and **before** any new location.
 - **Risk:** The highest-stakes change remaining — it touches every persistence path. **Lesson 2 is load-bearing: never bypass `_choose_backend()`; the new backend registers there, routes never import it.** Documented footguns (`infrastructure.md`): the Supavisor transaction-vs-session pooler + asyncpg prepared-statement caching, misconfigured, fail under exactly the concurrency you can't afford mid-rollout — a long-lived uvicorn wants direct/session port 5432, not the 6543 pooler (session-on-6543 removed Feb 2025). Secrets (connection string, service key) off-repo (Lesson 3); the new backend needs its env set in `conftest.py`, not per-file (Lesson 6); keep migration and scale-up in separate steps.
-- **Status:** proposed — the user's named next move; run as its own session (full 10x chain).
+- **Status:** done
 
 ### F-02: Multi-supplier master data ready
 
@@ -307,3 +307,4 @@ How to execute Horizon 2 for maximum efficiency and lowest rework — the 10x sk
 - **S-08: Manager views submitted inventory counts; Captain/Owner browse inventory history/trends over time.** — Archived 2026-06-09 → `context/archive/2026-06-09-inventory-manager-view/`. Lesson: the Captain inventory read endpoints already existed (built in the inventory-count-followups follow-up track) — FR-019 was frontend-only; reuse a lean response contract by adding a SEPARATE enriched model (InventoryCountDetail) rather than changing the one a live consumer (the order pre-fill picker) depends on. Server-side enrichment (location_name + product names) follows the manager_order_detail precedent. Trend charts deferred (should-have).
 - **F-02: (foundation) Master data verified for suppliers beyond Bukat (Pago + others)** — Archived 2026-06-09 → `context/archive/2026-06-09-multi-supplier-master-data/`. Lesson: —.
 - **S-03: Owner validates Bukat suggestions vs per-line history and corrects master data.** — Archived 2026-06-09 → `context/archive/2026-06-09-bukat-suggestion-learning-loop/`. Lesson: S-03's "thin build that reads per-line history" = a read-only per-product aggregate (suggested/captain/manager averages + avg deviation + reason histogram, sorted worst-first) that operationalizes FR-012 review WITHOUT auto-correction — the master-data fix stays an out-of-band sheet edit (suggest-only governing rule). Averages are purchase-unit quantities; don't label them with inventory_unit. Built on synthetic tests; the positive path validates at the deploy gate against real pilot data.
+- **S-10: Order + inventory data runs on Supabase (Postgres) behind `_choose_backend()`** — Archived 2026-06-17 → `context/archive/2026-06-16-supabase-backend/`. Lesson: the new backend registers in `_choose_backend()` (L2 held); Session Pooler (IPv4, 5432) + psycopg2/SQLAlchemy sync sidestepped the asyncpg pooler footgun; cut over via backfill→parity→flip with Sheets kept warm; caught a real schema bug at backfill (delta_vs_suggestion_pct is a ratio >100, widen NUMERIC(8,6)→(12,6)).
