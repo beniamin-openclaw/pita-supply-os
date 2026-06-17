@@ -667,6 +667,30 @@ def delete_order_lines(order_id: str) -> int:
     return len(target_rows)
 
 
+def replace_order_lines_atomic(
+    order_id: str,
+    new_lines: list[OrderLine],
+    *,
+    order_updates: dict | None = None,
+    expected_status=None,
+) -> None:
+    """Sheets counterpart of the Supabase atomic captain-edit (F1).
+
+    Sheets has no cross-call transaction, so this runs the SAME non-transactional
+    ``delete_order_lines`` -> ``append_order_lines`` -> guarded ``update_order``
+    sequence the route used to execute inline -- the two backends deliberately
+    diverge here (Supabase is atomic; Sheets is best-effort). Behavior is identical
+    to the prior inline path: ``update_order`` pops ``expected_status`` (sheet
+    status safety comes from the route's preflight re-read + the dispatch guard),
+    and the brief 0-lines window between delete and append remains the accepted
+    Sheets-only v0 trade-off.
+    """
+    delete_order_lines(order_id)
+    if new_lines:
+        append_order_lines(new_lines)
+    update_order(order_id, **(order_updates or {}), expected_status=expected_status)
+
+
 # ---------- Inventory count read + append-only write API (S-06) ----------
 
 def load_inventory_counts() -> list[InventoryCount]:

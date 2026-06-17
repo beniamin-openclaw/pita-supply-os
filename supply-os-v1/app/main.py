@@ -1104,37 +1104,31 @@ def captain_order_edit(
 
     total_value_rounded = round(total_value, 2)
 
-    # Sheets: replace the line set atomically-ish. We accept a brief window
-    # where a concurrent manager queue read could see 0 lines; the cache
-    # invalidation + status re-read above closes the longer race, but the
-    # actual write sequence is still non-transactional. v0 trade-off.
+    # F1: the full captain edit — status guard + line-set replacement + order-field
+    # updates — is ONE atomic unit. On Supabase, `replace_order_lines_atomic` wraps
+    # the conditional `UPDATE orders … WHERE status='captain_submitted' RETURNING`
+    # + `DELETE order_lines` + `INSERT new_lines` in a single transaction: a guard
+    # miss (manager claimed/changed it concurrently) rolls the WHOLE thing back, so
+    # the line set is never replaced under a now-claimed order. Sheets keeps the
+    # prior non-transactional delete→append→guarded-update sequence (it has no
+    # cross-call transaction) — the two backends deliberately diverge here, and the
+    # brief 0-lines window stays an accepted Sheets-only v0 trade-off.
     #
-    # Preserve `captain_submitted_at` on edit — it represents the ORIGINAL
-    # submission moment for sort + audit; resetting it on every edit was a
-    # silent regression caught in code review (B-H3).
-    backend.delete_order_lines(order_id)
-    if new_lines:
-        backend.append_order_lines(new_lines)
-    # `expected_status` makes the FINAL status write atomic on Supabase (conditional
-    # UPDATE … WHERE status='captain_submitted'; 0 rows → 409). It does NOT make the
-    # whole edit atomic: delete_order_lines + append_order_lines above have ALREADY
-    # committed by the time the guard runs, so a manager-claim landing in this window
-    # leaves the line set replaced under a now-claimed order and the captain still
-    # gets a 409. This is the documented non-transactional v0 window — no worse than
-    # Sheets (which has no captain-edit status guard at all; Supabase at least 409s).
-    # The clean fix (wrap all three writes in one transaction) is deferred to before
-    # multi-location rollout — see context/changes/supabase-backend/follow-ups/
-    # review-fixes.md — since at single-location pilot scale the race is near-
-    # impossible and a combined transactional method would break the uniform seam.
+    # `captain_submitted_at` is preserved (the ORIGINAL submit moment is the
+    # sort/audit key); only `last_edited_at` is stamped so captain + manager can see
+    # the order was corrected and when.
     try:
-        backend.update_order(
+        backend.replace_order_lines_atomic(
             order_id,
-            total_value_estimate_pln=total_value_rounded,
-            requested_delivery_date=req.requested_delivery_date or existing.requested_delivery_date,
-            notes=req.notes,
-            # Stamp the edit time so captain + manager can see this order was
-            # corrected and when (captain_submitted_at stays = original submit).
-            last_edited_at=datetime.now(timezone.utc),
+            new_lines,
+            order_updates={
+                "total_value_estimate_pln": total_value_rounded,
+                "requested_delivery_date": (
+                    req.requested_delivery_date or existing.requested_delivery_date
+                ),
+                "notes": req.notes,
+                "last_edited_at": datetime.now(timezone.utc),
+            },
             expected_status=OrderStatus.CAPTAIN_SUBMITTED.value,
         )
     except errors.OrderStatusConflictError:

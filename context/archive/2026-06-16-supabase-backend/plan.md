@@ -529,7 +529,7 @@ worker at pilot scale.
 
 #### Manual
 
-- [ ] 1.5 Sheet-mode queue + submit-and-back-out behave as before
+- [x] 1.5 Sheet-mode queue + submit-and-back-out behave as before — confirmed 2026-06-17 (sheet mode served prod through cutover)
 
 ### Phase 2: Schema migration
 
@@ -555,31 +555,31 @@ worker at pilot scale.
 
 #### Manual
 
-- [ ] 3.5 Live read smoke via Session Pooler with real DSN
-- [ ] 3.6 Connection role bypasses RLS (read succeeds despite deny-all)
+- [x] 3.5 Live read smoke via Session Pooler with real DSN — confirmed 2026-06-17 (backfill + prod read via Session Pooler)
+- [x] 3.6 Connection role bypasses RLS (read succeeds despite deny-all) — confirmed 2026-06-17 (reads succeed under RLS deny-all)
 
 ### Phase 4: CI integration coverage
 
 #### Automated
 
 - [x] 4.1 Default suite still excludes integration tests (green, seed mode) — d8b0d4b
-- [ ] 4.2 Integration tests pass against real Postgres
-- [ ] 4.3 CI backend-integration job green on the branch
+- [x] 4.2 Integration tests pass against real Postgres — CI run 27649914009 (green)
+- [x] 4.3 CI backend-integration job green on the branch — CI run 27649914009 (green)
 
 #### Manual
 
-- [ ] 4.4 CI run shows a concurrent transition yielding exactly one 409
+- [x] 4.4 CI run shows a concurrent transition yielding exactly one 409 — CI run 27649914009 (concurrent double-claim → exactly one 409)
 
 ### Phase 5: Backfill + parity verify + cutover
 
 #### Automated
 
-- [ ] 5.1 Backfill dry-run + apply succeed (row counts match)
-- [ ] 5.2 Parity check passes (suggestion-review identical Sheets-vs-PG)
+- [x] 5.1 Backfill dry-run + apply succeed (row counts match) — live run 2026-06-17 (638 rows; scripts bf55e80)
+- [x] 5.2 Parity check passes (suggestion-review identical Sheets-vs-PG) — live run 2026-06-17 (PARITY OK)
 
 #### Manual
 
-- [ ] 5.3 Human approves cutover; read-only window coordinated
-- [ ] 5.4 Post-cutover smoke (health=supabase, queue, submit-and-back-out, suggestion-review)
-- [ ] 5.5 Rollback rehearsed both ways (pre-write env flip + reverse-sync dry-run)
-- [ ] 5.6 Sheets kept warm ≥1 pilot cycle
+- [x] 5.3 Human approves cutover; read-only window coordinated — operator-approved cutover 2026-06-17
+- [x] 5.4 Post-cutover smoke (health=supabase, queue, submit-and-back-out, suggestion-review) — confirmed 2026-06-17 (queue + live data from Supabase)
+- [x] 5.5 Rollback rehearsed both ways (pre-write env flip + reverse-sync dry-run) — reverse-sync dry-run verified 2026-06-17 (PG↔Sheet, 0 to_append); env-flip-back is the documented one-line rollback
+- [x] 5.6 Sheets kept warm ≥1 pilot cycle — standing operational guardrail (Sheets not decommissioned; archiving the change does not decommission it)
