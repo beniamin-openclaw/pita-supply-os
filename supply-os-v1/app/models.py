@@ -145,7 +145,11 @@ class Order(BaseModel):
 class OrderLineSubmit(BaseModel):
     product_id: str
     supplier_product_id: str
-    current_stock_qty_base: float = Field(ge=0)
+    # None = stock NOT counted (distinct from a counted 0). When None, the submit
+    # gate skips the deviation/critical reason check (there is no real suggestion
+    # to deviate from) and forces a reason only on an over-MAX order; the line is
+    # persisted with current_stock_qty_base=0 (the column stays NOT NULL).
+    current_stock_qty_base: Optional[float] = Field(default=None, ge=0)
     captain_final_qty_purchase: float = Field(ge=0)
     reason_code: Optional[ReasonCode] = None
     captain_comment: str = ""

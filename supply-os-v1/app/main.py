@@ -45,6 +45,7 @@ from .models import (
     ManagerSaveResponse,
     Order,
     OrderLine,
+    OrderLineSubmit,
     OrderingMethod,
     OrderStatus,
     Product,
@@ -332,6 +333,132 @@ def _persist_order(backend, order: Order, lines: list[OrderLine]) -> bool:
     return True
 
 
+def _evaluate_submit_line(
+    line: OrderLineSubmit,
+    sp: SupplierProduct,
+    setting: LocationProductSetting,
+    product: Product,
+    order_line_id: str,
+    order_id: str,
+) -> tuple[OrderLine, Optional[str], float]:
+    """Validate one captain-submitted line and build its persisted OrderLine.
+
+    Shared by ``captain_submit`` and ``captain_order_edit`` so their per-line
+    gates cannot drift. Returns ``(order_line, warning_or_None, line_value_pln)``
+    and raises ``HTTPException`` on a hard gate.
+
+    Two branches on whether the Captain counted stock:
+
+    - **Uncounted** (``line.current_stock_qty_base is None``): there is no real
+      suggestion to deviate from (SUGESTIA renders "—"), so the deviation and
+      critical-under reason gates are skipped. A reason is forced only when the
+      order exceeds MAX — the storage ceiling, the one stock-independent concern
+      (``order_base > max`` and not ``allow_over_max_due_to_packaging``). The line
+      persists with ``current_stock_qty_base=0`` (column stays NOT NULL) and
+      ``delta_vs_suggestion_pct=None`` (so it never inflates deviation roll-ups).
+    - **Counted** (a value was given): the existing critical-under and >20%
+      deviation gates apply byte-identically.
+    """
+    is_critical = setting.is_critical_for_location or product.is_critical
+    stock = line.current_stock_qty_base
+    current_for_math = stock if stock is not None else 0.0
+    suggestion = compute_suggestion(
+        SuggestionInput(
+            current_stock_qty_base=current_for_math,
+            target_stock_qty_base=setting.target_stock_qty_base,
+            max_stock_qty_base=setting.max_stock_qty_base,
+            units_per_purchase_unit=sp.units_per_purchase_unit,
+            rounding_rule=sp.rounding_rule,
+            is_critical=is_critical,
+            allow_over_max_due_to_packaging=setting.allow_over_max_due_to_packaging,
+        )
+    )
+    suggested_qty_purchase = suggestion.suggested_qty_purchase
+    suggested_qty_base = suggestion.suggested_qty_base
+
+    warning: Optional[str] = None
+    order_base = line.captain_final_qty_purchase * sp.units_per_purchase_unit
+
+    if stock is None:
+        # Uncounted — over-MAX is the only reason gate.
+        over_max = (
+            setting.max_stock_qty_base > 0
+            and not setting.allow_over_max_due_to_packaging
+            and order_base > setting.max_stock_qty_base
+        )
+        if over_max and line.reason_code is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Line '{line.product_id}' ordered over MAX "
+                    f"({order_base:g} > {setting.max_stock_qty_base:g}) "
+                    f"without reason_code"
+                ),
+            )
+        if over_max and line.reason_code is not None:
+            warning = (
+                f"Line {line.product_id}: over MAX "
+                f"({order_base:g} > {setting.max_stock_qty_base:g}), "
+                f"reason: {line.reason_code.value}"
+            )
+        stored_stock = 0.0
+        delta_pct: Optional[float] = None
+    else:
+        delta_pct = abs(
+            line.captain_final_qty_purchase - suggested_qty_purchase
+        ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
+
+        if (
+            is_critical
+            and line.captain_final_qty_purchase < suggested_qty_purchase
+            and line.reason_code is None
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Critical product '{line.product_id}' under-ordered "
+                    f"without reason_code"
+                ),
+            )
+        if delta_pct > 0.20 and line.reason_code is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Line '{line.product_id}' deviates {delta_pct:.0%} "
+                    f"from suggestion without reason_code"
+                ),
+            )
+        if delta_pct > 0.20 and line.reason_code is not None:
+            warning = (
+                f"Line {line.product_id}: {delta_pct:.0%} deviation, "
+                f"reason: {line.reason_code.value}"
+            )
+        stored_stock = stock
+
+    line_value = (
+        line.captain_final_qty_purchase * sp.price_estimate_pln
+        if sp.price_estimate_pln
+        else 0.0
+    )
+
+    order_line = OrderLine(
+        order_line_id=order_line_id,
+        order_id=order_id,
+        product_id=line.product_id,
+        supplier_product_id=line.supplier_product_id,
+        current_stock_qty_base=stored_stock,
+        target_stock_qty_base=setting.target_stock_qty_base,
+        suggested_qty_base=suggested_qty_base,
+        suggested_qty_purchase=suggested_qty_purchase,
+        captain_final_qty_purchase=line.captain_final_qty_purchase,
+        captain_final_qty_base=order_base,
+        delta_vs_suggestion_pct=delta_pct,
+        reason_code=line.reason_code,
+        captain_comment=line.captain_comment,
+    )
+    return order_line, warning, line_value
+
+
 @app.post("/api/captain/submit", response_model=CaptainSubmitResponse)
 def captain_submit(
     req: CaptainSubmitRequest,
@@ -392,76 +519,18 @@ def captain_submit(
                 ),
             )
 
-        is_critical = setting.is_critical_for_location or product.is_critical
-        suggestion = compute_suggestion(
-            SuggestionInput(
-                current_stock_qty_base=line.current_stock_qty_base,
-                target_stock_qty_base=setting.target_stock_qty_base,
-                max_stock_qty_base=setting.max_stock_qty_base,
-                units_per_purchase_unit=sp.units_per_purchase_unit,
-                rounding_rule=sp.rounding_rule,
-                is_critical=is_critical,
-                allow_over_max_due_to_packaging=setting.allow_over_max_due_to_packaging,
-            )
+        order_line, warning, line_value = _evaluate_submit_line(
+            line,
+            sp,
+            setting,
+            product,
+            order_line_id=f"OL-{order_id}-{idx:03d}",
+            order_id=order_id,
         )
-        suggested_qty_purchase = suggestion.suggested_qty_purchase
-        suggested_qty_base = suggestion.suggested_qty_base
-
-        delta_pct = abs(
-            line.captain_final_qty_purchase - suggested_qty_purchase
-        ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
-
-        # Hard gates
-        if (
-            is_critical
-            and line.captain_final_qty_purchase < suggested_qty_purchase
-            and line.reason_code is None
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Critical product '{line.product_id}' under-ordered "
-                    f"without reason_code"
-                ),
-            )
-        if delta_pct > 0.20 and line.reason_code is None:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Line '{line.product_id}' deviates {delta_pct:.0%} "
-                    f"from suggestion without reason_code"
-                ),
-            )
-
-        if delta_pct > 0.20 and line.reason_code is not None:
-            warnings.append(
-                f"Line {line.product_id}: {delta_pct:.0%} deviation, "
-                f"reason: {line.reason_code.value}"
-            )
-
-        captain_final_qty_base = (
-            line.captain_final_qty_purchase * sp.units_per_purchase_unit
-        )
-        if sp.price_estimate_pln:
-            total_value += line.captain_final_qty_purchase * sp.price_estimate_pln
-
-        order_lines.append(
-            OrderLine(
-                order_line_id=f"OL-{order_id}-{idx:03d}",
-                order_id=order_id,
-                product_id=line.product_id,
-                supplier_product_id=line.supplier_product_id,
-                current_stock_qty_base=line.current_stock_qty_base,
-                target_stock_qty_base=setting.target_stock_qty_base,
-                suggested_qty_base=suggested_qty_base,
-                suggested_qty_purchase=suggested_qty_purchase,
-                captain_final_qty_purchase=line.captain_final_qty_purchase,
-                captain_final_qty_base=captain_final_qty_base,
-                delta_vs_suggestion_pct=delta_pct,
-                reason_code=line.reason_code,
-                captain_comment=line.captain_comment,
-            )
-        )
+        if warning is not None:
+            warnings.append(warning)
+        total_value += line_value
+        order_lines.append(order_line)
 
     order = Order(
         order_id=order_id,
@@ -1020,73 +1089,18 @@ def captain_order_edit(
                 ),
             )
 
-        is_critical = setting.is_critical_for_location or product.is_critical
-        suggestion = compute_suggestion(
-            SuggestionInput(
-                current_stock_qty_base=line.current_stock_qty_base,
-                target_stock_qty_base=setting.target_stock_qty_base,
-                max_stock_qty_base=setting.max_stock_qty_base,
-                units_per_purchase_unit=sp.units_per_purchase_unit,
-                rounding_rule=sp.rounding_rule,
-                is_critical=is_critical,
-                allow_over_max_due_to_packaging=setting.allow_over_max_due_to_packaging,
-            )
+        order_line, warning, line_value = _evaluate_submit_line(
+            line,
+            sp,
+            setting,
+            product,
+            order_line_id=f"OL-{order_id}-{idx:03d}",
+            order_id=order_id,
         )
-        suggested_qty_purchase = suggestion.suggested_qty_purchase
-        suggested_qty_base = suggestion.suggested_qty_base
-        delta_pct = abs(
-            line.captain_final_qty_purchase - suggested_qty_purchase
-        ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
-
-        if (
-            is_critical
-            and line.captain_final_qty_purchase < suggested_qty_purchase
-            and line.reason_code is None
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Critical product '{line.product_id}' under-ordered "
-                    f"without reason_code"
-                ),
-            )
-        if delta_pct > 0.20 and line.reason_code is None:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Line '{line.product_id}' deviates {delta_pct:.0%} "
-                    f"from suggestion without reason_code"
-                ),
-            )
-        if delta_pct > 0.20 and line.reason_code is not None:
-            warnings.append(
-                f"Line {line.product_id}: {delta_pct:.0%} deviation, "
-                f"reason: {line.reason_code.value}"
-            )
-
-        captain_final_qty_base = (
-            line.captain_final_qty_purchase * sp.units_per_purchase_unit
-        )
-        if sp.price_estimate_pln:
-            total_value += line.captain_final_qty_purchase * sp.price_estimate_pln
-
-        new_lines.append(
-            OrderLine(
-                order_line_id=f"OL-{order_id}-{idx:03d}",
-                order_id=order_id,
-                product_id=line.product_id,
-                supplier_product_id=line.supplier_product_id,
-                current_stock_qty_base=line.current_stock_qty_base,
-                target_stock_qty_base=setting.target_stock_qty_base,
-                suggested_qty_base=suggested_qty_base,
-                suggested_qty_purchase=suggested_qty_purchase,
-                captain_final_qty_purchase=line.captain_final_qty_purchase,
-                captain_final_qty_base=captain_final_qty_base,
-                delta_vs_suggestion_pct=delta_pct,
-                reason_code=line.reason_code,
-                captain_comment=line.captain_comment,
-            )
-        )
+        if warning is not None:
+            warnings.append(warning)
+        total_value += line_value
+        new_lines.append(order_line)
 
     total_value_rounded = round(total_value, 2)
 

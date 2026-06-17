@@ -378,6 +378,57 @@ def test_edit_replaces_lines_and_updates_order(mocker):
     assert update_kwargs["last_edited_at"] is not None
 
 
+def test_edit_uncounted_normal_order_needs_no_reason(mocker):
+    """PATCH with current stock omitted (None = uncounted) and a normal order
+    (order_base 2*5=10 <= max 25) must pass with no reason_code — even though,
+    counted as 0, it would be a >20% deviation from suggested 4. The persisted
+    line carries current_stock_qty_base=0 and delta_vs_suggestion_pct=None.
+    (change: order-stock-optional-overmax — mirrors the submit path via the
+    shared _evaluate_submit_line helper.)"""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, total=500.0)
+    patches = _enable_sheet(
+        mocker, orders=[order], get_order_return=order, delete_lines_return=1
+    )
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "captain_final_qty_purchase": 2.0,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    appended = patches["append_order_lines"].call_args[0][0]
+    assert appended[0].current_stock_qty_base == 0
+    assert appended[0].delta_vs_suggestion_pct is None
+
+
+def test_edit_uncounted_over_max_rejected(mocker):
+    """PATCH uncounted + over-MAX (6*5=30 > max 25) without a reason → 400."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, total=500.0)
+    _enable_sheet(mocker, orders=[order], get_order_return=order, delete_lines_return=1)
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "captain_final_qty_purchase": 6.0,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 400
+    assert "over MAX" in r.json()["detail"]
+
+
 def test_edit_invalidates_cache_before_status_check(mocker):
     """B2 fix: the route must force-invalidate the orders cache before reading
     `existing.status`, otherwise a manager dispatch within the 60s TTL window
