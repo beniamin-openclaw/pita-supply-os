@@ -1,10 +1,10 @@
 ---
 change_id: order-lines-targeted-load
 title: Targeted order_lines load for queue/list endpoints (F-7 — kill the full-table scan)
-status: implemented
+status: archived
 created: 2026-06-17
 updated: 2026-06-17
-archived_at: null
+archived_at: 2026-06-17T10:59:35Z
 ---
 
 ## Notes
