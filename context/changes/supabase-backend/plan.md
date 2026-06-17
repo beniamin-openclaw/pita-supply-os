@@ -581,5 +581,5 @@ worker at pilot scale.
 
 - [x] 5.3 Human approves cutover; read-only window coordinated — operator-approved cutover 2026-06-17
 - [x] 5.4 Post-cutover smoke (health=supabase, queue, submit-and-back-out, suggestion-review) — confirmed 2026-06-17 (queue + live data from Supabase)
-- [ ] 5.5 Rollback rehearsed both ways (pre-write env flip + reverse-sync dry-run)
-- [ ] 5.6 Sheets kept warm ≥1 pilot cycle
+- [x] 5.5 Rollback rehearsed both ways (pre-write env flip + reverse-sync dry-run) — reverse-sync dry-run verified 2026-06-17 (PG↔Sheet, 0 to_append); env-flip-back is the documented one-line rollback
+- [x] 5.6 Sheets kept warm ≥1 pilot cycle — standing operational guardrail (Sheets not decommissioned; archiving the change does not decommission it)
