@@ -121,6 +121,79 @@ def test_release_404_when_missing(mocker):
     assert r.status_code == 404
 
 
+# ---------- cancel (soft-delete with trace) ----------
+
+def test_cancel_from_captain_submitted(mocker):
+    patches = _enable_sheet(mocker, _order(status=OrderStatus.CAPTAIN_SUBMITTED))
+    r = client.post(
+        "/api/manager/cancel/ORD-A",
+        headers=MANAGER_AUTH,
+        json={"reason": "Pomyłka — testowe zamówienie"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "cancelled"
+    kwargs = patches["update_order"].call_args.kwargs
+    assert kwargs["status"] == "cancelled"
+    assert kwargs["cancel_reason"] == "Pomyłka — testowe zamówienie"
+    assert kwargs["cancelled_by"]  # actor proxy stamped
+    assert kwargs["cancelled_at"]  # timestamp stamped
+    # atomic guard uses the order's current status
+    assert kwargs["expected_status"] == "captain_submitted"
+
+
+def test_cancel_from_manager_claimed(mocker):
+    patches = _enable_sheet(mocker, _order(status=OrderStatus.MANAGER_CLAIMED))
+    r = client.post(
+        "/api/manager/cancel/ORD-A",
+        headers=MANAGER_AUTH,
+        json={"reason": "Dostawca zamknięty"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "cancelled"
+    assert patches["update_order"].call_args.kwargs["expected_status"] == "manager_claimed"
+
+
+def test_cancel_rejects_manager_sent(mocker):
+    _enable_sheet(mocker, _order(status=OrderStatus.MANAGER_SENT))
+    r = client.post(
+        "/api/manager/cancel/ORD-A",
+        headers=MANAGER_AUTH,
+        json={"reason": "za późno"},
+    )
+    assert r.status_code == 409
+    assert "cannot cancel" in r.json()["detail"]
+
+
+def test_cancel_requires_reason(mocker):
+    _enable_sheet(mocker, _order(status=OrderStatus.CAPTAIN_SUBMITTED))
+    r = client.post(
+        "/api/manager/cancel/ORD-A",
+        headers=MANAGER_AUTH,
+        json={"reason": ""},
+    )
+    assert r.status_code == 422  # Pydantic min_length=1
+
+
+def test_cancel_404_when_missing(mocker):
+    _enable_sheet(mocker, None)
+    r = client.post(
+        "/api/manager/cancel/ORD-GONE",
+        headers=MANAGER_AUTH,
+        json={"reason": "test"},
+    )
+    assert r.status_code == 404
+
+
+def test_cancel_requires_manager_auth(mocker):
+    _enable_sheet(mocker, _order())
+    r = client.post(
+        "/api/manager/cancel/ORD-A",
+        headers=CAPTAIN_AUTH,
+        json={"reason": "test"},
+    )
+    assert r.status_code == 401
+
+
 # ---------- captain edit gate interaction ----------
 
 def test_captain_cannot_edit_claimed_order(mocker):

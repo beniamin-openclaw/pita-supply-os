@@ -104,7 +104,8 @@ _ORDER_COLUMNS = [
     "order_id", "location_id", "supplier_id", "order_date",
     "requested_delivery_date", "status", "captain_user", "captain_submitted_at",
     "manager_user", "manager_sent_at", "sent_method", "supplier_order_reference",
-    "total_value_estimate_pln", "last_edited_at", "notes",
+    "total_value_estimate_pln", "last_edited_at",
+    "cancelled_at", "cancelled_by", "cancel_reason", "notes",
 ]
 _ORDER_LINE_COLUMNS = [
     "order_line_id", "order_id", "product_id", "supplier_product_id",
@@ -141,7 +142,7 @@ _DATE_COLS = frozenset(
 )
 _TIMESTAMPTZ_COLS = frozenset(
     {
-        "captain_submitted_at", "manager_sent_at", "last_edited_at",
+        "captain_submitted_at", "manager_sent_at", "last_edited_at", "cancelled_at",
         "count_submitted_at", "received_submitted_at",
     }
 )

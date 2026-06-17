@@ -33,6 +33,8 @@ from .models import (
     InventoryProduct,
     Location,
     LocationProductSetting,
+    ManagerCancelRequest,
+    ManagerCancelResponse,
     ManagerClaimResponse,
     ManagerDispatchRequest,
     ManagerDispatchResponse,
@@ -1293,6 +1295,65 @@ def manager_release(
     return ManagerReleaseResponse(
         order_id=order_id, status=OrderStatus.CAPTAIN_SUBMITTED
     )
+
+
+@app.post("/api/manager/cancel/{order_id}", response_model=ManagerCancelResponse)
+def manager_cancel(
+    order_id: str,
+    req: ManagerCancelRequest,
+    _: None = Depends(require_manager),
+):
+    """Cancel a pre-dispatch order (soft-delete) with a durable who/when/why trace.
+
+    captain_submitted | manager_claimed → cancelled. The order is NEVER hard-
+    deleted; status flips to cancelled and `cancel_reason` / `cancelled_by` /
+    `cancelled_at` record the trace. Cancelling drops the order from the active
+    Manager queue (which filters by status). Only valid before dispatch — a
+    manager_sent/closed order is past the supplier email and is not cancellable
+    here (409). Mirrors `manager_release`; the atomic `expected_status` is the
+    order's CURRENT status so a concurrent transition fails cleanly.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Cancel requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("orders")
+    order = backend.get_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+    if order.status not in (
+        OrderStatus.CAPTAIN_SUBMITTED,
+        OrderStatus.MANAGER_CLAIMED,
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} status is {order.status.value}, "
+                f"expected captain_submitted or manager_claimed (cannot cancel)"
+            ),
+        )
+
+    try:
+        backend.update_order(
+            order_id,
+            status=OrderStatus.CANCELLED.value,
+            cancelled_at=datetime.now(timezone.utc).isoformat(),
+            cancelled_by="manager-default",  # proxy until real Manager auth
+            cancel_reason=req.reason.strip(),
+            expected_status=order.status.value,
+        )
+    except errors.OrderStatusConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} was changed concurrently "
+                f"(expected {order.status.value})"
+            ),
+        )
+    return ManagerCancelResponse(order_id=order_id, status=OrderStatus.CANCELLED)
 
 
 @app.post("/api/manager/dispatch", response_model=ManagerDispatchResponse)

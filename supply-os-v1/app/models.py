@@ -136,6 +136,11 @@ class Order(BaseModel):
     supplier_order_reference: Optional[str] = None
     total_value_estimate_pln: Optional[float] = None
     last_edited_at: Optional[datetime] = None  # set on captain edit; None = never edited
+    # Soft-delete trace (Manager cancel): all None/"" until cancelled. Status goes
+    # to CANCELLED; the order is never hard-deleted.
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[str] = None
+    cancel_reason: str = ""
     notes: str = ""
     lines: list[OrderLine] = Field(default_factory=list)
 
@@ -377,6 +382,20 @@ class ManagerReleaseResponse(BaseModel):
     'send-back' banner; cleared when the captain resubmits)."""
     order_id: str
     status: OrderStatus  # captain_submitted on success
+
+
+class ManagerCancelRequest(BaseModel):
+    """Payload for POST /api/manager/cancel/{order_id}. The Manager cancels a
+    pre-dispatch order with a required reason that is stored as a durable trace
+    (cancel_reason + cancelled_by + cancelled_at on the order)."""
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ManagerCancelResponse(BaseModel):
+    """Result of cancel — order goes captain_submitted|manager_claimed →
+    cancelled (soft-delete; never hard-deleted)."""
+    order_id: str
+    status: OrderStatus  # cancelled on success
 
 
 # ---------- Inventory count (S-06) ----------
