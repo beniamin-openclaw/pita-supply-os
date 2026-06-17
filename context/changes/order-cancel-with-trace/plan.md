@@ -123,8 +123,8 @@ Backend + frontend + a Supabase migration (3 nullable columns). Grounded 2026-06
 ### Phase 1: Backend cancel endpoint + trace columns + migration
 
 #### Automated
-- [ ] 1.1 ruff
-- [ ] 1.2 pytest (incl. cancel cases)
+- [x] 1.1 ruff — 7a62356
+- [x] 1.2 pytest (incl. cancel cases, 391) — 7a62356
 
 #### Manual
 - [ ] 1.3 e2e on deploy (migration applied first)
@@ -132,9 +132,9 @@ Backend + frontend + a Supabase migration (3 nullable columns). Grounded 2026-06
 ### Phase 2: Frontend cancel button + reason
 
 #### Automated
-- [ ] 2.1 build
-- [ ] 2.2 lint
-- [ ] 2.3 test
+- [x] 2.1 build — 3dfdaef
+- [x] 2.2 lint — 3dfdaef
+- [x] 2.3 test (57) — 3dfdaef
 
 #### Manual
 - [ ] 2.4 cancel drops order from queue + trace stored

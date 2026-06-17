@@ -1,7 +1,7 @@
 ---
 change_id: order-cancel-with-trace
 title: Manager cancels an order (soft-delete) with a who/when/why trace
-status: implementing
+status: implemented
 created: 2026-06-17
 updated: 2026-06-17
 archived_at: null
