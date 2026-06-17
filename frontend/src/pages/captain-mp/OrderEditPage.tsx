@@ -37,9 +37,13 @@ function lineToItem(line: ManagerOrderLineDetail): OrderableItem {
     units_per_purchase_unit: line.units_per_purchase_unit,
     rounding_rule: line.rounding_rule ?? "full_only", // detail line carries it (S-09); fall back to full_only
     min_stock_qty_base: 0,
-    max_stock_qty_base: 0,
+    // Real ceiling from the detail join (impl-review F1) so computeRowState's uncounted over-MAX
+    // gate mirrors the backend; was hardcoded 0/true, which made the over-MAX
+    // pill unreachable on edit (a cleared stock + over-MAX order then 400'd at
+    // the backend with no on-screen warning).
+    max_stock_qty_base: line.max_stock_qty_base,
     target_stock_qty_base: line.target_stock_qty_base,
-    allow_over_max_due_to_packaging: true,
+    allow_over_max_due_to_packaging: line.allow_over_max_due_to_packaging,
     supplier_product_id: line.supplier_product_id,
     supplier_product_name: line.supplier_product_name,
   };

@@ -254,6 +254,12 @@ class ManagerOrderLineDetail(BaseModel):
     price_estimate_pln: Optional[float] = None
     current_stock_qty_base: float
     target_stock_qty_base: float
+    # Storage ceiling + packaging override, joined from location_product_settings.
+    # The Captain edit screen needs these to mirror the backend over-MAX gate
+    # (uncounted-stock branch) so a cleared stock + over-MAX order shows the red
+    # pill instead of a surprise 400. Default 0/False when no setting row exists.
+    max_stock_qty_base: float = 0
+    allow_over_max_due_to_packaging: bool = False
     suggested_qty_base: float
     suggested_qty_purchase: float
     captain_final_qty_purchase: float

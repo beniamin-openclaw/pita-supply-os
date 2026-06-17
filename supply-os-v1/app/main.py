@@ -474,6 +474,10 @@ def captain_submit(
       - critical product under-ordered without reason_code -> 400.
       - any line deviating >20% from suggestion without reason_code -> 400.
         Deviations with a reason_code are surfaced as warnings on the response.
+      - uncounted line (current_stock_qty_base omitted/null) ordered over MAX
+        without reason_code -> 400. When stock is uncounted the deviation +
+        critical gates are skipped (no real suggestion); only over-MAX forces a
+        reason. See `_evaluate_submit_line`.
     """
     backend = _choose_backend()
     master = _resolve_master_data(backend, location_id, req.supplier_id)
@@ -767,6 +771,11 @@ def manager_order_detail(
     sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == order.location_id
+    }
 
     supplier = suppliers_by_id.get(order.supplier_id)
     location = locations_by_id.get(order.location_id)
@@ -775,6 +784,7 @@ def manager_order_detail(
     for line in order.lines:
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
+        setting = settings_by_pid.get(line.product_id)
         enriched_lines.append(
             ManagerOrderLineDetail(
                 order_line_id=line.order_line_id,
@@ -792,6 +802,10 @@ def manager_order_detail(
                 price_estimate_pln=sp.price_estimate_pln if sp else None,
                 current_stock_qty_base=line.current_stock_qty_base,
                 target_stock_qty_base=line.target_stock_qty_base,
+                max_stock_qty_base=setting.max_stock_qty_base if setting else 0,
+                allow_over_max_due_to_packaging=(
+                    setting.allow_over_max_due_to_packaging if setting else False
+                ),
                 suggested_qty_base=line.suggested_qty_base,
                 suggested_qty_purchase=line.suggested_qty_purchase,
                 captain_final_qty_purchase=line.captain_final_qty_purchase,
@@ -834,12 +848,20 @@ def _enrich_lines_for_detail(
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
     sps_by_id: dict[str, SupplierProduct],
+    settings_by_pid: Optional[dict[str, LocationProductSetting]] = None,
 ) -> list[ManagerOrderLineDetail]:
-    """Shared helper — turn OrderLine rows into ManagerOrderLineDetail with joins."""
+    """Shared helper — turn OrderLine rows into ManagerOrderLineDetail with joins.
+
+    ``settings_by_pid`` (location_product_settings keyed by product_id) supplies
+    ``max_stock_qty_base`` + ``allow_over_max_due_to_packaging`` so the Captain
+    edit screen can mirror the backend over-MAX gate. None/absent → 0/False.
+    """
+    settings_by_pid = settings_by_pid or {}
     enriched: list[ManagerOrderLineDetail] = []
     for line in lines:
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
+        setting = settings_by_pid.get(line.product_id)
         enriched.append(
             ManagerOrderLineDetail(
                 order_line_id=line.order_line_id,
@@ -857,6 +879,10 @@ def _enrich_lines_for_detail(
                 price_estimate_pln=sp.price_estimate_pln if sp else None,
                 current_stock_qty_base=line.current_stock_qty_base,
                 target_stock_qty_base=line.target_stock_qty_base,
+                max_stock_qty_base=setting.max_stock_qty_base if setting else 0,
+                allow_over_max_due_to_packaging=(
+                    setting.allow_over_max_due_to_packaging if setting else False
+                ),
                 suggested_qty_base=line.suggested_qty_base,
                 suggested_qty_purchase=line.suggested_qty_purchase,
                 captain_final_qty_purchase=line.captain_final_qty_purchase,
@@ -972,9 +998,17 @@ def captain_order_detail(
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
 
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == order.location_id
+    }
+
     supplier = suppliers_by_id.get(order.supplier_id)
     location = locations_by_id.get(order.location_id)
-    enriched_lines = _enrich_lines_for_detail(order.lines, products_by_id, sps_by_id)
+    enriched_lines = _enrich_lines_for_detail(
+        order.lines, products_by_id, sps_by_id, settings_by_pid
+    )
 
     return CaptainOrderDetail(
         order_id=order.order_id,

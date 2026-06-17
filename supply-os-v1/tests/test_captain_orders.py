@@ -429,6 +429,29 @@ def test_edit_uncounted_over_max_rejected(mocker):
     assert "over MAX" in r.json()["detail"]
 
 
+def test_edit_uncounted_over_max_with_reason_passes(mocker):
+    """PATCH uncounted + over-MAX (6*5=30 > max 25) WITH a reason_code → 200
+    (mirrors test_submit_uncounted_over_max_with_reason_warns)."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, total=500.0)
+    _enable_sheet(mocker, orders=[order], get_order_return=order, delete_lines_return=1)
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "captain_final_qty_purchase": 6.0,
+                    "reason_code": "PACKAGING_LIMITATION",
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert any("over MAX" in w for w in r.json()["warnings"])
+
+
 def test_edit_invalidates_cache_before_status_check(mocker):
     """B2 fix: the route must force-invalidate the orders cache before reading
     `existing.status`, otherwise a manager dispatch within the 60s TTL window

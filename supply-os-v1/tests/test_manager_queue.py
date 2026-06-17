@@ -165,6 +165,12 @@ def _enable_sheet_backend(
     mocker.patch.object(
         sheets, "load_locations", return_value=locations or [_location()]
     )
+    # manager_order_detail / captain_order_detail join location_product_settings
+    # for the over-MAX fields (S-12); these tests don't assert on them, so an
+    # empty list (→ defaults 0/False) keeps them off the live-Sheet path.
+    mocker.patch.object(
+        sheets, "load_location_product_settings", return_value=[]
+    )
     get_order_mock = mocker.patch.object(
         sheets, "get_order", return_value=get_order_return
     )

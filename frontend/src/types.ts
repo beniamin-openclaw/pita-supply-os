@@ -309,6 +309,10 @@ export interface ManagerOrderLineDetail {
   price_estimate_pln?: number;
   current_stock_qty_base: number;
   target_stock_qty_base: number;
+  // Joined from location_product_settings so the edit screen can mirror the
+  // backend over-MAX gate (uncounted-stock branch). Default 0/false on the wire.
+  max_stock_qty_base: number;
+  allow_over_max_due_to_packaging: boolean;
   suggested_qty_base: number;
   suggested_qty_purchase: number;
   captain_final_qty_purchase: number;
