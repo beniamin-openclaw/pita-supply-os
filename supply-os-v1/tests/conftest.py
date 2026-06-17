@@ -36,3 +36,7 @@ os.environ.setdefault("SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON", "")
 os.environ.setdefault("SUPPLY_OS_SUPABASE_URL", "")
 os.environ.setdefault("SUPPLY_OS_SUPABASE_SERVICE_ROLE_KEY", "")
 os.environ.setdefault("SUPPLY_OS_SUPABASE_WZ_BUCKET", "wz-photos")
+# Blank the Supabase Postgres DSN so a real .env can't make the supabase data
+# backend look configured in unit tests (it degrades off when empty, mirroring
+# the Storage creds above).
+os.environ.setdefault("SUPPLY_OS_DATABASE_URL", "")

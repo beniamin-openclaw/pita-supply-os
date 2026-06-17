@@ -28,6 +28,11 @@ from google.oauth2.service_account import Credentials
 from pydantic import BaseModel
 
 from .config import has_service_account_creds, resolve_service_account_info, settings
+from .errors import (
+    ConfigDriftError,
+    OrderAlreadyDispatchedError,
+    OrderNotFoundError,
+)
 from .models import (
     InventoryCount,
     InventoryCountLine,
@@ -46,6 +51,10 @@ from .models import (
 log = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
+
+# Capability flag (see ``main._is_persistent``): this backend persists writes, so
+# persistence-gated routes proceed instead of degrading like the seed loader.
+SUPPORTS_PERSISTENCE = True
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -70,23 +79,10 @@ _ttl_cache: dict[tuple[str, str], tuple[float, object]] = {}
 
 
 # ---------- Errors ----------
-
-class ConfigDriftError(Exception):
-    """Raised when a worksheet's headers don't match the expected schema."""
-
-    pass
-
-
-class OrderNotFoundError(Exception):
-    """Raised when update_order or update_order_lines can't find the order_id."""
-
-    pass
-
-
-class OrderAlreadyDispatchedError(Exception):
-    """Raised when an update would transition an already-dispatched order back."""
-
-    pass
+# The data-layer error classes now live in ``app/errors.py`` (backend-agnostic)
+# and are imported at the top of this module + re-exported, so existing
+# ``sheets.ConfigDriftError`` / ``sheets.OrderNotFoundError`` /
+# ``sheets.OrderAlreadyDispatchedError`` references keep working unchanged.
 
 
 # ---------- Configuration helpers ----------
@@ -488,7 +484,12 @@ def update_order(order_id: str, **kwargs) -> None:
       again, raises OrderAlreadyDispatchedError. Callers should still do their
       own preflight read.
     - Calls invalidate_cache('orders') after a successful write.
+    - ``expected_status`` is a Supabase-only atomicity hint (a conditional-UPDATE
+      guard); it is popped here and never written as a column. Sheets enforces the
+      same status-transition contract via each route's preflight re-read + the
+      dispatch guard below, so the seam signature stays uniform across backends.
     """
+    kwargs.pop("expected_status", None)
     if not kwargs:
         return
 

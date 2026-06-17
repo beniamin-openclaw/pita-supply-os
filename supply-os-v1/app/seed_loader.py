@@ -21,6 +21,10 @@ from .models import (
 
 T = TypeVar("T", bound=BaseModel)
 
+# Capability flag (see ``main._is_persistent``): the seed loader is read-only (no
+# write functions), so persistence-gated routes degrade instead of persisting.
+SUPPORTS_PERSISTENCE = False
+
 # Cache: { str(path): (mtime_at_read, parsed_rows) }
 _cache: dict[str, tuple[float, list]] = {}
 

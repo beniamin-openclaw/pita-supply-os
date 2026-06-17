@@ -30,6 +30,44 @@ jobs:
       - name: Test (pytest)
         run: pytest
 
+  backend-integration:
+    name: Backend integration (real Postgres)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supply-os-v1
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Exercises the Supabase backend path (L1: CI must actually run it). The
+      # integration tests apply migrations 0001+0002 into this ephemeral DB
+      # themselves, then prove the 5 status-transition 409 row-lock contracts.
+      # Plain local container → no sslmode (prod DSN adds sslmode=require at runtime).
+      SUPPLY_OS_DATA_BACKEND: supabase
+      SUPPLY_OS_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Integration tests (pytest -m integration)
+        run: pytest -m integration
+
   frontend:
     name: Frontend (build + lint)
     runs-on: ubuntu-latest
