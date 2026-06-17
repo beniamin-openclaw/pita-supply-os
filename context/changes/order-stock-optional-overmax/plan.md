@@ -150,7 +150,7 @@ None — no schema/data change. Uncounted persists as `0`; the request models ar
 
 #### Manual
 
-- [ ] 1.3 (end-to-end, covered with Phase 2 on deploy)
+- [x] 1.3 (end-to-end, covered with Phase 2 on deploy) — owner smoke-check on prod 2026-06-17
 
 ### Phase 2: Frontend — send null + over-MAX-only gate
 
@@ -162,6 +162,6 @@ None — no schema/data change. Uncounted persists as `0`; the request models ar
 
 #### Manual (owner, on deploy)
 
-- [ ] 2.4 blank stock + normal order → no reason required, submits
-- [ ] 2.5 blank stock + over-MAX → reason required, then submits
-- [ ] 2.6 stock entered → unchanged
+- [x] 2.4 blank stock + normal order → no reason required, submits — owner prod smoke-check 2026-06-17
+- [x] 2.5 blank stock + over-MAX → reason required, then submits — owner prod smoke-check 2026-06-17
+- [x] 2.6 stock entered → unchanged — owner prod smoke-check 2026-06-17
