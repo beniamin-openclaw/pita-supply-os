@@ -120,9 +120,9 @@ None — frontend-only, additive. Revert = revert the phase commits.
 ### Phase 1: Localizer + i18n + apiClient wiring
 
 #### Automated
-- [ ] 1.1 build
-- [ ] 1.2 lint
-- [ ] 1.3 unit tests (incl. apiErrors.test.ts)
+- [x] 1.1 build — 33da0e5
+- [x] 1.2 lint — 33da0e5
+- [x] 1.3 unit tests (incl. apiErrors.test.ts, 57) — 33da0e5
 
 #### Manual
 - [ ] 1.4 422 shows PL on prod
@@ -130,9 +130,9 @@ None — frontend-only, additive. Revert = revert the phase commits.
 ### Phase 2: UI empty-order guard
 
 #### Automated
-- [ ] 2.1 build
-- [ ] 2.2 lint
-- [ ] 2.3 unit tests
+- [x] 2.1 build — 84b21c4
+- [x] 2.2 lint — 84b21c4
+- [x] 2.3 unit tests — 84b21c4
 
 #### Manual
 - [ ] 2.4 empty-order submit blocked with PL toast
