@@ -154,10 +154,14 @@ export function OrderEditPage() {
 
   const handleSubmit = useCallback(async () => {
     if (!order) return;
+    const payloadLines = buildPayloadLines(lines);
+    // Same UI guard as the new-order screen: 0 buildable lines would 422.
+    if (payloadLines.length === 0) {
+      showToast(t("apiError.orderEmpty"), "error");
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const payloadLines = buildPayloadLines(lines);
-
       await api.captainOrderEdit(order.order_id, {
         requested_delivery_date: order.requested_delivery_date ?? undefined,
         lines: payloadLines,

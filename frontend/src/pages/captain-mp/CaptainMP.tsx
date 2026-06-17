@@ -343,10 +343,16 @@ export function CaptainMP() {
     const supplier = suppliers.find((s) => s.supplier_id === activeSupplierId);
     if (!supplier) return;
     setConfirmOpen(false);
+    const payloadLines = buildPayloadLines(lines);
+    // Guard the most common 422 trigger at the UI: a row with only OBECNY STAN
+    // typed (no order qty) builds 0 lines → the backend would 422. Block here
+    // with a localized message instead of a round-trip.
+    if (payloadLines.length === 0) {
+      showToast(t("apiError.orderEmpty"), "error");
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const payloadLines = buildPayloadLines(lines);
-
       await api.captainSubmit({
         supplier_id: activeSupplierId,
         requested_delivery_date: getRequestedDeliveryDate(supplier.delivery_days),
