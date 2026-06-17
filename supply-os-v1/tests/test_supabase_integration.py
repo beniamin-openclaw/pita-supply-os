@@ -80,11 +80,13 @@ def _schema():
     eng = supabase_backend._get_engine()
     ddl = (MIGRATIONS_DIR / "0001_initial_schema.sql").read_text()
     rls = (MIGRATIONS_DIR / "0002_rls_deny_all.sql").read_text()
+    widen = (MIGRATIONS_DIR / "0003_widen_delta_vs_suggestion_pct.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
         conn.exec_driver_sql(ddl)
         conn.exec_driver_sql(rls)
+        conn.exec_driver_sql(widen)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -169,7 +171,7 @@ def test_order_append_get_roundtrip():
     line = got.lines[0]
     assert line.captain_final_qty_purchase == 8           # numeric round-trip
     assert line.reason_code is ReasonCode.LOW_STORAGE      # enum round-trip
-    assert line.delta_vs_suggestion_pct == 0.0             # numeric(8,6) round-trip
+    assert line.delta_vs_suggestion_pct == 0.0             # numeric(12,6) round-trip
 
 
 def test_update_order_lines_and_delete():
