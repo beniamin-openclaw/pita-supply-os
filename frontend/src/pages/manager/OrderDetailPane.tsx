@@ -15,7 +15,7 @@ import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DispatchPanel } from "./DispatchPanel";
 import { OrderLineTable } from "./OrderLineTable";
 import { type DraftMap, draftQty, hasDirtyDrafts } from "./lib/draftState";
-import { managerSummary } from "./lib/managerLine";
+import { managerSummary, isManagerEngaged } from "./lib/managerLine";
 
 // Kept out of the component body so the impure `Date.now()` read isn't treated
 // as render-time work by the React Compiler. cutoff_iso lives on the queue
@@ -159,14 +159,18 @@ export function OrderDetailPane({
 
         {/* Manager summary strip + sticky save affordance */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs font-medium text-slate-700">
-            {summary.changeCount > 0
-              ? t("manager.managerSummary", {
-                  changes: summary.changeCount,
-                  value: (summary.valueDeltaPln >= 0 ? "+" : "") + summary.valueDeltaPln.toFixed(2),
-                })
-              : t("manager.managerSummaryNone")}
-          </div>
+          {/* Manager-vs-captain comparison is meaningless before the manager
+              engages — hide the strip until claimed/sent/closed (Bug C). */}
+          {isManagerEngaged(detail.status) && (
+            <div className="text-xs font-medium text-slate-700">
+              {summary.changeCount > 0
+                ? t("manager.managerSummary", {
+                    changes: summary.changeCount,
+                    value: (summary.valueDeltaPln >= 0 ? "+" : "") + summary.valueDeltaPln.toFixed(2),
+                  })
+                : t("manager.managerSummaryNone")}
+            </div>
+          )}
           {editable && dirty && (
             <button
               type="button"

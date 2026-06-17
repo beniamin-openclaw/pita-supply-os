@@ -94,7 +94,7 @@ export const STRINGS = {
   "card.order": { pl: "Zamawiasz", en: "Ordering" },
 
   // Row state messages (compute.ts) -----------------------------------------
-  "state.empty": { pl: "Wpisz stan i zamówienie", en: "Enter stock and order qty" },
+  "state.empty": { pl: "Wpisz zamówienie", en: "Enter order qty" },
   "state.devNoReason": {
     pl: "{pct} odchylenia — wymagany powód",
     en: "{pct} deviation — reason required",
@@ -107,6 +107,20 @@ export const STRINGS = {
   "state.smallAdj": {
     pl: "Drobna korekta ({pct})",
     en: "Minor adjustment ({pct})",
+  },
+  // Blank-stock variants (Bug A): the order is evaluated as if stock=0, but the
+  // suggestion shows "—", so these carry no "%".
+  "state.devNoReasonNoStock": {
+    pl: "Zamówienie bez stanu — wymagany powód",
+    en: "Order without current stock — reason required",
+  },
+  "state.devReasonNoStock": {
+    pl: "Zamówienie bez stanu — powód podany",
+    en: "Order without current stock — reason provided",
+  },
+  "state.smallAdjNoStock": {
+    pl: "Zamówienie bez stanu",
+    en: "Order without current stock",
   },
 
   // Reason picker -----------------------------------------------------------
@@ -169,8 +183,8 @@ export const STRINGS = {
   "sticky.summary.many.reasons": { pl: "{n} powodów", en: "{n} reasons" },
   "sticky.fixRedCards": { pl: "Popraw czerwone karty", en: "Fix red cards" },
   "sticky.fillStockFirst": {
-    pl: "Wpisz stan magazynu, by aktywować przycisk Wyślij",
-    en: "Enter stock levels to enable the Submit button",
+    pl: "Wpisz zamówienie, by aktywować przycisk Wyślij",
+    en: "Enter an order qty to enable the Submit button",
   },
   "sticky.readyToSubmit": { pl: "Gotowe do wysyłki", en: "Ready to submit" },
   "sticky.draftBtn": { pl: "Szkic", en: "Draft" },

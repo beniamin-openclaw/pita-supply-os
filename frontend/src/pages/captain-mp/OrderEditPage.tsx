@@ -23,6 +23,7 @@ import { StickyActionBar } from "./components/StickyActionBar";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
 import { computeRowState } from "./lib/compute";
+import { buildPayloadLines } from "./lib/buildPayloadLines";
 import type { OrderLine } from "./types";
 
 /** Translate an enriched detail line into the shape ProductCard expects. */
@@ -48,6 +49,9 @@ function lineToFormState(line: ManagerOrderLineDetail): OrderLine {
   return {
     product_id: line.product_id,
     supplier_product_id: line.supplier_product_id,
+    // Persisted stock is shown as-is. An order submitted with a BLANK stock
+    // persists as 0 (buildPayloadLines coerces blank→0), so re-editing it shows
+    // "0" here, not blank — 0 is the value of record (the backend stored it).
     current_stock_qty_base: line.current_stock_qty_base,
     captain_final_qty_purchase: line.captain_final_qty_purchase,
     reason_code: line.reason_code ?? "",
@@ -148,20 +152,7 @@ export function OrderEditPage() {
     if (!order) return;
     setIsSubmitting(true);
     try {
-      const payloadLines = Object.values(lines)
-        .filter(
-          (l) =>
-            l.current_stock_qty_base !== "" &&
-            l.captain_final_qty_purchase !== "",
-        )
-        .map((l) => ({
-          product_id: l.product_id,
-          supplier_product_id: l.supplier_product_id,
-          current_stock_qty_base: Number(l.current_stock_qty_base),
-          captain_final_qty_purchase: Number(l.captain_final_qty_purchase),
-          reason_code: l.reason_code || null,
-          captain_comment: l.captain_comment || undefined,
-        }));
+      const payloadLines = buildPayloadLines(lines);
 
       await api.captainOrderEdit(order.order_id, {
         requested_delivery_date: order.requested_delivery_date ?? undefined,

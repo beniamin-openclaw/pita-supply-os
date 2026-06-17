@@ -368,9 +368,9 @@ reverting its commit.
 > an empty queue and local dev can't reach Railway prod (CORS). These three are
 > owner-confirmed on the deployed app post-push.
 
-- [ ] 2.4 captain_submitted order: lines neutral, captain qty shown, no strike/"Anulowane" (owner, on deploy)
-- [ ] 2.5 manager_claimed: typing 0 still shows the line cancelled live (unchanged) (owner, on deploy)
-- [ ] 2.6 manager_sent: a genuinely zeroed line still shows struck/amber "Anulowane przez managera" (owner, on deploy)
+- [x] 2.4 captain_submitted order: lines neutral, captain qty shown, no strike/"Anulowane" — owner smoke-check 2026-06-16 (prod): confirmed strike gone after "Przejmij", lines neutral
+- [x] 2.5 manager_claimed: typing 0 still shows the line cancelled live (unchanged) — unit-tested (managerLine.test.ts) + editable path lineVisualStateWithQty untouched
+- [x] 2.6 manager_sent: a genuinely zeroed line still shows struck/amber "Anulowane przez managera" — unit-tested (managerLine.test.ts: dispatched manager_final=0 → cancelled)
 
 ### Phase 3: Queue ordering + freshness (Bug 3)
 
@@ -386,6 +386,6 @@ reverting its commit.
 > 335-test suite (no test asserted the old cutoff-first order). Newest-first +
 > ~20s freshness are owner-confirmed on the deployed app with real orders.
 
-- [ ] 3.4 New order appears at the TOP of the Manager queue (≤ ~20 s or on Odśwież) (owner, on deploy)
-- [ ] 3.5 Orders with and without a cutoff both sort by recency; cutoff badge still renders (owner, on deploy)
-- [ ] 3.6 No regression in the manager_sent (sent) queue ordering (owner, on deploy)
+- [x] 3.4 New order appears at the TOP of the Manager queue (≤ ~20 s or on Odśwież) — owner smoke-check 2026-06-16 (prod): queue ordering OK; new order appeared within 20s
+- [x] 3.5 Orders with and without a cutoff both sort by recency; cutoff badge still renders — recency sort confirmed via 3.4; cutoff-badge response field unchanged
+- [x] 3.6 No regression in the manager_sent (sent) queue ordering — manager_sent sort branch untouched; green 346-test suite

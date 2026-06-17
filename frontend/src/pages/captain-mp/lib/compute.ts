@@ -39,6 +39,12 @@ export function computeSuggestion(
   return { base: suggestedBase, purchase: suggestedPurchase };
 }
 
+// Backend-parity note: the backend deviation gate (captain_submit) floors the
+// denominator at rounding_step(rule), so suggested=0 → denom=step and any
+// positive order trips the >20% reason gate. Here we use Infinity for
+// suggested=0 instead — the observable outcome is identical (any positive order
+// against a 0 suggestion requires a reason on both sides), so the gates never
+// disagree. Keep them in sync if the backend formula changes.
 export function computeDeviation(suggestedPurchase: number, finalPurchase: number): number {
   if (suggestedPurchase === 0) {
     return finalPurchase > 0 ? Infinity : 0;
@@ -63,7 +69,11 @@ function formatPctSigned(deviation: number): string {
 }
 
 export function computeRowState(item: OrderableItem, line: OrderLine): RowState {
-  if (line.current_stock_qty_base === "" || line.captain_final_qty_purchase === "") {
+  // The order quantity is what makes a row evaluable. A blank CURRENT STOCK is
+  // optional — treat it as 0 (the Captain may order without counting). Because
+  // the UI then shows the suggestion as "—", blank-stock messages carry no "%".
+  // Only a blank ORDER qty short-circuits to the empty/grey state.
+  if (line.captain_final_qty_purchase === "") {
     return {
       state: "grey",
       messageKey: "state.empty",
@@ -72,62 +82,48 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  const current = Number(line.current_stock_qty_base);
+  const stockBlank = line.current_stock_qty_base === "";
+  const current = stockBlank ? 0 : Number(line.current_stock_qty_base);
   const final = Number(line.captain_final_qty_purchase);
   const { purchase: suggested } = computeSuggestion(item, current);
 
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);
+  const hasReason =
+    !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
+
+  // Reason-required result (>20% deviation, or a critical under-order). With a
+  // blank stock we swap to no-"%" message keys and omit the pct var (the
+  // suggestion is shown as "—"); the red/orange + requiresReason gate is
+  // identical, mirroring the backend's deviation gate on stock=0.
+  const reasonResult = (): RowState => ({
+    state: hasReason ? "orange" : "red",
+    messageKey: hasReason
+      ? stockBlank
+        ? "state.devReasonNoStock"
+        : "state.devReason"
+      : stockBlank
+        ? "state.devNoReasonNoStock"
+        : "state.devNoReason",
+    messageVars: stockBlank ? undefined : { pct: formatPctSigned(deviation) },
+    requiresReason: true,
+    deviationPct: deviation,
+  });
 
   if (absDeviation > 20) {
-    const hasReason =
-      !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
-    const pct = formatPctSigned(deviation);
-
-    if (!hasReason) {
-      return {
-        state: "red",
-        messageKey: "state.devNoReason",
-        messageVars: { pct },
-        requiresReason: true,
-        deviationPct: deviation,
-      };
-    }
-    return {
-      state: "orange",
-      messageKey: "state.devReason",
-      messageVars: { pct },
-      requiresReason: true,
-      deviationPct: deviation,
-    };
+    return reasonResult();
   }
 
   // Critical products: any under-order (even ≤20%) requires a reason —
   // mirrors the backend gate in captain_submit / captain_order_edit.
   // Exception: suggested === 0 means nothing to order, no reason needed.
   if (item.is_critical && final < suggested && suggested > 0) {
-    const hasReason =
-      !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
-    const pct = formatPctSigned(deviation);
-    if (!hasReason) {
-      return {
-        state: "red",
-        messageKey: "state.devNoReason",
-        messageVars: { pct },
-        requiresReason: true,
-        deviationPct: deviation,
-      };
-    }
-    return {
-      state: "orange",
-      messageKey: "state.devReason",
-      messageVars: { pct },
-      requiresReason: true,
-      deviationPct: deviation,
-    };
+    return reasonResult();
   }
 
-  if (final === suggested) {
+  // Exact match → green; but with blank stock we never claim a "match" (the
+  // suggestion renders as "—"), so fall through to the neutral no-stock label.
+  if (final === suggested && !stockBlank) {
     return {
       state: "green",
       messageKey: "state.match",
@@ -136,12 +132,12 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  // Small deviation (≤20%) — show the % so captain sees how close to suggestion.
-  const pct = formatPctSigned(deviation);
+  // Small deviation (≤20%) — show the % normally; neutral no-"%" label when the
+  // stock is blank.
   return {
     state: "yellow",
-    messageKey: "state.smallAdj",
-    messageVars: { pct },
+    messageKey: stockBlank ? "state.smallAdjNoStock" : "state.smallAdj",
+    messageVars: stockBlank ? undefined : { pct: formatPctSigned(deviation) },
     requiresReason: false,
     deviationPct: deviation,
   };

@@ -41,9 +41,50 @@ describe("computeRowState — empty inputs", () => {
     expect(requiresReason).toBe(false);
   });
 
-  it("returns grey when final is filled but stock is empty", () => {
-    const { state } = computeRowState(makeItem(), makeLine({ captain_final_qty_purchase: 3 }));
+  it("returns grey only when ORDER qty is empty (a blank stock alone no longer suppresses)", () => {
+    // Stock filled, order qty empty → still grey (nothing to evaluate).
+    const { state } = computeRowState(makeItem(), makeLine({ current_stock_qty_base: 10 }));
     expect(state).toBe("grey");
+  });
+});
+
+describe("computeRowState — blank stock, order entered (Bug A)", () => {
+  // makeItem default: target=50, units=10 → suggestion at stock=0 is ceil(50/10)=5.
+  it("blank stock + order ≫ target, no reason → red + requiresReason, no-% message", () => {
+    const { state, requiresReason, messageKey, messageVars } = computeRowState(
+      makeItem(),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 21 }),
+    );
+    expect(state).toBe("red");
+    expect(requiresReason).toBe(true);
+    expect(messageKey).toBe("state.devNoReasonNoStock");
+    expect(messageVars).toBeUndefined();
+  });
+
+  it("blank stock + over-order with a reason → orange + requiresReason, no-% message", () => {
+    const { state, requiresReason, messageKey, messageVars } = computeRowState(
+      makeItem(),
+      makeLine({
+        current_stock_qty_base: "",
+        captain_final_qty_purchase: 21,
+        reason_code: "EVENT_HIGH_TRAFFIC",
+      }),
+    );
+    expect(state).toBe("orange");
+    expect(requiresReason).toBe(true);
+    expect(messageKey).toBe("state.devReasonNoStock");
+    expect(messageVars).toBeUndefined();
+  });
+
+  it("blank stock + order ≈ target (≤20%) → yellow, no reason, no-% message", () => {
+    // order 5 = stock-0 suggestion; blank stock must NOT show green (suggestion is "—").
+    const { state, requiresReason, messageKey } = computeRowState(
+      makeItem(),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 5 }),
+    );
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+    expect(messageKey).toBe("state.smallAdjNoStock");
   });
 });
 

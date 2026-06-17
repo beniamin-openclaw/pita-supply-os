@@ -8,7 +8,7 @@
 // (instead of always reading the persisted line). The G1 read-only callers pass
 // no override and get the persisted-line behavior unchanged.
 
-import type { ManagerOrderLineDetail } from "../../../types";
+import type { ManagerOrderLineDetail, OrderStatus } from "../../../types";
 
 /**
  * Effective "Manager zamawia" quantity (purchase units) FROM THE PERSISTED LINE.
@@ -125,4 +125,18 @@ export function managerSummary(
     valueDeltaPln += (effectiveQty - captainQty) * price;
   }
   return { changeCount, valueDeltaPln };
+}
+
+/**
+ * Has the manager engaged this order yet? The manager-vs-captain summary strip
+ * is only meaningful once the manager has taken over — before that
+ * (`captain_submitted`) a "Bez zmian vs kapitan" comparison is noise (the bug
+ * this guards). True for manager_claimed / manager_sent / closed.
+ */
+export function isManagerEngaged(status: OrderStatus): boolean {
+  return (
+    status === "manager_claimed" ||
+    status === "manager_sent" ||
+    status === "closed"
+  );
 }
