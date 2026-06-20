@@ -7,7 +7,8 @@
 -- it via psycopg2 exec_driver_sql, where a literal percent is read as a param marker.
 -- Apply live to prod Supabase BEFORE deploying the backend code (the cancel write
 -- targets these columns); recorded here for CI + fresh provisions.
+-- IF NOT EXISTS so a re-apply (re-provision, repeated MCP apply) is idempotent.
 ALTER TABLE orders
-    ADD COLUMN cancelled_at  timestamptz,
-    ADD COLUMN cancelled_by  text,
-    ADD COLUMN cancel_reason text NOT NULL DEFAULT '';
+    ADD COLUMN IF NOT EXISTS cancelled_at  timestamptz,
+    ADD COLUMN IF NOT EXISTS cancelled_by  text,
+    ADD COLUMN IF NOT EXISTS cancel_reason text NOT NULL DEFAULT '';

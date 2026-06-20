@@ -81,12 +81,16 @@ def _schema():
     ddl = (MIGRATIONS_DIR / "0001_initial_schema.sql").read_text()
     rls = (MIGRATIONS_DIR / "0002_rls_deny_all.sql").read_text()
     widen = (MIGRATIONS_DIR / "0003_widen_delta_vs_suggestion_pct.sql").read_text()
+    # 0004 adds the order cancel-trace columns; _ORDER_COLUMNS now references them,
+    # so append_order/update_order would error against a pre-0004 schema.
+    cancel_trace = (MIGRATIONS_DIR / "0004_add_order_cancel_trace.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
         conn.exec_driver_sql(ddl)
         conn.exec_driver_sql(rls)
         conn.exec_driver_sql(widen)
+        conn.exec_driver_sql(cancel_trace)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -253,6 +257,31 @@ def test_claim_contract_conditional():
     # Second claim: row is no longer captain_submitted → conditional matches 0 rows.
     with pytest.raises(errors.OrderStatusConflictError):
         supabase_backend.update_order(oid, status="manager_claimed", expected_status="captain_submitted")
+
+
+def test_cancel_contract_conditional():
+    # order-cancel-with-trace: soft-cancel writes the 3 new columns + flips status
+    # via the conditional UPDATE; a second cancel finds the row no longer in the
+    # expected state. Proves the 0004 columns round-trip + the atomic guard.
+    oid = _make_order(OrderStatus.CAPTAIN_SUBMITTED)
+    supabase_backend.update_order(
+        oid,
+        status="cancelled",
+        cancelled_at=datetime.now(timezone.utc).isoformat(),  # ISO str → cast
+        cancelled_by="manager-default",
+        cancel_reason="Pomyłka testowa",
+        expected_status="captain_submitted",
+    )
+    got = supabase_backend.get_order(oid)
+    assert got.status is OrderStatus.CANCELLED
+    assert got.cancel_reason == "Pomyłka testowa"
+    assert got.cancelled_by == "manager-default"
+    assert got.cancelled_at is not None
+    # Second cancel: row is no longer captain_submitted → 0 rows → conflict.
+    with pytest.raises(errors.OrderStatusConflictError):
+        supabase_backend.update_order(
+            oid, status="cancelled", expected_status="captain_submitted"
+        )
 
 
 def test_dispatch_contract_conditional():

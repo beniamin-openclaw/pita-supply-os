@@ -49,12 +49,17 @@ function typeMessage(type: string, ctx: Record<string, unknown> | undefined, lan
     case "value_error.missing":
       return str("apiError.required", lang);
     case "too_short":
-    case "string_too_short":
-    case "list_type":
+    case "string_too_short": {
+      // `list_type` (not a list at all) is intentionally NOT here — it carries no
+      // min_length, so it falls through to the generic `invalid` message below.
       return str("apiError.minItems", lang, { min: num(ctx, "min_length") ?? 1 });
+    }
     case "too_long":
-    case "string_too_long":
-      return str("apiError.maxItems", lang, { max: num(ctx, "max_length") ?? 0 });
+    case "string_too_long": {
+      const max = num(ctx, "max_length");
+      // No ctx.max_length (older/edge Pydantic) → generic, never a false "max 0".
+      return max === undefined ? str("apiError.invalid", lang) : str("apiError.maxItems", lang, { max });
+    }
     case "greater_than_equal":
       return str("apiError.gte", lang, { limit: num(ctx, "ge") ?? 0 });
     case "greater_than":
