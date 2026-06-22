@@ -78,7 +78,7 @@ SP_FILBER_P076,SUP_FILBER,P076,Lemoniada Orange,szt,1,,5.95,TRUE,
 SP_FILBER_P077,SUP_FILBER,P077,Lemoniada Grapefruit,szt,1,,5.95,TRUE,
 SP_INTERMLECZ_P001,SUP_INTERMLECZ,P001,Masło MR 500g,szt,1,,6.27,TRUE,
 SP_INTERMLECZ_P013,SUP_INTERMLECZ,P013,Oliwki kalamata,opak,2,,45.31,TRUE,1 opak = 2 kg
-SP_INTERMLECZ_P015,SUP_INTERMLECZ,P015,Halloumi,szt,0.2,,7.73,TRUE,1 szt = 0.2 kg (200g block) — verify with Captain
+SP_INTERMLECZ_P015,SUP_INTERMLECZ,P015,Halloumi,szt,1.0,,7.73,TRUE,Liczone w szt; 1 szt zakupu = 1 szt magazynu (skorygowane z kg/0.2 2026-06-17)
 SP_INTERMLECZ_P017,SUP_INTERMLECZ,P017,Florinis,opak,3.6,,40.53,TRUE,1 opak ≈ 3.6 kg — verify with Captain
 SP_INTERMLECZ_P021,SUP_INTERMLECZ,P021,Frytki Aviko (opakowania),opak,2.5,,22.55,TRUE,1 opak ≈ 2.5 kg — verify with Captain
 SP_INTERMLECZ_P022,SUP_INTERMLECZ,P022,Frytki z batatów (opakowania),opak,2.27,,46.08,TRUE,1 opak ≈ 2.27 kg — verify with Captain
