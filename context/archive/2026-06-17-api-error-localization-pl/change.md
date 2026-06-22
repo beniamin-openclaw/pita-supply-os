@@ -1,10 +1,10 @@
 ---
 change_id: api-error-localization-pl
 title: Localize FastAPI 422 validation errors to Polish in the UI
-status: impl_reviewed
+status: archived
 created: 2026-06-17
-updated: 2026-06-20
-archived_at: null
+updated: 2026-06-22
+archived_at: 2026-06-22T16:51:31Z
 ---
 
 ## Notes
