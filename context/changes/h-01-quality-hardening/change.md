@@ -1,7 +1,7 @@
 ---
 change_id: h-01-quality-hardening
 title: "Quality hardening (parallel-safe): backend lockfile, CI proof, thicker ruff"
-status: implementing
+status: impl_reviewed
 created: 2026-06-23
 updated: 2026-06-23
 archived_at: null

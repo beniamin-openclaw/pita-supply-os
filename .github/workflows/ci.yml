@@ -119,7 +119,9 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Recompile locks (must match the committed files)
         # Identical invocation to the AGENTS.md regen procedure (same flags +
-        # Python 3.12), so the autogen header + ordering are byte-stable.
+        # Python 3.12). pip-compile normalizes the recorded header (alphabetical
+        # long-opts, --extra=dev), so flag ORDER here is irrelevant — only the flag
+        # SET + pinned pip-tools + Python version must match for a byte-stable diff.
         run: |
           pip-compile --strip-extras --output-file=requirements.txt pyproject.toml
           pip-compile --strip-extras --extra dev --output-file=requirements-dev.txt pyproject.toml

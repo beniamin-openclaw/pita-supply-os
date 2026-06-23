@@ -381,14 +381,14 @@ jobs install from a pinned lock (typically faster + better cached than range res
 
 #### Automated
 
-- [x] 3.1 `ruff check .` exits 0 under the expanded config
-- [x] 3.2 No product/test .py files modified (config-only)
-- [x] 3.3 CI backend ruff step passes against the new config locally
+- [x] 3.1 `ruff check .` exits 0 under the expanded config — 8f81348
+- [x] 3.2 No product/test .py files modified (config-only) — 8f81348
+- [x] 3.3 CI backend ruff step passes against the new config locally — 8f81348
 
 #### Manual
 
-- [x] 3.4 select is a meaningful uplift; every ignore has a reason comment
-- [x] 3.5 No `# noqa` added to any product file
+- [x] 3.4 select is a meaningful uplift; every ignore has a reason comment — 8f81348
+- [x] 3.5 No `# noqa` added to any product file — 8f81348
 
 ### Phase 4: DEFERRED — TS strict + mypy/pyright
 

@@ -81,6 +81,10 @@ ignore = [
   "RET501",
   # unnecessary range() start arg (1) — autofix edits product code → Phase 4.
   "PIE808",
+  # ISC001 (single-line implicit string concat) conflicts with `ruff format`;
+  # keep it off now so enabling the formatter in Phase 4 needs no config surgery
+  # (ISC002/ISC003 stay active and pass clean today).
+  "ISC001",
 ]
 
 [tool.pytest.ini_options]
