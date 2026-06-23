@@ -166,7 +166,7 @@ describe("computeRowState — critical product, real under-order", () => {
   });
 });
 
-describe("computeRowState — critical product, small under-order (≤20%)", () => {
+describe("computeRowState — critical product, small under-order (≤25%)", () => {
   it("critical + 2% under-order, no reason → red + requiresReason (P006 Pomidor case)", () => {
     // target=42, stock=3, suggestion=ceil(39/1)=39, order=38 → -2.6% deviation
     // Backend rejects this without a reason_code — frontend must match.
@@ -199,16 +199,42 @@ describe("computeRowState — critical product, small under-order (≤20%)", () 
 });
 
 describe("computeRowState — small deviation", () => {
-  it("≤20% deviation without reason → yellow, no requiresReason", () => {
+  it("≤25% deviation without reason → yellow, no requiresReason", () => {
     // target=50, stock=40 → need 10 → 10/10 = 1 purchase unit (suggestion)
     // order 1.1 pu would be >1 but for full_only we stay with whole numbers
     // suggestion=1, order=1 → exact match. Let's set suggestion to be 5 and order 4.
     // target=50, units=10 → need 50, suggestion = ceil(50/10)=5. stock=0.
-    // order=4 → deviation = (4-5)/5 = -20% → exactly at boundary → yellow
+    // order=4 → deviation = (4-5)/5 = -20% → below the 25% boundary → yellow
     const item = makeItem({ target_stock_qty_base: 50, units_per_purchase_unit: 10 });
     const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 4 });
     const { state, requiresReason } = computeRowState(item, line);
     expect(state).toBe("yellow");
     expect(requiresReason).toBe(false);
+  });
+});
+
+describe("computeRowState — deviation threshold is 25% (round-1 quick-win)", () => {
+  // suggestion = ceil(500/10) = 50, so each purchase unit is exactly 2%.
+  const item = makeItem({
+    is_critical: false,
+    target_stock_qty_base: 500,
+    units_per_purchase_unit: 10,
+    max_stock_qty_base: 10_000, // irrelevant on the counted path; keeps intent clear
+  });
+
+  it("22% under-order without reason → yellow (would have tripped the old 20% gate)", () => {
+    // order=39 vs suggestion=50 → (39-50)/50 = -22% → below 25% → no reason
+    const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 39 });
+    const { state, requiresReason } = computeRowState(item, line);
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+  });
+
+  it("26% under-order without reason → red + requiresReason", () => {
+    // order=37 vs suggestion=50 → (37-50)/50 = -26% → above 25% → reason required
+    const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 37 });
+    const { state, requiresReason } = computeRowState(item, line);
+    expect(state).toBe("red");
+    expect(requiresReason).toBe(true);
   });
 });

@@ -255,6 +255,24 @@ def test_queue_computes_deviation_count(mocker):
     assert payload[0]["line_count"] == 3
 
 
+def test_queue_deviation_threshold_is_25pct(mocker):
+    # Round-1 quick-win: the deviation badge counter is 25% (>=), not 20%.
+    # 0.22 must NOT count (it would have under the old 0.20); 0.25 and 0.30 do.
+    orders = [_order("ORD-A")]
+    lines = [
+        _line("ORD-A", "OL-1", delta_pct=0.22),  # below 0.25 → not counted
+        _line("ORD-A", "OL-2", delta_pct=0.25),  # exactly at boundary (>=) → counted
+        _line("ORD-A", "OL-3", delta_pct=0.30),  # above → counted
+    ]
+    _enable_sheet_backend(mocker, orders=orders, lines=lines)
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload[0]["deviation_count"] == 2
+    assert payload[0]["line_count"] == 3
+
+
 def test_queue_computes_reason_count(mocker):
     orders = [_order("ORD-A")]
     lines = [

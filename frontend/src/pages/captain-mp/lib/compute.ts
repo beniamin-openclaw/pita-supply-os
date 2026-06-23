@@ -41,7 +41,7 @@ export function computeSuggestion(
 
 // Backend-parity note: the backend deviation gate (captain_submit) floors the
 // denominator at rounding_step(rule), so suggested=0 → denom=step and any
-// positive order trips the >20% reason gate. Here we use Infinity for
+// positive order trips the >25% reason gate. Here we use Infinity for
 // suggested=0 instead — the observable outcome is identical (any positive order
 // against a 0 suggestion requires a reason on both sides), so the gates never
 // disagree. Keep them in sync if the backend formula changes.
@@ -118,7 +118,7 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);
 
-  // Reason-required result (>20% deviation, or a critical under-order).
+  // Reason-required result (>25% deviation, or a critical under-order).
   const reasonResult = (): RowState => ({
     state: hasReason ? "orange" : "red",
     messageKey: hasReason ? "state.devReason" : "state.devNoReason",
@@ -127,11 +127,11 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     deviationPct: deviation,
   });
 
-  if (absDeviation > 20) {
+  if (absDeviation > 25) {
     return reasonResult();
   }
 
-  // Critical products: any under-order (even ≤20%) requires a reason —
+  // Critical products: any under-order (even ≤25%) requires a reason —
   // mirrors the backend gate in captain_submit / captain_order_edit.
   // Exception: suggested === 0 means nothing to order, no reason needed.
   if (item.is_critical && final < suggested && suggested > 0) {
@@ -147,7 +147,7 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  // Small deviation (≤20%).
+  // Small deviation (≤25%).
   return {
     state: "yellow",
     messageKey: "state.smallAdj",

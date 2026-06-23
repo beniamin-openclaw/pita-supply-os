@@ -381,7 +381,7 @@ def test_edit_replaces_lines_and_updates_order(mocker):
 def test_edit_uncounted_normal_order_needs_no_reason(mocker):
     """PATCH with current stock omitted (None = uncounted) and a normal order
     (order_base 2*5=10 <= max 25) must pass with no reason_code — even though,
-    counted as 0, it would be a >20% deviation from suggested 4. The persisted
+    counted as 0, it would be a >25% deviation from suggested 4. The persisted
     line carries current_stock_qty_base=0 and delta_vs_suggestion_pct=None.
     (change: order-stock-optional-overmax — mirrors the submit path via the
     shared _evaluate_submit_line helper.)"""

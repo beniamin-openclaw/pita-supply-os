@@ -2,7 +2,7 @@
 
 Auth uses the same env-token model as test_main.py. Tests cover validation
 gates (unknown supplier/product, missing settings, critical under-order,
-deviation > 20%), happy paths, response shape, and the persist contract
+deviation > 25%), happy paths, response shape, and the persist contract
 in both backends (seed = no-op + warning; sheet = append called).
 """
 import pytest
@@ -50,7 +50,7 @@ def test_submit_bukat_p009_subkg_tenth_kg_from_seed():
     """P009 carries rounding_rule=tenth_kg in seed: target 0.5, stock 0 →
     suggestion 0.5 kg. Ordering exactly 0.5 is accepted with no deviation
     warning — which only holds if the seed's tenth_kg rule is applied
-    (full_only would suggest 1.0 kg and reject 0.5 as a >20% under-order
+    (full_only would suggest 1.0 kg and reject 0.5 as a >25% under-order
     without a reason)."""
     body = {
         "supplier_id": "SUP_BUKAT",
@@ -195,11 +195,11 @@ def test_submit_critical_underorder_with_reason():
     assert r.status_code == 200, r.text
     out = r.json()
     assert out["status"] == "captain_submitted"
-    # Underorder is itself a >20% deviation from suggested=1 → captures warning.
+    # Underorder is itself a >25% deviation from suggested=1 → captures warning.
     assert any("deviation" in w for w in out["warnings"])
 
 
-def test_submit_deviation_over_20pct_no_reason():
+def test_submit_deviation_over_25pct_no_reason():
     # P019 Przyprawa: non-critical, suggested=1 (target=1, units_per_pu=1, stock=0).
     # Captain submits 2 → delta = 100%, no reason → 400.
     body = {
@@ -218,7 +218,7 @@ def test_submit_deviation_over_20pct_no_reason():
     assert "deviates" in r.json()["detail"]
 
 
-def test_submit_deviation_over_20pct_with_reason_returns_warning():
+def test_submit_deviation_over_25pct_with_reason_returns_warning():
     body = {
         "supplier_id": "SUP_PAGO",
         "lines": [

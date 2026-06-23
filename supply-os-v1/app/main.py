@@ -358,7 +358,7 @@ def _evaluate_submit_line(
       (``order_base > max`` and not ``allow_over_max_due_to_packaging``). The line
       persists with ``current_stock_qty_base=0`` (column stays NOT NULL) and
       ``delta_vs_suggestion_pct=None`` (so it never inflates deviation roll-ups).
-    - **Counted** (a value was given): the existing critical-under and >20%
+    - **Counted** (a value was given): the existing critical-under and >25%
       deviation gates apply byte-identically.
     """
     is_critical = setting.is_critical_for_location or product.is_critical
@@ -422,7 +422,7 @@ def _evaluate_submit_line(
                     f"without reason_code"
                 ),
             )
-        if delta_pct > 0.20 and line.reason_code is None:
+        if delta_pct > 0.25 and line.reason_code is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -430,7 +430,7 @@ def _evaluate_submit_line(
                     f"from suggestion without reason_code"
                 ),
             )
-        if delta_pct > 0.20 and line.reason_code is not None:
+        if delta_pct > 0.25 and line.reason_code is not None:
             warning = (
                 f"Line {line.product_id}: {delta_pct:.0%} deviation, "
                 f"reason: {line.reason_code.value}"
@@ -474,7 +474,7 @@ def captain_submit(
       - every line's product_id must have a location_product_setting row at
         this captain's location.
       - critical product under-ordered without reason_code -> 400.
-      - any line deviating >20% from suggestion without reason_code -> 400.
+      - any line deviating >25% from suggestion without reason_code -> 400.
         Deviations with a reason_code are surfaced as warnings on the response.
       - uncounted line (current_stock_qty_base omitted/null) ordered over MAX
         without reason_code -> 400. When stock is uncounted the deviation +
@@ -568,7 +568,7 @@ def captain_submit(
 
 # ---------- Manager Dispatch (auth required) ----------
 
-_DEVIATION_THRESHOLD = 0.20  # matches captain_submit validation
+_DEVIATION_THRESHOLD = 0.25  # matches captain_submit validation
 
 
 def _deviation_threshold() -> float:
@@ -1049,7 +1049,7 @@ def captain_order_edit(
         Any other status → 409 Conflict, message tells the user to contact the
         manager.
       - Same line-level validation as POST /api/captain/submit (critical zero
-        requires reason, >20% deviation requires reason, supplier_product
+        requires reason, >25% deviation requires reason, supplier_product
         orderable here, etc.).
 
     On success:
