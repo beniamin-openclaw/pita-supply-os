@@ -1,10 +1,10 @@
 ---
 change_id: email-total-to-manager-panel
 title: Move the estimated total out of the supplier email into the Manager panel
-status: impl_reviewed
+status: archived
 created: 2026-06-23
 updated: 2026-06-23
-archived_at: null
+archived_at: 2026-06-23T21:23:08Z
 ---
 
 ## Notes
