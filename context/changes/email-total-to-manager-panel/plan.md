@@ -151,10 +151,10 @@ None — no data/schema change.
 
 #### Automated
 
-- [x] 1.1 Backend tests pass (incl. inverted gmail_url test): `cd supply-os-v1 && python -m pytest`
-- [x] 1.2 Frontend build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [x] 1.3 Frontend lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
-- [x] 1.4 Frontend unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
+- [x] 1.1 Backend tests pass (incl. inverted gmail_url test): `cd supply-os-v1 && python -m pytest` — bb25cd8
+- [x] 1.2 Frontend build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build` — bb25cd8
+- [x] 1.3 Frontend lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint` — bb25cd8
+- [x] 1.4 Frontend unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test` — bb25cd8
 
 #### Manual
 
