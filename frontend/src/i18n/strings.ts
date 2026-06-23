@@ -536,7 +536,7 @@ export const STRINGS = {
     en: "changed by manager (was {value})",
   },
   "orders.detail.orderedLabel": { pl: "Zamówiono", en: "Ordered" },
-  "orders.detail.receivedLabel": { pl: "Przyjęto", en: "Received" },
+  "orders.detail.receivedLabel": { pl: "Dostarczono", en: "Delivered" },
   "orders.detail.orderedSecondary": {
     pl: "Zamówiono: {value} {unit}",
     en: "Ordered: {value} {unit}",

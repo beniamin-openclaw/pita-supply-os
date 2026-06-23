@@ -1,7 +1,7 @@
 ---
 change_id: receiving-received-headline
 title: Receiving display — post-delivery line shows the received qty as the headline
-status: implemented
+status: impl_reviewed
 created: 2026-06-23
 updated: 2026-06-23
 archived_at: null
