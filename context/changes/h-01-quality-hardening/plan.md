@@ -374,7 +374,7 @@ jobs install from a pinned lock (typically faster + better cached than range res
 #### Manual
 
 - [x] 2.5 ci.yml read-through confirms it runs supply-os-v1 + frontend (DoD proof) — 4e7bc1e
-- [ ] 2.6 Feature-branch push turns the Actions run green (real CI proof; permission-gated, never main) — capture run URL
+- [x] 2.6 Feature-branch push turns the Actions run green (real CI proof; permission-gated, never main) — capture run URL — CI green: run 28057653402 @7594611 (caught + fixed a macOS→Linux greenlet lock skew first)
 - [x] 2.7 Drift job would fail on a deliberate pyproject edit-without-regen — 4e7bc1e
 
 ### Phase 3: Thicker ruff ruleset (clean-only)
@@ -394,4 +394,4 @@ jobs install from a pinned lock (typically faster + better cached than range res
 
 #### Manual
 
-- [ ] 4.1 Phase marked deferred in plan + change.md, gating merge named (no execution this change)
+- [x] 4.1 Phase marked deferred in plan + change.md, gating merge named (no execution this change)

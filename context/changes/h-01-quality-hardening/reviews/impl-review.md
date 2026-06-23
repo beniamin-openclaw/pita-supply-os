@@ -4,8 +4,8 @@
 - **Plan**: `context/changes/h-01-quality-hardening/plan.md`
 - **Scope**: Phases 1–3 of 4 (Phase 4 is deferred / not executed)
 - **Date**: 2026-06-23
-- **Verdict**: NEEDS ATTENTION → APPROVED (2 warnings fixed; 2 observations accepted)
-- **Findings**: 0 critical, 2 warnings, 2 observations
+- **Verdict**: NEEDS ATTENTION → APPROVED (3 warnings fixed; 2 observations accepted; real-CI green @7594611)
+- **Findings**: 0 critical, 3 warnings, 2 observations
 
 ## Verdicts
 
@@ -33,7 +33,7 @@ Branch diff vs common ancestor `83432c9`: 9 files — `.github/workflows/ci.yml`
 - Lockfile-drift: recompile on Python 3.12 with pinned pip-tools 7.5.3 → empty `git diff` (no-op).
 - `ci.yml` valid YAML, 4 jobs (`backend`, `backend-integration`, `frontend`, `lockfile-drift`); no `-e ".[dev]"` remains.
 - Locks fully pinned (58 runtime / 68 dev `==`); secrets audit clean.
-- Manual pending: **2.6** (feature-branch push for real-CI proof — permission-gated, never `main`); **4.1** (Phase 4 deferred, doc-state).
+- Manual: **2.6** satisfied — feature-branch push; real-CI run `28057653402` green @`7594611` (after fixing F5); **4.1** confirmed (Phase 4 deferred, gating merge named).
 
 ## Findings
 
@@ -88,3 +88,21 @@ Branch diff vs common ancestor `83432c9`: 9 files — `.github/workflows/ci.yml`
   rewritten for the lockfile also contained the stale FE-test-runner clause). Disclosed at implement
   time. Tooling/doc only, no product code, no demo-blocker files.
 - **Decision**: ACCEPTED (within phase intent; improves doc truthfulness)
+
+### F5 — lockfiles generated on macOS arm64 omitted a Linux-only dep (`greenlet`)
+
+- **Severity**: ⚠️ WARNING
+- **Impact**: 🔎 MEDIUM — real tradeoff; pause to reason through it
+- **Dimension**: Safety & Quality (reproducibility / data-safety)
+- **Location**: `supply-os-v1/requirements.txt`, `supply-os-v1/requirements-dev.txt`
+- **Detail**: Caught by the real-CI proof (2.6), NOT by any local check. The locks were generated on
+  macOS arm64, whose `platform_machine == "arm64"` is excluded from SQLAlchemy's `greenlet` marker
+  (which covers `x86_64 / aarch64 / amd64 / win32`). CI + Railway are Linux x86_64 where `greenlet`
+  IS required, so the committed lock was missing it — a non-reproducible lock the Linux
+  `lockfile-drift` job flagged. Local recompiles all agreed (same host), so local proof was
+  structurally blind to this. Vindicates plan-review F1 (real-CI = the DoD evidence) and F2 (determinism).
+- **Fix**: Added `greenlet==3.5.2` (via sqlalchemy) to both locks — the Linux resolution; the CI drift
+  job now recompiles byte-identical = green. Rewrote the AGENTS.md regen procedure to mandate Linux
+  x86_64 generation (`docker --platform linux/amd64 python:3.12`), never macOS. Recorded as a lesson
+  ("pip-compile locks are platform-specific"). Commit `7594611`; CI run `28057653402` green.
+- **Decision**: FIXED
