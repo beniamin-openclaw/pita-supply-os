@@ -289,9 +289,9 @@ None — display-only, no data or schema change.
 
 #### Automated
 
-- [x] 2.1 Build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [x] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
-- [x] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
+- [x] 2.1 Build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build` — b593416
+- [x] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint` — b593416
+- [x] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test` — b593416
 
 #### Manual
 
