@@ -15,6 +15,7 @@ import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lu
 import type { OrderableItem, CardState } from "../types";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
+import { DecimalInput } from "./DecimalInput";
 import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
 
@@ -86,19 +87,11 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
     currentVal,
   );
 
-  const handleCurrentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    onChange({
-      ...line,
-      current_stock_qty_base: val === "" ? "" : Number(val),
-    });
+  const handleCurrentChange = (v: number | "") => {
+    onChange({ ...line, current_stock_qty_base: v });
   };
-  const handleFinalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    onChange({
-      ...line,
-      captain_final_qty_purchase: val === "" ? "" : Number(val),
-    });
+  const handleFinalChange = (v: number | "") => {
+    onChange({ ...line, captain_final_qty_purchase: v });
   };
   const handleReasonChange = (reason: string, comment: string) => {
     onChange({
@@ -156,12 +149,9 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
               {t("card.currentStock")}
             </label>
             <div className="relative">
-              <input
+              <DecimalInput
                 id={currentInputId}
-                type="number"
                 inputMode="decimal"
-                min="0"
-                step="any"
                 value={line.current_stock_qty_base}
                 onChange={handleCurrentChange}
                 aria-describedby={currentUnitId}
@@ -231,22 +221,13 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
               {t("card.order")}
             </label>
             <div className="relative">
-              <input
+              <DecimalInput
                 id={finalInputId}
-                type="number"
                 inputMode={
                   item.rounding_rule === "tenth_kg" ||
                   item.rounding_rule === "half_allowed"
                     ? "decimal"
                     : "numeric"
-                }
-                min="0"
-                step={
-                  item.rounding_rule === "tenth_kg"
-                    ? "0.1"
-                    : item.rounding_rule === "half_allowed"
-                      ? "0.5"
-                      : "1"
                 }
                 value={line.captain_final_qty_purchase}
                 onChange={handleFinalChange}

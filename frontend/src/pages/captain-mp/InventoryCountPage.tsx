@@ -15,6 +15,7 @@ import { useT } from "../../i18n";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
+import { DecimalInput } from "./components/DecimalInput";
 import { Toast, type ToastProps } from "./components/Toast";
 
 import type {
@@ -243,12 +244,12 @@ export function InventoryCountPage() {
   }, [lines, countDate]);
 
   // ---- Handlers -------------------------------------------------------------
-  const handleStockChange = useCallback((productId: string, raw: string) => {
+  const handleStockChange = useCallback((productId: string, value: number | "") => {
     setLines((prev) => ({
       ...prev,
       [productId]: {
         ...(prev[productId] || blankLine()),
-        current_stock_qty_base: raw === "" ? "" : Number(raw),
+        current_stock_qty_base: value,
       },
     }));
   }, []);
@@ -553,14 +554,11 @@ export function InventoryCountPage() {
                                 <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
                                   {t("inventory.qtyLabel")}
                                 </label>
-                                <input
+                                <DecimalInput
                                   id={`stock-${p.product_id}`}
-                                  type="number"
                                   inputMode="decimal"
-                                  min={0}
-                                  step="any"
                                   value={line.current_stock_qty_base}
-                                  onChange={(e) => handleStockChange(p.product_id, e.target.value)}
+                                  onChange={(v) => handleStockChange(p.product_id, v)}
                                   className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>

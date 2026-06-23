@@ -71,4 +71,16 @@ describe("buildPayloadLines", () => {
     expect(byId.P2.reason_code).toBeNull();
     expect(byId.P2.captain_comment).toBeUndefined();
   });
+
+  it("keeps a decimal order qty + stock (comma-locale fix) through the >0 filter", () => {
+    // Regression for the demo blocker: a weight-good ordered as 0,6 (parsed to
+    // 0.6 by DecimalInput) must survive the filter and serialize as 0.6, not be
+    // dropped as NaN/blank.
+    const out = buildPayloadLines({
+      P1: row({ captain_final_qty_purchase: 0.6, current_stock_qty_base: 0.6 }),
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].captain_final_qty_purchase).toBe(0.6);
+    expect(out[0].current_stock_qty_base).toBe(0.6);
+  });
 });

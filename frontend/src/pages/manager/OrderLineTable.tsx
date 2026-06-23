@@ -25,6 +25,7 @@ import {
   lineVisualState,
   lineVisualStateWithQty,
 } from "./lib/managerLine";
+import { DecimalInput } from "../captain-mp/components/DecimalInput";
 
 function reasonLabelKey(code: ReasonCode): StringKey {
   return `reason.codes.${code}` as StringKey;
@@ -195,23 +196,18 @@ export function OrderLineTable({
                 {/* Manager zamawia — editable number stepper in G2 (else read-only) */}
                 <td className={`px-3 py-2 whitespace-nowrap tabular-nums font-bold ${editable ? "" : qtyStrike}`}>
                   {editable ? (
-                    <input
-                      type="number"
-                      min={0}
-                      step={
-                        line.rounding_rule === "tenth_kg"
-                          ? 0.1
-                          : line.rounding_rule === "half_allowed"
-                            ? 0.5
-                            : 1
+                    <DecimalInput
+                      inputMode={
+                        line.rounding_rule === "tenth_kg" ||
+                        line.rounding_rule === "half_allowed"
+                          ? "decimal"
+                          : "numeric"
                       }
                       value={managerQty}
                       aria-label={t("manager.qtyInputLabel")}
-                      onChange={(e) => {
-                        const raw = Number(e.target.value);
-                        const next = Number.isFinite(raw) && raw > 0 ? raw : 0;
-                        onQtyChange?.(line.order_line_id, next);
-                      }}
+                      onChange={(v) =>
+                        onQtyChange?.(line.order_line_id, typeof v === "number" && v > 0 ? v : 0)
+                      }
                       className={`w-20 rounded border border-slate-300 px-2 py-1 text-right tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                         visual === "cancelled" ? "border-amber-400 bg-amber-50" : ""
                       }`}

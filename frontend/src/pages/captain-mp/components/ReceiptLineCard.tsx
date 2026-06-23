@@ -4,6 +4,7 @@
 import { AlertOctagon } from "lucide-react";
 import { useT } from "../../../i18n";
 import type { ManagerOrderLineDetail } from "../../../types";
+import { DecimalInput } from "./DecimalInput";
 
 interface ReceiptLineCardProps {
   line: ManagerOrderLineDetail;
@@ -37,15 +38,10 @@ export function ReceiptLineCard({ line, ordered, delivered, onChange }: ReceiptL
           <span className="text-[10px] uppercase tracking-wide text-slate-500">
             {t("delivery.delivered")}
           </span>
-          <input
-            type="number"
+          <DecimalInput
             inputMode="decimal"
-            min={0}
-            step="any"
             value={delivered}
-            onChange={(e) =>
-              onChange(line.order_line_id, e.target.value === "" ? "" : Number(e.target.value))
-            }
+            onChange={(v) => onChange(line.order_line_id, v)}
             className="mt-0.5 w-28 rounded-lg border border-slate-300 px-3 py-2 text-right text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label={`${t("delivery.delivered")} — ${line.product_name_pl}`}
           />
