@@ -231,9 +231,9 @@ None — no data or schema change. Existing persisted orders/receipts are unaffe
 
 #### Automated
 
-- [x] 2.1 Type-check + build passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [x] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
-- [x] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
+- [x] 2.1 Type-check + build passes: `PATH=/opt/homebrew/bin:$PATH npm run build` — a0b8a70
+- [x] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint` — a0b8a70
+- [x] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test` — a0b8a70
 
 #### Manual
 
