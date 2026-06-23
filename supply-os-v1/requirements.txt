@@ -45,6 +45,8 @@ google-auth==2.55.0
     #   pita-supply-os (pyproject.toml)
 google-auth-oauthlib==1.4.0
     # via gspread
+greenlet==3.5.2
+    # via sqlalchemy
 gspread==6.2.1
     # via pita-supply-os (pyproject.toml)
 h11==0.16.0
