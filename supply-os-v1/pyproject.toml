@@ -43,6 +43,46 @@ include = ["app*"]
 line-length = 100
 target-version = "py310"
 
+[tool.ruff.lint]
+# Curated uplift over ruff's default ruleset (E4/E7/E9 + F). Every family below
+# passes `ruff check .` clean TODAY with zero product-code edits; codes that would
+# require code edits or are language/framework noise are turned off via `ignore`
+# (config-only grandfathering — no `# noqa` was added to any source file).
+# Families whose only remedy is editing product code (UP pyupgrade, RUF mixed,
+# PT pytest-style, I isort, PTH pathlib) are deferred to H-01 Phase 4, which runs
+# after the in-flight demo-blocker change merges to main.
+select = [
+  "E",    # pycodestyle errors
+  "F",    # pyflakes (ruff default)
+  "W",    # pycodestyle warnings
+  "B",    # flake8-bugbear — real bug catchers (mutable defaults, loop var binding, …)
+  "C4",   # flake8-comprehensions
+  "SIM",  # flake8-simplify
+  "RET",  # flake8-return
+  "PIE",  # flake8-pie
+  "ISC",  # flake8-implicit-str-concat
+  "TID",  # flake8-tidy-imports
+  "G",    # flake8-logging-format
+]
+ignore = [
+  # Line length is the formatter's job — enforce via `ruff format` in Phase 4,
+  # not E501 (39 pre-existing long lines today).
+  "E501",
+  # FastAPI's `Depends(...)` default-argument idiom — pervasive and intentional.
+  "B008",
+  # raise-without-`from` inside except: 19 pre-existing; add `from`/`from None`
+  # in Phase 4 (product-code edits, out of scope for this config-only change).
+  "B904",
+  # unnecessary dict()/list() call (7) — autofix edits product code → Phase 4.
+  "C408",
+  # dict-comprehension-for-iterable (8) — autofix edits product code → Phase 4.
+  "C420",
+  # unnecessary `return None` (1) — autofix edits product code → Phase 4.
+  "RET501",
+  # unnecessary range() start arg (1) — autofix edits product code → Phase 4.
+  "PIE808",
+]
+
 [tool.pytest.ini_options]
 # `integration` tests hit a REAL Postgres (the Supabase backend) and are EXCLUDED
 # from the default run via addopts; opt in with `pytest -m integration` (they need

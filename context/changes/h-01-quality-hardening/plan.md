@@ -366,29 +366,29 @@ jobs install from a pinned lock (typically faster + better cached than range res
 
 #### Automated
 
-- [x] 2.1 Backend gate green locally (ruff + pytest)
-- [x] 2.2 Frontend gate green locally (npm ci + build + lint + test)
-- [x] 2.3 Drift guard is a no-op on fresh checkout (recompile → empty diff)
-- [x] 2.4 ci.yml valid YAML; backend jobs reference requirements-dev.txt
+- [x] 2.1 Backend gate green locally (ruff + pytest) — 4e7bc1e
+- [x] 2.2 Frontend gate green locally (npm ci + build + lint + test) — 4e7bc1e
+- [x] 2.3 Drift guard is a no-op on fresh checkout (recompile → empty diff) — 4e7bc1e
+- [x] 2.4 ci.yml valid YAML; backend jobs reference requirements-dev.txt — 4e7bc1e
 
 #### Manual
 
-- [x] 2.5 ci.yml read-through confirms it runs supply-os-v1 + frontend (DoD proof)
+- [x] 2.5 ci.yml read-through confirms it runs supply-os-v1 + frontend (DoD proof) — 4e7bc1e
 - [ ] 2.6 Feature-branch push turns the Actions run green (real CI proof; permission-gated, never main) — capture run URL
-- [x] 2.7 Drift job would fail on a deliberate pyproject edit-without-regen
+- [x] 2.7 Drift job would fail on a deliberate pyproject edit-without-regen — 4e7bc1e
 
 ### Phase 3: Thicker ruff ruleset (clean-only)
 
 #### Automated
 
-- [ ] 3.1 `ruff check .` exits 0 under the expanded config
-- [ ] 3.2 No product/test .py files modified (config-only)
-- [ ] 3.3 CI backend ruff step passes against the new config locally
+- [x] 3.1 `ruff check .` exits 0 under the expanded config
+- [x] 3.2 No product/test .py files modified (config-only)
+- [x] 3.3 CI backend ruff step passes against the new config locally
 
 #### Manual
 
-- [ ] 3.4 select is a meaningful uplift; every ignore has a reason comment
-- [ ] 3.5 No `# noqa` added to any product file
+- [x] 3.4 select is a meaningful uplift; every ignore has a reason comment
+- [x] 3.5 No `# noqa` added to any product file
 
 ### Phase 4: DEFERRED — TS strict + mypy/pyright
 
