@@ -1,10 +1,10 @@
 ---
 change_id: demo-blocker-decimals-save
 title: Fix decimal-comma inputs and receipt-edit save loss (P0 demo blockers)
-status: impl_reviewed
+status: archived
 created: 2026-06-23
 updated: 2026-06-23
-archived_at: null
+archived_at: 2026-06-23T14:53:50Z
 ---
 
 ## Notes
