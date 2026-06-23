@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: draft
 created: 2026-06-04
-updated: 2026-06-17
+updated: 2026-06-23
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -196,7 +196,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 | D-01 | deploy-wiring               | (owner-run) Auto-deploy `main`: Vercel re-pointed to the new repo; backend redeployed | —                | `deployment-plan.md`, infra Q3  | done |
 | S-10 | supabase-backend            | Order + inventory data runs on Supabase (Postgres) behind `_choose_backend()`        | —                | `infrastructure.md`, PRD Open Q3 | done      |
 | F-02 | multi-supplier-master-data  | (foundation) Master data verified for suppliers beyond Bukat (Pago + others)         | —                | FR-012, FR-013                  | done      |
-| H-01 | quality-hardening           | Backend lockfile + TS strict + mypy/pyright + thicker ruff — reproducible, type-safe  | —                | `health-check.md` #3/#4/#5/#6   | proposed  |
+| H-01 | quality-hardening           | Backend lockfile + TS strict + mypy/pyright + thicker ruff — reproducible, type-safe  | —                | `health-check.md` #3/#4/#5/#6   | in progress |
 | M-01 | in-store-demo (milestone)   | Full Captain→Manager→dispatch run in the store, multi-supplier, on the prod stack     | S-10, F-02, D-01 | governing rule; rollout gate    | milestone |
 
 ### D-01: Deploy wiring (auto-deploy on `main`)
@@ -234,7 +234,7 @@ Horizon 1 delivered the full PRD on the pilot stack (Google Sheets, single Wola�
 - **Refs:** `health-check.md` Fix #3 (lockfile), #4 (TS strict), #5 (ruff), #6 (formatter); `stack-assessment.md` (mypy/pyright).
 - **Prerequisites:** — (product CI is now in place to gate these). Recommended before company-wide scale; can run parallel to S-10/F-02.
 - **Risk:** Low product risk, high leverage. Enabling TS `strict` will surface latent `any`s (Lesson 7 — mirror Pydantic optionality); stage it so the build stays green.
-- **Status:** proposed.
+- **Status:** in progress — **parallel-safe subset shipped 2026-06-23** (backend lockfile #3 via pip-tools + thicker ruff #5 + CI installs-from-lock & a `lockfile-drift` guard), change `h-01-quality-hardening` archived → `context/archive/2026-06-23-h-01-quality-hardening/`, all CI jobs green. **Remaining (Phase 4, deferred):** TS `strict` #4 + mypy/pyright + `ruff format` #6 — gated on the in-flight `demo-blocker-decimals-save` merging to `main` (enabling `strict`/formatter would collide with files that branch edits). To resume after that merge as a follow-up change (e.g. `h-01-quality-hardening-typecheck`); see the archived plan's Phase 4. Lesson recorded: pip-compile locks are platform-specific — regenerate on the Linux deploy target, never macOS.
 
 ### M-01: In-store full-run demo (milestone)
 
