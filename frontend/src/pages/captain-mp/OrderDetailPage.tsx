@@ -3,7 +3,7 @@
 // to the edit form. If status !== captain_submitted, button is disabled with
 // a short explanation.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertOctagon,
@@ -38,17 +38,24 @@ export function OrderDetailPage() {
   const [photos, setPhotos] = useState<ReceiptPhotoItem[]>([]);
   const [photoError, setPhotoError] = useState(false);
 
-  const load = useCallback(() => {
+  // Fetch lives in the effect (not a useCallback) so a `cancelled` flag can guard
+  // every setState — mirrors ReceiveDeliveryPage. Without it, a fast back/forward
+  // on mobile lets an in-flight receipt chain overwrite a newer order's state or
+  // set state after unmount (F1).
+  useEffect(() => {
     if (!order_id) return;
+    let cancelled = false;
     api
       .captainOrder(order_id)
       .then((data) => {
+        if (cancelled) return;
         setOrder(data);
         setError(null);
         if (data.status === "manager_sent") {
           api
             .captainReceipts(data.order_id)
             .then((rs) => {
+              if (cancelled) return;
               setReceipts(rs);
               setPhotoError(false);
               const first = rs[0];
@@ -57,21 +64,30 @@ export function OrderDetailPage() {
                 // variance (degrade silently to no overlay on error).
                 api
                   .receipt(first.receipt_id)
-                  .then(setReceiptDetail)
-                  .catch(() => setReceiptDetail(null));
+                  .then((rd) => {
+                    if (!cancelled) setReceiptDetail(rd);
+                  })
+                  .catch(() => {
+                    if (!cancelled) setReceiptDetail(null);
+                  });
               } else {
                 setReceiptDetail(null);
               }
               if (first && first.wz_photo_count > 0) {
                 api
                   .receiptPhotoUrls(first.receipt_id)
-                  .then(setPhotos)
-                  .catch(() => setPhotoError(true));
+                  .then((urls) => {
+                    if (!cancelled) setPhotos(urls);
+                  })
+                  .catch(() => {
+                    if (!cancelled) setPhotoError(true);
+                  });
               } else {
                 setPhotos([]);
               }
             })
             .catch(() => {
+              if (cancelled) return;
               setReceipts([]);
               setReceiptDetail(null);
             });
@@ -82,13 +98,13 @@ export function OrderDetailPage() {
         }
       })
       .catch((e: ApiError) => {
+        if (cancelled) return;
         if (e.status !== 401) setError(e.detail);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [order_id]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-20">
@@ -221,6 +237,9 @@ export function OrderDetailPage() {
                           {line.purchase_unit}
                         </span>
                       </div>
+                      {/* Hint only when the manager's final differs from the
+                          captain's — the big number above already shows the
+                          effective (manager) qty; equal/unset → no hint. */}
                       {line.manager_final_qty_purchase > 0 &&
                         line.manager_final_qty_purchase !==
                           line.captain_final_qty_purchase && (

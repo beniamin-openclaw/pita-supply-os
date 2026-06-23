@@ -42,7 +42,11 @@ export function formatDecimal(value: number | ""): string {
  *  `2.2 - 1.8 = 0.40000000000000013` → `roundQty(...) === 0.4`. Use this on any
  *  quantity that comes out of arithmetic (subtraction/multiply) before display;
  *  stored values are already clean and don't need it (but it's harmless on them).
- *  Two dp is plenty for purchase units (whole / 0.5 / 0.1 steps). */
+ *  Two dp is plenty for purchase units (whole / 0.5 / 0.1 steps).
+ *
+ *  NOTE: binary half-way cases truncate down (`roundQty(1.005) === 1`, not 1.01) —
+ *  this is a display helper for killing arithmetic tails, NOT a money-grade rounder;
+ *  don't use it to snap a user-entered value before submit. */
 export function roundQty(n: number): number {
   return Math.round(n * 100) / 100;
 }
