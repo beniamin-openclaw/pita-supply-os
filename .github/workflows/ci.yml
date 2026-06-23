@@ -1,10 +1,12 @@
 name: CI
 
-# Product CI — runs the ACTUAL product's checks (backend ruff+pytest, frontend
-# build+lint), the exact commands from AGENTS.md / the /verify skill. Addresses
-# the lessons.md gap "Verify CI actually runs the product's tests" (this repo
-# previously had no product CI). No deploy, no secrets: the backend suite forces
-# the seed backend and blanks Google creds via tests/conftest.py.
+# Product CI — runs the ACTUAL product's checks (backend ruff+pytest installed
+# from the pinned lock, a real-Postgres integration job, frontend
+# build+lint+vitest) plus a lockfile-drift guard, the exact commands from
+# AGENTS.md / the /verify skill. Addresses the lessons.md gap "Verify CI actually
+# runs the product's tests" (this repo previously had no product CI). No deploy,
+# no secrets: the backend suite forces the seed backend and blanks Google creds
+# via tests/conftest.py.
 
 on:
   push:
@@ -23,8 +25,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+          cache-dependency-path: supply-os-v1/requirements-dev.txt
+      - name: Install dependencies (from pinned lock)
+        # Reproducible install: pinned dev lock, then the local package with no
+        # re-resolution (--no-deps) so only the locked versions are used.
+        run: |
+          pip install -r requirements-dev.txt
+          pip install -e . --no-deps
       - name: Lint (ruff)
         run: ruff check .
       - name: Test (pytest)
@@ -63,8 +70,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install dependencies
-        run: pip install -e ".[dev]"
+          cache-dependency-path: supply-os-v1/requirements-dev.txt
+      - name: Install dependencies (from pinned lock)
+        run: |
+          pip install -r requirements-dev.txt
+          pip install -e . --no-deps
       - name: Integration tests (pytest -m integration)
         run: pytest -m integration
 
@@ -89,3 +99,30 @@ jobs:
         run: npm run lint
       - name: Test (vitest)
         run: npm run test
+
+  lockfile-drift:
+    name: Lockfile drift (pip-compile)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supply-os-v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: supply-os-v1/requirements-dev.txt
+      - name: Install pinned pip-tools
+        # The dev lock pins pip-tools, so recompiling here uses the SAME resolver
+        # version that generated the committed locks — keeping the diff honest.
+        run: pip install -r requirements-dev.txt
+      - name: Recompile locks (must match the committed files)
+        # Identical invocation to the AGENTS.md regen procedure (same flags +
+        # Python 3.12), so the autogen header + ordering are byte-stable.
+        run: |
+          pip-compile --strip-extras --output-file=requirements.txt pyproject.toml
+          pip-compile --strip-extras --extra dev --output-file=requirements-dev.txt pyproject.toml
+      - name: Fail on drift
+        # Non-zero diff = pyproject.toml changed without regenerating the locks.
+        run: git diff --exit-code requirements.txt requirements-dev.txt

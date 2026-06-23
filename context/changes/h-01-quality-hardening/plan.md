@@ -351,31 +351,31 @@ jobs install from a pinned lock (typically faster + better cached than range res
 
 #### Automated
 
-- [x] 1.1 requirements.txt + requirements-dev.txt exist and are fully pinned (==)
-- [x] 1.2 Clean install from the dev lock + `pip install -e . --no-deps` succeeds in a fresh venv
-- [x] 1.3 Backend pytest passes against the locked deps
-- [x] 1.4 No secrets staged (git add -n audit)
+- [x] 1.1 requirements.txt + requirements-dev.txt exist and are fully pinned (==) — 0f287e9
+- [x] 1.2 Clean install from the dev lock + `pip install -e . --no-deps` succeeds in a fresh venv — 0f287e9
+- [x] 1.3 Backend pytest passes against the locked deps — 0f287e9
+- [x] 1.4 No secrets staged (git add -n audit) — 0f287e9
 
 #### Manual
 
-- [x] 1.5 Locks generated on Python 3.12 (matches CI)
-- [x] 1.6 pyproject still the loose source of truth; .txt files marked generated
-- [x] 1.7 Pinned versions match current resolution (spot-check fastapi/pydantic/sqlalchemy)
+- [x] 1.5 Locks generated on Python 3.12 (matches CI) — 0f287e9
+- [x] 1.6 pyproject still the loose source of truth; .txt files marked generated — 0f287e9
+- [x] 1.7 Pinned versions match current resolution (spot-check fastapi/pydantic/sqlalchemy) — 0f287e9
 
 ### Phase 2: CI wiring + lock-drift guard
 
 #### Automated
 
-- [ ] 2.1 Backend gate green locally (ruff + pytest)
-- [ ] 2.2 Frontend gate green locally (npm ci + build + lint + test)
-- [ ] 2.3 Drift guard is a no-op on fresh checkout (recompile → empty diff)
-- [ ] 2.4 ci.yml valid YAML; backend jobs reference requirements-dev.txt
+- [x] 2.1 Backend gate green locally (ruff + pytest)
+- [x] 2.2 Frontend gate green locally (npm ci + build + lint + test)
+- [x] 2.3 Drift guard is a no-op on fresh checkout (recompile → empty diff)
+- [x] 2.4 ci.yml valid YAML; backend jobs reference requirements-dev.txt
 
 #### Manual
 
-- [ ] 2.5 ci.yml read-through confirms it runs supply-os-v1 + frontend (DoD proof)
+- [x] 2.5 ci.yml read-through confirms it runs supply-os-v1 + frontend (DoD proof)
 - [ ] 2.6 Feature-branch push turns the Actions run green (real CI proof; permission-gated, never main) — capture run URL
-- [ ] 2.7 Drift job would fail on a deliberate pyproject edit-without-regen
+- [x] 2.7 Drift job would fail on a deliberate pyproject edit-without-regen
 
 ### Phase 3: Thicker ruff ruleset (clean-only)
 
