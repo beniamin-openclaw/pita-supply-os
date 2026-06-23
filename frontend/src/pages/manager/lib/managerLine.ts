@@ -9,18 +9,17 @@
 // no override and get the persisted-line behavior unchanged.
 
 import type { ManagerOrderLineDetail, OrderStatus } from "../../../types";
+import { effectiveOrderedQtyPurchase } from "../../../lib/orderQty";
 
 /**
  * Effective "Manager zamawia" quantity (purchase units) FROM THE PERSISTED LINE.
- * Mirrors the backend `gmail_url._effective_qty`: manager_final if > 0, else
- * fall back to captain_final. Use this only when there is no live draft; the
- * edit table passes the draft value into the `*WithQty` helpers below.
+ * Delegates to the shared `effectiveOrderedQtyPurchase` (manager_final if > 0,
+ * else captain_final) — kept under this name because the helpers below
+ * (`deltaVsCaptain`, `lineVisualState`, `managerSummary`) reference it. Use this
+ * only when there is no live draft; the edit table passes the draft value into
+ * the `*WithQty` helpers below.
  */
-export function effectiveManagerQtyPurchase(line: ManagerOrderLineDetail): number {
-  return line.manager_final_qty_purchase > 0
-    ? line.manager_final_qty_purchase
-    : line.captain_final_qty_purchase;
-}
+export const effectiveManagerQtyPurchase = effectiveOrderedQtyPurchase;
 
 /**
  * Δ vs punkt — manager override of what the point asked for, as a signed

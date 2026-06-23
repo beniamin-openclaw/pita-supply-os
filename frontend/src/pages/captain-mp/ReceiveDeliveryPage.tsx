@@ -10,20 +10,13 @@ import { ChevronLeft, Loader2, PackageCheck } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
-import type { CaptainOrderDetail, ManagerOrderLineDetail, ReceiptLineSubmit } from "../../types";
+import { effectiveOrderedQtyPurchase } from "../../lib/orderQty";
+import type { CaptainOrderDetail, ReceiptLineSubmit } from "../../types";
 
 import { PhotoUploadControl } from "./components/PhotoUploadControl";
 import { ReceiptLineCard } from "./components/ReceiptLineCard";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
-
-/** Effective ordered qty = manager_final if > 0 else captain_final (mirrors the
- *  dispatch rule — the quantity actually ordered from the supplier). */
-function effectiveOrdered(line: ManagerOrderLineDetail): number {
-  return line.manager_final_qty_purchase > 0
-    ? line.manager_final_qty_purchase
-    : line.captain_final_qty_purchase;
-}
 
 // WZ photo upload writes to a private Supabase Storage bucket (server-side,
 // service_role key); photos are viewed via short-lived signed URLs. Enabled now
@@ -68,7 +61,7 @@ export function ReceiveDeliveryPage() {
         setLoadError(null);
         setOrder(data);
         const built: Record<string, number | ""> = {};
-        for (const l of data.lines) built[l.order_line_id] = effectiveOrdered(l);
+        for (const l of data.lines) built[l.order_line_id] = effectiveOrderedQtyPurchase(l);
         setDelivered(built);
       })
       .catch((e: ApiError) => {
@@ -96,7 +89,7 @@ export function ReceiveDeliveryPage() {
           const v = delivered[l.order_line_id];
           return {
             order_line_id: l.order_line_id,
-            received_qty_purchase: v === "" || v === undefined ? effectiveOrdered(l) : v,
+            received_qty_purchase: v === "" || v === undefined ? effectiveOrderedQtyPurchase(l) : v,
           };
         });
         const resp = await api.receiptSubmit({
@@ -209,7 +202,7 @@ export function ReceiveDeliveryPage() {
                 <ReceiptLineCard
                   key={line.order_line_id}
                   line={line}
-                  ordered={effectiveOrdered(line)}
+                  ordered={effectiveOrderedQtyPurchase(line)}
                   delivered={delivered[line.order_line_id] ?? ""}
                   onChange={handleLineChange}
                   readOnly={receiptSaved}

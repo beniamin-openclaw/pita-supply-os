@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { parseDecimal, formatDecimal } from "./number";
+import { parseDecimal, formatDecimal, roundQty } from "./number";
 
 describe("parseDecimal", () => {
   it("parses a comma decimal (the core demo bug)", () => {
@@ -45,5 +45,28 @@ describe("formatDecimal", () => {
 
   it("keeps the blank sentinel blank", () => {
     expect(formatDecimal("")).toBe("");
+  });
+});
+
+describe("roundQty", () => {
+  it("kills the binary-float tail (the demo variance bug)", () => {
+    expect(roundQty(2.2 - 1.8)).toBe(0.4); // was 0.40000000000000013
+    expect(roundQty(0.1 + 0.2)).toBe(0.3);
+  });
+
+  it("leaves clean values untouched", () => {
+    expect(roundQty(1.8)).toBe(1.8);
+    expect(roundQty(12)).toBe(12);
+    expect(roundQty(0)).toBe(0);
+  });
+
+  it("rounds to 2 dp", () => {
+    expect(roundQty(1.005)).toBe(1); // float: 1.005*100 = 100.499… → 100 → 1
+    expect(roundQty(1.234)).toBe(1.23);
+    expect(roundQty(1.235)).toBe(1.24);
+  });
+
+  it("handles negative variances", () => {
+    expect(roundQty(1.8 - 2.2)).toBe(-0.4);
   });
 });

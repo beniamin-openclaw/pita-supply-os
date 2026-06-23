@@ -530,6 +530,10 @@ export const STRINGS = {
     en: "Submitted: {value}",
   },
   "orders.detail.linesHeader": { pl: "Pozycje zamówienia", en: "Order items" },
+  "orders.detail.managerChanged": {
+    pl: "zmienione przez menedżera (było {value})",
+    en: "changed by manager (was {value})",
+  },
   "orders.editToast.success": {
     pl: "Zamówienie zaktualizowane",
     en: "Order updated",

@@ -17,6 +17,7 @@ import {
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
+import { effectiveOrderedQtyPurchase } from "../../lib/orderQty";
 import type { CaptainOrderDetail, ReceiptPhotoItem, ReceiptSummary } from "../../types";
 import { statusVisual } from "./lib/orderStatus";
 
@@ -187,11 +188,20 @@ export function OrderDetailPage() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-lg font-bold text-slate-900 tabular-nums">
-                        {line.captain_final_qty_purchase}{" "}
+                        {effectiveOrderedQtyPurchase(line)}{" "}
                         <span className="text-xs font-normal text-slate-600">
                           {line.purchase_unit}
                         </span>
                       </div>
+                      {line.manager_final_qty_purchase > 0 &&
+                        line.manager_final_qty_purchase !==
+                          line.captain_final_qty_purchase && (
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {t("orders.detail.managerChanged", {
+                              value: line.captain_final_qty_purchase,
+                            })}
+                          </div>
+                        )}
                       {typeof line.delta_vs_suggestion_pct === "number" &&
                         Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
                           <div

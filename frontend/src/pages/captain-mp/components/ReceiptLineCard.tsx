@@ -5,6 +5,7 @@ import { AlertOctagon } from "lucide-react";
 import { useT } from "../../../i18n";
 import type { ManagerOrderLineDetail } from "../../../types";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
+import { roundQty } from "../../../components/ui/number";
 
 interface ReceiptLineCardProps {
   line: ManagerOrderLineDetail;
@@ -24,7 +25,7 @@ export function ReceiptLineCard({
   readOnly = false,
 }: ReceiptLineCardProps) {
   const { t } = useT();
-  const variance = delivered === "" ? 0 : Number(delivered) - ordered;
+  const variance = delivered === "" ? 0 : roundQty(Number(delivered) - ordered);
   const showVariance = delivered !== "" && variance !== 0;
   const varianceText = `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`;
 
