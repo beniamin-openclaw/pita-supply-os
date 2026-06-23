@@ -385,6 +385,7 @@ export const STRINGS = {
   "manager.detail.submitted": { pl: "Wysłane przez kapitana: {value}", en: "Captain submitted: {value}" },
   "manager.detail.delivery": { pl: "Dostawa: {value}", en: "Delivery: {value}" },
   "manager.detail.notesLabel": { pl: "Notatka zamówienia", en: "Order notes" },
+  "manager.detail.totalValue": { pl: "Wartość szacunkowa: {value} PLN", en: "Estimated value: {value} PLN" },
   // Per-line table column headers (Phase G1)
   "manager.col.product": { pl: "Produkt", en: "Product" },
   "manager.col.unit": { pl: "Jedn.", en: "Unit" },

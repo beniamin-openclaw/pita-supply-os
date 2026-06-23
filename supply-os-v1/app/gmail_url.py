@@ -23,11 +23,6 @@ GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/"
 MAX_GMAIL_URL_LENGTH = 8000
 
 
-def _format_pln(value: float) -> str:
-    """Polish-locale decimal: 668.0 -> '668,00'."""
-    return f"{value:.2f}".replace(".", ",")
-
-
 def _effective_qty(line: OrderLine) -> float:
     """Use manager_final if > 0, otherwise captain_final."""
     if line.manager_final_qty_purchase and line.manager_final_qty_purchase > 0:
@@ -98,10 +93,9 @@ def _build_body(
         body_lines.append(f"{idx}.  | {product_name} | {qty_str} {unit_label}".rstrip())
 
     body_lines.append("")
-    if order.total_value_estimate_pln is not None:
-        body_lines.append(
-            f"Laczna wartosc szacunkowa: {_format_pln(order.total_value_estimate_pln)} zl"
-        )
+    # The estimated total is internal (Manager-panel only) and is deliberately
+    # NOT included in the supplier email body (DEMO_FEEDBACK #7). Keep this in
+    # sync with the TS twin (frontend/src/pages/manager/lib/emailBody.ts).
     if location is not None:
         address = location.delivery_address or location.location_name
         body_lines.append(f"Adres dostawy: {address}")

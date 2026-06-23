@@ -211,7 +211,9 @@ def test_build_url_body_includes_polish_diacritics_correctly():
     assert "Mąka żytnia śląska" in parsed["body"][0]
 
 
-def test_build_url_body_includes_total_with_polish_decimal_comma():
+def test_build_url_body_excludes_estimated_total():
+    # The estimated value is internal (Manager-panel only) and must NOT leak into
+    # the supplier email body (DEMO_FEEDBACK #7). Guard against it returning.
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     order = _make_order(lines=[line], total=668.0)
     supplier = _make_supplier()
@@ -220,9 +222,8 @@ def test_build_url_body_includes_total_with_polish_decimal_comma():
 
     url = build_draft_url(order, supplier, [line], products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
-    assert "668,00 zl" in body
-    # Make sure we did NOT emit US-style 668.00
-    assert "668.00" not in body
+    assert "668,00" not in body
+    assert "szacunkowa" not in body.lower()
 
 
 def test_build_url_body_skips_zero_qty_lines():

@@ -192,6 +192,16 @@ export function OrderDetailPane({
             </button>
           )}
         </div>
+
+        {/* Estimated value — Manager-only; deliberately NOT in the supplier email
+            (it lives here so the supplier never sees our internal estimate). */}
+        {detail.total_value_estimate_pln != null && (
+          <div className="mt-3 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-800">
+            {t("manager.detail.totalValue", {
+              value: detail.total_value_estimate_pln.toFixed(2),
+            })}
+          </div>
+        )}
       </div>
 
       {/* Actions / dispatch */}

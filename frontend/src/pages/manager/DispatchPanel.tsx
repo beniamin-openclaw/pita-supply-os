@@ -20,7 +20,6 @@ import type { ManagerOrderDetail, ManagerOrderLineDetail, OrderingMethod } from 
 import {
   type DraftMap,
   draftQty,
-  draftTotalValuePln,
   isOrderEmpty,
 } from "./lib/draftState";
 import {
@@ -53,7 +52,6 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
   const method = detail.ordering_method;
 
   const empty = isOrderEmpty(drafts, detail.lines);
-  const totalValuePln = draftTotalValuePln(drafts, detail.lines);
   const effQty = useMemo(
     () => (line: ManagerOrderLineDetail) => draftQty(drafts, line),
     [drafts],
@@ -129,7 +127,6 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
         <EmailDispatch
           detail={detail}
           effQty={effQty}
-          totalValuePln={totalValuePln}
           empty={empty}
           busy={busy}
           onDispatch={onDispatch}
@@ -181,7 +178,6 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
 interface EmailDispatchProps {
   detail: ManagerOrderDetail;
   effQty: (line: ManagerOrderLineDetail) => number;
-  totalValuePln: number;
   empty: boolean;
   busy: boolean;
   onDispatch: (sentMethod: OrderingMethod) => void;
@@ -191,7 +187,6 @@ interface EmailDispatchProps {
 function EmailDispatch({
   detail,
   effQty,
-  totalValuePln,
   empty,
   busy,
   onDispatch,
@@ -204,7 +199,7 @@ function EmailDispatch({
   // this and re-seeds. "Odśwież" re-seeds from the current draft qty on demand.
   const [subject, setSubject] = useState(() => buildEmailSubject(detail));
   const [body, setBody] = useState(() =>
-    buildEmailBody(detail, effQty, empty ? null : totalValuePln),
+    buildEmailBody(detail, effQty),
   );
 
   const to = detail.supplier_email ?? "";
@@ -251,7 +246,7 @@ function EmailDispatch({
             type="button"
             onClick={() => {
               setSubject(buildEmailSubject(detail));
-              setBody(buildEmailBody(detail, effQty, empty ? null : totalValuePln));
+              setBody(buildEmailBody(detail, effQty));
             }}
             className="text-[11px] text-blue-700 underline hover:text-blue-900"
           >
