@@ -6,6 +6,26 @@ to `file:line` so each item can become a change.
 
 ---
 
+## Round 3 — 2026-06-23 (post-deploy verification of `order-qty-display`)
+
+Owner verified `order-qty-display` live (effective-qty + manager hint + received overlay + rounding
+all working). Two follow-ups raised → both shipped same day:
+
+- **A — supplier email leaks the estimated value** (Round-1 backlog #7). → change **`email-total-to-manager-panel`**
+  (live): removed "Łączna wartość szacunkowa" from BOTH email builders (`emailBody.ts` + `gmail_url.py`),
+  added "Wartość szacunkowa: X PLN" to the Manager panel above the action buttons; inverted the
+  backend test to guard it stays out.
+- **B — receiving "shows wrong"**: Awokado captain-ordered 3 → manager 2 → received 3, but the
+  order-detail headline showed a big "2" (ordered). → change **`receiving-received-headline`** (live):
+  post-delivery the line now leads with the **received** qty ("Dostarczono" label), with
+  "Zamówiono: X · Różnica: Y" (from the receipt snapshot) as a labeled secondary; pre-delivery the
+  ordered headline is now labeled too. Resolved research inconsistencies 1–4 (see the change's
+  `research.md`).
+
+**Deferred receiving backlog (research §5, not yet built):** Manager has no visibility of received
+qty / variance / discrepancies (learning-loop gap); the receive screen pre-fills delivered = ordered
+with no recount gate; variance colour overlaps the deviation-% colour. Separate future changes.
+
 ## Round 2 — 2026-06-23 (post-deploy verification of `demo-blocker-decimals-save`)
 
 Owner ran the live link (`pita-supply-os.vercel.app`, Captain + Manager on phone) after the
