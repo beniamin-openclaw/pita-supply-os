@@ -4,7 +4,7 @@
 import { AlertOctagon } from "lucide-react";
 import { useT } from "../../../i18n";
 import type { ManagerOrderLineDetail } from "../../../types";
-import { DecimalInput } from "./DecimalInput";
+import { DecimalInput } from "../../../components/ui/DecimalInput";
 
 interface ReceiptLineCardProps {
   line: ManagerOrderLineDetail;

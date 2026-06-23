@@ -25,7 +25,7 @@ import {
   lineVisualState,
   lineVisualStateWithQty,
 } from "./lib/managerLine";
-import { DecimalInput } from "../captain-mp/components/DecimalInput";
+import { DecimalInput } from "../../components/ui/DecimalInput";
 
 function reasonLabelKey(code: ReasonCode): StringKey {
   return `reason.codes.${code}` as StringKey;

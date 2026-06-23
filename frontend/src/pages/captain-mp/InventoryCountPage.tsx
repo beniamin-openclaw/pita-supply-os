@@ -15,7 +15,7 @@ import { useT } from "../../i18n";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
-import { DecimalInput } from "./components/DecimalInput";
+import { DecimalInput } from "../../components/ui/DecimalInput";
 import { Toast, type ToastProps } from "./components/Toast";
 
 import type {

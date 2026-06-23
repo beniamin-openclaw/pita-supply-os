@@ -15,7 +15,7 @@ import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lu
 import type { OrderableItem, CardState } from "../types";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
-import { DecimalInput } from "./DecimalInput";
+import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
 

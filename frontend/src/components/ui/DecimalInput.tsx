@@ -11,7 +11,7 @@
 
 import { useState, type ChangeEvent } from "react";
 
-import { parseDecimal, formatDecimal } from "../lib/number";
+import { parseDecimal, formatDecimal } from "./number";
 
 interface DecimalInputProps {
   value: number | "";
@@ -33,6 +33,7 @@ export function DecimalInput({
   value,
   onChange,
   inputMode = "decimal",
+  className,
   ...rest
 }: DecimalInputProps) {
   // Local raw-string buffer: what the user actually typed (may be mid-decimal,
@@ -69,5 +70,18 @@ export function DecimalInput({
     if (parsed !== null) onChange(parsed);
   };
 
-  return <input type="text" inputMode={inputMode} value={raw} onChange={handleChange} {...rest} />;
+  // Visual cue for unparseable text (e.g. stray letters): a red ring composed with
+  // the caller's className. Uses `ring` (not border-color) so it never fights the
+  // parent's border classes; aria-invalid stays the parent's concern (impl-review F3).
+  const invalid = raw.trim() !== "" && parseDecimal(raw) === null;
+  return (
+    <input
+      type="text"
+      inputMode={inputMode}
+      value={raw}
+      onChange={handleChange}
+      {...rest}
+      className={`${className ?? ""}${invalid ? " ring-2 ring-red-400" : ""}`}
+    />
+  );
 }

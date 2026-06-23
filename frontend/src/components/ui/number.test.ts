@@ -28,6 +28,8 @@ describe("parseDecimal", () => {
     expect(parseDecimal(",")).toBeNull();
     expect(parseDecimal("1.5abc")).toBeNull();
     expect(parseDecimal("1 234")).toBeNull(); // thousands spacing rejected
+    expect(parseDecimal("1e5")).toBeNull(); // scientific notation rejected
+    expect(parseDecimal("2E3")).toBeNull();
   });
 
   it("keeps negatives (UI min=0 enforces bounds)", () => {

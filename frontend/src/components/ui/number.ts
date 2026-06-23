@@ -16,12 +16,16 @@
  *   - "0," → "0." → Number("0.") === 0 (finite) → returns 0. This is the wanted
  *     mid-type behavior: the field still shows "0," while the user types toward
  *     "0,6", and the live suggestion uses 0 in the meantime.
- *   - "abc", ",", "1 234" → null (strict reject).
+ *   - "abc", ",", "1 234", "1e5" → null (strict reject; scientific notation too).
  *   - "-1" → -1 (bounds are a UI concern via min=0). */
 export function parseDecimal(raw: string): number | null {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
   const normalized = trimmed.replace(/,/g, ".");
+  // Reject scientific notation: Number("1e5") is a finite 100000, but a quantity
+  // field must never silently submit 100k. The mobile decimal keyboard has no "e"
+  // key anyway, so this only guards stray desktop/paste input (impl-review F2).
+  if (/[eE]/.test(normalized)) return null;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
 }
