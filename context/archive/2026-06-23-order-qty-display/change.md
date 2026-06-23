@@ -1,10 +1,10 @@
 ---
 change_id: order-qty-display
 title: Captain order detail reflects manager-final + received qty; round qty displays to 2 dp
-status: impl_reviewed
+status: archived
 created: 2026-06-23
 updated: 2026-06-23
-archived_at: null
+archived_at: 2026-06-23T21:23:08Z
 ---
 
 ## Notes
