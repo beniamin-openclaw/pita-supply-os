@@ -25,6 +25,10 @@ dev = [
   "pytest-mock>=3.0",
   "ruff>=0.4",
   "httpx>=0.27",
+  # Lock compiler. Pinned exactly into requirements-dev.txt so the CI
+  # lockfile-drift job recompiles with the same resolver — see root AGENTS.md
+  # for the regen procedure (H-01 quality-hardening).
+  "pip-tools>=7.4,<8",
 ]
 
 [build-system]
