@@ -136,9 +136,9 @@ None — display-only.
 
 #### Automated
 
-- [x] 1.1 Frontend build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [x] 1.2 Frontend lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
-- [x] 1.3 Frontend unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
+- [x] 1.1 Frontend build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build` — df1980f
+- [x] 1.2 Frontend lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint` — df1980f
+- [x] 1.3 Frontend unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test` — df1980f
 
 #### Manual
 
