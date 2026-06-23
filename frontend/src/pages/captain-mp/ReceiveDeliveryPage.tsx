@@ -127,6 +127,11 @@ export function ReceiveDeliveryPage() {
     }
   }, [order, receivedBy, delivered, photos, createdReceiptId, navigate, showToast, t]);
 
+  // The receipt is append-only + persist-first: once it's saved, the quantities
+  // are committed and there is no path to re-save edits. Lock the qty + received-by
+  // inputs so a post-save edit can't be silently lost; the only remaining action
+  // is (re)uploading photos.
+  const receiptSaved = createdReceiptId !== null;
   const submitDisabled = isSubmitting || !receivedBy.trim();
 
   return (
@@ -174,6 +179,15 @@ export function ReceiveDeliveryPage() {
           <>
             <p className="mb-4 text-sm text-slate-600">{t("delivery.intro")}</p>
 
+            {receiptSaved && (
+              <div
+                className="mb-4 rounded-lg border border-green-300 bg-green-50 px-3 py-2.5 text-sm text-green-900"
+                role="status"
+              >
+                {t("delivery.savedLockNote")}
+              </div>
+            )}
+
             <label className="mb-4 block">
               <span className="text-sm font-semibold text-slate-900">
                 {t("delivery.receivedByLabel")}
@@ -183,7 +197,10 @@ export function ReceiveDeliveryPage() {
                 value={receivedBy}
                 onChange={(e) => setReceivedBy(e.target.value)}
                 placeholder={t("delivery.receivedByPlaceholder")}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                readOnly={receiptSaved}
+                className={`mt-1 w-full rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  receiptSaved ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
+                }`}
               />
             </label>
 
@@ -195,6 +212,7 @@ export function ReceiveDeliveryPage() {
                   ordered={effectiveOrdered(line)}
                   delivered={delivered[line.order_line_id] ?? ""}
                   onChange={handleLineChange}
+                  readOnly={receiptSaved}
                 />
               ))}
             </div>

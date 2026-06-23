@@ -794,6 +794,10 @@ export const STRINGS = {
     en: "Receipt saved, but photo upload failed: {detail}",
   },
   "delivery.retryPhotos": { pl: "Spróbuj ponownie wgrać zdjęcia", en: "Retry photo upload" },
+  "delivery.savedLockNote": {
+    pl: "Paragon zapisany — ilości są już zatwierdzone. Pozostało tylko dograć zdjęcia WZ.",
+    en: "Receipt saved — quantities are locked. Only the WZ photos remain.",
+  },
   "delivery.statusConfirmed": { pl: "Dostawa potwierdzona", en: "Delivery confirmed" },
   "delivery.confirmedAt": { pl: "Potwierdzono: {value}", en: "Confirmed: {value}" },
   "delivery.discrepancies": { pl: "Rozbieżności: {count}", en: "Discrepancies: {count}" },

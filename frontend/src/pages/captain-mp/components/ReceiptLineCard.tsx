@@ -11,9 +11,18 @@ interface ReceiptLineCardProps {
   ordered: number;
   delivered: number | "";
   onChange: (orderLineId: string, value: number | "") => void;
+  /** Once the receipt is saved (append-only), the quantity is locked — edits after
+   *  save have no persist path, so the field goes read-only instead of misleading. */
+  readOnly?: boolean;
 }
 
-export function ReceiptLineCard({ line, ordered, delivered, onChange }: ReceiptLineCardProps) {
+export function ReceiptLineCard({
+  line,
+  ordered,
+  delivered,
+  onChange,
+  readOnly = false,
+}: ReceiptLineCardProps) {
   const { t } = useT();
   const variance = delivered === "" ? 0 : Number(delivered) - ordered;
   const showVariance = delivered !== "" && variance !== 0;
@@ -42,7 +51,10 @@ export function ReceiptLineCard({ line, ordered, delivered, onChange }: ReceiptL
             inputMode="decimal"
             value={delivered}
             onChange={(v) => onChange(line.order_line_id, v)}
-            className="mt-0.5 w-28 rounded-lg border border-slate-300 px-3 py-2 text-right text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            readOnly={readOnly}
+            className={`mt-0.5 w-28 rounded-lg border px-3 py-2 text-right text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              readOnly ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
+            }`}
             aria-label={`${t("delivery.delivered")} — ${line.product_name_pl}`}
           />
         </label>

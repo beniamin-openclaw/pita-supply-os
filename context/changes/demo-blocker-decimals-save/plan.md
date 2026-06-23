@@ -215,9 +215,9 @@ None — no data or schema change. Existing persisted orders/receipts are unaffe
 
 #### Automated
 
-- [x] 1.1 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
-- [x] 1.2 Type-check + build passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [x] 1.3 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
+- [x] 1.1 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test` — 9f9728c
+- [x] 1.2 Type-check + build passes: `PATH=/opt/homebrew/bin:$PATH npm run build` — 9f9728c
+- [x] 1.3 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint` — 9f9728c
 
 #### Manual
 
@@ -231,9 +231,9 @@ None — no data or schema change. Existing persisted orders/receipts are unaffe
 
 #### Automated
 
-- [ ] 2.1 Type-check + build passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [ ] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
-- [ ] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
+- [x] 2.1 Type-check + build passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
+- [x] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
+- [x] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
 
 #### Manual
 
