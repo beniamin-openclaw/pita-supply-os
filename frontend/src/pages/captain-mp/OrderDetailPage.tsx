@@ -231,37 +231,80 @@ export function OrderDetailPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-lg font-bold text-slate-900 tabular-nums">
-                        {effectiveOrderedQtyPurchase(line)}{" "}
-                        <span className="text-xs font-normal text-slate-600">
-                          {line.purchase_unit}
-                        </span>
-                      </div>
-                      {/* Hint only when the manager's final differs from the
-                          captain's — the big number above already shows the
-                          effective (manager) qty; equal/unset → no hint. */}
-                      {line.manager_final_qty_purchase > 0 &&
-                        line.manager_final_qty_purchase !==
-                          line.captain_final_qty_purchase && (
+                      {receiptLine ? (
+                        // Post-delivery: lead with what was RECEIVED (the owner's
+                        // operative number); ordered + variance demote to a labeled
+                        // secondary, sourced from the receipt's own snapshot so they
+                        // stay consistent with the stored variance.
+                        <>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                            {t("orders.detail.receivedLabel")}
+                          </div>
+                          <div className="text-lg font-bold text-slate-900 tabular-nums">
+                            {roundQty(receiptLine.received_qty_purchase)}{" "}
+                            <span className="text-xs font-normal text-slate-600">
+                              {line.purchase_unit}
+                            </span>
+                          </div>
                           <div className="text-[11px] text-slate-500 mt-0.5">
-                            {t("orders.detail.managerChanged", {
-                              value: line.captain_final_qty_purchase,
+                            {t("orders.detail.orderedSecondary", {
+                              value: roundQty(receiptLine.ordered_qty_purchase),
+                              unit: line.purchase_unit,
                             })}
                           </div>
-                        )}
-                      {typeof line.delta_vs_suggestion_pct === "number" &&
-                        Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
-                          <div
-                            className={`text-xs font-semibold ${
-                              line.delta_vs_suggestion_pct > 0
-                                ? "text-orange-700"
-                                : "text-red-700"
-                            }`}
-                          >
-                            {line.delta_vs_suggestion_pct > 0 ? "+" : ""}
-                            {Math.round(line.delta_vs_suggestion_pct * 100)}%
+                          {variance !== 0 && (
+                            <div
+                              className={`text-xs font-semibold ${
+                                variance > 0 ? "text-orange-700" : "text-red-700"
+                              }`}
+                            >
+                              {t("delivery.variance", {
+                                value: `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`,
+                              })}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        // Pre-delivery: ordered headline (effective = manager-or-captain),
+                        // now labeled so the number is anchored; keep the manager-changed
+                        // hint + the deviation badge.
+                        <>
+                          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                            {t("orders.detail.orderedLabel")}
                           </div>
-                        )}
+                          <div className="text-lg font-bold text-slate-900 tabular-nums">
+                            {effectiveOrderedQtyPurchase(line)}{" "}
+                            <span className="text-xs font-normal text-slate-600">
+                              {line.purchase_unit}
+                            </span>
+                          </div>
+                          {/* Hint only when the manager's final differs from the
+                              captain's — the big number above already shows the
+                              effective (manager) qty; equal/unset → no hint. */}
+                          {line.manager_final_qty_purchase > 0 &&
+                            line.manager_final_qty_purchase !==
+                              line.captain_final_qty_purchase && (
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                {t("orders.detail.managerChanged", {
+                                  value: line.captain_final_qty_purchase,
+                                })}
+                              </div>
+                            )}
+                          {typeof line.delta_vs_suggestion_pct === "number" &&
+                            Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
+                              <div
+                                className={`text-xs font-semibold ${
+                                  line.delta_vs_suggestion_pct > 0
+                                    ? "text-orange-700"
+                                    : "text-red-700"
+                                }`}
+                              >
+                                {line.delta_vs_suggestion_pct > 0 ? "+" : ""}
+                                {Math.round(line.delta_vs_suggestion_pct * 100)}%
+                              </div>
+                            )}
+                        </>
+                      )}
                     </div>
                   </div>
                   {(line.reason_code || line.captain_comment) && (
@@ -270,27 +313,6 @@ export function OrderDetailPage() {
                         ? t(("reason.codes." + line.reason_code) as Parameters<typeof t>[0])
                         : ""}
                       {line.captain_comment ? ` — ${line.captain_comment}` : ""}
-                    </div>
-                  )}
-                  {receiptLine && (
-                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs">
-                      <span className="text-slate-600">
-                        {t("orders.detail.received", {
-                          value: roundQty(receiptLine.received_qty_purchase),
-                          unit: line.purchase_unit,
-                        })}
-                      </span>
-                      {variance !== 0 && (
-                        <span
-                          className={`font-semibold ${
-                            variance > 0 ? "text-orange-700" : "text-red-700"
-                          }`}
-                        >
-                          {t("delivery.variance", {
-                            value: `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`,
-                          })}
-                        </span>
-                      )}
                     </div>
                   )}
                 </li>
