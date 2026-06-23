@@ -99,17 +99,6 @@ export function dispatchPayload(
   }));
 }
 
-/** Recomputed total estimate for the draft (sum of effective qty * unit price). */
-export function draftTotalValuePln(
-  drafts: DraftMap,
-  lines: ManagerOrderLineDetail[],
-): number {
-  return lines.reduce(
-    (sum, line) => sum + draftQty(drafts, line) * (line.price_estimate_pln ?? 0),
-    0,
-  );
-}
-
 /** True when no line has an effective qty > 0 (dispatch must be blocked). */
 export function isOrderEmpty(drafts: DraftMap, lines: ManagerOrderLineDetail[]): boolean {
   return !lines.some((line) => draftQty(drafts, line) > 0);
