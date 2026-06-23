@@ -534,6 +534,10 @@ export const STRINGS = {
     pl: "zmienione przez menedżera (było {value})",
     en: "changed by manager (was {value})",
   },
+  "orders.detail.received": {
+    pl: "Dostarczono: {value} {unit}",
+    en: "Delivered: {value} {unit}",
+  },
   "orders.editToast.success": {
     pl: "Zamówienie zaktualizowane",
     en: "Order updated",

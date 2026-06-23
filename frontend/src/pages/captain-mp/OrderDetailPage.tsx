@@ -18,7 +18,13 @@ import {
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import { effectiveOrderedQtyPurchase } from "../../lib/orderQty";
-import type { CaptainOrderDetail, ReceiptPhotoItem, ReceiptSummary } from "../../types";
+import { roundQty } from "../../components/ui/number";
+import type {
+  CaptainOrderDetail,
+  ReceiptDetail,
+  ReceiptPhotoItem,
+  ReceiptSummary,
+} from "../../types";
 import { statusVisual } from "./lib/orderStatus";
 
 export function OrderDetailPage() {
@@ -28,6 +34,7 @@ export function OrderDetailPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<ReceiptSummary[]>([]);
+  const [receiptDetail, setReceiptDetail] = useState<ReceiptDetail | null>(null);
   const [photos, setPhotos] = useState<ReceiptPhotoItem[]>([]);
   const [photoError, setPhotoError] = useState(false);
 
@@ -45,6 +52,16 @@ export function OrderDetailPage() {
               setReceipts(rs);
               setPhotoError(false);
               const first = rs[0];
+              if (first) {
+                // Pull the full receipt so each line can show received qty +
+                // variance (degrade silently to no overlay on error).
+                api
+                  .receipt(first.receipt_id)
+                  .then(setReceiptDetail)
+                  .catch(() => setReceiptDetail(null));
+              } else {
+                setReceiptDetail(null);
+              }
               if (first && first.wz_photo_count > 0) {
                 api
                   .receiptPhotoUrls(first.receipt_id)
@@ -54,9 +71,13 @@ export function OrderDetailPage() {
                 setPhotos([]);
               }
             })
-            .catch(() => setReceipts([]));
+            .catch(() => {
+              setReceipts([]);
+              setReceiptDetail(null);
+            });
         } else {
           setReceipts([]);
+          setReceiptDetail(null);
           setPhotos([]);
         }
       })
@@ -164,7 +185,14 @@ export function OrderDetailPage() {
               {t("orders.detail.linesHeader")}
             </h2>
             <ul className="space-y-2 mb-6">
-              {order.lines.map((line) => (
+              {order.lines.map((line) => {
+                const receiptLine = receiptDetail?.lines.find(
+                  (rl) => rl.order_line_id === line.order_line_id,
+                );
+                const variance = receiptLine
+                  ? roundQty(receiptLine.variance_qty_purchase)
+                  : 0;
+                return (
                 <li
                   key={line.order_line_id}
                   className="rounded-lg border border-slate-200 bg-white p-3"
@@ -225,8 +253,30 @@ export function OrderDetailPage() {
                       {line.captain_comment ? ` — ${line.captain_comment}` : ""}
                     </div>
                   )}
+                  {receiptLine && (
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs">
+                      <span className="text-slate-600">
+                        {t("orders.detail.received", {
+                          value: roundQty(receiptLine.received_qty_purchase),
+                          unit: line.purchase_unit,
+                        })}
+                      </span>
+                      {variance !== 0 && (
+                        <span
+                          className={`font-semibold ${
+                            variance > 0 ? "text-orange-700" : "text-red-700"
+                          }`}
+                        >
+                          {t("delivery.variance", {
+                            value: `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`,
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
 
             {/* Goods receiving (GR-01): confirm delivery, or show the receipt. */}

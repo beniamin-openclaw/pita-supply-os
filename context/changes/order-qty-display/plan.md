@@ -273,9 +273,9 @@ None — display-only, no data or schema change.
 
 #### Automated
 
-- [x] 1.1 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
-- [x] 1.2 Build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [x] 1.3 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
+- [x] 1.1 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test` — 3b3d8e0
+- [x] 1.2 Build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build` — 3b3d8e0
+- [x] 1.3 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint` — 3b3d8e0
 
 #### Manual
 
@@ -289,9 +289,9 @@ None — display-only, no data or schema change.
 
 #### Automated
 
-- [ ] 2.1 Build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
-- [ ] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
-- [ ] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
+- [x] 2.1 Build/type-check passes: `PATH=/opt/homebrew/bin:$PATH npm run build`
+- [x] 2.2 Lint passes: `PATH=/opt/homebrew/bin:$PATH npm run lint`
+- [x] 2.3 Unit tests pass: `PATH=/opt/homebrew/bin:$PATH npm run test`
 
 #### Manual
 
