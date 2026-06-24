@@ -53,6 +53,14 @@ export const STRINGS = {
   "captain.draftBannerAccept": { pl: "Wznów", en: "Resume" },
   "captain.draftBannerDiscard": { pl: "Odrzuć", en: "Discard" },
 
+  // "Who orders" attribution (ordered_by) — required before sending the order.
+  "captain.orderedByLabel": { pl: "Kto zamawia", en: "Who orders" },
+  "captain.orderedByPlaceholder": { pl: "Imię i nazwisko", en: "Full name" },
+  "captain.orderedByRequired": {
+    pl: "Wymagane przed wysłaniem",
+    en: "Required before sending",
+  },
+
   // Toast / global messages -------------------------------------------------
   "toast.close": { pl: "Zamknij powiadomienie", en: "Close notification" },
   "toast.draftSaved": { pl: "Szkic zapisany", en: "Draft saved" },
@@ -92,6 +100,7 @@ export const STRINGS = {
   "apiError.field.captain_final_qty_purchase": { pl: "Zamawiasz", en: "Order qty" },
   "apiError.field.count_user": { pl: "Kto liczył", en: "Counted by" },
   "apiError.field.received_by": { pl: "Kto przyjął", en: "Received by" },
+  "apiError.field.ordered_by": { pl: "Kto zamawia", en: "Who orders" },
   "apiError.field.reason_code": { pl: "Powód", en: "Reason" },
   "apiError.field.requested_delivery_date": { pl: "Data dostawy", en: "Delivery date" },
 
@@ -339,6 +348,7 @@ export const STRINGS = {
   },
   "manager.cutoff": { pl: "cutoff: {value}", en: "cutoff: {value}" },
   "manager.submitted": { pl: "submitted: {value}", en: "submitted: {value}" },
+  "manager.orderedBy": { pl: "Zamówił: {value}", en: "Ordered by: {value}" },
 
   // Edited-marker (Phase F4) -------------------------------------------------
   "orders.editedBadge": { pl: "POPRAWIONE", en: "EDITED" },
@@ -397,6 +407,7 @@ export const STRINGS = {
   "manager.detail.cutoff": { pl: "Cutoff: {value}", en: "Cutoff: {value}" },
   "manager.detail.cutoffPast": { pl: "po cutoff: {value}", en: "past cutoff: {value}" },
   "manager.detail.submitted": { pl: "Wysłane przez kapitana: {value}", en: "Captain submitted: {value}" },
+  "manager.detail.orderedBy": { pl: "Zamówił: {value}", en: "Ordered by: {value}" },
   "manager.detail.delivery": { pl: "Dostawa: {value}", en: "Delivery: {value}" },
   "manager.detail.notesLabel": { pl: "Notatka zamówienia", en: "Order notes" },
   "manager.detail.totalValue": { pl: "Wartość szacunkowa: {value} PLN", en: "Estimated value: {value} PLN" },

@@ -104,7 +104,7 @@ _ORDER_COLUMNS = [
     "order_id", "location_id", "supplier_id", "order_date",
     "requested_delivery_date", "status", "captain_user", "captain_submitted_at",
     "manager_user", "manager_sent_at", "sent_method", "supplier_order_reference",
-    "total_value_estimate_pln", "last_edited_at",
+    "total_value_estimate_pln", "ordered_by", "last_edited_at",
     "cancelled_at", "cancelled_by", "cancel_reason", "notes",
 ]
 _ORDER_LINE_COLUMNS = [

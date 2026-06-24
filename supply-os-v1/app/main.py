@@ -547,6 +547,7 @@ def captain_submit(
         status=OrderStatus.CAPTAIN_SUBMITTED,
         captain_user=location_id,  # proxy — no individual identity in v0
         captain_submitted_at=datetime.now(timezone.utc),
+        ordered_by=req.ordered_by,  # required free-text "who orders" (FR/spec)
         total_value_estimate_pln=round(total_value, 2),
         notes=req.notes,
     )
@@ -730,6 +731,7 @@ def manager_queue(
                 status=order.status,
                 captain_user=order.captain_user,
                 captain_submitted_at=order.captain_submitted_at,
+                ordered_by=order.ordered_by,
                 line_count=len(lines),
                 total_value_estimate_pln=order.total_value_estimate_pln,
                 deviation_count=deviation_count,
@@ -838,6 +840,7 @@ def manager_order_detail(
         status=order.status,
         captain_user=order.captain_user,
         captain_submitted_at=order.captain_submitted_at,
+        ordered_by=order.ordered_by,
         manager_user=order.manager_user,
         manager_sent_at=order.manager_sent_at,
         total_value_estimate_pln=order.total_value_estimate_pln,

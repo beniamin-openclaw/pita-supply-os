@@ -91,6 +91,7 @@ export interface CaptainSubmitRequest {
   supplier_id: string;
   requested_delivery_date?: string; // ISO date "YYYY-MM-DD"
   lines: OrderLineSubmit[];
+  ordered_by: string; // required free-text "who orders" (mirrors received_by / count_user)
   notes?: string;
 }
 
@@ -294,6 +295,7 @@ export interface ManagerQueueItem {
   status: OrderStatus;
   captain_user?: string;
   captain_submitted_at?: string; // ISO datetime
+  ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   line_count: number;
   total_value_estimate_pln?: number;
   deviation_count: number;
@@ -349,6 +351,7 @@ export interface ManagerOrderDetail {
   status: OrderStatus;
   captain_user?: string;
   captain_submitted_at?: string;
+  ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   manager_user?: string;
   manager_sent_at?: string;
   total_value_estimate_pln?: number;

@@ -41,6 +41,7 @@ def _order(
     status: OrderStatus = OrderStatus.CAPTAIN_SUBMITTED,
     total: float = 668.0,
     captain_submitted_at: datetime | None = None,
+    ordered_by: str | None = "Jan Kowalski",
 ) -> Order:
     return Order(
         order_id=order_id,
@@ -52,6 +53,7 @@ def _order(
         captain_user=location_id,
         captain_submitted_at=captain_submitted_at
         or datetime(2026, 5, 20, 8, 30, tzinfo=timezone.utc),
+        ordered_by=ordered_by,
         total_value_estimate_pln=total,
     )
 
@@ -193,6 +195,8 @@ def test_queue_returns_only_matching_status(mocker):
     assert len(payload) == 1
     assert payload[0]["order_id"] == "ORD-A"
     assert payload[0]["status"] == "captain_submitted"
+    # ordered_by ("who orders") round-trips onto the queue item.
+    assert payload[0]["ordered_by"] == "Jan Kowalski"
 
 
 def test_queue_returns_only_matching_location(mocker):
@@ -366,6 +370,8 @@ def test_order_detail_happy_path(mocker):
     assert payload["order_id"] == order_id
     assert payload["status"] == "captain_submitted"
     assert len(payload["lines"]) == 2
+    # ordered_by ("who orders") round-trips onto the order detail.
+    assert payload["ordered_by"] == "Jan Kowalski"
 
 
 def test_order_detail_not_found(mocker):
