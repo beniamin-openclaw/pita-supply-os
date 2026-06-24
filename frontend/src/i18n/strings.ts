@@ -846,6 +846,11 @@ export const STRINGS = {
     en: "Could not load WZ photos",
   },
   "delivery.missingWz": { pl: "Brak zdjęcia WZ", en: "Missing WZ photo" },
+  // Manager receiving view (manager-receiving-view) — read-only delivery surface.
+  "manager.delivery.section": { pl: "Dostawa", en: "Delivery" },
+  "manager.delivery.receivedBy": { pl: "Przyjął: {value}", en: "Received by: {value}" },
+  "manager.queue.delivered": { pl: "Dostarczono", en: "Delivered" },
+  "manager.queue.discrepancy": { pl: "Różnice", en: "Discrepancies" },
   // Recount gate (round-1 quick-win): delivered starts blank — the captain must
   // enter or one-tap-confirm each line; nothing is pre-counted.
   "delivery.deliveredPlaceholder": { pl: "Wpisz ilość", en: "Enter qty" },

@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { useT } from "../../i18n";
 import type { ManagerOrderDetail, OrderingMethod } from "../../types";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
+import { DeliverySection } from "./DeliverySection";
 import { DispatchPanel } from "./DispatchPanel";
 import { OrderLineTable } from "./OrderLineTable";
 import { type DraftMap, draftQty, hasDirtyDrafts } from "./lib/draftState";
@@ -205,6 +206,10 @@ export function OrderDetailPane({
             })}
           </div>
         )}
+
+        {/* Read-only delivery section (manager-receiving-view) — renders only
+            when the order has at least one goods-receipt. */}
+        {detail.receipts.length > 0 && <DeliverySection receipts={detail.receipts} />}
       </div>
 
       {/* Actions / dispatch */}

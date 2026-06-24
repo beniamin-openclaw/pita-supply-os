@@ -177,6 +177,21 @@ function QueueCard({
               })}
             </span>
           )}
+          {/* Receipt signal (manager-receiving-view): ⚠ when a delivery has a
+              discrepancy, else neutral ✓ when delivered clean. Both only appear
+              on the manager_sent lane (counts are 0 elsewhere). */}
+          {item.received_discrepancy_count > 0 ? (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 font-semibold text-red-800"
+              title={t("manager.queue.discrepancy")}
+            >
+              <span aria-hidden="true">⚠</span> {t("manager.queue.discrepancy")}
+            </span>
+          ) : item.received_count > 0 ? (
+            <span className="rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-900">
+              <span aria-hidden="true">✓</span> {t("manager.queue.delivered")}
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-1.5 flex flex-wrap gap-x-3 text-[11px] text-slate-500">

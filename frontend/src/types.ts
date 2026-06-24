@@ -302,6 +302,11 @@ export interface ManagerQueueItem {
   reason_count: number;
   last_edited_at?: string | null;
   cutoff_iso?: string; // ISO datetime
+  // Goods-receipt signal (manager-receiving-view). Set only on the manager_sent
+  // lane; 0 elsewhere. FE shows a ⚠ chip when discrepancy > 0, else a ✓ chip when
+  // received_count > 0.
+  received_count: number;
+  received_discrepancy_count: number;
 }
 
 // Manager Order Detail -------------------------------------------------------
@@ -336,6 +341,29 @@ export interface ManagerOrderLineDetail {
   manager_comment: string;
 }
 
+export interface ManagerOrderReceiptLine {
+  order_line_id: string;
+  product_id: string;
+  product_name_pl: string;
+  purchase_unit: string;
+  ordered_qty_purchase: number;
+  received_qty_purchase: number;
+  variance_qty_purchase: number;
+  receipt_comment: string;
+}
+
+export interface ManagerOrderReceipt {
+  receipt_id: string;
+  receipt_date: string; // ISO date "YYYY-MM-DD"
+  received_by?: string | null;
+  received_submitted_at?: string | null; // ISO datetime
+  line_count: number;
+  discrepancy_count: number;
+  received_with_missing_wz: boolean;
+  wz_photo_count: number;
+  lines: ManagerOrderReceiptLine[];
+}
+
 export interface ManagerOrderDetail {
   order_id: string;
   location_id: string;
@@ -357,6 +385,9 @@ export interface ManagerOrderDetail {
   total_value_estimate_pln?: number;
   notes: string;
   lines: ManagerOrderLineDetail[];
+  // Goods-receipts against this order (0..N, newest-first), read-only — closes
+  // the suggested→captain→manager→RECEIVED loop on the Manager screen.
+  receipts: ManagerOrderReceipt[];
 }
 
 // Manager Dispatch -----------------------------------------------------------
