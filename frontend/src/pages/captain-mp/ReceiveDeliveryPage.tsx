@@ -60,11 +60,13 @@ export function ReceiveDeliveryPage() {
         }
         setLoadError(null);
         setOrder(data);
-        // Recount gate: start every line BLANK. The captain must consciously
-        // enter (or one-tap "= zamówione") each delivered qty — we never seed it
-        // with the ordered qty, so nothing is silently pre-counted.
+        // Pre-fill each line with the ordered qty (effectiveOrderedQtyPurchase =
+        // manager_final if set, else captain_final — the qty actually ordered).
+        // The common "delivered == ordered" case is then one tap (confirm); the
+        // captain edits only the lines that differ. A line can still be cleared
+        // to blank, which the submit guard below rejects.
         const built: Record<string, number | ""> = {};
-        for (const l of data.lines) built[l.order_line_id] = "";
+        for (const l of data.lines) built[l.order_line_id] = effectiveOrderedQtyPurchase(l);
         setDelivered(built);
       })
       .catch((e: ApiError) => {
@@ -182,6 +184,11 @@ export function ReceiveDeliveryPage() {
             {order && (
               <p className="text-xs text-white/70 font-mono truncate leading-tight">
                 {order.order_id} · {order.order_date}
+              </p>
+            )}
+            {order?.ordered_by && (
+              <p className="text-xs text-white/80 truncate leading-tight">
+                {t("orders.detail.orderedBy", { value: order.ordered_by })}
               </p>
             )}
           </div>

@@ -1143,6 +1143,7 @@ def captain_order_detail(
         status=order.status,
         captain_user=order.captain_user,
         captain_submitted_at=order.captain_submitted_at,
+        ordered_by=order.ordered_by,
         last_edited_at=order.last_edited_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
         notes=order.notes,

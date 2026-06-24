@@ -388,6 +388,7 @@ class CaptainOrderDetail(BaseModel):
     status: OrderStatus
     captain_user: Optional[str] = None
     captain_submitted_at: Optional[datetime] = None
+    ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     last_edited_at: Optional[datetime] = None
     total_value_estimate_pln: Optional[float] = None
     notes: str = ""
