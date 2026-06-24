@@ -1,10 +1,10 @@
 ---
 change_id: ux-quick-wins-r1
 title: UX quick-wins round 1 — deviation threshold, no-baseline copy, variance colour, recount gate, history nav
-status: impl_reviewed
+status: archived
 created: 2026-06-23
 updated: 2026-06-24
-archived_at: null
+archived_at: 2026-06-24T10:04:16Z
 ---
 
 ## Notes
