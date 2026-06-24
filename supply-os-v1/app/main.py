@@ -40,6 +40,8 @@ from .models import (
     ManagerDispatchResponse,
     ManagerOrderDetail,
     ManagerOrderLineDetail,
+    ManagerOrderReceipt,
+    ManagerOrderReceiptLine,
     ManagerQueueItem,
     ManagerReleaseRequest,
     ManagerReleaseResponse,
@@ -706,6 +708,28 @@ def manager_queue(
     now_utc = datetime.now(timezone.utc)
     threshold = _deviation_threshold()
 
+    # Receipt signal (manager-receiving-view): only the manager_sent lane can have
+    # goods-receipts. Count receipts + discrepancy-bearing receipts per displayed
+    # order so the FE renders the ⚠ / ✓ chip. Other lanes skip the scan entirely.
+    # Degrade to no signal when the receipts tab is absent (mirrors captain_receipts).
+    received_count_by_order: dict[str, int] = {}
+    received_discrepancy_by_order: dict[str, int] = {}
+    if status == OrderStatus.MANAGER_SENT:
+        wanted = set(order_ids)
+        try:
+            for r in backend.load_receipts():
+                if r.order_id not in wanted:
+                    continue
+                received_count_by_order[r.order_id] = (
+                    received_count_by_order.get(r.order_id, 0) + 1
+                )
+                if r.discrepancy_count > 0:
+                    received_discrepancy_by_order[r.order_id] = (
+                        received_discrepancy_by_order.get(r.order_id, 0) + 1
+                    )
+        except sheets.WorksheetNotFound:
+            pass
+
     items: list[ManagerQueueItem] = []
     for order in filtered:
         supplier = suppliers_by_id.get(order.supplier_id)
@@ -738,6 +762,10 @@ def manager_queue(
                 reason_count=reason_count,
                 last_edited_at=order.last_edited_at,
                 cutoff_iso=cutoff_iso,
+                received_count=received_count_by_order.get(order.order_id, 0),
+                received_discrepancy_count=received_discrepancy_by_order.get(
+                    order.order_id, 0
+                ),
             )
         )
 
@@ -755,6 +783,81 @@ def manager_queue(
                              if it.captain_submitted_at else 0.0)
         )
     return items
+
+
+def _load_order_receipts(
+    backend,
+    order_id: str,
+    products_by_id: dict[str, Product],
+    sps_by_id: dict[str, SupplierProduct],
+) -> list[ManagerOrderReceipt]:
+    """Load an order's goods-receipts (0..N), newest-first, enriched for the
+    Manager delivery section (manager-receiving-view).
+
+    Degrades to ``[]`` when the receipts worksheet is absent (mirrors
+    ``captain_receipts``) — never raises, so a pilot Sheet without the receipts
+    tabs still serves order detail. Seed mode never reaches here (the route gates
+    on ``_is_persistent``). Newest = ``received_submitted_at`` (fallback
+    ``receipt_date`` at UTC midnight), descending — mirrors the recency keys in
+    ``captain_receipts`` / ``captain_inventory_latest``."""
+    # TODO(perf): these are full-table reads filtered in Python. At pilot volume
+    # that's fine, but if the receipts tables grow, add a targeted
+    # `load_receipt_lines_for_orders(order_ids)` to both backends mirroring F-7's
+    # `load_order_lines_for_orders` (WHERE order_id = ANY(...) on Supabase).
+    try:
+        all_receipts = backend.load_receipts()
+        all_lines = backend.load_receipt_lines()
+    except sheets.WorksheetNotFound:
+        return []
+
+    receipts = [r for r in all_receipts if r.order_id == order_id]
+    if not receipts:
+        return []
+
+    lines_by_receipt: dict[str, list[ReceiptLine]] = {}
+    for ln in all_lines:
+        if ln.order_id == order_id:
+            lines_by_receipt.setdefault(ln.receipt_id, []).append(ln)
+
+    def _recency_key(r: Receipt) -> datetime:
+        if r.received_submitted_at is not None:
+            return r.received_submitted_at
+        return datetime.combine(r.receipt_date, datetime.min.time(), tzinfo=timezone.utc)
+
+    receipts.sort(key=_recency_key, reverse=True)
+
+    out: list[ManagerOrderReceipt] = []
+    for r in receipts:
+        enriched: list[ManagerOrderReceiptLine] = []
+        for ln in lines_by_receipt.get(r.receipt_id, []):
+            product = products_by_id.get(ln.product_id)
+            sp = sps_by_id.get(ln.supplier_product_id)
+            enriched.append(
+                ManagerOrderReceiptLine(
+                    order_line_id=ln.order_line_id,
+                    product_id=ln.product_id,
+                    product_name_pl=product.product_name_pl if product else ln.product_id,
+                    purchase_unit=sp.purchase_unit if sp else "",
+                    ordered_qty_purchase=ln.ordered_qty_purchase,
+                    received_qty_purchase=ln.received_qty_purchase,
+                    variance_qty_purchase=ln.variance_qty_purchase,
+                    receipt_comment=ln.receipt_comment,
+                )
+            )
+        out.append(
+            ManagerOrderReceipt(
+                receipt_id=r.receipt_id,
+                receipt_date=r.receipt_date,
+                received_by=r.received_by,
+                received_submitted_at=r.received_submitted_at,
+                line_count=r.line_count,
+                discrepancy_count=r.discrepancy_count,
+                received_with_missing_wz=r.received_with_missing_wz,
+                wz_photo_count=r.wz_photo_count,
+                lines=enriched,
+            )
+        )
+    return out
 
 
 @app.get("/api/manager/order/{order_id}", response_model=ManagerOrderDetail)
@@ -826,6 +929,15 @@ def manager_order_detail(
             )
         )
 
+    # Receipts can only exist once an order reached manager_sent (the Captain
+    # confirm gate requires it), so only those statuses pay the receipt scan;
+    # every other status skips it and returns no receipts.
+    order_receipts: list[ManagerOrderReceipt] = []
+    if order.status in (OrderStatus.MANAGER_SENT, OrderStatus.CLOSED):
+        order_receipts = _load_order_receipts(
+            backend, order_id, products_by_id, sps_by_id
+        )
+
     return ManagerOrderDetail(
         order_id=order.order_id,
         location_id=order.location_id,
@@ -846,6 +958,7 @@ def manager_order_detail(
         total_value_estimate_pln=order.total_value_estimate_pln,
         notes=order.notes,
         lines=enriched_lines,
+        receipts=order_receipts,
     )
 
 

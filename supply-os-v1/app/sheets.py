@@ -768,13 +768,21 @@ def get_inventory_count(count_id: str) -> InventoryCount | None:
 # ---------- Goods-receipt read + append/update API (GR-01) ----------
 
 def load_receipts() -> list[Receipt]:
-    """Read 'receipts' worksheet, return Receipt instances (no lines populated)."""
-    return _read_with_ttl("receipts", Receipt)
+    """Read 'receipts' worksheet, return Receipt instances (no lines populated).
+
+    Uses ORDERS_TTL_SECONDS (not the 60s default): receipts now drive the Manager
+    queue's ✓/⚠ delivery chip (manager-receiving-view), so a freshly-confirmed
+    delivery should surface as promptly as a freshly-submitted order.
+    """
+    return _read_with_ttl("receipts", Receipt, ORDERS_TTL_SECONDS)
 
 
 def load_receipt_lines() -> list[ReceiptLine]:
-    """Read 'receipt_lines' worksheet, return ReceiptLine instances."""
-    return _read_with_ttl("receipt_lines", ReceiptLine)
+    """Read 'receipt_lines' worksheet, return ReceiptLine instances.
+
+    ORDERS_TTL_SECONDS for the same freshness reason as ``load_receipts``.
+    """
+    return _read_with_ttl("receipt_lines", ReceiptLine, ORDERS_TTL_SECONDS)
 
 
 def append_receipt(receipt: Receipt) -> None:

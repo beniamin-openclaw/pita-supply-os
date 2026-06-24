@@ -253,6 +253,12 @@ class ManagerQueueItem(BaseModel):
     reason_count: int  # lines z non-null reason_code
     last_edited_at: Optional[datetime] = None  # set if captain edited after submit
     cutoff_iso: Optional[datetime] = None  # absolute cutoff datetime for ordering (Tue 14:00 dla Pago)
+    # Goods-receipt signal (manager-receiving-view). Set only on the manager_sent
+    # lane; 0 on every other lane / legacy row. received_count = receipts for this
+    # order; received_discrepancy_count = receipts with discrepancy_count > 0. The
+    # FE renders a ⚠ chip when discrepancy > 0, else a neutral ✓ chip when count > 0.
+    received_count: int = 0
+    received_discrepancy_count: int = 0
 
 
 class ManagerOrderLineDetail(BaseModel):
@@ -288,6 +294,36 @@ class ManagerOrderLineDetail(BaseModel):
     manager_comment: str = ""
 
 
+class ManagerOrderReceiptLine(BaseModel):
+    """One delivered line within a receipt, enriched for the Manager read-only
+    delivery section (manager-receiving-view). Product name + purchase unit are
+    joined server-side so the section is self-contained (no FE line-mapping).
+    ``variance_qty_purchase`` = received − ordered, pre-computed at confirm."""
+    order_line_id: str
+    product_id: str
+    product_name_pl: str  # joined from products (id fallback)
+    purchase_unit: str  # joined from supplier_products
+    ordered_qty_purchase: float = 0
+    received_qty_purchase: float = 0
+    variance_qty_purchase: float = 0
+    receipt_comment: str = ""
+
+
+class ManagerOrderReceipt(BaseModel):
+    """A goods-receipt against an order, for the Manager delivery section. An
+    order can have 0..N receipts (append-only); the detail endpoint returns them
+    newest-first. Mirrors the Captain receipt overlay, read-only."""
+    receipt_id: str
+    receipt_date: date
+    received_by: Optional[str] = None
+    received_submitted_at: Optional[datetime] = None
+    line_count: int = 0
+    discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
+    received_with_missing_wz: bool = True
+    wz_photo_count: int = 0
+    lines: list[ManagerOrderReceiptLine] = Field(default_factory=list)
+
+
 class ManagerOrderDetail(BaseModel):
     """Full order with lines, suppliers, products — for the right detail pane."""
     order_id: str
@@ -310,6 +346,10 @@ class ManagerOrderDetail(BaseModel):
     total_value_estimate_pln: Optional[float] = None
     notes: str = ""
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
+    # Goods-receipts against this order (0..N, newest-first), read-only — closes
+    # the suggested→captain→manager→RECEIVED loop on the Manager screen. Empty
+    # when none / receipts tab absent (manager-receiving-view).
+    receipts: list[ManagerOrderReceipt] = Field(default_factory=list)
 
 
 # ---------- Captain own-orders view + edit (Phase E3) ----------
