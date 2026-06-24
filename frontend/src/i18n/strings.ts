@@ -555,6 +555,7 @@ export const STRINGS = {
     pl: "Wysłane: {value}",
     en: "Submitted: {value}",
   },
+  "orders.detail.orderedBy": { pl: "Zamówił: {value}", en: "Ordered by: {value}" },
   "orders.detail.linesHeader": { pl: "Pozycje zamówienia", en: "Order items" },
   "orders.detail.managerChanged": {
     pl: "zmienione przez menedżera (było {value})",

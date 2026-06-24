@@ -237,6 +237,7 @@ export interface CaptainOrderDetail {
   status: OrderStatus;
   captain_user?: string | null;
   captain_submitted_at?: string | null;
+  ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   last_edited_at?: string | null;
   total_value_estimate_pln?: number | null;
   notes: string;
