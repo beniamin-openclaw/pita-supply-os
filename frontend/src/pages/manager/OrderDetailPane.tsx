@@ -127,6 +127,9 @@ export function OrderDetailPane({
               })}
             </span>
           )}
+          {detail.ordered_by && (
+            <span>{t("manager.detail.orderedBy", { value: detail.ordered_by })}</span>
+          )}
           {cutoffIso && (
             <span className={cutoffPast ? "font-semibold text-red-700" : undefined}>
               {t(cutoffPast ? "manager.detail.cutoffPast" : "manager.detail.cutoff", {

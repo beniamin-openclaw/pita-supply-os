@@ -49,6 +49,10 @@ export function CaptainMP() {
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Required free-text "who orders" attribution — mirrors InventoryCountPage's
+  // countedBy / ReceiveDeliveryPage's receivedBy. Persists across suppliers in
+  // one session (the same person orders all suppliers); not cleared on submit.
+  const [orderedBy, setOrderedBy] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
   const [draftBanner, setDraftBanner] = useState<{
@@ -357,6 +361,7 @@ export function CaptainMP() {
         supplier_id: activeSupplierId,
         requested_delivery_date: getRequestedDeliveryDate(supplier.delivery_days),
         lines: payloadLines,
+        ordered_by: orderedBy.trim(),
         notes: "",
       });
 
@@ -378,7 +383,7 @@ export function CaptainMP() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [activeSupplierId, lines, sentSuppliers, suppliers, showToast, t]);
+  }, [activeSupplierId, lines, orderedBy, sentSuppliers, suppliers, showToast, t]);
 
   // ---- Pre-submit confirmation gate (F5) -------------------------------------
   // Critical products with nothing ordered (final empty or 0). Non-blocking:
@@ -505,6 +510,31 @@ export function CaptainMP() {
             {t("orders.history.navLink")} →
           </button>
         </div>
+        {/* Required "who orders" attribution (ordered_by) — sent with the order
+            and shown to the Manager as "Zamówił: X". Mirrors the inventory
+            "Kto liczył" field. */}
+        <div className="mb-4">
+          <label
+            htmlFor="order-ordered-by"
+            className="block text-xs font-semibold text-slate-700 mb-1"
+          >
+            {t("captain.orderedByLabel")}
+            <span className="text-red-600" aria-hidden="true">
+              {" "}
+              *
+            </span>
+          </label>
+          <input
+            id="order-ordered-by"
+            type="text"
+            value={orderedBy}
+            onChange={(e) => setOrderedBy(e.target.value)}
+            autoComplete="name"
+            placeholder={t("captain.orderedByPlaceholder")}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-[11px] text-slate-500">{t("captain.orderedByRequired")}</p>
+        </div>
         {draftBanner && (
           <div
             role="dialog"
@@ -593,6 +623,7 @@ export function CaptainMP() {
           onSaveDraft={handleSaveDraft}
           onSubmit={openConfirm}
           isSubmitting={isSubmitting}
+          orderedByMissing={!orderedBy.trim()}
         />
       )}
 

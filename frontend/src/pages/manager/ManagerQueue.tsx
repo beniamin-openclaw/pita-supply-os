@@ -186,6 +186,9 @@ function QueueCard({
           {item.captain_submitted_at && (
             <span>{t("manager.submitted", { value: formatDateTime(item.captain_submitted_at) })}</span>
           )}
+          {item.ordered_by && (
+            <span>{t("manager.orderedBy", { value: item.ordered_by })}</span>
+          )}
         </div>
       </button>
     </li>

@@ -135,6 +135,12 @@ class Order(BaseModel):
     sent_method: Optional[str] = None
     supplier_order_reference: Optional[str] = None
     total_value_estimate_pln: Optional[float] = None
+    # Free-text "who orders" attribution captured at submit. Required on input
+    # (CaptainSubmitRequest), Optional here so legacy rows with no value stay
+    # valid. Mirrors Receipt.received_by / InventoryCount.count_user; not a
+    # person-identity (the v0 per-user Non-Goal stands), never overwritten by the
+    # captain edit.
+    ordered_by: Optional[str] = None
     last_edited_at: Optional[datetime] = None  # set on captain edit; None = never edited
     # Soft-delete trace (Manager cancel): all None/"" until cancelled. Status goes
     # to CANCELLED; the order is never hard-deleted.
@@ -164,6 +170,10 @@ class CaptainSubmitRequest(BaseModel):
     supplier_id: str
     requested_delivery_date: Optional[date] = None
     lines: list[OrderLineSubmit] = Field(min_length=1)
+    # Required free-text "who orders" attribution (FR/spec) — mirrors
+    # ReceiptSubmitRequest.received_by / InventoryCountSubmitRequest.count_user.
+    # min_length=1 → omitting or blanking it is a 422 before the business gate.
+    ordered_by: str = Field(min_length=1)
     notes: str = ""
 
 
@@ -236,6 +246,7 @@ class ManagerQueueItem(BaseModel):
     status: OrderStatus
     captain_user: Optional[str] = None
     captain_submitted_at: Optional[datetime] = None
+    ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     line_count: int
     total_value_estimate_pln: Optional[float] = None
     deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.25
@@ -293,6 +304,7 @@ class ManagerOrderDetail(BaseModel):
     status: OrderStatus
     captain_user: Optional[str] = None
     captain_submitted_at: Optional[datetime] = None
+    ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     manager_user: Optional[str] = None
     manager_sent_at: Optional[datetime] = None
     total_value_estimate_pln: Optional[float] = None

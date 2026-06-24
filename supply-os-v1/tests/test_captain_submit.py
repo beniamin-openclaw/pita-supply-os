@@ -26,6 +26,7 @@ def test_submit_happy_path_seed_backend():
     # → suggested 1 karton. Captain matches → no deviation, no reason needed.
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -54,6 +55,7 @@ def test_submit_bukat_p009_subkg_tenth_kg_from_seed():
     without a reason)."""
     body = {
         "supplier_id": "SUP_BUKAT",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P009",
@@ -77,6 +79,7 @@ def test_submit_unauthorized_no_token():
         "/api/captain/submit",
         json={
             "supplier_id": "SUP_PAGO",
+            "ordered_by": "Jan Kowalski",
             "lines": [
                 {
                     "product_id": "P027",
@@ -93,6 +96,7 @@ def test_submit_unauthorized_no_token():
 def test_submit_unknown_supplier_id():
     body = {
         "supplier_id": "SUP_DOESNOTEXIST",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -110,6 +114,7 @@ def test_submit_unknown_supplier_id():
 def test_submit_unknown_supplier_product():
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -128,6 +133,7 @@ def test_submit_unknown_product():
     # supplier_product exists at PAGO but use mismatched product_id
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P999",  # not in products.csv
@@ -145,6 +151,7 @@ def test_submit_no_setting_for_location():
     # KEN has no location_product_settings rows at all → P027 missing.
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -163,6 +170,7 @@ def test_submit_critical_underorder_no_reason():
     # P027 is critical at WOLA. Current=7, suggested=1, captain submits 0 → underorder.
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -181,6 +189,7 @@ def test_submit_critical_underorder_no_reason():
 def test_submit_critical_underorder_with_reason():
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -204,6 +213,7 @@ def test_submit_deviation_over_25pct_no_reason():
     # Captain submits 2 → delta = 100%, no reason → 400.
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P019",
@@ -221,6 +231,7 @@ def test_submit_deviation_over_25pct_no_reason():
 def test_submit_deviation_over_25pct_with_reason_returns_warning():
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P019",
@@ -239,15 +250,53 @@ def test_submit_deviation_over_25pct_with_reason_returns_warning():
 
 
 def test_submit_empty_lines():
-    body = {"supplier_id": "SUP_PAGO", "lines": []}
+    body = {"supplier_id": "SUP_PAGO", "ordered_by": "Jan Kowalski", "lines": []}
     r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
     assert r.status_code == 422  # Pydantic min_length=1
+
+
+def test_submit_missing_ordered_by_422():
+    """ordered_by is required free-text attribution → omitting it is a 422
+    (Pydantic rejects before the business-logic gate). Mirrors
+    test_inventory_submit_missing_count_user_422."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "current_stock_qty_base": 7,
+                "captain_final_qty_purchase": 1,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 422
+
+
+def test_submit_blank_ordered_by_422():
+    """A blank ordered_by (min_length=1) is also a 422."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "ordered_by": "",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "current_stock_qty_base": 7,
+                "captain_final_qty_purchase": 1,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 422
 
 
 def test_submit_order_id_format():
     """ORD-YYYYMMDD-WOL-PAGO-<6hex>; 5 calls all unique + correct shape."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -279,6 +328,7 @@ def test_submit_total_value_computed():
     """Two known PAGO lines: P027 (145 PLN) + P026 (94 PLN) = 239."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -325,6 +375,7 @@ def test_submit_persists_to_sheet_when_backend_is_sheet(mocker):
 
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -346,6 +397,7 @@ def test_submit_in_seed_mode_does_not_raise():
     """Seed backend has no writes — submit should still 200 + warn."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -374,6 +426,7 @@ def test_submit_uncounted_normal_order_needs_no_reason():
     no reason_code."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -398,6 +451,7 @@ def test_submit_uncounted_over_max_no_reason_rejected():
     without a reason_code → 400."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -415,6 +469,7 @@ def test_submit_uncounted_over_max_with_reason_warns():
     """Same over-MAX order WITH a reason_code → 200 + an over-MAX warning."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -454,6 +509,7 @@ def test_submit_uncounted_persists_zero_stock_and_null_delta(mocker):
 
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -476,6 +532,7 @@ def test_submit_counted_zero_still_gates_as_before():
     must NOT be loosened by the uncounted branch."""
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",
@@ -495,6 +552,7 @@ def test_submit_location_derived_from_auth_not_request():
     # KEN has no settings → P027 fails location-setting check.
     body = {
         "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
         "lines": [
             {
                 "product_id": "P027",

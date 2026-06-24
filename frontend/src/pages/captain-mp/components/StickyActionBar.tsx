@@ -13,6 +13,9 @@ interface StickyActionBarProps {
   onSubmit: () => void;
   isSubmitting: boolean;
   isEmpty?: boolean;
+  // Required "who orders" name not yet filled — disables submit (mirrors the
+  // inventory/receiving disabled-button-until-named pattern).
+  orderedByMissing?: boolean;
 }
 
 export function StickyActionBar({
@@ -25,6 +28,7 @@ export function StickyActionBar({
   onSubmit,
   isSubmitting,
   isEmpty,
+  orderedByMissing,
 }: StickyActionBarProps) {
   const { t, tPlural } = useT();
 
@@ -33,7 +37,7 @@ export function StickyActionBar({
   const reasonsText = tPlural("sticky.summary", "reasons", reasonCount);
 
   const summary = `${linesText} · ${devsText} · ${reasonsText}`;
-  const submitDisabled = hasRedCards || isSubmitting || isEmpty;
+  const submitDisabled = hasRedCards || isSubmitting || isEmpty || orderedByMissing;
 
   return (
     <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
@@ -53,6 +57,8 @@ export function StickyActionBar({
             </button>
           ) : isEmpty ? (
             <div className="text-xs text-slate-600 font-medium">{t("sticky.fillStockFirst")}</div>
+          ) : orderedByMissing ? (
+            <div className="text-xs text-slate-600 font-medium">{t("captain.orderedByRequired")}</div>
           ) : (
             <div className="text-xs text-green-700 font-semibold flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-green-600" aria-hidden="true" />

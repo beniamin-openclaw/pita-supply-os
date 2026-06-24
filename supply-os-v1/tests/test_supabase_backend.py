@@ -274,7 +274,7 @@ def test_get_order_assembles_parent_and_lines(mocker):
         "captain_submitted_at": datetime(2026, 6, 16, tzinfo=timezone.utc),
         "manager_user": None, "manager_sent_at": None, "sent_method": None,
         "supplier_order_reference": None, "total_value_estimate_pln": 100.0,
-        "last_edited_at": None, "notes": "",
+        "ordered_by": None, "last_edited_at": None, "notes": "",
     }
     line_row = {
         "order_line_id": "OL-1", "order_id": "ORD-1", "product_id": "P1",

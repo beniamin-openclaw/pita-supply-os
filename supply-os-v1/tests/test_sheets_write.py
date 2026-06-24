@@ -36,6 +36,7 @@ ORDER_HEADERS = [
     "sent_method",
     "supplier_order_reference",
     "total_value_estimate_pln",
+    "ordered_by",
     "notes",
 ]
 ORDER_LINE_HEADERS = [
@@ -75,6 +76,7 @@ def _mk_order(**overrides) -> Order:
         sent_method=None,
         supplier_order_reference=None,
         total_value_estimate_pln=None,
+        ordered_by=None,
         notes="",
     )
     base.update(overrides)
