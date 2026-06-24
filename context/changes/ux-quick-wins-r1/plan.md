@@ -178,19 +178,21 @@ per-line deviation %.
 
 ### Changes Required
 
-#### 1. Shared formatter + i18n key
+#### 1. No-baseline i18n keys (inline guards, not a shared formatter)
 
-**File**: `frontend/src/lib/` (extend `orderQty.ts` or add `deviation.ts`) and
-`frontend/src/i18n/strings.ts`
+**File**: `frontend/src/i18n/strings.ts` (+ inline guards at the render sites below)
 
-**Intent**: One helper decides "no baseline vs percentage" so all sites stay
-consistent.
+**Intent**: Render a "no baseline" copy when the suggestion is 0, consistently
+across the three deviation-% sites.
 
-**Contract**: New i18n key `deviation.noBaseline` `{ pl: "brak bazy", en: "no
-baseline" }` (follow the `<domain>.<concept>` convention). New helper
-`formatDeviationPct(deltaFraction: number | null | undefined, suggestedQtyPurchase:
-number): string` returning the no-baseline label when `suggestedQtyPurchase === 0`
-or `deltaFraction` is null/undefined/non-finite, else the signed `±N%`.
+**Contract**: New i18n keys — `deviation.noBaseline` `{ pl: "brak bazy", en: "no
+baseline" }` for the two bare-% cells, plus `state.noBaselineReason` /
+`state.noBaselineNoReason` for the captain submit pill (so it carries no `{pct}`).
+Each render site applies an inline `suggested_qty_purchase === 0` guard rather than a
+shared `formatDeviationPct` helper — the plan-review (F1) found the inline guard
+simpler and lower-risk than abstracting a one-line `=== 0` check across sites that
+format the percentage differently (captain inline `Math.round(*100)` vs manager
+`formatPct`).
 
 #### 2. Captain order-detail render site
 
@@ -408,55 +410,55 @@ parity.
 
 #### Automated
 
-- [x] 1.1 Backend tests pass (`cd supply-os-v1 && python3 -m pytest`)
-- [x] 1.2 Frontend tests pass (`npm run test`)
-- [x] 1.3 Frontend build + lint pass
-- [x] 1.4 No `0.20` / `> 20` stragglers in deviation paths
+- [x] 1.1 Backend tests pass (`cd supply-os-v1 && python3 -m pytest`) — 40fdf1f
+- [x] 1.2 Frontend tests pass (`npm run test`) — 40fdf1f
+- [x] 1.3 Frontend build + lint pass — 40fdf1f
+- [x] 1.4 No `0.20` / `> 20` stragglers in deviation paths — 40fdf1f
 
 #### Manual
 
-- [x] 1.5 24% needs no reason, 26% does (captain submit)
-- [x] 1.6 Queue badge skips 24%, counts 26%
+- [x] 1.5 24% needs no reason, 26% does (captain submit) — 40fdf1f
+- [x] 1.6 Queue badge skips 24%, counts 26% — 40fdf1f
 
 ### Phase 2: No-baseline deviation copy
 
 #### Automated
 
-- [ ] 2.1 Frontend tests pass (incl. new suggestion-0 case)
-- [ ] 2.2 Build + lint pass
+- [x] 2.1 Frontend tests pass (incl. new suggestion-0 case)
+- [x] 2.2 Build + lint pass
 
 #### Manual
 
-- [ ] 2.3 Suggestion-0 line shows "brak bazy", never ∞/large %
+- [x] 2.3 Suggestion-0 line shows "brak bazy", never ∞/large %
 
 ### Phase 3: Variance colour ≠ deviation colour
 
 #### Automated
 
-- [ ] 3.1 Build + lint pass
+- [x] 3.1 Build + lint pass
 
 #### Manual
 
-- [ ] 3.2 Variance sky/indigo vs deviation amber/red on one screen
+- [x] 3.2 Variance sky/indigo vs deviation amber/red on one screen
 
 ### Phase 4: Recount gate at receiving
 
 #### Automated
 
-- [ ] 4.1 Build + lint + test pass
+- [x] 4.1 Build + lint + test pass
 
 #### Manual
 
-- [ ] 4.2 Delivered fields blank on open
-- [ ] 4.3 Submit blocked until every line entered/confirmed
-- [ ] 4.4 "= zamówione" fills + overridable; post-save lock + photos intact
+- [x] 4.2 Delivered fields blank on open
+- [x] 4.3 Submit blocked until every line entered/confirmed
+- [x] 4.4 "= zamówione" fills + overridable; post-save lock + photos intact
 
 ### Phase 5: Order-history navigation visible
 
 #### Automated
 
-- [ ] 5.1 Build + lint + test pass
+- [x] 5.1 Build + lint + test pass
 
 #### Manual
 
-- [ ] 5.2 "Historia" tab visible + one-tap to history from two captain screens
+- [x] 5.2 "Historia" tab visible + one-tap to history from two captain screens

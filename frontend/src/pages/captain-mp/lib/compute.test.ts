@@ -78,7 +78,7 @@ describe("computeRowState — blank stock = uncounted, over-MAX is the only gate
   });
 
   it("blank stock + normal order within MAX → yellow, NO reason (the key win)", () => {
-    // order 9 → base 90 <= 100. Counted as 0 this would trip the >20% gate vs
+    // order 9 → base 90 <= 100. Counted as 0 this would trip the >25% gate vs
     // suggested 5; uncounted it needs no reason.
     const { state, requiresReason, messageKey, deviationPct } = computeRowState(
       makeItem(),
@@ -145,7 +145,7 @@ describe("computeRowState — critical product, suggestion = 0", () => {
 describe("computeRowState — critical product, real under-order", () => {
   it("ordering 0 on a critical when suggestion > 0, no reason → red + requiresReason", () => {
     // target=50, stock=0 → need 50 base → 5 purchase units (ceil(50/10)=5)
-    // ordering 0 vs suggestion 5 = -100% deviation → >20% → no reason → red
+    // ordering 0 vs suggestion 5 = -100% deviation → >25% → no reason → red
     const item = makeItem({ is_critical: true, target_stock_qty_base: 50, units_per_purchase_unit: 10 });
     const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 0 });
     const { state, requiresReason } = computeRowState(item, line);
@@ -236,5 +236,32 @@ describe("computeRowState — deviation threshold is 25% (round-1 quick-win)", (
     const { state, requiresReason } = computeRowState(item, line);
     expect(state).toBe("red");
     expect(requiresReason).toBe(true);
+  });
+});
+
+describe("computeRowState — no suggestion baseline (suggestion 0, round-1 quick-win)", () => {
+  // target=0 → suggestion 0; ordering any positive qty has no % baseline.
+  const item = makeItem({ target_stock_qty_base: 0, units_per_purchase_unit: 10 });
+
+  it("suggestion 0 + positive order, no reason → no-baseline copy, no % token, never ∞", () => {
+    const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 5 });
+    const { state, requiresReason, messageKey, messageVars } = computeRowState(item, line);
+    expect(requiresReason).toBe(true);
+    expect(state).toBe("red"); // no reason given
+    expect(messageKey).toBe("state.noBaselineNoReason");
+    // The pill carries NO interpolated percentage — so "+∞%" can never render.
+    expect(messageVars?.pct).toBeUndefined();
+  });
+
+  it("suggestion 0 + positive order + reason → orange no-baseline copy", () => {
+    const line = makeLine({
+      current_stock_qty_base: 0,
+      captain_final_qty_purchase: 5,
+      reason_code: "LOW_STORAGE",
+    });
+    const { state, messageKey, messageVars } = computeRowState(item, line);
+    expect(state).toBe("orange");
+    expect(messageKey).toBe("state.noBaselineReason");
+    expect(messageVars?.pct).toBeUndefined();
   });
 });

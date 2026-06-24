@@ -79,7 +79,7 @@ def rounding_step(rule: RoundingRule) -> float:
     """Smallest purchase-unit increment a rule can emit.
 
     Used as the deviation-gate denominator floor (`max(suggested, step)`) so the
-    >20% gate stays meaningful for sub-1.0 suggestions. `FULL_ONLY` /
+    >25% gate stays meaningful for sub-1.0 suggestions. `FULL_ONLY` /
     `UP_FOR_CRITICAL` snap to whole units (1.0), keeping the gate byte-identical
     to the original hardcoded `max(suggested, 1.0)` for those rules.
     """

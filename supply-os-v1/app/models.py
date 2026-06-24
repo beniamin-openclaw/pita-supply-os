@@ -238,7 +238,7 @@ class ManagerQueueItem(BaseModel):
     captain_submitted_at: Optional[datetime] = None
     line_count: int
     total_value_estimate_pln: Optional[float] = None
-    deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.20
+    deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.25
     reason_count: int  # lines z non-null reason_code
     last_edited_at: Optional[datetime] = None  # set if captain edited after submit
     cutoff_iso: Optional[datetime] = None  # absolute cutoff datetime for ordering (Tue 14:00 dla Pago)

@@ -171,8 +171,10 @@ export function OrderLineTable({
 
                 {/* Δ vs sug. + reason badge (captain's deviation) */}
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {typeof line.delta_vs_suggestion_pct === "number" &&
-                  Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
+                  {line.suggested_qty_purchase === 0 ? (
+                    <span className="text-slate-400">{t("deviation.noBaseline")}</span>
+                  ) : typeof line.delta_vs_suggestion_pct === "number" &&
+                    Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
                     <span
                       className={`font-semibold tabular-nums ${
                         line.delta_vs_suggestion_pct > 0 ? "text-orange-700" : "text-red-700"

@@ -1,14 +1,15 @@
-// Permanent Captain navigation tabs (Phase 5) — Zamówienia / Remanent.
+// Permanent Captain navigation tabs (Phase 5) — Zamówienia / Historia / Remanent.
 // Sits directly under the brand header on every captain-v2 screen so the
-// inventory module is reachable without opening the hamburger (the demo pain).
-// Variant C: the active tab is brand-filled, the inactive one outlined. Active
-// state is derived from the route, NOT stored.
+// inventory module AND order history are reachable without opening the hamburger
+// (the demo pain). Variant C: the active tab is brand-filled, the inactive ones
+// outlined. Active state is derived from the route, NOT stored.
 
 import { Link, useLocation } from "react-router-dom";
-import { ClipboardList, PackageSearch } from "lucide-react";
+import { ClipboardList, History, PackageSearch } from "lucide-react";
 import { useT } from "../../../i18n";
 
 const ORDERS_PATH = "/captain-v2";
+const HISTORY_PATH = "/captain-v2/orders";
 const INVENTORY_PATH = "/captain-v2/inventory-count";
 
 export function CaptainTabs() {
@@ -16,10 +17,12 @@ export function CaptainTabs() {
   const { pathname } = useLocation();
 
   // The inventory tab owns the whole inventory subtree (`-count` AND the
-  // `-history` sub-page); everything else under captain-v2 (the order screen +
-  // the orders list/detail/edit) belongs to the Zamówienia tab.
+  // `-history` sub-page); the Historia tab owns the orders list/detail/edit/
+  // receive subtree (`/captain-v2/orders…`); the Zamówienia tab owns the bare
+  // order-submission screen (everything else under captain-v2).
   const inventoryActive = pathname.startsWith("/captain-v2/inventory");
-  const ordersActive = !inventoryActive;
+  const historyActive = pathname.startsWith("/captain-v2/orders");
+  const ordersActive = !inventoryActive && !historyActive;
 
   const base =
     "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
@@ -39,6 +42,14 @@ export function CaptainTabs() {
         >
           <ClipboardList size={16} aria-hidden="true" />
           {t("tabs.orders")}
+        </Link>
+        <Link
+          to={HISTORY_PATH}
+          aria-current={historyActive ? "page" : undefined}
+          className={`${base} ${historyActive ? activeCls : inactiveCls}`}
+        >
+          <History size={16} aria-hidden="true" />
+          {t("tabs.history")}
         </Link>
         <Link
           to={INVENTORY_PATH}

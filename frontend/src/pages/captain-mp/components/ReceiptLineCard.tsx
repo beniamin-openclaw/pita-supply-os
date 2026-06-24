@@ -53,17 +53,30 @@ export function ReceiptLineCard({
             value={delivered}
             onChange={(v) => onChange(line.order_line_id, v)}
             readOnly={readOnly}
+            placeholder={t("delivery.deliveredPlaceholder")}
             className={`mt-0.5 w-28 rounded-lg border px-3 py-2 text-right text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
             }`}
             aria-label={`${t("delivery.delivered")} — ${line.product_name_pl}`}
           />
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => onChange(line.order_line_id, ordered)}
+              aria-label={`${t("delivery.useOrderedQty")} — ${line.product_name_pl}`}
+              className="mt-1 text-[11px] font-semibold text-brand hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+            >
+              {t("delivery.useOrderedQty")}
+            </button>
+          )}
         </label>
       </div>
       {showVariance && (
         <div
           className={`mt-1 text-right text-xs font-semibold ${
-            variance > 0 ? "text-orange-700" : "text-red-700"
+            // Variance gets its own hue family (sky over / indigo under) so it
+            // never collides with the amber/red deviation signal on the same screen.
+            variance > 0 ? "text-sky-700" : "text-indigo-700"
           }`}
         >
           {t("delivery.variance", { value: varianceText })}

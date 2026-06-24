@@ -60,8 +60,11 @@ export function ReceiveDeliveryPage() {
         }
         setLoadError(null);
         setOrder(data);
+        // Recount gate: start every line BLANK. The captain must consciously
+        // enter (or one-tap "= zamówione") each delivered qty — we never seed it
+        // with the ordered qty, so nothing is silently pre-counted.
         const built: Record<string, number | ""> = {};
-        for (const l of data.lines) built[l.order_line_id] = effectiveOrderedQtyPurchase(l);
+        for (const l of data.lines) built[l.order_line_id] = "";
         setDelivered(built);
       })
       .catch((e: ApiError) => {
@@ -79,6 +82,20 @@ export function ReceiveDeliveryPage() {
 
   const handleSubmit = useCallback(async () => {
     if (!order || !receivedBy.trim()) return;
+    // Recount gate: on the INITIAL submit, every line must carry a conscious
+    // delivered value — never silently default a blank to the ordered qty. The
+    // submit button is already disabled in this state; this is defense-in-depth.
+    // (Skipped on the photo-retry path, where the receipt is already saved.)
+    if (!createdReceiptId) {
+      const missing = order.lines.some((l) => {
+        const v = delivered[l.order_line_id];
+        return v === "" || v === undefined;
+      });
+      if (missing) {
+        showToast(t("delivery.allLinesRequired"), "error");
+        return;
+      }
+    }
     setIsSubmitting(true);
     // Track the receipt id across this call so a photo-step failure is reported
     // (and retried) distinctly from a submit failure.
@@ -87,9 +104,15 @@ export function ReceiveDeliveryPage() {
       if (!receiptId) {
         const lines: ReceiptLineSubmit[] = order.lines.map((l) => {
           const v = delivered[l.order_line_id];
+          // Unreachable: the recount gate above guarantees a value. Fail loud
+          // (caught below → error toast) rather than silently submitting 0,
+          // which would record a false full short-delivery.
+          if (v === "" || v === undefined) {
+            throw new Error(`blank delivered qty for ${l.order_line_id} past recount gate`);
+          }
           return {
             order_line_id: l.order_line_id,
-            received_qty_purchase: v === "" || v === undefined ? effectiveOrderedQtyPurchase(l) : v,
+            received_qty_purchase: Number(v),
           };
         });
         const resp = await api.receiptSubmit({
@@ -125,7 +148,17 @@ export function ReceiveDeliveryPage() {
   // inputs so a post-save edit can't be silently lost; the only remaining action
   // is (re)uploading photos.
   const receiptSaved = createdReceiptId !== null;
-  const submitDisabled = isSubmitting || !receivedBy.trim();
+  // Recount gate: block the initial submit until every line carries a value. On
+  // the photo-retry path (receiptSaved) the quantities are already committed, so
+  // we don't re-require them.
+  const allLinesEntered =
+    !!order &&
+    order.lines.every((l) => {
+      const v = delivered[l.order_line_id];
+      return v !== "" && v !== undefined;
+    });
+  const submitDisabled =
+    isSubmitting || !receivedBy.trim() || (!receiptSaved && !allLinesEntered);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-28">

@@ -255,7 +255,10 @@ export function OrderDetailPage() {
                           {variance !== 0 && (
                             <div
                               className={`text-xs font-semibold ${
-                                variance > 0 ? "text-orange-700" : "text-red-700"
+                                // Variance gets its own hue family (sky over /
+                                // indigo under), distinct from the amber/red
+                                // deviation signal shown for the same line.
+                                variance > 0 ? "text-sky-700" : "text-indigo-700"
                               }`}
                             >
                               {t("delivery.variance", {
@@ -290,7 +293,12 @@ export function OrderDetailPage() {
                                 })}
                               </div>
                             )}
-                          {typeof line.delta_vs_suggestion_pct === "number" &&
+                          {line.suggested_qty_purchase === 0 ? (
+                            <div className="text-xs font-semibold text-slate-500">
+                              {t("deviation.noBaseline")}
+                            </div>
+                          ) : (
+                            typeof line.delta_vs_suggestion_pct === "number" &&
                             Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
                               <div
                                 className={`text-xs font-semibold ${
@@ -302,7 +310,8 @@ export function OrderDetailPage() {
                                 {line.delta_vs_suggestion_pct > 0 ? "+" : ""}
                                 {Math.round(line.delta_vs_suggestion_pct * 100)}%
                               </div>
-                            )}
+                            )
+                          )}
                         </>
                       )}
                     </div>

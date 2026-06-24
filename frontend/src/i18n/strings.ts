@@ -148,6 +148,20 @@ export const STRINGS = {
     pl: "Zamówienie bez stanu",
     en: "Order without current stock",
   },
+  // No-baseline variants: the suggestion is 0 (e.g. bucket SKUs), so a "%
+  // deviation" is mathematically meaningless / explodes. Show "brak bazy" copy
+  // instead of a huge or ∞ percentage. State + requiresReason stay as the gate
+  // dictates; only the wording (no embedded %) changes.
+  "state.noBaselineNoReason": {
+    pl: "Brak bazy sugestii — wymagany powód",
+    en: "No suggestion baseline — reason required",
+  },
+  "state.noBaselineReason": {
+    pl: "Brak bazy sugestii — powód podany",
+    en: "No suggestion baseline — reason provided",
+  },
+  // Short token for the captain order-detail + manager line-table % cells.
+  "deviation.noBaseline": { pl: "brak bazy", en: "no baseline" },
 
   // Reason picker -----------------------------------------------------------
   "reason.label": {
@@ -698,6 +712,9 @@ export const STRINGS = {
   // Phase 5 — permanent Captain tab strip (navigation)
   "tabs.ariaLabel": { pl: "Nawigacja Kapitana", en: "Captain navigation" },
   "tabs.orders": { pl: "Zamówienia", en: "Orders" },
+  // Round-1 quick-win: a persistent tab to order history (+ receipts via detail),
+  // so it's one tap from every captain screen, not buried in the hamburger.
+  "tabs.history": { pl: "Historia", en: "History" },
   "tabs.inventory": { pl: "Remanent", en: "Inventory" },
   // S-08 — Manager inventory view (FR-018)
   "manager.inventory.title": { pl: "Remanenty", en: "Inventory counts" },
@@ -818,6 +835,14 @@ export const STRINGS = {
     en: "Could not load WZ photos",
   },
   "delivery.missingWz": { pl: "Brak zdjęcia WZ", en: "Missing WZ photo" },
+  // Recount gate (round-1 quick-win): delivered starts blank — the captain must
+  // enter or one-tap-confirm each line; nothing is pre-counted.
+  "delivery.deliveredPlaceholder": { pl: "Wpisz ilość", en: "Enter qty" },
+  "delivery.useOrderedQty": { pl: "= zamówione", en: "= ordered" },
+  "delivery.allLinesRequired": {
+    pl: "Wpisz dostarczoną ilość dla każdej pozycji",
+    en: "Enter the delivered qty for every line",
+  },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

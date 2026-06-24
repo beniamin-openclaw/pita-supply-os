@@ -118,13 +118,23 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);
 
-  // Reason-required result (>25% deviation, or a critical under-order).
+  // Reason-required result (>25% deviation, or a critical under-order). When the
+  // suggestion is 0 there is no baseline to express a % against (the deviation is
+  // ∞), so swap in the "no baseline" wording — state + requiresReason are
+  // unchanged (the backend still gates on it; only the displayed copy changes).
+  const noBaseline = suggested === 0;
   const reasonResult = (): RowState => ({
     state: hasReason ? "orange" : "red",
-    messageKey: hasReason ? "state.devReason" : "state.devNoReason",
-    messageVars: { pct: formatPctSigned(deviation) },
+    messageKey: noBaseline
+      ? hasReason
+        ? "state.noBaselineReason"
+        : "state.noBaselineNoReason"
+      : hasReason
+        ? "state.devReason"
+        : "state.devNoReason",
+    messageVars: noBaseline ? undefined : { pct: formatPctSigned(deviation) },
     requiresReason: true,
-    deviationPct: deviation,
+    deviationPct: noBaseline ? null : deviation,
   });
 
   if (absDeviation > 25) {
