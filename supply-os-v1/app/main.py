@@ -942,6 +942,8 @@ def manager_order_detail(
         order_id=order.order_id,
         location_id=order.location_id,
         location_name=location.location_name if location else order.location_id,
+        delivery_address=location.delivery_address if location else None,
+        city=location.city if location else None,
         supplier_id=order.supplier_id,
         supplier_name=supplier.supplier_name if supplier else order.supplier_id,
         supplier_email=supplier.email if supplier else None,

@@ -344,29 +344,47 @@ def test_build_url_includes_delivery_date_or_TBD():
     assert "do potwierdzenia" in body_without
 
 
-def test_build_url_includes_location_address_or_name():
+def test_build_url_combines_name_address_city():
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     products = {"P027": _make_product("P027", "Souvlaki")}
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
     supplier = _make_supplier()
     order = _make_order(lines=[line])
 
-    # With explicit address
-    loc_with_addr = Location(
-        location_id="WOLA",
-        location_name="Pita Bros Wola",
-        delivery_address="Wolska 50, 01-001 Warszawa",
-    )
-    url_a = build_draft_url(order, supplier, [line], products, loc_with_addr)
-    body_a = urllib.parse.parse_qs(urllib.parse.urlparse(url_a).query)["body"][0]
-    assert "Wolska 50, 01-001 Warszawa" in body_a
+    def _body_of(location: Location) -> str:
+        url = build_draft_url(order, supplier, [line], products, location)
+        return urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
 
-    # With only name (no address)
-    loc_name_only = Location(
-        location_id="WOLA",
-        location_name="Pita Bros Wola",
-        delivery_address=None,
+    # Name + street + city → all three joined, in order.
+    body_full = _body_of(
+        Location(
+            location_id="WOLA",
+            location_name="Pita Bros Wola",
+            delivery_address="Wolska 50, 01-001",
+            city="Warszawa",
+        )
     )
-    url_n = build_draft_url(order, supplier, [line], products, loc_name_only)
-    body_n = urllib.parse.parse_qs(urllib.parse.urlparse(url_n).query)["body"][0]
-    assert "Pita Bros Wola" in body_n
+    assert "Adres dostawy: Pita Bros Wola, Wolska 50, 01-001, Warszawa" in body_full
+
+    # Street missing → name + city only; the empty part is skipped (no ", ,").
+    body_no_addr = _body_of(
+        Location(
+            location_id="WOLA",
+            location_name="Pita Bros Wola",
+            delivery_address=None,
+            city="Warszawa",
+        )
+    )
+    assert "Adres dostawy: Pita Bros Wola, Warszawa" in body_no_addr
+    assert ", ," not in body_no_addr
+
+    # Name only → just the name (back-compat with the old name fallback).
+    body_name = _body_of(
+        Location(
+            location_id="WOLA",
+            location_name="Pita Bros Wola",
+            delivery_address=None,
+            city=None,
+        )
+    )
+    assert "Adres dostawy: Pita Bros Wola" in body_name

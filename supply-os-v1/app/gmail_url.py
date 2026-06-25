@@ -30,6 +30,22 @@ def _effective_qty(line: OrderLine) -> float:
     return line.captain_final_qty_purchase
 
 
+def _format_delivery_address(location: Optional[Location]) -> str:
+    """Supplier-facing delivery address: ``location_name, delivery_address, city``
+    joined by ``", "`` with empty/missing parts skipped.
+
+    Kept byte-identical to the TS twin
+    (frontend/src/pages/manager/lib/emailBody.ts) so the preview the manager
+    edits and this re-open URL never diverge. Replaces the older
+    ``delivery_address or location_name`` fallback, which dropped both the
+    location name and the city whenever a street address was present.
+    """
+    if location is None:
+        return ""
+    parts = [location.location_name, location.delivery_address, location.city]
+    return ", ".join(p.strip() for p in parts if p and p.strip())
+
+
 def _build_subject(order: Order, location: Optional[Location]) -> str:
     """Supplier-facing subject: ``Zamówienie {location_name}``.
 
@@ -96,8 +112,8 @@ def _build_body(
     # The estimated total is internal (Manager-panel only) and is deliberately
     # NOT included in the supplier email body (DEMO_FEEDBACK #7). Keep this in
     # sync with the TS twin (frontend/src/pages/manager/lib/emailBody.ts).
-    if location is not None:
-        address = location.delivery_address or location.location_name
+    address = _format_delivery_address(location)
+    if address:
         body_lines.append(f"Adres dostawy: {address}")
     if order.requested_delivery_date is not None:
         body_lines.append(

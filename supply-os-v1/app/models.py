@@ -329,6 +329,11 @@ class ManagerOrderDetail(BaseModel):
     order_id: str
     location_id: str
     location_name: str  # joined
+    # Delivery address, joined from locations — the supplier email address line
+    # is location_name + delivery_address + city (empty parts skipped). Optional
+    # so legacy/absent locations stay valid (mirrors the Location master-data).
+    delivery_address: Optional[str] = None
+    city: Optional[str] = None
     supplier_id: str
     supplier_name: str  # joined
     supplier_email: Optional[str] = None  # for the Gmail draft preview
