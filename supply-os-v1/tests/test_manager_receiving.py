@@ -213,6 +213,43 @@ def test_detail_empty_receipts_when_none(mocker):
     assert r.json()["receipts"] == []
 
 
+# ---------- Detail: delivery address fields (email-delivery-address) ----------
+
+def test_detail_includes_full_delivery_address(mocker):
+    order_id = "ORD-RCV-ADDR"
+    order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
+    _enable(mocker, orders=[order], get_order_return=order, receipts=[])
+    # Location WITH street + city — the detail must surface both new fields so the
+    # dispatch email's address line can render location_name + street + city.
+    loc = Location(
+        location_id="WOLA",
+        location_name="Pita Bros Wola",
+        delivery_address="Wolska 50, 01-001",
+        city="Warszawa",
+    )
+    mocker.patch.object(sheets, "load_locations", return_value=[loc])
+
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["location_name"] == "Pita Bros Wola"
+    assert body["delivery_address"] == "Wolska 50, 01-001"
+    assert body["city"] == "Warszawa"
+
+
+def test_detail_delivery_address_null_when_location_bare(mocker):
+    order_id = "ORD-RCV-BARE"
+    order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
+    # Default _location() carries only a name → both fields come back null.
+    _enable(mocker, orders=[order], get_order_return=order, receipts=[])
+
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["delivery_address"] is None
+    assert body["city"] is None
+
+
 def test_detail_degrades_when_receipts_tab_missing(mocker):
     order_id = "ORD-RCV-3"
     order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
