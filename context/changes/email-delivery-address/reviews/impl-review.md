@@ -6,7 +6,7 @@
 - **Date**: 2026-06-25
 - **Verdict**: APPROVED
 - **Findings**: 0 critical, 0 warnings, 2 observations
-- **Commits**: 1078240 (backend), dbcffca (frontend)
+- **Commits**: 1078240 (backend), dbcffca (frontend), 1d6740c (route test)
 
 ## Verdicts
 
@@ -65,8 +65,9 @@ passed (5 new `emailBody` tests).
 
 ## Success Criteria
 
-- **1.1 backend pytest** — PASS: `402 passed, 16 deselected` (incl. rewritten
-  `test_build_url_combines_name_address_city`).
+- **1.1 backend pytest** — PASS: `404 passed, 16 deselected` (incl. rewritten
+  `test_build_url_combines_name_address_city` + two route tests asserting the
+  detail returns delivery_address + city).
 - **2.1 frontend build/lint/test** — PASS: `tsc -b && vite build` ✓, `eslint .`
   clean, `vitest` `82 passed (10 files)`.
 - **2.2 owner live-run** — PENDING (deferred-by-design; gated on Wola master-data, F1).

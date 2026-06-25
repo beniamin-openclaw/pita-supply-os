@@ -16,7 +16,7 @@ exact output:
 The backend twin (`gmail_url.py`, used only for the session re-open link) is
 pinned by `test_build_url_combines_name_address_city` to the same format.
 
-Suites at review time: backend `402 passed, 16 deselected`; frontend `tsc -b &&
+Suites at review time: backend `404 passed, 16 deselected`; frontend `tsc -b &&
 vite build` ✓, `eslint .` clean, `vitest` `82 passed (10 files)`. New frontend
 bundle hash: `index-CiMOJeWQ.js`.
 

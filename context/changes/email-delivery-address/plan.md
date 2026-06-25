@@ -73,7 +73,8 @@ backend twin (`gmail_url.py`) — must emit the **same** combined line, and the
 
 ### Phase 1: Backend
 #### Automated
-- [x] 1.1 backend pytest green (402 passed, 16 deselected) — 1078240
+- [x] 1.1 backend pytest green (404 passed, 16 deselected) — 1078240
+- [x] 1.3 GET /api/manager/order/{id} returns delivery_address + city — 1d6740c
 #### Manual
 - [x] 1.2 n/a — body string verified by the Phase 2 unit test — 1078240
 
