@@ -1,10 +1,10 @@
 ---
 change_id: manager-receiving-view
 title: Manager receiving view
-status: impl_reviewed
+status: archived
 created: 2026-06-24
-updated: 2026-06-24
-archived_at: null
+updated: 2026-06-25
+archived_at: 2026-06-25T10:29:30Z
 ---
 
 ## Notes
