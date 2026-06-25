@@ -45,9 +45,9 @@ export function buildEmailSubject(detail: ManagerOrderDetail): string {
  * NOTE: the estimated total is deliberately NOT in the supplier email — it is
  * internal (Manager-panel only). See OrderDetailPane + DEMO_FEEDBACK #7.
  *
- * Fidelity gap (flagged in spec §5a): the Python builder uses
- * `location.delivery_address or location.location_name`, but ManagerOrderDetail
- * has no delivery_address — we use `location_name` only.
+ * The `Adres dostawy:` line is byte-identical to the backend twin
+ * gmail_url._format_delivery_address: location name, street and city joined by
+ * ", " with empty parts skipped. Keep both builders in lockstep.
  */
 export function buildEmailBody(
   detail: ManagerOrderDetail,
@@ -74,8 +74,13 @@ export function buildEmailBody(
   });
 
   out.push("");
-  // ManagerOrderDetail carries location_name only (no delivery_address).
-  out.push(`Adres dostawy: ${detail.location_name}`);
+  // location_name + delivery_address + city, empty parts skipped (mirrors
+  // gmail_url._format_delivery_address so preview == sent draft == re-open URL).
+  const addressParts = [detail.location_name, detail.delivery_address, detail.city]
+    .map((part) => (part ?? "").trim())
+    .filter((part) => part.length > 0);
+  const address = addressParts.join(", ");
+  if (address) out.push(`Adres dostawy: ${address}`);
   if (detail.requested_delivery_date) {
     out.push(`Data dostawy: ${detail.requested_delivery_date}`);
   } else {

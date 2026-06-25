@@ -369,6 +369,11 @@ export interface ManagerOrderDetail {
   order_id: string;
   location_id: string;
   location_name: string;
+  // Delivery address joined from locations — the email address line is
+  // location_name + delivery_address + city (empty parts skipped). Optional,
+  // mirroring the backend ManagerOrderDetail / Location master-data.
+  delivery_address?: string;
+  city?: string;
   supplier_id: string;
   supplier_name: string;
   supplier_email?: string;
