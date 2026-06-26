@@ -325,23 +325,27 @@ def test_build_url_uses_manager_final_if_present_else_captain_final():
     assert "Gyros | 3 karton" in body
 
 
-def test_build_url_includes_delivery_date_or_TBD():
+def test_build_url_shows_fixed_delivery_window():
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     products = {"P027": _make_product("P027", "Souvlaki")}
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
     supplier = _make_supplier()
 
-    # With delivery date — date appears in the BODY (subject no longer carries it).
+    # A requested date no longer appears in the supplier email — the body carries
+    # a fixed "from 11:00" window instead, and the date / old fallback are gone.
     order_with = _make_order(delivery_date=date(2026, 5, 25), lines=[line])
     url_with = build_draft_url(order_with, supplier, [line], products, None)
     body_with = urllib.parse.parse_qs(urllib.parse.urlparse(url_with).query)["body"][0]
-    assert "2026-05-25" in body_with
+    assert "Dostawa możliwa od godziny 11:00" in body_with
+    assert "Data dostawy" not in body_with
+    assert "2026-05-25" not in body_with
 
-    # Without delivery date
+    # Same fixed line when no date was requested (no "do potwierdzenia" fallback).
     order_without = _make_order(delivery_date=None, lines=[line])
     url_without = build_draft_url(order_without, supplier, [line], products, None)
     body_without = urllib.parse.parse_qs(urllib.parse.urlparse(url_without).query)["body"][0]
-    assert "do potwierdzenia" in body_without
+    assert "Dostawa możliwa od godziny 11:00" in body_without
+    assert "do potwierdzenia" not in body_without
 
 
 def test_build_url_combines_name_address_city():

@@ -115,12 +115,10 @@ def _build_body(
     address = _format_delivery_address(location)
     if address:
         body_lines.append(f"Adres dostawy: {address}")
-    if order.requested_delivery_date is not None:
-        body_lines.append(
-            f"Data dostawy: {order.requested_delivery_date.isoformat()}"
-        )
-    else:
-        body_lines.append("Data dostawy: do potwierdzenia")
+    # Fixed delivery window for ALL locations — the supplier email no longer
+    # carries the requested delivery DATE, only the from-time (owner request).
+    # Keep byte-identical to the TS twin (emailBody.ts).
+    body_lines.append("Dostawa możliwa od godziny 11:00")
     body_lines.append("")
     body_lines.append("Pozdrawiam,")
     body_lines.append("Pita Bros")

@@ -75,4 +75,14 @@ describe("buildEmailBody — delivery address line (email-delivery-address)", ()
     );
     expect(body).toContain("Tzatzyki | 2 wiadro");
   });
+
+  it("shows the fixed delivery-window line and drops the delivery date", () => {
+    const body = buildEmailBody(
+      detail({ requested_delivery_date: "2026-06-27" }),
+      noLines,
+    );
+    expect(body).toContain("Dostawa możliwa od godziny 11:00");
+    expect(body).not.toContain("Data dostawy");
+    expect(body).not.toContain("2026-06-27");
+  });
 });

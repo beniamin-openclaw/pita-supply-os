@@ -81,11 +81,10 @@ export function buildEmailBody(
     .filter((part) => part.length > 0);
   const address = addressParts.join(", ");
   if (address) out.push(`Adres dostawy: ${address}`);
-  if (detail.requested_delivery_date) {
-    out.push(`Data dostawy: ${detail.requested_delivery_date}`);
-  } else {
-    out.push("Data dostawy: do potwierdzenia");
-  }
+  // Fixed delivery window for ALL locations — the supplier email no longer
+  // carries the requested delivery DATE, only the from-time (owner request).
+  // Keep byte-identical to the backend twin (gmail_url.py).
+  out.push("Dostawa możliwa od godziny 11:00");
   out.push("");
   out.push("Pozdrawiam,");
   out.push("Pita Bros");
