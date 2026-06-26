@@ -36,4 +36,4 @@ DATE is intentionally dropped from the supplier email (owner: Variant A).
 - [x] 1.1 backend pytest green (404 passed, 16 deselected)
 - [x] 1.2 frontend build + lint + test green (83 passed; bundle index-DXBOAN8Q.js)
 #### Manual
-- [ ] 1.3 owner live-run: dispatch preview shows "Dostawa możliwa od godziny 11:00", no date line
+- [x] 1.3 owner live-run: dispatch preview shows "Dostawa możliwa od godziny 11:00", no date line — verified live by owner 2026-06-26

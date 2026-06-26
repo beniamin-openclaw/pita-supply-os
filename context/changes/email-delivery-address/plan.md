@@ -82,4 +82,4 @@ backend twin (`gmail_url.py`) — must emit the **same** combined line, and the
 #### Automated
 - [x] 2.1 frontend build + lint + test green (82 passed) — dbcffca
 #### Manual
-- [ ] 2.2 owner live-run dispatch preview shows full address (needs Wola master-data `delivery_address` filled — see verification/preview-notes.md)
+- [x] 2.2 owner live-run dispatch preview shows full address — verified live by owner 2026-06-26 (Wola master-data filled in prod Supabase + seed)
