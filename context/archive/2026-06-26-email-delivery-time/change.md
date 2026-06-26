@@ -1,10 +1,10 @@
 ---
 change_id: email-delivery-time
 title: Supplier email shows a fixed "delivery from 11:00" line instead of the delivery date
-status: implemented
+status: archived
 created: 2026-06-26
 updated: 2026-06-26
-archived_at: null
+archived_at: 2026-06-26T10:45:34Z
 ---
 
 ## Notes
