@@ -463,6 +463,27 @@ class ManagerCancelResponse(BaseModel):
     status: OrderStatus  # cancelled on success
 
 
+# ---------- Manager add ad-hoc product line (add-product-to-order) ----------
+
+class ManagerAddLineRequest(BaseModel):
+    """Payload for POST /api/manager/order/{id}/add-line — append one ad-hoc
+    product line to a manager_claimed order. The product must be orderable for the
+    order's supplier+location and not already on the order. Orderable membership is
+    the only gate (the Manager has qty override authority — no captain
+    deviation/critical/over-MAX reason gate applies to a manager-added line)."""
+    product_id: str = Field(min_length=1)
+    supplier_product_id: str = Field(min_length=1)
+
+
+class ManagerAddLineResponse(BaseModel):
+    """Result of add-line — a skeleton OrderLine (all quantities 0) was appended;
+    the Manager then sets manager_final via the existing save/dispatch flow. The
+    order status is unchanged (stays manager_claimed)."""
+    order_id: str
+    order_line_id: str
+    status: OrderStatus  # manager_claimed on success
+
+
 # ---------- Inventory count (S-06) ----------
 
 class InventoryProduct(BaseModel):

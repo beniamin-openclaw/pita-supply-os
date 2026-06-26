@@ -864,6 +864,15 @@ export const STRINGS = {
     pl: "Wpisz dostarczoną ilość dla każdej pozycji",
     en: "Enter the delivered qty for every line",
   },
+  // Add ad-hoc product to an order (add-product-to-order) — the searchable picker
+  // shown on the Captain edit screen and the Manager claimed-order pane.
+  "addProduct.button": { pl: "+ Dodaj produkt", en: "+ Add product" },
+  "addProduct.placeholder": { pl: "Szukaj produktu…", en: "Search product…" },
+  "addProduct.empty": { pl: "Brak produktów do dodania", en: "No products to add" },
+  "manager.addLineOk": {
+    pl: "Dodano produkt do zamówienia",
+    en: "Product added to order",
+  },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

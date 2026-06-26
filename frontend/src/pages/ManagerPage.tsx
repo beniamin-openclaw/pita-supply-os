@@ -21,6 +21,7 @@ import { AppHeader } from "../components/ui/AppHeader";
 import type {
   ManagerOrderDetail,
   ManagerQueueItem,
+  OrderableItem,
   OrderingMethod,
 } from "../types";
 import { ManagerFilterBar } from "./manager/ManagerFilterBar";
@@ -56,6 +57,11 @@ export function ManagerPage() {
   // Per-line draft state for the selected order (G2). Reseeded on every detail
   // load; dirty = differs from the seeded baseline.
   const [drafts, setDrafts] = useState<DraftMap>({});
+
+  // Orderable products for the selected order, for the add-line picker
+  // (add-product-to-order). Populated only for a manager_claimed order; [] for
+  // every other lane. The picker filters out products already on the order.
+  const [orderableForSelected, setOrderableForSelected] = useState<OrderableItem[]>([]);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -110,6 +116,22 @@ export function ManagerPage() {
           if (latestDetailRequest.current !== orderId) return; // stale
           setDetail(d);
           setDrafts(seedDrafts(d)); // reseed draft baseline on every load
+          // Add-product (add-product-to-order): only a manager_claimed order can
+          // take new lines, so fetch the supplier's orderable list just for that
+          // lane. Non-fatal — the picker stays hidden if it fails.
+          if (d.status === "manager_claimed") {
+            api
+              .managerOrderable(d.supplier_id, d.location_id)
+              .then((orderable) => {
+                if (latestDetailRequest.current !== orderId) return; // stale
+                setOrderableForSelected(orderable);
+              })
+              .catch(() => {
+                if (latestDetailRequest.current === orderId) setOrderableForSelected([]);
+              });
+          } else {
+            setOrderableForSelected([]);
+          }
         })
         .catch((e: ApiError) => {
           if (latestDetailRequest.current !== orderId) return; // stale
@@ -144,6 +166,7 @@ export function ManagerPage() {
       setSelectedId(orderId);
       setDetail(null);
       setDrafts({});
+      setOrderableForSelected([]);
       loadDetail(orderId);
     },
     [selectedId, confirmDiscardIfDirty, loadDetail],
@@ -298,6 +321,42 @@ export function ManagerPage() {
     [detail, drafts, refreshAll, showToast, t],
   );
 
+  // Add one ad-hoc product line to the claimed order (add-product-to-order). The
+  // line is persisted server-side at qty 0; we then re-fetch the detail and MERGE
+  // the new line into the draft map (NOT seedDrafts — that would wipe the
+  // manager's other unsaved edits). The Manager sets the qty via the existing
+  // save/dispatch flow afterwards.
+  const handleAddLine = useCallback(
+    async (orderId: string, productId: string, supplierProductId: string) => {
+      setBusyId(orderId);
+      try {
+        const resp = await api.managerAddLine(orderId, productId, supplierProductId);
+        const newDetail = await api.managerOrder(orderId);
+        if (latestDetailRequest.current !== orderId) return; // user moved on
+        setDetail(newDetail);
+        setDrafts((prev) => ({
+          ...prev,
+          [resp.order_line_id]: { qty: 0, comment: "" },
+        }));
+        showToast(t("manager.addLineOk"), true);
+      } catch (e) {
+        const detailMsg = e instanceof ApiError ? e.detail : String(e);
+        showToast(t("manager.actionError", { detail: detailMsg }), false);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [showToast, t],
+  );
+
+  // Products that can still be added to the selected order: the supplier's
+  // orderable list minus what's already on the order (add-product-to-order).
+  const availableToAdd = useMemo<OrderableItem[]>(() => {
+    if (!detail) return [];
+    const present = new Set(detail.lines.map((l) => l.product_id));
+    return orderableForSelected.filter((o) => !present.has(o.product_id));
+  }, [detail, orderableForSelected]);
+
   // Queue filters (S-05): supplier options derive from the loaded queue (only
   // suppliers that have orders → no dead options); the lanes toggle which groups
   // render. Both ephemeral. effectiveSupplierId resolves at render so a supplier
@@ -445,6 +504,8 @@ export function ManagerPage() {
               cutoffIso={selectedCutoffIso}
               dispatchedEmailUrl={selectedId ? dispatchedLinks[selectedId] ?? null : null}
               drafts={drafts}
+              availableToAdd={availableToAdd}
+              onAddLine={handleAddLine}
               onClaim={handleClaim}
               onRelease={handleRelease}
               onCancel={handleCancel}

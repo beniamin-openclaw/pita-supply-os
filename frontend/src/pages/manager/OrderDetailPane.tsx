@@ -10,7 +10,8 @@
 import { Loader2 } from "lucide-react";
 
 import { useT } from "../../i18n";
-import type { ManagerOrderDetail, OrderingMethod } from "../../types";
+import type { ManagerOrderDetail, OrderableItem, OrderingMethod } from "../../types";
+import { AddProductPicker } from "../../components/ui/AddProductPicker";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
 import { DispatchPanel } from "./DispatchPanel";
@@ -39,6 +40,10 @@ interface OrderDetailPaneProps {
   dispatchedEmailUrl?: string | null;
   /** Live per-line draft state (qty + comment), keyed by order_line_id. */
   drafts: DraftMap;
+  /** Orderable products that can still be added to this order (claimed only). */
+  availableToAdd: OrderableItem[];
+  /** Append an ad-hoc product line to the order (add-product-to-order). */
+  onAddLine: (orderId: string, productId: string, supplierProductId: string) => void;
   onClaim: (orderId: string) => void;
   onRelease: (orderId: string) => void;
   /** Cancel (soft-delete) a pre-dispatch order with a required reason. */
@@ -60,6 +65,8 @@ export function OrderDetailPane({
   cutoffIso,
   dispatchedEmailUrl,
   drafts,
+  availableToAdd,
+  onAddLine,
   onClaim,
   onRelease,
   onCancel,
@@ -163,6 +170,20 @@ export function OrderDetailPane({
           onQtyChange={onQtyChange}
           onCommentChange={onCommentChange}
         />
+
+        {/* Add ad-hoc product (add-product-to-order) — claimed orders only, and
+            only when something is still addable. */}
+        {editable && availableToAdd.length > 0 && (
+          <div className="mt-3">
+            <AddProductPicker
+              items={availableToAdd}
+              disabled={busy}
+              onSelect={(item) =>
+                onAddLine(detail.order_id, item.product_id, item.supplier_product_id)
+              }
+            />
+          </div>
+        )}
 
         {/* Manager summary strip + sticky save affordance */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">

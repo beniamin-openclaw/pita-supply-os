@@ -2,9 +2,10 @@
 // product cards with prior stock/qty/reason values, lets the user adjust,
 // and submits via PATCH /api/captain/order/{id}.
 //
-// Scope deliberately narrowed: edits the existing line set in place. If the
-// captain wants to add a brand-new product, they should ask the manager
-// (which would normally use a fresh submit anyway).
+// The captain can also ADD a product that was not in the original submission
+// (add-product-to-order): the picker below the cards lists the supplier's
+// orderable products not already on the order; the PATCH replaces the full line
+// set, so an added line persists transparently.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -17,6 +18,7 @@ import type {
   ManagerOrderLineDetail,
   OrderableItem,
 } from "../../types";
+import { AddProductPicker } from "../../components/ui/AddProductPicker";
 
 import { ProductCard } from "./components/ProductCard";
 import { StickyActionBar } from "./components/StickyActionBar";
@@ -71,6 +73,9 @@ export function OrderEditPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [lines, setLines] = useState<Record<string, OrderLine>>({});
   const [items, setItems] = useState<OrderableItem[]>([]);
+  // Orderable products for this supplier that are NOT yet on the order — the
+  // add-product picker's source (add-product-to-order).
+  const [availableToAdd, setAvailableToAdd] = useState<OrderableItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
@@ -104,6 +109,21 @@ export function OrderEditPage() {
         }
         setItems(builtItems);
         setLines(builtLines);
+
+        // Add-product (add-product-to-order): offer the supplier's orderable
+        // products that are not already on the order. This fetch is SEQUENTIAL —
+        // supplier_id is only known once the order resolves — and non-fatal: if it
+        // fails the picker simply stays hidden (the edit flow is unaffected).
+        const existing = new Set(data.lines.map((dl) => dl.product_id));
+        api
+          .orderable(data.supplier_id)
+          .then((orderable) => {
+            if (cancelled) return;
+            setAvailableToAdd(orderable.filter((o) => !existing.has(o.product_id)));
+          })
+          .catch(() => {
+            if (!cancelled) setAvailableToAdd([]);
+          });
       })
       .catch((e: ApiError) => {
         if (cancelled) return;
@@ -116,6 +136,26 @@ export function OrderEditPage() {
 
   const handleLineChange = useCallback((newLine: OrderLine) => {
     setLines((prev) => ({ ...prev, [newLine.product_id]: newLine }));
+  }, []);
+
+  const handleAddProduct = useCallback((item: OrderableItem) => {
+    setItems((prev) => [...prev, item]);
+    setLines((prev) => ({
+      ...prev,
+      [item.product_id]: {
+        product_id: item.product_id,
+        supplier_product_id: item.supplier_product_id,
+        current_stock_qty_base: "",
+        captain_final_qty_purchase: "",
+      },
+    }));
+    setAvailableToAdd((prev) => prev.filter((o) => o.product_id !== item.product_id));
+    // Scroll the freshly-added card into view after the next paint.
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`card-${item.product_id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }, []);
 
   const handleScrollToRed = useCallback(() => {
@@ -258,6 +298,12 @@ export function OrderEditPage() {
               onChange={handleLineChange}
             />
           ))
+        )}
+
+        {order && availableToAdd.length > 0 && (
+          <div className="mt-4">
+            <AddProductPicker items={availableToAdd} onSelect={handleAddProduct} />
+          </div>
         )}
       </main>
 

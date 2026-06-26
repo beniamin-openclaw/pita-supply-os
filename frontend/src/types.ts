@@ -288,6 +288,19 @@ export interface ManagerCancelResponse {
   status: OrderStatus; // "cancelled" on success
 }
 
+// Manager add ad-hoc product line (add-product-to-order) ----------------------
+
+export interface ManagerAddLineRequest {
+  product_id: string;
+  supplier_product_id: string;
+}
+
+export interface ManagerAddLineResponse {
+  order_id: string;
+  order_line_id: string;
+  status: OrderStatus; // "manager_claimed" on success
+}
+
 // Manager Queue --------------------------------------------------------------
 
 export interface ManagerQueueItem {

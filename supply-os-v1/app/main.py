@@ -33,6 +33,8 @@ from .models import (
     InventoryProduct,
     Location,
     LocationProductSetting,
+    ManagerAddLineRequest,
+    ManagerAddLineResponse,
     ManagerCancelRequest,
     ManagerCancelResponse,
     ManagerClaimResponse,
@@ -166,6 +168,31 @@ def _build_orderable_item(
     }
 
 
+def _build_orderable_items(
+    backend, location_id: str, supplier_id: str
+) -> list[dict]:
+    """Orderable line dicts for one location + supplier (shared by the Captain
+    and Manager orderable routes).
+
+    Mirrors the prior inline ``captain_orderable`` body: reads through the chosen
+    ``backend`` (so sheet/supabase serve live master data), filters
+    ``supplier_products`` to this supplier AND only products that have a
+    ``location_product_setting`` at this location, then enriches each via
+    ``_build_orderable_item``."""
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == location_id
+    }
+    sps = [
+        sp
+        for sp in backend.load_supplier_products()
+        if sp.supplier_id == supplier_id and sp.product_id in settings_by_pid
+    ]
+    return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
+
+
 @app.get("/api/captain/orderable")
 def captain_orderable(
     supplier_id: str,
@@ -181,19 +208,23 @@ def captain_orderable(
     dropped any product missing from the old `location_product_settings` snapshot
     (e.g. whole suppliers showed zero products) while sheet-backed screens were
     complete."""
-    backend = _choose_backend()
-    products_by_id = {p.product_id: p for p in backend.load_products()}
-    settings_by_pid = {
-        s.product_id: s
-        for s in backend.load_location_product_settings()
-        if s.location_id == location_id
-    }
-    sps = [
-        sp
-        for sp in backend.load_supplier_products()
-        if sp.supplier_id == supplier_id and sp.product_id in settings_by_pid
-    ]
-    return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
+    return _build_orderable_items(_choose_backend(), location_id, supplier_id)
+
+
+@app.get("/api/manager/orderable")
+def manager_orderable(
+    supplier_id: str,
+    location_id: str,
+    _: None = Depends(require_manager),
+):
+    """Manager-auth twin of `captain_orderable` (add-product-to-order).
+
+    The Manager token carries no location, so `location_id` is an explicit query
+    param (vs. derived from the Captain token). Same shape + logic — used by the
+    Manager add-line picker to list products that can be added to an order at
+    `location_id` from `supplier_id`. No status restriction (it only reads master
+    data); orderable membership is re-checked server-side on the add-line POST."""
+    return _build_orderable_items(_choose_backend(), location_id, supplier_id)
 
 
 class SuggestRequest(BaseModel):
@@ -1732,6 +1763,125 @@ def manager_order_save(
         status=OrderStatus.MANAGER_CLAIMED,
         lines_updated=len(line_updates),
         total_value_estimate_pln=total_rounded,
+    )
+
+
+# ---------- Manager add ad-hoc product line (add-product-to-order) ----------
+
+
+@app.post(
+    "/api/manager/order/{order_id}/add-line",
+    response_model=ManagerAddLineResponse,
+)
+def manager_add_line(
+    order_id: str,
+    req: ManagerAddLineRequest,
+    _: None = Depends(require_manager),
+):
+    """Append one ad-hoc product line to a manager_claimed order (add-product-to-order).
+
+    The Manager picks a product from `/api/manager/orderable` that is not yet on the
+    order; this persists a skeleton OrderLine (all quantities 0) so the Manager can
+    then set `manager_final` via the existing save/dispatch flow. Orderable
+    membership is the ONLY gate — the Manager has qty override authority, so the
+    captain deviation / critical-under / over-MAX reason gates do NOT apply to a
+    manager-added line (plan decision).
+
+    Gates (deterministic):
+      - persistent backend required (seed → 503; mirrors `manager_order_save`).
+      - order must exist → 404.
+      - order.status must be `manager_claimed` → 409.
+      - `supplier_product_id` must be orderable for the order's supplier+location → 400.
+      - the matched orderable item's `product_id` must equal `req.product_id` → 400.
+      - `product_id` must not already be on the order → 400 (no duplicate line).
+
+    Append-only: writes a single OrderLine via `append_order_lines`; it does NOT
+    change the order status or `total_value_estimate_pln` (the later save/dispatch
+    recomputes the total over all lines). The new line carries
+    `delta_vs_suggestion_pct=None` (never counts in deviation roll-ups) and all
+    quantities 0; the dispatch email builder skips zero-qty lines, so a forgotten
+    line never reaches the supplier.
+
+    Concurrency: this mirrors the sibling manager routes' preflight (invalidate →
+    re-read → status-gate). `append_order_lines` is an unconditional append (no
+    `expected_status` guard), but the captain cannot edit a `manager_claimed` order
+    (the captain edit gate requires `captain_submitted`), so the add-vs-captain-edit
+    race is impossible by construction; manager-vs-manager is nil at the single-token
+    pilot scale (see the plan's Decision Notes).
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Add-line requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("orders")
+    order = backend.get_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+    if order.status != OrderStatus.MANAGER_CLAIMED:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} status is {order.status.value}, "
+                f"expected manager_claimed (cannot add a line)"
+            ),
+        )
+
+    # Orderable membership for THIS order's supplier + location (server-side
+    # re-check; the picker's list is advisory).
+    orderable = _build_orderable_items(backend, order.location_id, order.supplier_id)
+    match = next(
+        (it for it in orderable if it["supplier_product_id"] == req.supplier_product_id),
+        None,
+    )
+    if match is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"supplier_product '{req.supplier_product_id}' not orderable at "
+                f"this location for supplier {order.supplier_id}"
+            ),
+        )
+    if match["product_id"] != req.product_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"supplier_product '{req.supplier_product_id}' does not map to "
+                f"product '{req.product_id}'"
+            ),
+        )
+    if any(line.product_id == req.product_id for line in order.lines):
+        raise HTTPException(
+            status_code=400,
+            detail=f"product '{req.product_id}' is already on order {order_id}",
+        )
+
+    order_line_id = f"OL-{order_id}-M-{secrets.token_hex(3)}"
+    new_line = OrderLine(
+        order_line_id=order_line_id,
+        order_id=order_id,
+        product_id=req.product_id,
+        supplier_product_id=req.supplier_product_id,
+        current_stock_qty_base=0,
+        # Real target from the location_product_setting (so the detail "Cel"
+        # column is meaningful); no suggestion is computed for an ad-hoc add.
+        target_stock_qty_base=match["target_stock_qty_base"],
+        suggested_qty_base=0,
+        suggested_qty_purchase=0,
+        captain_final_qty_purchase=0,
+        captain_final_qty_base=0,
+        manager_final_qty_purchase=0,
+        manager_final_qty_base=0,
+        delta_vs_suggestion_pct=None,
+    )
+    backend.append_order_lines([new_line])
+
+    return ManagerAddLineResponse(
+        order_id=order_id,
+        order_line_id=order_line_id,
+        status=OrderStatus.MANAGER_CLAIMED,
     )
 
 

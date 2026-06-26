@@ -24,6 +24,7 @@ import type {
   InventoryProduct,
   Location,
   SuggestionReviewItem,
+  ManagerAddLineResponse,
   ManagerCancelRequest,
   ManagerCancelResponse,
   ManagerClaimResponse,
@@ -370,6 +371,21 @@ export const api = {
     ),
   managerDispatch: (req: ManagerDispatchRequest) =>
     apiPost<ManagerDispatchResponse>("/api/manager/dispatch", req, "manager"),
+  // Orderable products the Manager can add to an order (add-product-to-order).
+  // location_id is explicit — the manager token carries no location.
+  managerOrderable: (supplier_id: string, location_id: string) =>
+    apiGet<OrderableItem[]>(
+      `/api/manager/orderable?supplier_id=${encodeURIComponent(supplier_id)}&location_id=${encodeURIComponent(location_id)}`,
+      "manager",
+    ),
+  // Append one ad-hoc product line to a manager_claimed order. The new line lands
+  // at qty 0; the Manager sets manager_final via the existing save/dispatch flow.
+  managerAddLine: (order_id: string, product_id: string, supplier_product_id: string) =>
+    apiPost<ManagerAddLineResponse>(
+      `/api/manager/order/${encodeURIComponent(order_id)}/add-line`,
+      { product_id, supplier_product_id },
+      "manager",
+    ),
   managerClaim: (order_id: string) =>
     apiPost<ManagerClaimResponse>(`/api/manager/claim/${encodeURIComponent(order_id)}`, {}, "manager"),
   managerRelease: (order_id: string, reason: string) =>
