@@ -82,6 +82,12 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
   const message = t(messageKey, messageVars);
   const colors = STATE_STYLES[state];
   const currentVal = Number(line.current_stock_qty_base) || 0;
+  // Informational "below minimum" signal — does NOT gate submit or feed the
+  // suggestion (min is otherwise unused). Only meaningful once stock is typed.
+  const belowMin =
+    line.current_stock_qty_base !== "" &&
+    item.min_stock_qty_base > 0 &&
+    currentVal < item.min_stock_qty_base;
   const { base: suggestedBase, purchase: suggestedPurchase } = computeSuggestion(
     item,
     currentVal,
@@ -137,6 +143,27 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
             unitsPerPurchase: item.units_per_purchase_unit,
           })}
         </div>
+
+        {/* Master-data annotation + below-minimum signal (both optional) */}
+        {(item.order_note || belowMin) && (
+          <div className="-mt-2 mb-3 space-y-1">
+            {item.order_note && (
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <Info size={12} aria-hidden="true" className="shrink-0 text-slate-400" />
+                <span className="line-clamp-1">{item.order_note}</span>
+              </div>
+            )}
+            {belowMin && (
+              <div className="flex items-center gap-1 text-xs font-semibold text-red-700">
+                <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
+                {t("card.belowMin", {
+                  min: item.min_stock_qty_base,
+                  unit: item.inventory_unit,
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 3-column grid: Current / Suggested / Order */}
         <div className="grid grid-cols-3 gap-3 mb-3">

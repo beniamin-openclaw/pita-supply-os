@@ -162,6 +162,7 @@ def _build_orderable_item(
         "allow_over_max_due_to_packaging": setting.allow_over_max_due_to_packaging,
         "supplier_product_id": sp.supplier_product_id,
         "supplier_product_name": sp.supplier_product_name,
+        "order_note": sp.order_note,
     }
 
 

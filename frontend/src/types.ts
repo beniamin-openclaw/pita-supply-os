@@ -71,6 +71,10 @@ export interface OrderableItem {
   allow_over_max_due_to_packaging: boolean;
   supplier_product_id: string;
   supplier_product_name: string;
+  // Optional short packaging/ordering annotation from supplier_products master
+  // data (e.g. "1 karton = 6 szt (18 kg)"), shown on the product card. Absent on
+  // the edit screen (rebuilt from order lines, which don't carry it).
+  order_note?: string | null;
 }
 
 // Captain Submit -------------------------------------------------------------

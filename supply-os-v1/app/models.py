@@ -86,6 +86,13 @@ class SupplierProduct(BaseModel):
     price_estimate_pln: Optional[float] = None
     active: bool = True
     notes: str = ""
+    # Short per-line packaging/ordering annotation shown on the Captain product
+    # card (e.g. "1 karton = 6 szt (18 kg)"). Read-only master data — never
+    # written via the app — so we deliberately DON'T set max_length here: a
+    # >60-char hand edit would then fail model construction on READ and 500 the
+    # orderable screen. The 60-char "few words" cap is enforced at the DB
+    # (varchar(60), migration 0006), where the value is actually entered.
+    order_note: Optional[str] = None
 
 
 class LocationProductSetting(BaseModel):

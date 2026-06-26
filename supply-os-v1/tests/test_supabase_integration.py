@@ -84,8 +84,12 @@ def _schema():
     # 0004 adds the order cancel-trace columns; _ORDER_COLUMNS now references them,
     # so append_order/update_order would error against a pre-0004 schema.
     cancel_trace = (MIGRATIONS_DIR / "0004_add_order_cancel_trace.sql").read_text()
-    # 0005 adds ordered_by to orders; _ORDER_COLUMNS now references it.
+    # 0005 adds orders.ordered_by; _ORDER_COLUMNS references it, so append_order
+    # errors against a pre-0005 schema. 0006 adds supplier_products.order_note,
+    # referenced by _SUPPLIER_PRODUCT_COLUMNS. Both MUST be applied here or the
+    # integration suite breaks (lesson: wire every new migration into the fixture).
     ordered_by = (MIGRATIONS_DIR / "0005_add_ordered_by.sql").read_text()
+    order_note = (MIGRATIONS_DIR / "0006_add_supplier_product_order_note.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -94,6 +98,7 @@ def _schema():
         conn.exec_driver_sql(widen)
         conn.exec_driver_sql(cancel_trace)
         conn.exec_driver_sql(ordered_by)
+        conn.exec_driver_sql(order_note)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

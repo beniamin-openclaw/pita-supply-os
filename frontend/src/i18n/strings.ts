@@ -126,6 +126,10 @@ export const STRINGS = {
     en: "need {base} {inventoryUnit} → {purchase} {purchaseUnit}",
   },
   "card.order": { pl: "Zamawiasz", en: "Ordering" },
+  "card.belowMin": {
+    pl: "Poniżej minimum: {min} {unit}",
+    en: "Below minimum: {min} {unit}",
+  },
 
   // Row state messages (compute.ts) -----------------------------------------
   "state.empty": { pl: "Wpisz zamówienie", en: "Enter order qty" },
