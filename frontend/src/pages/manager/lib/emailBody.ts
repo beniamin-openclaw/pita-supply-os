@@ -80,7 +80,9 @@ export function buildEmailBody(
     .map((part) => (part ?? "").trim())
     .filter((part) => part.length > 0);
   const address = addressParts.join(", ");
-  if (address) out.push(`Adres dostawy: ${address}`);
+  // Uppercased label — the strongest emphasis available in a plaintext Gmail
+  // body (bold is impossible; owner asked to highlight the delivery address).
+  if (address) out.push(`ADRES DOSTAWY: ${address}`);
   // Fixed delivery window for ALL locations — the supplier email no longer
   // carries the requested delivery DATE, only the from-time (owner request).
   // Keep byte-identical to the backend twin (gmail_url.py).
@@ -88,6 +90,13 @@ export function buildEmailBody(
   out.push("");
   out.push("Pozdrawiam,");
   out.push("Pita Bros");
+  // Operating-company footer (feedback r5): each location orders under its own
+  // spółka; suppliers need the invoicing entity + NIP in every order email.
+  if (detail.company_name) {
+    out.push(detail.company_name);
+    if (detail.company_address) out.push(detail.company_address);
+    if (detail.company_nip) out.push(`NIP: ${detail.company_nip}`);
+  }
   out.push(`(zamowienie #${detail.order_id})`);
 
   return out.join("\n");

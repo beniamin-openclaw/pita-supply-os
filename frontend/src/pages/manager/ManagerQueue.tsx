@@ -11,8 +11,8 @@ import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
 import type { ManagerQueueItem } from "../../types";
 
-/** The three queue lanes (one status group each). */
-export type QueueLane = "submitted" | "claimed" | "sent";
+/** The queue lanes (one status group each). */
+export type QueueLane = "submitted" | "claimed" | "sent" | "closed";
 
 interface QueueGroup {
   key: QueueLane;
@@ -25,6 +25,7 @@ interface ManagerQueueProps {
   submitted: ManagerQueueItem[] | null;
   claimed: ManagerQueueItem[] | null;
   sent: ManagerQueueItem[] | null;
+  closed: ManagerQueueItem[] | null;
   selectedId: string | null;
   onSelect: (orderId: string) => void;
   /** Which lanes to render. Omitted = all visible (backward compatible). */
@@ -35,6 +36,7 @@ export function ManagerQueue({
   submitted,
   claimed,
   sent,
+  closed,
   selectedId,
   onSelect,
   visibleLanes,
@@ -43,6 +45,7 @@ export function ManagerQueue({
     { key: "submitted", titleKey: "manager.tab.submitted", accent: "text-blue-800", items: submitted },
     { key: "claimed", titleKey: "manager.tab.claimed", accent: "text-orange-700", items: claimed },
     { key: "sent", titleKey: "manager.tab.sent", accent: "text-green-700", items: sent },
+    { key: "closed", titleKey: "manager.tab.closed", accent: "text-slate-600", items: closed },
   ];
   const shown = visibleLanes ? groups.filter((g) => visibleLanes.has(g.key)) : groups;
 

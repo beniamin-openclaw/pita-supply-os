@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app import seed_loader, sheets
+from app import errors, seed_loader, sheets
 from app.config import DataBackend
 from app.main import _WARSAW_TZ, app
 from app.models import Order, OrderLine, OrderStatus
@@ -109,10 +109,17 @@ def test_receipt_submit_happy_path(mocker):
     mocker.patch.object(sheets, "get_order", return_value=_fake_order())
     appended = mocker.patch.object(sheets, "append_receipt")
     appended_lines = mocker.patch.object(sheets, "append_receipt_lines")
+    status_update = mocker.patch.object(sheets, "update_order")
 
     body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
     r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
     assert r.status_code == 200, r.text
+
+    # First receipt closes the order (feedback r5): manager_sent -> closed.
+    status_update.assert_called_once()
+    _, su_kwargs = status_update.call_args
+    assert su_kwargs.get("status") == OrderStatus.CLOSED.value
+    assert su_kwargs.get("expected_status") == OrderStatus.MANAGER_SENT.value
     out = r.json()
     assert out["receipt_id"].startswith("RCP-")
     assert out["line_count"] == 2
@@ -166,6 +173,39 @@ def test_receipt_submit_wrong_status_409(mocker):
     assert "manager_sent" in r.json()["detail"]
 
 
+def test_receipt_submit_on_closed_order_no_second_transition(mocker):
+    """A closed order stays receivable (partial deliveries → 2nd receipt), but
+    the status transition fires only on the FIRST receipt (manager_sent)."""
+    _patch_sheet_backend(mocker)
+    mocker.patch.object(
+        sheets, "get_order", return_value=_fake_order(status=OrderStatus.CLOSED)
+    )
+    mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    status_update = mocker.patch.object(sheets, "update_order")
+
+    body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    status_update.assert_not_called()
+
+
+def test_receipt_submit_concurrent_status_change_still_succeeds(mocker):
+    """The close transition is best-effort: a concurrent status change must not
+    fail the already-persisted receipt."""
+    _patch_sheet_backend(mocker)
+    mocker.patch.object(sheets, "get_order", return_value=_fake_order())
+    mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(
+        sheets, "update_order", side_effect=errors.OrderStatusConflictError("race")
+    )
+
+    body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+
+
 def test_receipt_submit_unknown_order_line_400(mocker):
     _patch_sheet_backend(mocker)
     mocker.patch.object(sheets, "get_order", return_value=_fake_order())
@@ -200,6 +240,7 @@ def test_receipt_submit_id_format(mocker):
     mocker.patch.object(sheets, "get_order", return_value=_fake_order())
     mocker.patch.object(sheets, "append_receipt")
     mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(sheets, "update_order")
     body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
     seen: set[str] = set()
     for _ in range(5):

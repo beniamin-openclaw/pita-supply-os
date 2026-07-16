@@ -103,14 +103,10 @@ export function loadDraft<T>(supplier_id: string): CaptainDraft<T> | null {
   try {
     const raw = localStorage.getItem(DRAFT_PREFIX + supplier_id);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as CaptainDraft<T>;
-    // Discard drafts older than 24h
-    const age_h = (Date.now() - new Date(parsed.saved_at).getTime()) / 3.6e6;
-    if (age_h > 24) {
-      clearDraft(supplier_id);
-      return null;
-    }
-    return parsed;
+    // No expiry: a draft lives until the captain submits the order or clears
+    // it explicitly (owner request — quantities must survive supplier
+    // switching and long sessions).
+    return JSON.parse(raw) as CaptainDraft<T>;
   } catch {
     return null;
   }

@@ -73,6 +73,12 @@ class Location(BaseModel):
     city: Optional[str] = None
     active: bool = True
     notes: str = ""
+    # Operating company for the supplier-email footer (locations belong to
+    # different spółki — feedback r5). Optional: absent columns (sheets/seed)
+    # and unfilled rows simply skip the footer block.
+    company_name: Optional[str] = None
+    company_address: Optional[str] = None
+    company_nip: Optional[str] = None
 
 
 class SupplierProduct(BaseModel):
@@ -341,6 +347,11 @@ class ManagerOrderDetail(BaseModel):
     # so legacy/absent locations stay valid (mirrors the Location master-data).
     delivery_address: Optional[str] = None
     city: Optional[str] = None
+    # Operating-company footer data, joined from locations (feedback r5): the
+    # editable email body appends spółka + adres + NIP when present.
+    company_name: Optional[str] = None
+    company_address: Optional[str] = None
+    company_nip: Optional[str] = None
     supplier_id: str
     supplier_name: str  # joined
     supplier_email: Optional[str] = None  # for the Gmail draft preview

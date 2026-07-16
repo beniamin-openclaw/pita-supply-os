@@ -42,12 +42,13 @@ export function ManagerPage() {
   const [submitted, setSubmitted] = useState<ManagerQueueItem[] | null>(null);
   const [claimed, setClaimed] = useState<ManagerQueueItem[] | null>(null);
   const [sent, setSent] = useState<ManagerQueueItem[] | null>(null);
+  const [closed, setClosed] = useState<ManagerQueueItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Queue filters (S-05) — ephemeral, client-side.
   const [filterSupplierId, setFilterSupplierId] = useState<string | null>(null);
   const [visibleLanes, setVisibleLanes] = useState<Set<QueueLane>>(
-    () => new Set<QueueLane>(["submitted", "claimed", "sent"]),
+    () => new Set<QueueLane>(["submitted", "claimed", "sent", "closed"]),
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -80,11 +81,13 @@ export function ManagerPage() {
       api.managerQueue(LOCATION_ID, "captain_submitted"),
       api.managerQueue(LOCATION_ID, "manager_claimed"),
       api.managerQueue(LOCATION_ID, "manager_sent"),
+      api.managerQueue(LOCATION_ID, "closed"),
     ])
-      .then(([sub, clm, snt]) => {
+      .then(([sub, clm, snt, cls]) => {
         setSubmitted(sub);
         setClaimed(clm);
         setSent(snt);
+        setClosed(cls);
         setError(null);
       })
       .catch((e: ApiError) => {
@@ -389,7 +392,7 @@ export function ManagerPage() {
         ? arr.filter((q) => q.supplier_id === effectiveSupplierId)
         : arr;
 
-  const anyFilterActive = effectiveSupplierId !== null || visibleLanes.size < 3;
+  const anyFilterActive = effectiveSupplierId !== null || visibleLanes.size < 4;
 
   const handleToggleLane = useCallback((lane: QueueLane) => {
     setVisibleLanes((prev) => {
@@ -495,6 +498,7 @@ export function ManagerPage() {
               submitted={filterBySupplier(submitted)}
               claimed={filterBySupplier(claimed)}
               sent={filterBySupplier(sent)}
+              closed={filterBySupplier(closed)}
               selectedId={selectedId}
               onSelect={handleSelect}
               visibleLanes={visibleLanes}

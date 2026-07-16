@@ -559,7 +559,7 @@ export function InventoryCountPage() {
                                   inputMode="decimal"
                                   value={line.current_stock_qty_base}
                                   onChange={(v) => handleStockChange(p.product_id, v)}
-                                  className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
                             </div>

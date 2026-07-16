@@ -90,6 +90,9 @@ def _schema():
     # integration suite breaks (lesson: wire every new migration into the fixture).
     ordered_by = (MIGRATIONS_DIR / "0005_add_ordered_by.sql").read_text()
     order_note = (MIGRATIONS_DIR / "0006_add_supplier_product_order_note.sql").read_text()
+    # 0007 adds locations.company_* (email footer); _LOCATION_COLUMNS references
+    # them, so the locations insert below errors against a pre-0007 schema.
+    company_fields = (MIGRATIONS_DIR / "0007_add_location_company_fields.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -99,6 +102,7 @@ def _schema():
         conn.exec_driver_sql(cancel_trace)
         conn.exec_driver_sql(ordered_by)
         conn.exec_driver_sql(order_note)
+        conn.exec_driver_sql(company_fields)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

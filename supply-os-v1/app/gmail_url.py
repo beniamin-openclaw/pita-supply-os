@@ -114,7 +114,9 @@ def _build_body(
     # sync with the TS twin (frontend/src/pages/manager/lib/emailBody.ts).
     address = _format_delivery_address(location)
     if address:
-        body_lines.append(f"Adres dostawy: {address}")
+        # Uppercased label — the strongest emphasis available in a plaintext
+        # Gmail-compose body (bold is impossible; owner asked to highlight it).
+        body_lines.append(f"ADRES DOSTAWY: {address}")
     # Fixed delivery window for ALL locations — the supplier email no longer
     # carries the requested delivery DATE, only the from-time (owner request).
     # Keep byte-identical to the TS twin (emailBody.ts).
@@ -122,6 +124,14 @@ def _build_body(
     body_lines.append("")
     body_lines.append("Pozdrawiam,")
     body_lines.append("Pita Bros")
+    # Operating-company footer (feedback r5): each location orders under its own
+    # spółka; suppliers need the invoicing entity + NIP in every order email.
+    if location is not None and location.company_name:
+        body_lines.append(location.company_name)
+        if location.company_address:
+            body_lines.append(location.company_address)
+        if location.company_nip:
+            body_lines.append(f"NIP: {location.company_nip}")
     body_lines.append(f"(zamowienie #{order.order_id})")
 
     return "\n".join(body_lines)

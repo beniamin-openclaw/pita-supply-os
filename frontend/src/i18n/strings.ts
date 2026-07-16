@@ -43,15 +43,14 @@ export const STRINGS = {
     en: "Nothing to order today",
   },
   "captain.draftBannerAriaLabel": {
-    pl: "Wznowić niezapisany szkic",
-    en: "Resume unsaved draft",
+    pl: "Przywrócony szkic zamówienia",
+    en: "Restored order draft",
   },
   "captain.draftBannerTitle": {
-    pl: "Wykryto szkic z godziny {time}. Wznowić?",
-    en: "Draft from {time} found. Resume it?",
+    pl: "Przywrócono szkic z godziny {time} — liczby są zapamiętane do wysłania lub wyczyszczenia.",
+    en: "Draft from {time} restored — your numbers stay until you submit or clear them.",
   },
-  "captain.draftBannerAccept": { pl: "Wznów", en: "Resume" },
-  "captain.draftBannerDiscard": { pl: "Odrzuć", en: "Discard" },
+  "captain.draftBannerDiscard": { pl: "Wyczyść szkic", en: "Clear draft" },
 
   // "Who orders" attribution (ordered_by) — required before sending the order.
   "captain.orderedByLabel": { pl: "Kto zamawia", en: "Who orders" },
@@ -362,6 +361,7 @@ export const STRINGS = {
   "manager.tab.submitted": { pl: "Do przejęcia", en: "To claim" },
   "manager.tab.claimed": { pl: "W realizacji", en: "In progress" },
   "manager.tab.sent": { pl: "Zamówione", en: "Ordered" },
+  "manager.tab.closed": { pl: "Zakończone (odebrane)", en: "Closed (received)" },
   "manager.action.openEmail": { pl: "Otwórz email do dostawcy", en: "Open supplier email" },
   "manager.sentEmptyHint": {
     pl: "Brak zamówionych pozycji w tej sesji.",

@@ -6,7 +6,7 @@
 // token); we leave `locationName` blank for now. A future `/api/whoami` endpoint
 // would let us populate it.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../../apiClient";
@@ -37,6 +37,18 @@ import type { InventoryCountSummary, InventoryLatestResponse } from "../../types
 // SUP_BLUESERV — 0 orderable lines at Wola). Retargeting the pilot later is a
 // one-line edit; no env var needed (same value in dev and prod).
 const PILOT_SUPPLIER_ID = "SUP_BUKAT";
+
+/** True when any line carries a value worth persisting as a draft. Freshly
+ * initialized (all-blank) line sets must not overwrite or create drafts. */
+function draftHasValues(lines: Record<string, OrderLine>): boolean {
+  return Object.values(lines).some(
+    (ln) =>
+      ln.current_stock_qty_base !== "" ||
+      ln.captain_final_qty_purchase !== "" ||
+      (ln.captain_comment ?? "") !== "" ||
+      (ln.reason_code ?? "") !== "",
+  );
+}
 
 export function CaptainMP() {
   const { t, formatDateTime } = useT();
@@ -175,6 +187,7 @@ export function CaptainMP() {
     setIsLoadingItems(true);
     setOrderableItems([]);
     setLines({});
+    setDraftBanner(null);
     /* eslint-enable react-hooks/set-state-in-effect */
 
     api
@@ -183,26 +196,35 @@ export function CaptainMP() {
         if (cancelled) return;
         setOrderableItems(items);
 
-        // Check for a recent draft. If present, surface a banner; don't auto-load.
+        // AUTO-restore a saved draft (owner request: quantities persist across
+        // supplier switches until submitted/cleared). Saved values are overlaid
+        // onto fresh blank lines so ids always come from current master data;
+        // the banner informs and offers clearing instead of asking first.
         const draft = loadDraft<DraftState>(activeSupplierId);
-        if (draft && draft.state?.lines && Object.keys(draft.state.lines).length > 0) {
+        const draftLines = draft?.state?.lines ?? null;
+        const initialLines: Record<string, OrderLine> = {};
+        items.forEach((item) => {
+          const saved = draftLines?.[item.product_id];
+          initialLines[item.product_id] = saved
+            ? {
+                ...saved,
+                product_id: item.product_id,
+                supplier_product_id: item.supplier_product_id,
+              }
+            : {
+                product_id: item.product_id,
+                supplier_product_id: item.supplier_product_id,
+                current_stock_qty_base: "",
+                captain_final_qty_purchase: "",
+              };
+        });
+        setLines(initialLines);
+        if (draft && draftHasValues(initialLines)) {
           setDraftBanner({
             supplierId: activeSupplierId,
             timestamp: draft.state.timestamp,
           });
-          // Initialize blank lines anyway; user explicitly accepts/dismisses.
         }
-        // Initialize empty lines for the freshly-loaded items.
-        const initialLines: Record<string, OrderLine> = {};
-        items.forEach((item) => {
-          initialLines[item.product_id] = {
-            product_id: item.product_id,
-            supplier_product_id: item.supplier_product_id,
-            current_stock_qty_base: "",
-            captain_final_qty_purchase: "",
-          };
-        });
-        setLines(initialLines);
       })
       .catch((err: ApiError) => {
         if (cancelled) return;
@@ -219,14 +241,39 @@ export function CaptainMP() {
   }, [activeSupplierId, showToast, t]);
 
   // ---- Draft auto-save (debounced) ------------------------------------------
+  // All-blank line sets are never saved: they'd overwrite a real draft (e.g.
+  // right after the supplier-switch wipe) or litter storage with empty drafts.
   useEffect(() => {
     if (!activeSupplierId || Object.keys(lines).length === 0) return;
     const timeoutId = setTimeout(() => {
+      if (!draftHasValues(lines)) return;
       const draftState: DraftState = { lines, timestamp: Date.now() };
       saveDraft(activeSupplierId, draftState);
     }, 500);
     return () => clearTimeout(timeoutId);
   }, [lines, activeSupplierId]);
+
+  // ---- Draft flush on supplier switch / unmount ------------------------------
+  // The debounce above loses the last ≤500ms of edits when the supplier changes
+  // (cleanup cancels the pending save while the fetch effect wipes `lines`) —
+  // that was the reported "numbers gone after switching supplier" bug. A ref
+  // carries the latest snapshot; the cleanup below runs BEFORE the new
+  // supplier's effects and on unmount, and writes it synchronously.
+  const draftFlushRef = useRef<{ supplierId: string | null; lines: Record<string, OrderLine> }>({
+    supplierId: null,
+    lines: {},
+  });
+  useEffect(() => {
+    draftFlushRef.current = { supplierId: activeSupplierId, lines };
+  });
+  useEffect(() => {
+    return () => {
+      const snap = draftFlushRef.current;
+      if (snap.supplierId && draftHasValues(snap.lines)) {
+        saveDraft(snap.supplierId, { lines: snap.lines, timestamp: Date.now() });
+      }
+    };
+  }, [activeSupplierId]);
 
   // ---- Handlers --------------------------------------------------------------
   const handleLineChange = useCallback((newLine: OrderLine) => {
@@ -248,20 +295,26 @@ export function CaptainMP() {
     }
   }, [orderableItems, lines]);
 
-  const acceptDraft = useCallback(() => {
-    if (!draftBanner) return;
-    const draft = loadDraft<DraftState>(draftBanner.supplierId);
-    if (draft?.state?.lines) {
-      setLines(draft.state.lines);
-    }
-    setDraftBanner(null);
-  }, [draftBanner]);
-
   const discardDraft = useCallback(() => {
     if (!draftBanner) return;
     clearDraft(draftBanner.supplierId);
     setDraftBanner(null);
-  }, [draftBanner]);
+    // The values on screen came from the cleared draft — reset them to blanks
+    // and neutralize the flush snapshot so nothing re-saves what was cleared.
+    draftFlushRef.current = { supplierId: null, lines: {} };
+    setLines(() => {
+      const blank: Record<string, OrderLine> = {};
+      orderableItems.forEach((item) => {
+        blank[item.product_id] = {
+          product_id: item.product_id,
+          supplier_product_id: item.supplier_product_id,
+          current_stock_qty_base: "",
+          captain_final_qty_purchase: "",
+        };
+      });
+      return blank;
+    });
+  }, [draftBanner, orderableItems]);
 
   const handleSaveDraft = useCallback(() => {
     if (!activeSupplierId) return;
@@ -367,6 +420,11 @@ export function CaptainMP() {
 
       showToast(t("toast.orderSent"), "success");
       clearDraft(activeSupplierId);
+      // Neutralize the flush snapshot + in-memory lines: without this, the
+      // flush-on-switch path would immediately re-save the just-submitted
+      // values as a fresh draft.
+      draftFlushRef.current = { supplierId: null, lines: {} };
+      setLines({});
       setSentSuppliers((prev) => new Set(prev).add(activeSupplierId));
 
       // Move to next un-submitted supplier if any.
@@ -547,13 +605,6 @@ export function CaptainMP() {
               })}
             </div>
             <div className="flex gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={acceptDraft}
-                className="px-3 py-2 rounded-md bg-amber-700 text-white text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
-              >
-                {t("captain.draftBannerAccept")}
-              </button>
               <button
                 type="button"
                 onClick={discardDraft}

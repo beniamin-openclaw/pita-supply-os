@@ -26,6 +26,7 @@ const LANES: { lane: QueueLane; labelKey: StringKey }[] = [
   { lane: "submitted", labelKey: "manager.tab.submitted" },
   { lane: "claimed", labelKey: "manager.tab.claimed" },
   { lane: "sent", labelKey: "manager.tab.sent" },
+  { lane: "closed", labelKey: "manager.tab.closed" },
 ];
 
 export function ManagerFilterBar({

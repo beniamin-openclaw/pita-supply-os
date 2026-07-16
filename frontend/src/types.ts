@@ -391,6 +391,11 @@ export interface ManagerOrderDetail {
   // mirroring the backend ManagerOrderDetail / Location master-data.
   delivery_address?: string;
   city?: string;
+  // Operating-company footer data (spółka + adres + NIP), joined from
+  // locations (feedback r5) — consumed by emailBody.ts.
+  company_name?: string;
+  company_address?: string;
+  company_nip?: string;
   supplier_id: string;
   supplier_name: string;
   supplier_email?: string;

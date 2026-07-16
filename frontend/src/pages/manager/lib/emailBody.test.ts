@@ -25,7 +25,7 @@ function detail(overrides: Partial<ManagerOrderDetail> = {}): ManagerOrderDetail
 const noLines = (): number => 0;
 
 function addressLine(body: string): string | undefined {
-  return body.split("\n").find((l) => l.startsWith("Adres dostawy:"));
+  return body.split("\n").find((l) => l.startsWith("ADRES DOSTAWY:"));
 }
 
 describe("buildEmailBody — delivery address line (email-delivery-address)", () => {
@@ -35,13 +35,13 @@ describe("buildEmailBody — delivery address line (email-delivery-address)", ()
       noLines,
     );
     expect(addressLine(body)).toBe(
-      "Adres dostawy: Pita Bros Wola, Wolska 50, 01-001, Warszawa",
+      "ADRES DOSTAWY: Pita Bros Wola, Wolska 50, 01-001, Warszawa",
     );
   });
 
   it("skips an empty street so there is no doubled comma", () => {
     const body = buildEmailBody(detail({ city: "Warszawa" }), noLines);
-    expect(addressLine(body)).toBe("Adres dostawy: Pita Bros Wola, Warszawa");
+    expect(addressLine(body)).toBe("ADRES DOSTAWY: Pita Bros Wola, Warszawa");
     expect(body).not.toContain(", ,");
   });
 
@@ -50,12 +50,12 @@ describe("buildEmailBody — delivery address line (email-delivery-address)", ()
       detail({ delivery_address: "   ", city: "Warszawa" }),
       noLines,
     );
-    expect(addressLine(body)).toBe("Adres dostawy: Pita Bros Wola, Warszawa");
+    expect(addressLine(body)).toBe("ADRES DOSTAWY: Pita Bros Wola, Warszawa");
   });
 
   it("falls back to the location name alone when no address is set", () => {
     const body = buildEmailBody(detail(), noLines);
-    expect(addressLine(body)).toBe("Adres dostawy: Pita Bros Wola");
+    expect(addressLine(body)).toBe("ADRES DOSTAWY: Pita Bros Wola");
   });
 
   it("still renders product lines by supplier-facing name + unit", () => {
@@ -84,5 +84,28 @@ describe("buildEmailBody — delivery address line (email-delivery-address)", ()
     expect(body).toContain("Dostawa możliwa od godziny 11:00");
     expect(body).not.toContain("Data dostawy");
     expect(body).not.toContain("2026-06-27");
+  });
+});
+
+describe("company footer (feedback r5)", () => {
+  it("appends spółka + adres + NIP under Pozdrawiam when present", () => {
+    const body = buildEmailBody(
+      detail({
+        company_name: "Pita Bros sp. z o.o.",
+        company_address: "ul. W. Laskonogiego 9, 02-496 Warszawa",
+        company_nip: "9522100633",
+      }),
+      noLines,
+    );
+    expect(body).toContain(
+      "Pozdrawiam,\nPita Bros\nPita Bros sp. z o.o.\n" +
+        "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633",
+    );
+  });
+
+  it("skips the footer block entirely when company data is absent", () => {
+    const body = buildEmailBody(detail(), noLines);
+    expect(body).not.toContain("NIP:");
+    expect(body).toContain("Pozdrawiam,\nPita Bros\n(zamowienie");
   });
 });

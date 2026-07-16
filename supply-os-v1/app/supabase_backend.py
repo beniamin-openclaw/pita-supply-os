@@ -89,6 +89,7 @@ _SUPPLIER_COLUMNS = [
 ]
 _LOCATION_COLUMNS = [
     "location_id", "location_name", "delivery_address", "city", "active", "notes",
+    "company_name", "company_address", "company_nip",
 ]
 _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",

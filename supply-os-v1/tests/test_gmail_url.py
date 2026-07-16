@@ -368,7 +368,7 @@ def test_build_url_combines_name_address_city():
             city="Warszawa",
         )
     )
-    assert "Adres dostawy: Pita Bros Wola, Wolska 50, 01-001, Warszawa" in body_full
+    assert "ADRES DOSTAWY: Pita Bros Wola, Wolska 50, 01-001, Warszawa" in body_full
 
     # Street missing → name + city only; the empty part is skipped (no ", ,").
     body_no_addr = _body_of(
@@ -379,7 +379,7 @@ def test_build_url_combines_name_address_city():
             city="Warszawa",
         )
     )
-    assert "Adres dostawy: Pita Bros Wola, Warszawa" in body_no_addr
+    assert "ADRES DOSTAWY: Pita Bros Wola, Warszawa" in body_no_addr
     assert ", ," not in body_no_addr
 
     # Name only → just the name (back-compat with the old name fallback).
@@ -391,4 +391,41 @@ def test_build_url_combines_name_address_city():
             city=None,
         )
     )
-    assert "Adres dostawy: Pita Bros Wola" in body_name
+    assert "ADRES DOSTAWY: Pita Bros Wola" in body_name
+
+
+def test_company_footer_appended_when_present():
+    """Company footer (spółka + adres + NIP) rides under 'Pozdrawiam, Pita Bros'
+    when the location carries company_* fields; without them the footer block is
+    skipped entirely (feedback r5)."""
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    supplier = _make_supplier()
+    order = _make_order(lines=[line])
+
+    def _body_of(location) -> str:
+        url = build_draft_url(order, supplier, [line], products, location)
+        return urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+
+    with_company = _body_of(
+        Location(
+            location_id="WOLA",
+            location_name="Pita Bros Wola",
+            delivery_address="Wolska 165",
+            city="01-258 Warszawa",
+            company_name="Pita Bros sp. z o.o.",
+            company_address="ul. W. Laskonogiego 9, 02-496 Warszawa",
+            company_nip="9522100633",
+        )
+    )
+    assert (
+        "Pozdrawiam,\nPita Bros\nPita Bros sp. z o.o.\n"
+        "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633"
+    ) in with_company
+
+    without_company = _body_of(
+        Location(location_id="WOLA", location_name="Pita Bros Wola")
+    )
+    assert "NIP:" not in without_company
+    assert "Pozdrawiam,\nPita Bros\n(zamowienie" in without_company

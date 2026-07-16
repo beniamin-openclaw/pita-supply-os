@@ -746,7 +746,7 @@ def manager_queue(
     # Degrade to no signal when the receipts tab is absent (mirrors captain_receipts).
     received_count_by_order: dict[str, int] = {}
     received_discrepancy_by_order: dict[str, int] = {}
-    if status == OrderStatus.MANAGER_SENT:
+    if status in (OrderStatus.MANAGER_SENT, OrderStatus.CLOSED):
         wanted = set(order_ids)
         try:
             for r in backend.load_receipts():
@@ -801,19 +801,17 @@ def manager_queue(
             )
         )
 
-    # Sort newest-first: the most recently submitted order sits at the TOP of the
-    # queue (an "inbox"). cutoff_iso still rides on each item as a badge but is no
-    # longer the primary sort key — a supplier without a parseable cutoff must not
-    # sink a fresh order to the bottom. manager_sent uses captain_submitted_at as
-    # a proxy (the queue model doesn't carry manager_sent_at; the dashboard pulls
-    # full detail via /order/{id} when it needs the sent timestamp). Other statuses
-    # (e.g. manager_claimed) are intentionally left in sheet/append order — fine at
-    # pilot volume; revisit if the claimed lane grows.
-    if status in (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_SENT):
-        items.sort(
-            key=lambda it: -(it.captain_submitted_at.timestamp()
-                             if it.captain_submitted_at else 0.0)
-        )
+    # Sort newest-first, EVERY lane (feedback r5: "od najnowszego do
+    # najstarszego"): the most recently submitted order sits at the TOP of the
+    # queue (an "inbox"). cutoff_iso still rides on each item as a badge but is
+    # not a sort key — a supplier without a parseable cutoff must not sink a
+    # fresh order to the bottom. captain_submitted_at is the proxy timestamp for
+    # every lane (the queue model doesn't carry manager_sent_at; the dashboard
+    # pulls full detail via /order/{id} when it needs the sent timestamp).
+    items.sort(
+        key=lambda it: -(it.captain_submitted_at.timestamp()
+                         if it.captain_submitted_at else 0.0)
+    )
     return items
 
 
@@ -976,6 +974,9 @@ def manager_order_detail(
         location_name=location.location_name if location else order.location_id,
         delivery_address=location.delivery_address if location else None,
         city=location.city if location else None,
+        company_name=location.company_name if location else None,
+        company_address=location.company_address if location else None,
+        company_nip=location.company_nip if location else None,
         supplier_id=order.supplier_id,
         supplier_name=supplier.supplier_name if supplier else order.supplier_id,
         supplier_email=supplier.email if supplier else None,
@@ -2522,14 +2523,18 @@ def captain_receipt_submit(
 
     Gates (deterministic):
       - order must exist AND belong to this Captain's location -> 404.
-      - order status must be manager_sent -> 409.
+      - order status must be manager_sent OR closed -> 409 otherwise (closed
+        stays receivable so a partial delivery can be confirmed in 2+ receipts).
       - every line's order_line_id must belong to the order -> 400.
       - receipt_date defaults to Warsaw-today; a future date -> 400.
 
-    Append-only: every submit creates a new receipt_id (no edit/upsert) and does
-    NOT change the order's status. Photos are attached later via
-    POST /api/captain/receipt/{id}/photos, so the receipt starts
-    `received_with_missing_wz=True`.
+    Receipts stay append-only (every submit creates a new receipt_id), but the
+    FIRST receipt now transitions the order manager_sent -> closed (feedback r5:
+    "statusy nie są aktualizowane po odbiorze") so received orders leave the
+    manager_sent lane instead of hanging there. The transition is best-effort:
+    a concurrent status change never fails the already-persisted receipt.
+    Photos are attached later via POST /api/captain/receipt/{id}/photos, so the
+    receipt starts `received_with_missing_wz=True`.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -2541,12 +2546,12 @@ def captain_receipt_submit(
     order = backend.get_order(req.order_id)
     if order is None or order.location_id != location_id:
         raise HTTPException(status_code=404, detail=f"Order {req.order_id} not found")
-    if order.status != OrderStatus.MANAGER_SENT:
+    if order.status not in (OrderStatus.MANAGER_SENT, OrderStatus.CLOSED):
         raise HTTPException(
             status_code=409,
             detail=(
                 f"Order {req.order_id} status is {order.status.value}, "
-                f"expected manager_sent (cannot confirm delivery)"
+                f"expected manager_sent or closed (cannot confirm delivery)"
             ),
         )
 
@@ -2621,6 +2626,25 @@ def captain_receipt_submit(
         warnings.append(
             "Receipt was not persisted (read-only backend) — data is in-memory only."
         )
+
+    # First receipt closes the order (manager_sent -> closed): a received order
+    # must leave the active "Zamówione" lane instead of hanging there (feedback
+    # r5). Best-effort — the receipt itself is already persisted, so a
+    # concurrent status change only logs and never fails the confirmation.
+    if persisted and order.status == OrderStatus.MANAGER_SENT:
+        try:
+            backend.update_order(
+                req.order_id,
+                status=OrderStatus.CLOSED.value,
+                expected_status=OrderStatus.MANAGER_SENT.value,
+            )
+        except errors.OrderStatusConflictError:
+            log.warning(
+                "Receipt %s persisted but order %s changed concurrently — "
+                "status left as-is",
+                receipt_id,
+                req.order_id,
+            )
 
     return ReceiptSubmitResponse(
         receipt_id=receipt_id,
