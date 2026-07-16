@@ -1,11 +1,13 @@
-// Captain edit-order screen. Loads the existing order detail, prefills the
-// product cards with prior stock/qty/reason values, lets the user adjust,
-// and submits via PATCH /api/captain/order/{id}.
+// Captain edit-order screen. Renders the SAME view as order creation — the
+// supplier's FULL orderable product list (feedback r6) — with the order's
+// prior stock/qty/reason values prefilled on their cards, and submits via
+// PATCH /api/captain/order/{id} (full line-set replacement, so setting a
+// quantity on any product adds it and clearing a quantity removes it).
 //
-// The captain can also ADD a product that was not in the original submission
-// (add-product-to-order): the picker below the cards lists the supplier's
-// orderable products not already on the order; the PATCH replaces the full line
-// set, so an added line persists transparently.
+// There is deliberately NO add-product picker here: the quick-add stays a
+// Manager-only affordance (OrderDetailPane); the Captain "adds" a product by
+// simply filling its card, exactly like on the create screen. If the orderable
+// fetch fails, the screen degrades to the pre-r6 behavior (order lines only).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -18,7 +20,6 @@ import type {
   ManagerOrderLineDetail,
   OrderableItem,
 } from "../../types";
-import { AddProductPicker } from "../../components/ui/AddProductPicker";
 
 import { ProductCard } from "./components/ProductCard";
 import { StickyActionBar } from "./components/StickyActionBar";
@@ -73,9 +74,6 @@ export function OrderEditPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [lines, setLines] = useState<Record<string, OrderLine>>({});
   const [items, setItems] = useState<OrderableItem[]>([]);
-  // Orderable products for this supplier that are NOT yet on the order — the
-  // add-product picker's source (add-product-to-order).
-  const [availableToAdd, setAvailableToAdd] = useState<OrderableItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
@@ -110,19 +108,26 @@ export function OrderEditPage() {
         setItems(builtItems);
         setLines(builtLines);
 
-        // Add-product (add-product-to-order): offer the supplier's orderable
-        // products that are not already on the order. This fetch is SEQUENTIAL —
-        // supplier_id is only known once the order resolves — and non-fatal: if it
-        // fails the picker simply stays hidden (the edit flow is unaffected).
-        const existing = new Set(data.lines.map((dl) => dl.product_id));
+        // Feedback r6: swap the order-lines-only card list for the supplier's
+        // FULL orderable list (same view as the create screen), keeping the
+        // order's values overlaid via `lines` (keyed by product_id — cards for
+        // untouched products default to blank in the render). This fetch is
+        // SEQUENTIAL — supplier_id is only known once the order resolves — and
+        // non-fatal: on failure the screen keeps the order-lines-only fallback.
         api
           .orderable(data.supplier_id)
           .then((orderable) => {
             if (cancelled) return;
-            setAvailableToAdd(orderable.filter((o) => !existing.has(o.product_id)));
+            // Keep any ordered product that is no longer orderable (master-data
+            // change since submit) visible by appending its line-derived card.
+            const inOrderable = new Set(orderable.map((o) => o.product_id));
+            const missing = builtItems.filter(
+              (it) => !inOrderable.has(it.product_id),
+            );
+            setItems([...orderable, ...missing]);
           })
           .catch(() => {
-            if (!cancelled) setAvailableToAdd([]);
+            /* degraded: order lines only */
           });
       })
       .catch((e: ApiError) => {
@@ -136,26 +141,6 @@ export function OrderEditPage() {
 
   const handleLineChange = useCallback((newLine: OrderLine) => {
     setLines((prev) => ({ ...prev, [newLine.product_id]: newLine }));
-  }, []);
-
-  const handleAddProduct = useCallback((item: OrderableItem) => {
-    setItems((prev) => [...prev, item]);
-    setLines((prev) => ({
-      ...prev,
-      [item.product_id]: {
-        product_id: item.product_id,
-        supplier_product_id: item.supplier_product_id,
-        current_stock_qty_base: "",
-        captain_final_qty_purchase: "",
-      },
-    }));
-    setAvailableToAdd((prev) => prev.filter((o) => o.product_id !== item.product_id));
-    // Scroll the freshly-added card into view after the next paint.
-    requestAnimationFrame(() => {
-      document
-        .getElementById(`card-${item.product_id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
   }, []);
 
   const handleScrollToRed = useCallback(() => {
@@ -300,11 +285,6 @@ export function OrderEditPage() {
           ))
         )}
 
-        {order && availableToAdd.length > 0 && (
-          <div className="mt-4">
-            <AddProductPicker items={availableToAdd} onSelect={handleAddProduct} />
-          </div>
-        )}
       </main>
 
       {order && items.length > 0 && (
