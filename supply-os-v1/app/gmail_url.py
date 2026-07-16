@@ -152,7 +152,9 @@ def build_draft_url(
         ValueError if `lines` is empty (after filtering, no orderable lines).
         ValueError if the resulting URL exceeds MAX_GMAIL_URL_LENGTH.
     """
-    if not supplier.email:
+    # "@" check mirrors the dispatch route's gate: placeholder values like
+    # 'TBD' must not become a Gmail recipient (silent non-delivery).
+    if not supplier.email or "@" not in supplier.email:
         raise ValueError(f"Supplier {supplier.supplier_id} has no email")
     if not lines:
         raise ValueError("Empty order - no lines to send")

@@ -254,6 +254,24 @@ def test_dispatch_supplier_no_email(mocker):
     assert "no email" in r.json()["detail"]
 
 
+def test_dispatch_email_channel_rejects_placeholder_email(mocker):
+    """'TBD' (any value without '@') must 400 — a placeholder recipient would
+    otherwise produce a normal-looking draft that never reaches the supplier."""
+    order = _captain_submitted_order()
+    tbd_supplier = Supplier(
+        supplier_id="SUP_PAGO", supplier_name="Pago", email="TBD",
+        ordering_method=OrderingMethod.EMAIL,
+    )
+    _activate_sheet_backend(mocker, order=order, supplier=tbd_supplier)
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 1}],
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 400
+    assert "no email" in r.json()["detail"]
+
+
 def test_dispatch_concurrent_dispatch_raises(mocker):
     order = _captain_submitted_order()
     mocks = _activate_sheet_backend(mocker, order=order)

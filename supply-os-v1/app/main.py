@@ -1551,12 +1551,16 @@ def manager_dispatch(
     # sent_method but have no email artifact. Branch on the supplier's
     # ordering_method (source of truth), never on the request's sent_method.
     is_email_channel = supplier.ordering_method == OrderingMethod.EMAIL
-    if is_email_channel and not supplier.email:
+    # "@" gate: master data historically carried placeholders ('TBD') in the
+    # email column; a bare truthiness check built a Gmail URL with a dead
+    # recipient and the order was silently never delivered (feedback-r4,
+    # Blue Service). Any value without "@" counts as no email.
+    if is_email_channel and "@" not in (supplier.email or ""):
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Supplier {supplier.supplier_id} has no email - "
-                f"cannot dispatch via Gmail"
+                f"Supplier {supplier.supplier_id} has no email (or a "
+                f"placeholder like 'TBD') - cannot dispatch via Gmail"
             ),
         )
 

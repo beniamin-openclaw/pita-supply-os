@@ -1,6 +1,6 @@
 # feedback-r4-suppliers-master-data
 
-**Status:** in-progress (ops applied 2026-07-16; code on branch; rollout pending)
+**Status:** impl_reviewed (ops applied + review APPROVED 2026-07-16 — reviews/impl-review.md; rollout pending)
 **Źródło:** feedback operatora po zamówieniach Intermlecz / Blue Service / Coca Cola / Bukat (2026-07) + CSV „Wolska stock" z nowymi min/max.
 
 ## Root cause połowy feedbacku

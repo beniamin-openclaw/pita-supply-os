@@ -55,7 +55,7 @@ function parsePhone(notes: string): string | null {
 function parsePortalUrl(notes: string): string | null {
   const m = notes.match(/https?:\/\/[^\s)]+/);
   if (!m) return null;
-  return m[0].replace(/[.,;]+$/, "");
+  return m[0].replace(/[.,;"'\]}]+$/, "");
 }
 
 export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: DispatchPanelProps) {
@@ -208,7 +208,10 @@ function EmailDispatch({
   );
 
   const to = detail.supplier_email ?? "";
-  const noEmail = !to.trim();
+  // "@" check (not bare non-empty): master data used placeholders like 'TBD'
+  // as the email value — those must surface the noEmail banner, not a dead
+  // recipient in a normal-looking Gmail draft. Mirrors the backend gate.
+  const noEmail = !to.includes("@");
 
   const { url, tooLong } = buildGmailComposeUrl({ to, subject, body });
   const canOpenGmail = !noEmail && !empty && !tooLong;
@@ -388,6 +391,7 @@ function PortalDispatch({
             >
               {t("manager.portalConfirmNo")}
             </button>
+            {copyListButton}
           </div>
         </div>
       ) : (

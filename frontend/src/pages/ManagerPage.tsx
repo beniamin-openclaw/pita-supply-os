@@ -304,7 +304,12 @@ export function ManagerPage() {
           manager_finals,
           sent_method: sentMethod,
         });
-        showToast(t("manager.dispatchedOk"), true);
+        // Non-email channels have no email artifact — "marked as ordered" is
+        // the accurate confirmation there; email keeps the dispatched copy.
+        showToast(
+          t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
+          true,
+        );
         // Keep any server-built compose URL so "Otwórz email" works on the sent
         // detail (email channel only; null for portal/phone/manual).
         if (resp.gmail_compose_url) {
