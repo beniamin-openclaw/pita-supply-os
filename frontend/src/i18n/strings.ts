@@ -495,6 +495,15 @@ export const STRINGS = {
     pl: "{supplier} zamawia się przez portal — system nie wysyła automatycznie.",
     en: "{supplier} orders via portal — the system does not send automatically.",
   },
+  "manager.portalConfirmQ": {
+    pl: "Czy na pewno złożyłeś już to zamówienie w portalu dostawcy?",
+    en: "Are you sure you already placed this order in the supplier portal?",
+  },
+  "manager.portalConfirmYes": {
+    pl: "Tak, zamówienie złożone ✓",
+    en: "Yes, order placed ✓",
+  },
+  "manager.portalConfirmNo": { pl: "Anuluj", en: "Cancel" },
   "manager.phoneNote": { pl: "{supplier} zamawia się telefonicznie.", en: "{supplier} orders by phone." },
   "manager.phoneMissing": {
     pl: "brak numeru — uzupełnij w master data",

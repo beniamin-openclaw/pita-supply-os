@@ -2,8 +2,10 @@
 //   email  → editable subject + textarea body; Gmail URL built IN TS from the
 //            EDITED text; 8000-char check hides "Otwórz w Gmail"; clicking the
 //            link ALSO fires the dispatch state-write. Copy body / address.
-//   portal → no email; placeholder portal-URL slot (never a hardcoded URL),
-//            copy-paste list, "Oznacz jako zamówione ✓".
+//   portal → no email; portal link parsed from supplier_notes (never hardcoded),
+//            copy-paste list, "Oznacz jako zamówione ✓" behind a two-step
+//            confirm ("czy na pewno złożyłeś zamówienie w portalu?") so a
+//            mis-click can't mark an order sent that was never placed.
 //   phone  → number from supplier_notes (tel: link if parseable), copy list,
 //            "Oznacz jako zamówione ✓".
 //   manual → info note + "Oznacz jako zamówione ✓".
@@ -45,6 +47,15 @@ function parsePhone(notes: string): string | null {
   if (!m) return null;
   const cleaned = m[1].replace(/[^\d+]/g, "");
   return cleaned.length >= 7 ? cleaned : null;
+}
+
+// Best-effort portal-URL extraction from free-text supplier_notes. Master data
+// carries the URL in the supplier's notes (no dedicated column yet); trailing
+// punctuation from prose is stripped.
+function parsePortalUrl(notes: string): string | null {
+  const m = notes.match(/https?:\/\/[^\s)]+/);
+  if (!m) return null;
+  return m[0].replace(/[.,;]+$/, "");
 }
 
 export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: DispatchPanelProps) {
@@ -135,21 +146,15 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
       )}
 
       {method === "portal" && (
-        <div className="space-y-3 text-sm">
-          <p className="text-slate-700">{t("manager.portalNote", { supplier: detail.supplier_name })}</p>
-          {/* Portal URL is NOT in master data yet — placeholder only, no guessed URL. */}
-          <div className="flex items-center gap-2">
-            <span className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              {t("manager.portalUrlTbd")}
-            </span>
-          </div>
-          <pre className="overflow-x-auto rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">{listText}</pre>
-          <div className="flex flex-wrap items-center gap-2">
-            {copyListButton}
-            {markOrderedButton}
-          </div>
-          {emptyNote}
-        </div>
+        <PortalDispatch
+          detail={detail}
+          listText={listText}
+          copyListButton={copyListButton}
+          emptyNote={emptyNote}
+          busy={busy}
+          empty={empty}
+          onDispatch={onDispatch}
+        />
       )}
 
       {method === "phone" && (
@@ -304,6 +309,101 @@ function EmailDispatch({
       </div>
 
       {empty && <p className="text-xs font-semibold text-amber-700">{t("manager.emptyOrder")}</p>}
+    </div>
+  );
+}
+
+// --- portal channel --------------------------------------------------------
+
+interface PortalDispatchProps {
+  detail: ManagerOrderDetail;
+  listText: string;
+  copyListButton: ReactNode;
+  emptyNote: ReactNode;
+  busy: boolean;
+  empty: boolean;
+  onDispatch: (sentMethod: OrderingMethod) => void;
+}
+
+function PortalDispatch({
+  detail,
+  listText,
+  copyListButton,
+  emptyNote,
+  busy,
+  empty,
+  onDispatch,
+}: PortalDispatchProps) {
+  const { t } = useT();
+  const portalUrl = parsePortalUrl(detail.supplier_notes ?? "");
+  // Two-step confirm: the manager must assert the order WAS placed in the
+  // portal before the state-write fires (owner request — no accidental
+  // "marked sent" for an order nobody placed).
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="text-slate-700">{t("manager.portalNote", { supplier: detail.supplier_name })}</p>
+      <div className="flex items-center gap-2">
+        {portalUrl ? (
+          <a
+            href={portalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            {t("manager.openPortal")} ↗
+          </a>
+        ) : (
+          <span className="rounded border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+            {t("manager.portalUrlTbd")}
+          </span>
+        )}
+      </div>
+      <pre className="overflow-x-auto rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">{listText}</pre>
+      {confirming ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-semibold text-amber-900">{t("manager.portalConfirmQ")}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy || empty}
+              onClick={() => onDispatch("portal")}
+              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+            >
+              {busy ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  {t("manager.action.working")}
+                </span>
+              ) : (
+                t("manager.portalConfirmYes")
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirming(false)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            >
+              {t("manager.portalConfirmNo")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {copyListButton}
+          <button
+            type="button"
+            disabled={busy || empty}
+            onClick={() => setConfirming(true)}
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+          >
+            {t("manager.markOrdered")}
+          </button>
+        </div>
+      )}
+      {emptyNote}
     </div>
   );
 }
