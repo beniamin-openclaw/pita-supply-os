@@ -64,3 +64,10 @@
 - **Problem**: In `order-ordered-by` I handed the user a "test on /captain-v2" checklist while the PR was still unmerged — nothing was deployed, so the new field wasn't there and the test was a dead end. By the time a change reaches the live-test handoff it is already verified and review-corrected, so an undeployed "test it live" ask only burns a round-trip.
 - **Rule**: Before asking the user to live-test, drive or explicitly propose the FULL end-to-end deploy first — frontend AND backend AND any DB migration (migration before the code that depends on it) — and confirm the new build is actually live (new Vercel production bundle for the merge commit / commit on `main` / backend health) before handing over the test steps. Never point the user at a screen for a change that is still local, uncommitted, or unmerged.
 - **Applies to**: implement, impl-review
+
+## Master-data ops: diff przed, audyt po
+
+- **Context**: prod Supabase (location_product_settings / suppliers / products), batch feedback-r4 2026-07-16 — zbiorcze UPDATE bez formalnego plan.md
+- **Problem**: zbiorcza zmiana master data w prod bez śladu porównawczego nie daje ścieżki rollbacku ani weryfikacji — a pojedynczy błędny wiersz (np. 'TBD' jako email) potrafi cicho zgubić realne zamówienie
+- **Rule**: każdy batch na master data w prod przechodzi 3 kroki: (1) SELECT-diff stare→nowe zapisany przed UPDATE (to jest rollback), (2) apply, (3) audyt po (asercje spójności, np. min≤max, target=max, brak placeholderów) + wpis w context/changes/<change-id>/change.md
+- **Applies to**: wszystkie operacje SQL na prod Supabase poza pojedynczymi oczywistymi UPDATE'ami; w szczególności rollout Bracka/KEN

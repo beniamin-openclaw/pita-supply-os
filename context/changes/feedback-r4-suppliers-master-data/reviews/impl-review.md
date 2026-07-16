@@ -6,7 +6,7 @@
 - **Date**: 2026-07-16
 - **Verdict**: APPROVED
 - **Findings**: 0 critical, 2 warnings, 5 observations
-- **Triage**: 2026-07-16 — F2-F5,F7 FIXED; F1 ACCEPTED; F6 lesson (w trakcie)
+- **Triage**: 2026-07-16 — F2-F5,F7 FIXED; F1 ACCEPTED; F6 ACCEPTED-AS-RULE (lessons.md)
 
 ## Verdicts
 
@@ -98,7 +98,7 @@ bez zmian behawioralnych; `key={detail.order_id}` resetuje stan potwierdzenia.
   batchach warto go zachować jako minimum.
 - **Fix**: Zapisać jako konwencję (lesson) — „master-data ops: zawsze diff-raport
   przed UPDATE i audyt po".
-- **Decision**: PENDING
+- **Decision**: ACCEPTED-AS-RULE — „Master-data ops: diff przed, audyt po" w context/foundation/lessons.md
 
 ### F7 — Liść Laurowy / Ziele Angielskie: min=max=0,5 opak
 
