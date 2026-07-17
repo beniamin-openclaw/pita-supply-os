@@ -1,3 +1,11 @@
+---
+change_id: feedback-r4-suppliers-master-data
+status: archived
+created: 2026-07-15
+archived_at: 2026-07-17T06:50:43Z
+updated: 2026-07-17
+---
+
 # feedback-r4-suppliers-master-data
 
 **Status:** impl_reviewed (ops applied + review APPROVED 2026-07-16 — reviews/impl-review.md; rollout pending)
