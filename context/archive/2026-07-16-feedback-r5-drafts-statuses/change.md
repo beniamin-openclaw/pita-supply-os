@@ -1,3 +1,11 @@
+---
+change_id: feedback-r5-drafts-statuses
+status: archived
+created: 2026-07-16
+archived_at: 2026-07-17T06:50:43Z
+updated: 2026-07-17
+---
+
 # feedback-r5-drafts-statuses
 
 **Status:** implemented (2026-07-16; verify na prod po deploy)
