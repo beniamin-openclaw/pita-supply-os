@@ -1,10 +1,10 @@
 ---
 change_id: add-product-to-order
 title: Add ad-hoc product to order from orderable list
-status: impl_reviewed
+status: archived
 created: 2026-06-26
-updated: 2026-06-26
-archived_at: null
+archived_at: 2026-07-17T06:50:43Z
+updated: 2026-07-17
 ---
 
 ## Notes
