@@ -1,3 +1,11 @@
+---
+change_id: feedback-r6-beverage-packs-edit-view
+status: archived
+created: 2026-07-16
+archived_at: 2026-07-17T06:50:43Z
+updated: 2026-07-17
+---
+
 # feedback-r6-beverage-packs-edit-view
 
 **Status:** implemented (2026-07-16; DB ops wykonane + zaudytowane, FE wdrożony)
