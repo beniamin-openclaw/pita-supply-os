@@ -556,3 +556,40 @@ def test_dispatch_email_channel_still_requires_email(mocker):
     r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
     assert r.status_code == 400
     assert "no email" in r.json()["detail"]
+
+
+# ---------- feedback r7: standing office CC on the dispatch URL ----------
+
+
+def _dispatch_query(mocker, cc_value: str) -> dict:
+    """Dispatch one order with settings.order_cc_email = cc_value; return the
+    parsed query of the returned Gmail compose URL."""
+    import urllib.parse
+
+    from app.config import settings as app_settings
+
+    mocker.patch.object(app_settings, "order_cc_email", cc_value)
+    order = _captain_submitted_order()
+    _activate_sheet_backend(mocker, order=order)
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [
+            {"order_line_id": "OL-001", "manager_final_qty_purchase": 5},
+        ],
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    url = r.json()["gmail_compose_url"]
+    return urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+
+
+def test_dispatch_url_carries_office_cc(mocker):
+    """The office copy must reach the real endpoint, not just the pure builder."""
+    query = _dispatch_query(mocker, "biuro@pitabros.pl")
+    assert query["cc"] == ["biuro@pitabros.pl"]
+
+
+def test_dispatch_url_omits_cc_when_setting_empty(mocker):
+    """Empty setting disables the DW entirely — no stray cc parameter."""
+    query = _dispatch_query(mocker, "")
+    assert "cc" not in query

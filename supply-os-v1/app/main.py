@@ -980,6 +980,7 @@ def manager_order_detail(
         supplier_id=order.supplier_id,
         supplier_name=supplier.supplier_name if supplier else order.supplier_id,
         supplier_email=supplier.email if supplier else None,
+        cc_email=settings.order_cc_email or None,
         ordering_method=supplier.ordering_method if supplier else OrderingMethod.EMAIL,
         supplier_notes=supplier.notes if supplier else "",
         order_date=order.order_date,
@@ -1625,6 +1626,7 @@ def manager_dispatch(
                 lines=enriched_lines,
                 products_by_id={**products_by_id, **sps_by_id},
                 location=location,
+                cc_email=settings.order_cc_email,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}")

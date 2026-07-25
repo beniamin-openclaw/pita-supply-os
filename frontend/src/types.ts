@@ -399,6 +399,9 @@ export interface ManagerOrderDetail {
   supplier_id: string;
   supplier_name: string;
   supplier_email?: string;
+  // Standing office copy (DW) for the supplier email, served by the backend from
+  // settings.order_cc_email (feedback r7). Absent/empty => no DW row, no cc param.
+  cc_email?: string | null;
   // G3: channel routing + phone/notes for the dispatch panel.
   ordering_method: OrderingMethod;
   supplier_notes: string;

@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types";
-import { buildEmailBody } from "./emailBody";
+import {
+  buildEmailBody,
+  buildGmailComposeUrl,
+  MAX_GMAIL_URL_LENGTH,
+} from "./emailBody";
 
 /** Minimal order-detail fixture — only the fields the email body reads matter. */
 function detail(overrides: Partial<ManagerOrderDetail> = {}): ManagerOrderDetail {
@@ -107,5 +111,51 @@ describe("company footer (feedback r5)", () => {
     const body = buildEmailBody(detail(), noLines);
     expect(body).not.toContain("NIP:");
     expect(body).toContain("Pozdrawiam,\nPita Bros\n(zamowienie");
+  });
+});
+
+describe("feedback r7 — empty delivery-date line + standing office CC", () => {
+  it("adds an empty 'Proszę o dostawę w dniu:' line right above the fixed window", () => {
+    const body = buildEmailBody(
+      detail({ requested_delivery_date: "2026-06-27" }),
+      noLines,
+    );
+    const lines = body.split("\n");
+    expect(body).toContain("Proszę o dostawę w dniu:");
+    // The derived date must NOT be injected — the operator fills it by hand.
+    expect(body).not.toContain("2026-06-27");
+    expect(lines.indexOf("Proszę o dostawę w dniu:") + 1).toBe(
+      lines.indexOf("Dostawa możliwa od godziny 11:00"),
+    );
+  });
+
+  it("emits cc only for an address carrying '@'", () => {
+    const base = { to: "handel@intermlecz.pl", subject: "S", body: "B" };
+    expect(buildGmailComposeUrl({ ...base, cc: "biuro@pitabros.pl" }).url).toContain(
+      "cc=biuro%40pitabros.pl",
+    );
+    for (const cc of [undefined, null, "", "TBD"]) {
+      expect(buildGmailComposeUrl({ ...base, cc }).url).not.toContain("cc=");
+    }
+  });
+
+  it("counts the cc parameter toward the length gate", () => {
+    const longBody = "x".repeat(MAX_GMAIL_URL_LENGTH - 200);
+    const base = { to: "handel@intermlecz.pl", subject: "S", body: longBody };
+    const withoutCc = buildGmailComposeUrl(base);
+    const withCc = buildGmailComposeUrl({ ...base, cc: "biuro@pitabros.pl" });
+    expect(withCc.url.length).toBeGreaterThan(withoutCc.url.length);
+  });
+
+  it("keeps both recipient addresses when the supplier email is comma-joined", () => {
+    const { url } = buildGmailComposeUrl({
+      to: "handel@intermlecz.pl,katarzyna.szymanska@intermlecz.pl",
+      subject: "S",
+      body: "B",
+      cc: "biuro@pitabros.pl",
+    });
+    expect(decodeURIComponent(url)).toContain(
+      "to=handel@intermlecz.pl,katarzyna.szymanska@intermlecz.pl",
+    );
   });
 });

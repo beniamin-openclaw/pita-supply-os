@@ -83,6 +83,12 @@ export function buildEmailBody(
   // Uppercased label — the strongest emphasis available in a plaintext Gmail
   // body (bold is impossible; owner asked to highlight the delivery address).
   if (address) out.push(`ADRES DOSTAWY: ${address}`);
+  // Empty delivery-date line the operator fills in by hand before sending
+  // (feedback r7). Deliberately NOT auto-filled from requested_delivery_date:
+  // for suppliers whose delivery_days is 'TBD' that value comes from the
+  // "tomorrow" fallback in captain-mp/lib/dates.ts, so an injected date would be
+  // a guess sent to a real supplier. Keep byte-identical to the backend twin.
+  out.push("Proszę o dostawę w dniu:");
   // Fixed delivery window for ALL locations — the supplier email no longer
   // carries the requested delivery DATE, only the from-time (owner request).
   // Keep byte-identical to the backend twin (gmail_url.py).
@@ -104,23 +110,29 @@ export function buildEmailBody(
 
 /**
  * Build the Gmail compose URL from the (possibly EDITED) subject + body:
- *   https://mail.google.com/mail/?view=cm&fs=1&to=<email>&su=<subject>&body=<body>
+ *   https://mail.google.com/mail/?view=cm&fs=1&to=<email>&cc=<cc>&su=<subject>&body=<body>
  * Each value is encodeURIComponent'd (matches Python urllib.parse.quote,
  * %0A for newlines, UTF-8 diacritics). Returns the URL plus whether it is
  * within MAX_GMAIL_URL_LENGTH so the caller can hide the Gmail link.
+ *
+ * `cc` is the standing office copy served by the backend
+ * (ManagerOrderDetail.cc_email, feedback r7). It is emitted only when it carries
+ * an "@" — the same placeholder gate the recipient uses, so a value like 'TBD'
+ * never becomes a silent dead CC. The length check runs on the ASSEMBLED url, so
+ * the cc parameter counts toward MAX_GMAIL_URL_LENGTH automatically.
  */
 export function buildGmailComposeUrl(args: {
   to: string;
   subject: string;
   body: string;
+  cc?: string | null;
 }): { url: string; tooLong: boolean } {
-  const query = [
-    `view=cm`,
-    `fs=1`,
-    `to=${encodeURIComponent(args.to)}`,
-    `su=${encodeURIComponent(args.subject)}`,
-    `body=${encodeURIComponent(args.body)}`,
-  ].join("&");
-  const url = `${GMAIL_COMPOSE_BASE}?${query}`;
+  const parts = [`view=cm`, `fs=1`, `to=${encodeURIComponent(args.to)}`];
+  if (args.cc && args.cc.includes("@")) {
+    parts.push(`cc=${encodeURIComponent(args.cc)}`);
+  }
+  parts.push(`su=${encodeURIComponent(args.subject)}`);
+  parts.push(`body=${encodeURIComponent(args.body)}`);
+  const url = `${GMAIL_COMPOSE_BASE}?${parts.join("&")}`;
   return { url, tooLong: url.length > MAX_GMAIL_URL_LENGTH };
 }

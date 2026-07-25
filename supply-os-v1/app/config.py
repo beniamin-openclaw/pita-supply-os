@@ -75,6 +75,14 @@ class Settings(BaseSettings):
     # Empty => Manager auth DISABLED (dev).
     manager_token: SecretStr = SecretStr("")
 
+    # Standing CC (DW) on every supplier order email (feedback r7): the office
+    # keeps a copy of what left for the supplier. Single source of truth for BOTH
+    # email builders — the backend re-open URL (gmail_url.build_draft_url) and the
+    # authoritative client-side one, which receives it via
+    # ManagerOrderDetail.cc_email. Empty => no cc parameter at all; a value
+    # without "@" is ignored by the builders (mirrors the recipient gate).
+    order_cc_email: str = "biuro@pitabros.pl"
+
 
 settings = Settings()
 

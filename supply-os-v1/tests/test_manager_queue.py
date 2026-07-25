@@ -432,3 +432,42 @@ def test_order_detail_unauthorized():
 def test_order_detail_captain_token_rejected():
     r = client.get("/api/manager/order/ORD-X", headers=CAPTAIN_AUTH)
     assert r.status_code == 401
+
+
+# ---------- feedback r7: order detail carries the standing office CC ----------
+
+
+def test_order_detail_exposes_office_cc(mocker):
+    """The FE owns the authoritative Gmail URL, so the backend must serve the DW
+    address; an empty setting must surface as null (panel then shows no DW row)."""
+    from app.config import settings as app_settings
+
+    order_id = "ORD-CC"
+    order = _order(order_id, location_id="WOLA", supplier_id="SUP_PAGO")
+    order = order.model_copy(
+        update={
+            "lines": [_line(order_id, "OL-1", product_id="P027", sp_id="SP_PAGO_P027")]
+        }
+    )
+
+    def _detail_payload() -> dict:
+        _enable_sheet_backend(
+            mocker,
+            orders=[order],
+            get_order_return=order,
+            products=[_product("P027", "Souvlaki Kurczak")],
+            supplier_products=[
+                _supplier_product("SP_PAGO_P027", "SUP_PAGO", "P027", "Souvlaki Karton 5kg")
+            ],
+            suppliers=[_supplier("SUP_PAGO", "Pago", email="zamowienia@pago.example")],
+            locations=[_location("WOLA", "Pita Bros Wola")],
+        )
+        r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    mocker.patch.object(app_settings, "order_cc_email", "biuro@pitabros.pl")
+    assert _detail_payload()["cc_email"] == "biuro@pitabros.pl"
+
+    mocker.patch.object(app_settings, "order_cc_email", "")
+    assert _detail_payload()["cc_email"] is None

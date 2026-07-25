@@ -464,6 +464,7 @@ export const STRINGS = {
   "manager.dispatch.phone": { pl: "Wysyłka: telefon", en: "Dispatch: phone" },
   "manager.dispatch.manual": { pl: "Wysyłka: ręcznie", en: "Dispatch: manual" },
   "manager.dispatch.emailTo": { pl: "Do:", en: "To:" },
+  "manager.dispatch.emailCc": { pl: "DW:", en: "CC:" },
   "manager.dispatch.emailSubject": { pl: "Temat:", en: "Subject:" },
   "manager.dispatch.emailBody": { pl: "Treść:", en: "Body:" },
   "manager.openGmail": { pl: "Otwórz w Gmail", en: "Open in Gmail" },

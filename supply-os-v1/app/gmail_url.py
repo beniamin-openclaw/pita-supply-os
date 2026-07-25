@@ -117,6 +117,13 @@ def _build_body(
         # Uppercased label — the strongest emphasis available in a plaintext
         # Gmail-compose body (bold is impossible; owner asked to highlight it).
         body_lines.append(f"ADRES DOSTAWY: {address}")
+    # Empty delivery-date line the operator fills in by hand before sending
+    # (feedback r7). Deliberately NOT auto-filled from
+    # order.requested_delivery_date: for suppliers whose delivery_days is 'TBD'
+    # that value comes from the frontend's "tomorrow" fallback
+    # (captain-mp/lib/dates.ts), so an injected date would be a guess sent to a
+    # real supplier. Keep byte-identical to the TS twin (emailBody.ts).
+    body_lines.append("Proszę o dostawę w dniu:")
     # Fixed delivery window for ALL locations — the supplier email no longer
     # carries the requested delivery DATE, only the from-time (owner request).
     # Keep byte-identical to the TS twin (emailBody.ts).
@@ -151,11 +158,18 @@ def build_draft_url(
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
     location: Optional[Location] = None,
+    cc_email: Optional[str] = None,
 ) -> str:
-    """Return a https://mail.google.com/mail/?... URL with prefilled to/subject/body.
+    """Return a https://mail.google.com/mail/?... URL with prefilled to/cc/subject/body.
 
     Lines with zero effective qty are skipped (no point ordering 0).
     Effective qty = manager_final if > 0, else captain_final.
+
+    ``cc_email`` is the standing office copy (settings.order_cc_email). It is
+    added as the Gmail ``cc`` parameter only when it carries an "@" — the same
+    placeholder gate the recipient uses, so a value like 'TBD' can never become a
+    silent dead CC. None/empty simply omits the parameter. Multiple addresses may
+    be comma-joined, exactly like ``supplier.email``.
 
     Raises:
         ValueError if supplier has no email.
@@ -177,16 +191,15 @@ def build_draft_url(
     body = _build_body(order, supplier, lines, products_by_id, location)
 
     # urlencode handles UTF-8 + Polish diacritics and quotes \n as %0A.
-    query = urllib.parse.urlencode(
-        [
-            ("view", "cm"),
-            ("fs", "1"),
-            ("to", supplier.email),
-            ("su", subject),
-            ("body", body),
-        ],
-        quote_via=urllib.parse.quote,
-    )
+    params: list[tuple[str, str]] = [
+        ("view", "cm"),
+        ("fs", "1"),
+        ("to", supplier.email),
+    ]
+    if cc_email and "@" in cc_email:
+        params.append(("cc", cc_email))
+    params.extend([("su", subject), ("body", body)])
+    query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
     url = f"{GMAIL_COMPOSE_BASE}?{query}"
     if len(url) > MAX_GMAIL_URL_LENGTH:
         raise ValueError(

@@ -355,6 +355,11 @@ class ManagerOrderDetail(BaseModel):
     supplier_id: str
     supplier_name: str  # joined
     supplier_email: Optional[str] = None  # for the Gmail draft preview
+    # Standing office copy (DW) for the supplier email, from settings.order_cc_email
+    # (feedback r7). The FE owns the authoritative Gmail URL, so it must receive the
+    # cc from the backend rather than hardcoding a second source of truth. None/empty
+    # => the dispatch panel shows no DW row and adds no cc parameter.
+    cc_email: Optional[str] = None
     # Channel the dispatch panel must branch on (email|portal|phone|manual).
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
     supplier_notes: str = ""  # fallback source for a phone number etc.

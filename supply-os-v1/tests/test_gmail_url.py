@@ -429,3 +429,51 @@ def test_company_footer_appended_when_present():
     )
     assert "NIP:" not in without_company
     assert "Pozdrawiam,\nPita Bros\n(zamowienie" in without_company
+
+
+# ---------- feedback r7: empty delivery-date line + standing office CC ----------
+
+
+def _url_and_body(cc_email=None):
+    """Build a one-line draft URL; return (url, decoded body)."""
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    order = _make_order(delivery_date=date(2026, 5, 25), lines=[line])
+    url = build_draft_url(
+        order, _make_supplier(), [line], products, None, cc_email=cc_email
+    )
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    return url, body
+
+
+def test_body_has_empty_delivery_date_line_for_manual_fill():
+    """The operator fills the date by hand — we must NOT inject the derived one."""
+    _, body = _url_and_body()
+    assert "Proszę o dostawę w dniu:" in body
+    # No date is auto-filled, and the fixed window still follows it.
+    assert "2026-05-25" not in body
+    assert "Dostawa możliwa od godziny 11:00" in body
+    lines = body.split("\n")
+    assert lines.index("Proszę o dostawę w dniu:") + 1 == lines.index(
+        "Dostawa możliwa od godziny 11:00"
+    )
+
+
+def test_cc_parameter_present_when_configured():
+    url, _ = _url_and_body(cc_email="biuro@pitabros.pl")
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert query["cc"] == ["biuro@pitabros.pl"]
+
+
+def test_cc_parameter_absent_when_empty_or_placeholder():
+    for value in (None, "", "TBD"):
+        url, _ = _url_and_body(cc_email=value)
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        assert "cc" not in query, f"cc must not be emitted for {value!r}"
+
+
+def test_cc_accepts_comma_joined_addresses():
+    url, _ = _url_and_body(cc_email="biuro@pitabros.pl,szef@pitabros.pl")
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert query["cc"] == ["biuro@pitabros.pl,szef@pitabros.pl"]

@@ -213,7 +213,13 @@ function EmailDispatch({
   // recipient in a normal-looking Gmail draft. Mirrors the backend gate.
   const noEmail = !to.includes("@");
 
-  const { url, tooLong } = buildGmailComposeUrl({ to, subject, body });
+  // Standing office copy (DW) from the backend — one source of truth shared with
+  // the server-side re-open URL. Shown below so the operator SEES the copy is
+  // going out; the "@" gate mirrors the recipient check (feedback r7).
+  const cc = detail.cc_email ?? "";
+  const hasCc = cc.includes("@");
+
+  const { url, tooLong } = buildGmailComposeUrl({ to, subject, body, cc });
   const canOpenGmail = !noEmail && !empty && !tooLong;
 
   return (
@@ -229,6 +235,17 @@ function EmailDispatch({
         <span className="w-16 shrink-0 text-xs font-semibold text-slate-500">{t("manager.dispatch.emailTo")}</span>
         <span className="font-mono text-slate-800">{to || "—"}</span>
       </div>
+
+      {/* DW (CC) — the office copy that rides on every order email. Rendered only
+          when configured, so an empty setting leaves the panel exactly as before. */}
+      {hasCc && (
+        <div className="flex items-center gap-2">
+          <span className="w-16 shrink-0 text-xs font-semibold text-slate-500">
+            {t("manager.dispatch.emailCc")}
+          </span>
+          <span className="font-mono text-slate-800">{cc}</span>
+        </div>
+      )}
 
       {/* Subject (editable) */}
       <div className="flex items-center gap-2">
