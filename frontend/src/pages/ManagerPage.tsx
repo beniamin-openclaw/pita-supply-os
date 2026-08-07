@@ -35,7 +35,11 @@ import {
   seedDrafts,
 } from "./manager/lib/draftState";
 
-const LOCATION_ID = "WOLA"; // single-location queue today (matches F3 + spec §1 non-goals)
+// The queue is deliberately NOT pinned to a location: `manager_queue` treats
+// location_id as an optional filter, so omitting it returns every location. It
+// used to be hardcoded to "WOLA", which silently hid a second location's orders
+// the moment BRACKA went live (bracka-rollout). Narrowing to one location is now
+// a client-side filter in ManagerFilterBar, like the supplier one.
 
 export function ManagerPage() {
   const { t } = useT();
@@ -47,6 +51,7 @@ export function ManagerPage() {
 
   // Queue filters (S-05) — ephemeral, client-side.
   const [filterSupplierId, setFilterSupplierId] = useState<string | null>(null);
+  const [filterLocationId, setFilterLocationId] = useState<string | null>(null);
   const [visibleLanes, setVisibleLanes] = useState<Set<QueueLane>>(
     () => new Set<QueueLane>(["submitted", "claimed", "sent", "closed"]),
   );
@@ -78,10 +83,10 @@ export function ManagerPage() {
 
   const loadQueue = useCallback(() => {
     Promise.all([
-      api.managerQueue(LOCATION_ID, "captain_submitted"),
-      api.managerQueue(LOCATION_ID, "manager_claimed"),
-      api.managerQueue(LOCATION_ID, "manager_sent"),
-      api.managerQueue(LOCATION_ID, "closed"),
+      api.managerQueue(undefined, "captain_submitted"),
+      api.managerQueue(undefined, "manager_claimed"),
+      api.managerQueue(undefined, "manager_sent"),
+      api.managerQueue(undefined, "closed"),
     ])
       .then(([sub, clm, snt, cls]) => {
         setSubmitted(sub);
@@ -380,19 +385,41 @@ export function ManagerPage() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [submitted, claimed, sent]);
 
+  // Location options (bracka-rollout). Derived from all FOUR lanes, unlike the
+  // supplier options above: a location whose only orders are already closed
+  // would otherwise be missing from the filter even though its tiles render in
+  // the (default-visible) closed lane. The label is the location_id — the queue
+  // item carries no location_name, and the tile shows the id as well.
+  const locationOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const arr of [submitted, claimed, sent, closed]) {
+      for (const q of arr ?? []) ids.add(q.location_id);
+    }
+    return [...ids].sort().map((id) => ({ id, name: id }));
+  }, [submitted, claimed, sent, closed]);
+
   const effectiveSupplierId =
     filterSupplierId && supplierOptions.some((o) => o.id === filterSupplierId)
       ? filterSupplierId
       : null;
 
-  const filterBySupplier = (arr: ManagerQueueItem[] | null) =>
-    arr === null
-      ? null
-      : effectiveSupplierId
-        ? arr.filter((q) => q.supplier_id === effectiveSupplierId)
-        : arr;
+  // Same resolve-at-render guard as the supplier filter: a location that drops
+  // out of the queue after a refresh falls back to "all" without setState.
+  const effectiveLocationId =
+    filterLocationId && locationOptions.some((o) => o.id === filterLocationId)
+      ? filterLocationId
+      : null;
 
-  const anyFilterActive = effectiveSupplierId !== null || visibleLanes.size < 4;
+  const filterQueue = (arr: ManagerQueueItem[] | null) => {
+    if (arr === null) return null;
+    let out = arr;
+    if (effectiveSupplierId) out = out.filter((q) => q.supplier_id === effectiveSupplierId);
+    if (effectiveLocationId) out = out.filter((q) => q.location_id === effectiveLocationId);
+    return out;
+  };
+
+  const anyFilterActive =
+    effectiveSupplierId !== null || effectiveLocationId !== null || visibleLanes.size < 4;
 
   const handleToggleLane = useCallback((lane: QueueLane) => {
     setVisibleLanes((prev) => {
@@ -405,6 +432,7 @@ export function ManagerPage() {
 
   const handleClearFilters = useCallback(() => {
     setFilterSupplierId(null);
+    setFilterLocationId(null);
     setVisibleLanes(new Set<QueueLane>(["submitted", "claimed", "sent"]));
   }, []);
 
@@ -486,6 +514,9 @@ export function ManagerPage() {
         <div className="flex flex-col gap-4 lg:flex-row">
           <div className="w-full lg:w-[360px] lg:shrink-0">
             <ManagerFilterBar
+              locationOptions={locationOptions}
+              selectedLocationId={effectiveLocationId}
+              onLocationChange={setFilterLocationId}
               supplierOptions={supplierOptions}
               selectedSupplierId={effectiveSupplierId}
               onSupplierChange={setFilterSupplierId}
@@ -495,10 +526,10 @@ export function ManagerPage() {
               anyActive={anyFilterActive}
             />
             <ManagerQueue
-              submitted={filterBySupplier(submitted)}
-              claimed={filterBySupplier(claimed)}
-              sent={filterBySupplier(sent)}
-              closed={filterBySupplier(closed)}
+              submitted={filterQueue(submitted)}
+              claimed={filterQueue(claimed)}
+              sent={filterQueue(sent)}
+              closed={filterQueue(closed)}
               selectedId={selectedId}
               onSelect={handleSelect}
               visibleLanes={visibleLanes}

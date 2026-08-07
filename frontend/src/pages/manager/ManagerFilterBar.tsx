@@ -1,6 +1,10 @@
-// Manager queue filters (S-05) — presentational supplier <select> + status
-// chips + clear. All filter state lives in the parent (ManagerPage); this only
-// renders props and reports changes. No data fetching, no app state.
+// Manager queue filters (S-05) — presentational location + supplier <select> +
+// status chips + clear. All filter state lives in the parent (ManagerPage); this
+// only renders props and reports changes. No data fetching, no app state.
+//
+// bracka-rollout: the location <select> completes FR-014's "supplier, location,
+// status" triple. It became load-bearing the moment a second location (BRACKA)
+// went live — before that the queue was pinned to WOLA in the parent.
 
 import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
@@ -11,7 +15,18 @@ export interface SupplierOption {
   name: string;
 }
 
+// Same shape as SupplierOption; named separately so the two option lists can't
+// be swapped by accident at the call site. `name` is the location_id today —
+// the queue item carries no location_name and the queue tile shows the id too.
+export interface LocationOption {
+  id: string;
+  name: string;
+}
+
 interface ManagerFilterBarProps {
+  locationOptions: LocationOption[];
+  selectedLocationId: string | null;
+  onLocationChange: (id: string | null) => void;
   supplierOptions: SupplierOption[];
   selectedSupplierId: string | null;
   onSupplierChange: (id: string | null) => void;
@@ -30,6 +45,9 @@ const LANES: { lane: QueueLane; labelKey: StringKey }[] = [
 ];
 
 export function ManagerFilterBar({
+  locationOptions,
+  selectedLocationId,
+  onLocationChange,
   supplierOptions,
   selectedSupplierId,
   onSupplierChange,
@@ -42,6 +60,32 @@ export function ManagerFilterBar({
 
   return (
     <div className="mb-3 space-y-3 rounded-lg border border-slate-200 bg-white p-3">
+      {/* Hidden while a single location has orders — a one-option filter is
+          noise, and that is the WOLA-only state the pilot ran in for months. */}
+      {locationOptions.length > 1 && (
+        <div>
+          <label
+            htmlFor="mgr-filter-location"
+            className="mb-1 block text-xs font-semibold text-slate-800"
+          >
+            {t("manager.filter.locationLabel")}
+          </label>
+          <select
+            id="mgr-filter-location"
+            value={selectedLocationId ?? ""}
+            onChange={(e) => onLocationChange(e.target.value === "" ? null : e.target.value)}
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-[16px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm"
+          >
+            <option value="">{t("manager.filter.allLocations")}</option>
+            {locationOptions.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div>
         <label
           htmlFor="mgr-filter-supplier"

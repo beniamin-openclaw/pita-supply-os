@@ -401,6 +401,8 @@ export const STRINGS = {
   },
   "manager.queueEmptyGroup": { pl: "Brak zamówień", en: "No orders" },
   // Manager queue filters (S-05) --------------------------------------------
+  "manager.filter.locationLabel": { pl: "Lokal", en: "Location" },
+  "manager.filter.allLocations": { pl: "Wszystkie lokale", en: "All locations" },
   "manager.filter.supplierLabel": { pl: "Dostawca", en: "Supplier" },
   "manager.filter.allSuppliers": { pl: "Wszyscy dostawcy", en: "All suppliers" },
   "manager.filter.statusLabel": { pl: "Status", en: "Status" },

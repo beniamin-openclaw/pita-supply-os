@@ -89,7 +89,7 @@ export function CaptainPage() {
 
         <section>
           <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-700">
-            Orderable @ WOLA × {selectedSupplier}
+            Orderable × {selectedSupplier}
           </h2>
           {error ? null : loading ? (
             <p className="text-sm text-slate-500">Ładowanie…</p>
