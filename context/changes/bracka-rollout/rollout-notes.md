@@ -68,6 +68,12 @@ widziałby cudzy lokal).
 `seed/locations.csv` — BRACKA: `active` FALSE→TRUE + adres (seed to fallback dev;
 testy mockują `load_locations`).
 
+## Deploy
+
+Commit `7c3b646` wypchnięty na `main` 2026-08-07. Potwierdzone na produkcji:
+bundle `assets/index-DSOiBeZz.js` (zgodny z buildem lokalnym) zawiera nowy klucz
+„Wszystkie lokale"; `GET /api/locations` → 401 (backend żyje, wymaga tokena).
+
 ## Do zrobienia przez operatora
 
 1. **Railway → Variables → `SUPPLY_OS_CAPTAIN_TOKENS`**: dopisać na końcu istniejącej
