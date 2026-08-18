@@ -1,10 +1,10 @@
 ---
 change_id: bracka-rollout
 title: Rollout lokalu Bracka — min/max z CSV, token Captain, kolejka Managera bez hardkodu WOLA
-status: impl_reviewed
+status: archived
 created: 2026-08-07
-updated: 2026-08-07
-archived_at: null
+updated: 2026-08-18
+archived_at: 2026-08-18T17:40:31Z
 ---
 
 ## Notes
