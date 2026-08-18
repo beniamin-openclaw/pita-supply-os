@@ -104,13 +104,29 @@ Zmienione: seed (`locations.csv` +NORBLIN, `location_product_settings.csv` +142 
 wyeksportowane z prod, `products.csv` +P142, `supplier_products.csv` +SP_PAGO_P142)
 oraz liczniki seeda w testach.
 
+## Smoke w prod — 2026-08-18, po ustawieniu tokena (wyłącznie GET)
+
+| Endpoint | Wynik |
+|---|---|
+| `/api/captain/orderable?supplier_id=SUP_BUKAT` | 200 · 15 pozycji (Pomidor 18/42, Cytryna 0,5/2 — zgodne z arkuszem) |
+| `/api/captain/orderable?supplier_id=SUP_PAGO` | 200 · 19 pozycji · **P142 5/40** · Gyros 15 KG 0/0 vs 25 KG 2/8 · P128/P130 0/0 |
+| `/api/captain/inventory/products` | 200 · 142 pozycje |
+| `/api/captain/orders` · `/api/captain/receipts` | 200 · puste (nowy lokal) |
+| `/api/captain/inventory/latest` | 200 · `null` (brak snapshotu) |
+
+Żadnego submitu ani dispatchu — zgodnie z twardą zasadą repo.
+
+Pierwsza próba smoke'a (przed deployem) zwracała `401 Invalid token`, nie
+`Bearer token required` — czyli backend parsował mapę tokenów i wartości w niej nie było.
+Diagnoza okazała się trafna: brakowało deployu, nie poprawności wartości.
+
 ## Do zrobienia przez operatora
 
-1. **Railway → Variables → `SUPPLY_OS_CAPTAIN_TOKENS`**: dopisać na końcu istniejącej
-   wartości parę `NORBLIN:<token>`. Token przekazany **wyłącznie w odpowiedzi na czacie**
+1. ~~**Railway → Variables → `SUPPLY_OS_CAPTAIN_TOKENS`**: dopisać parę
+   `NORBLIN:<token>`.~~ **ZROBIONE 2026-08-18** — smoke GET potwierdzony (patrz wyżej). Token przekazany **wyłącznie w odpowiedzi na czacie**
    — świadomie nie ma go w żadnym pliku repo (wniosek z Bracki: token wylądował
    w `rollout-notes.md`, czyli w gicie). Agent nie ustawia zmiennych na Railway.
-2. Merge gałęzi do `main` → auto-deploy Railway + Vercel.
+2. ~~Merge gałęzi do `main` → auto-deploy Railway + Vercel.~~ **ZROBIONE** (PR #20/#21).
 3. Przekazać token kapitanowi Norblina (w aplikacji wkleja samą wartość hex; prefiks
    `NORBLIN:` jest po stronie serwera, a `sanitizeTokenInput` i tak by go obciął).
 
