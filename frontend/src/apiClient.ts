@@ -354,9 +354,14 @@ export const api = {
       "captain",
     ),
   // Manager
-  managerQueue: (location_id?: string, status: OrderStatus = "captain_submitted") => {
+  managerQueue: (
+    location_id?: string,
+    status: OrderStatus = "captain_submitted",
+    limit?: number,
+  ) => {
     const params = new URLSearchParams({ status });
     if (location_id) params.set("location_id", location_id);
+    if (limit) params.set("limit", String(limit));
     return apiGet<ManagerQueueItem[]>(`/api/manager/queue?${params}`, "manager");
   },
   managerOrder: (order_id: string) =>

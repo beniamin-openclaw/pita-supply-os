@@ -702,10 +702,14 @@ def _compute_next_cutoff(supplier: Supplier, now_utc: datetime) -> Optional[date
 def manager_queue(
     location_id: Optional[str] = None,
     status: OrderStatus = OrderStatus.CAPTAIN_SUBMITTED,
+    limit: int = 50,
     _: None = Depends(require_manager),
 ):
     """List orders matching ``status`` (default captain_submitted), optionally
-    filtered by ``location_id``.
+    filtered by ``location_id``. ``limit`` (default 50, clamped 1..200) caps the
+    lane to the newest N orders — F5: the manager_sent/closed lanes grow forever,
+    and now that the location filter is client-side (bracka-rollout removed the
+    old WOLA hardcode) every poll scans every location's history instead of one.
 
     Seed backend cannot serve this — orders live only in the Sheet. In that
     mode we return an empty list and log a warning so the Manager dashboard
@@ -719,6 +723,8 @@ def manager_queue(
         )
         return []
 
+    limit = max(1, min(limit, 200))
+
     orders = backend.load_orders()
     filtered = [
         o for o in orders
@@ -727,6 +733,16 @@ def manager_queue(
     ]
     if not filtered:
         return []
+
+    # F5: sort newest-first and clamp to `limit` BEFORE any per-order enrichment
+    # (the F-7 targeted line load + the receipt scan below), so the line/receipt
+    # scan shrinks with the page instead of growing with the lane's full history.
+    # Same key as the final sort below (captain_submitted_at; no cutoff_iso).
+    filtered.sort(
+        key=lambda o: -(o.captain_submitted_at.timestamp()
+                         if o.captain_submitted_at else 0.0)
+    )
+    filtered = filtered[:limit]
 
     # F-7: load only the lines for the orders we're displaying — a targeted
     # `WHERE order_id = ANY(...)` on Supabase (one cached read on Sheets), not a
@@ -737,21 +753,22 @@ def manager_queue(
         lines_by_order.setdefault(line.order_id, []).append(line)
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     now_utc = datetime.now(timezone.utc)
     threshold = _deviation_threshold()
 
     # Receipt signal (manager-receiving-view): only the manager_sent lane can have
     # goods-receipts. Count receipts + discrepancy-bearing receipts per displayed
     # order so the FE renders the ⚠ / ✓ chip. Other lanes skip the scan entirely.
-    # Degrade to no signal when the receipts tab is absent (mirrors captain_receipts).
+    # F5: targeted to `order_ids` (the already-limited page) via
+    # `load_receipts_for_orders`, not a full receipts table scan — mirrors the
+    # F-7 order_lines loader above. Degrade to no signal when the receipts tab is
+    # absent (mirrors captain_receipts).
     received_count_by_order: dict[str, int] = {}
     received_discrepancy_by_order: dict[str, int] = {}
     if status in (OrderStatus.MANAGER_SENT, OrderStatus.CLOSED):
-        wanted = set(order_ids)
         try:
-            for r in backend.load_receipts():
-                if r.order_id not in wanted:
-                    continue
+            for r in backend.load_receipts_for_orders(order_ids):
                 received_count_by_order[r.order_id] = (
                     received_count_by_order.get(r.order_id, 0) + 1
                 )
@@ -766,6 +783,8 @@ def manager_queue(
     for order in filtered:
         supplier = suppliers_by_id.get(order.supplier_id)
         supplier_name = supplier.supplier_name if supplier else order.supplier_id
+        location = locations_by_id.get(order.location_id)
+        location_name = location.location_name if location else order.location_id
         lines = lines_by_order.get(order.order_id, [])
 
         deviation_count = sum(
@@ -780,6 +799,7 @@ def manager_queue(
             ManagerQueueItem(
                 order_id=order.order_id,
                 location_id=order.location_id,
+                location_name=location_name,
                 supplier_id=order.supplier_id,
                 supplier_name=supplier_name,
                 order_date=order.order_date,

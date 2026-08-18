@@ -785,6 +785,20 @@ def load_receipt_lines() -> list[ReceiptLine]:
     return _read_with_ttl("receipt_lines", ReceiptLine, ORDERS_TTL_SECONDS)
 
 
+def load_receipts_for_orders(order_ids: list[str]) -> list[Receipt]:
+    """Receipts for a specific set of orders — a targeted filter over the
+    TTL-cached full read, not a full-table scan (F5, mirrors
+    ``load_order_lines_for_orders``). Sheets has no targeted query, so this
+    still reads the whole (cached) 'receipts' worksheet and filters in Python;
+    the win is that the manager_queue caller only asks for the orders on the
+    page it's about to render, not every order ever dispatched. Empty id list
+    short-circuits to ``[]`` (no read)."""
+    if not order_ids:
+        return []
+    wanted = set(order_ids)
+    return [r for r in load_receipts() if r.order_id in wanted]
+
+
 def append_receipt(receipt: Receipt) -> None:
     """Append one row to 'receipts', then invalidate the read cache.
 
