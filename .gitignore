@@ -1,5 +1,8 @@
 .DS_Store
 .claude/
+.agents/
+.codex/
+.vercel/
 *.lock
 node_modules/
 .env
