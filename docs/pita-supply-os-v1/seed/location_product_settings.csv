@@ -416,3 +416,9 @@ NORBLIN__P139,NORBLIN,P139,0,0,0,FALSE,FALSE,norblin-rollout 2026-08-18: brak na
 NORBLIN__P140,NORBLIN,P140,0,0,0,FALSE,FALSE,norblin-rollout 2026-08-18: brak na liscie CSV Norblin
 NORBLIN__P141,NORBLIN,P141,0,0,0,FALSE,FALSE,norblin-rollout 2026-08-18: brak na liscie CSV Norblin
 NORBLIN__P142,NORBLIN,P142,5,40,40,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz min/max (nowe SKU 57/50)
+NORBLIN__P143,NORBLIN,P143,3,20,20,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz min/max
+NORBLIN__P144,NORBLIN,P144,1,2,2,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz min/max
+NORBLIN__P145,NORBLIN,P145,0.5,1.5,1.5,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz min/max
+BRACKA__P143,BRACKA,P143,2,5,5,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz Bracki min/max
+BRACKA__P144,BRACKA,P144,0,0,0,FALSE,FALSE,norblin-rollout 2026-08-18: brak min/max w arkuszu Bracki
+BRACKA__P145,BRACKA,P145,0.5,1.5,1.5,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz Bracki min/max
