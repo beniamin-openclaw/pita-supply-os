@@ -1,10 +1,17 @@
 ---
 change_id: norblin-rollout
 title: Rollout lokalu Norblin — nowy lokal, min/max z CSV, token Captain
-status: in-progress
+status: archived
 created: 2026-08-18
 updated: 2026-08-18
+archived_at: 2026-08-18T18:35:00Z
 ---
+
+> **Otwarte po archiwizacji** (Faza 4, krok operatora): dopisanie pary
+> `NORBLIN:<token>` w Railway → Variables → `SUPPLY_OS_CAPTAIN_TOKENS` oraz smoke GET
+> w prod tokenem Norblina. Kod i dane są wdrożone (PR #20, merge `ee62eea`);
+> do czasu ustawienia tokena kapitan Norblina nie zaloguje się. Follow-upy w
+> `rollout-notes.md`.
 
 ## Notes
 
