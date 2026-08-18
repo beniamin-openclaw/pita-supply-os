@@ -5,19 +5,19 @@
 rolloutach kolejnych punktów. Świadomie NIE trzymamy tu kont bankowych ani
 danych osobowych — stopka zamówienia ich nie potrzebuje.
 
-## Lokalizacje objęte systemem (Wolska + rollout Bracka/KEN)
+## Lokalizacje objęte systemem (Wolska + rollout Bracka/KEN/Norblin)
 
 | location_id | Lokal (adres dostawy) | Spółka | NIP | Adres firmy | Telefon |
 |---|---|---|---|---|---|
 | WOLA | ul. Wolska 165, 01-258 Warszawa | Pita Bros sp. z o.o. | 9522100633 | ul. W. Laskonogiego 9, 02-496 Warszawa | 662015470 |
 | BRACKA | ul. Bracka 20, 00-028 Warszawa | Pita Bros Centrum Sp. z o.o. | 5223314413 | ul. W. Laskonogiego 9, 02-496 Warszawa | 600722252 |
 | KEN | Al. KEN 21, Warszawa *(kod pocztowy do uzupełnienia)* | Pita Bros KEN sp. z o.o. | 5223241275 | ul. W. Laskonogiego 9, 02-496 Warszawa | 530699266 |
+| NORBLIN | ul. Żelazna 51/53, 00-841 Warszawa | Pita Bros sp. z o.o. | 9522100633 | ul. W. Laskonogiego 9, 02-496 Warszawa | 535300514 |
 
 ## Pozostałe (na przyszłe rollouty)
 
 | Lokal | Spółka | NIP | Adres lokalu | Telefon |
 |---|---|---|---|---|
-| Norblin | Pita Bros sp. z o.o. | 9522100633 | ul. Żelazna 51/53, 00-841 Warszawa | 535300514 |
 | Katowice (Supersam Bajsownia) | Pita Bros sp. z o.o. | 9522100633 | Ks. Piotra Skargi 6A, 40-091 Katowice | — |
 | Nocny Market (sezonowo) | Pita Bros sp. z o.o. | 9522100633 | Towarowa, Warszawa | — |
 | MEZE (Wilcza) | Greek Meze sp. z o.o. sp.k. | 9522104424 | Wilcza 46, 00-679 Warszawa | 698782654 |
