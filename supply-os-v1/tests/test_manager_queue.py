@@ -7,7 +7,7 @@ settings.data_backend is enough to route reads at it.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -347,6 +347,95 @@ def test_queue_cutoff_iso_none_when_supplier_missing_fields(mocker):
     r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
     assert r.json()[0]["cutoff_iso"] is None
+
+
+# ---------- F4: location_name join ----------
+
+
+def test_queue_joins_location_name(mocker):
+    orders = [_order("ORD-A", location_id="BRACKA")]
+    locations = [_location(location_id="BRACKA", name="Pita Bros Bracka")]
+    _enable_sheet_backend(mocker, orders=orders, locations=locations)
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["location_name"] == "Pita Bros Bracka"
+
+
+def test_queue_location_name_falls_back_to_id_when_location_unknown(mocker):
+    # The order references a location that isn't in master data (e.g. a stale
+    # or since-removed row) — must degrade to the id rather than 500 or "".
+    orders = [_order("ORD-A", location_id="GHOST")]
+    _enable_sheet_backend(
+        mocker, orders=orders, locations=[_location("WOLA", "Pita Bros Wola")]
+    )
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["location_name"] == "GHOST"
+
+
+# ---------- F5: limit clamp + newest-N + scoped enrichment ----------
+
+
+def test_queue_limit_returns_newest_n(mocker):
+    orders = [
+        _order("ORD-OLD", captain_submitted_at=datetime(2026, 5, 1, 8, 0, tzinfo=timezone.utc)),
+        _order("ORD-MID", captain_submitted_at=datetime(2026, 5, 10, 8, 0, tzinfo=timezone.utc)),
+        _order("ORD-NEW", captain_submitted_at=datetime(2026, 5, 20, 8, 0, tzinfo=timezone.utc)),
+    ]
+    _enable_sheet_backend(mocker, orders=orders)
+
+    r = client.get("/api/manager/queue", params={"limit": 2}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    ids = [row["order_id"] for row in r.json()]
+    assert ids == ["ORD-NEW", "ORD-MID"]
+
+
+def test_queue_limit_clamps_below_one(mocker):
+    orders = [
+        _order("ORD-OLD", captain_submitted_at=datetime(2026, 5, 1, 8, 0, tzinfo=timezone.utc)),
+        _order("ORD-NEW", captain_submitted_at=datetime(2026, 5, 20, 8, 0, tzinfo=timezone.utc)),
+    ]
+    _enable_sheet_backend(mocker, orders=orders)
+
+    r = client.get("/api/manager/queue", params={"limit": 0}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert len(payload) == 1
+    assert payload[0]["order_id"] == "ORD-NEW"
+
+
+def test_queue_limit_clamps_above_200(mocker):
+    base = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    orders = [
+        _order(f"ORD-{i:03d}", captain_submitted_at=base + timedelta(minutes=i))
+        for i in range(205)
+    ]
+    _enable_sheet_backend(mocker, orders=orders)
+
+    r = client.get("/api/manager/queue", params={"limit": 500}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert len(payload) == 200
+    # newest-first: the last order created (ORD-204) sorts to the top.
+    assert payload[0]["order_id"] == "ORD-204"
+
+
+def test_queue_limit_scopes_line_load_to_sliced_orders(mocker):
+    """F5: `load_order_lines_for_orders` must only be asked about the page
+    actually returned, not every order matching the status/location filter."""
+    orders = [
+        _order("ORD-OLD", captain_submitted_at=datetime(2026, 5, 1, 8, 0, tzinfo=timezone.utc)),
+        _order("ORD-NEW", captain_submitted_at=datetime(2026, 5, 20, 8, 0, tzinfo=timezone.utc)),
+    ]
+    _enable_sheet_backend(mocker, orders=orders)
+    spy = mocker.spy(sheets, "load_order_lines_for_orders")
+
+    r = client.get("/api/manager/queue", params={"limit": 1}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert len(r.json()) == 1
+    spy.assert_called_once_with(["ORD-NEW"])
 
 
 # ---------- /api/manager/order/{id} ----------

@@ -144,7 +144,7 @@ function QueueCard({
       >
         <div className="flex items-center gap-2">
           <span className="min-w-0 truncate text-sm font-medium text-slate-900">
-            {item.location_id} → {item.supplier_name}
+            {item.location_name} → {item.supplier_name}
           </span>
           {item.last_edited_at && (
             <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-purple-800">

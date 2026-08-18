@@ -16,8 +16,8 @@ export interface SupplierOption {
 }
 
 // Same shape as SupplierOption; named separately so the two option lists can't
-// be swapped by accident at the call site. `name` is the location_id today —
-// the queue item carries no location_name and the queue tile shows the id too.
+// be swapped by accident at the call site. `name` is the joined location_name
+// (F4) — the queue item carries it, mirroring supplier_name / SupplierOption.
 export interface LocationOption {
   id: string;
   name: string;

@@ -306,6 +306,7 @@ export interface ManagerAddLineResponse {
 export interface ManagerQueueItem {
   order_id: string;
   location_id: string;
+  location_name: string; // joined from locations; falls back to location_id (F4)
   supplier_id: string;
   supplier_name: string;
   order_date: string;

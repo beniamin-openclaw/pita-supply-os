@@ -252,6 +252,7 @@ class ManagerQueueItem(BaseModel):
     """One row in the Manager dashboard's queue pane (compact list)."""
     order_id: str
     location_id: str
+    location_name: str  # joined from locations tab; falls back to location_id (F4)
     supplier_id: str
     supplier_name: str  # joined from suppliers tab
     order_date: date

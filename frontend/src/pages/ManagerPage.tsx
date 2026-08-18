@@ -388,14 +388,16 @@ export function ManagerPage() {
   // Location options (bracka-rollout). Derived from all FOUR lanes, unlike the
   // supplier options above: a location whose only orders are already closed
   // would otherwise be missing from the filter even though its tiles render in
-  // the (default-visible) closed lane. The label is the location_id — the queue
-  // item carries no location_name, and the tile shows the id as well.
+  // the (default-visible) closed lane. The label is the joined location_name
+  // (F4) — the queue item now carries it, mirroring supplier_name below.
   const locationOptions = useMemo(() => {
-    const ids = new Set<string>();
+    const byId = new Map<string, string>();
     for (const arr of [submitted, claimed, sent, closed]) {
-      for (const q of arr ?? []) ids.add(q.location_id);
+      for (const q of arr ?? []) byId.set(q.location_id, q.location_name);
     }
-    return [...ids].sort().map((id) => ({ id, name: id }));
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [submitted, claimed, sent, closed]);
 
   const effectiveSupplierId =

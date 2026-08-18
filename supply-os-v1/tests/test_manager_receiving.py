@@ -161,14 +161,31 @@ def _enable(
         receipts_mock = mocker.patch.object(
             sheets, "load_receipts", side_effect=receipts_side_effect
         )
+        # manager_queue calls the F5 targeted loader (not load_receipts); a
+        # degrade test needs it to raise the same way regardless of the args.
+        receipts_for_orders_mock = mocker.patch.object(
+            sheets, "load_receipts_for_orders", side_effect=receipts_side_effect
+        )
     else:
         receipts_mock = mocker.patch.object(
             sheets, "load_receipts", return_value=receipts or []
         )
+        all_receipts = receipts or []
+
+        def _for_orders(order_ids: list[str], _all=all_receipts):
+            wanted = set(order_ids)
+            return [r for r in _all if r.order_id in wanted]
+
+        receipts_for_orders_mock = mocker.patch.object(
+            sheets, "load_receipts_for_orders", side_effect=_for_orders
+        )
     mocker.patch.object(
         sheets, "load_receipt_lines", return_value=receipt_lines or []
     )
-    return {"load_receipts": receipts_mock}
+    return {
+        "load_receipts": receipts_mock,
+        "load_receipts_for_orders": receipts_for_orders_mock,
+    }
 
 
 # ---------- Detail: receipts block ----------
@@ -304,6 +321,32 @@ def test_detail_closed_order_includes_receipts(mocker):
 
 # ---------- Queue: receipt counters ----------
 
+def test_queue_sent_lane_uses_targeted_receipts_loader(mocker):
+    """F5: the queue's receipt scan must go through `load_receipts_for_orders`
+    (targeted `WHERE order_id = ANY(...)` on Supabase / filtered TTL-cached read
+    on Sheets), never the full `load_receipts()` table scan — and it must still
+    produce the same received_count for the displayed order."""
+    order_a = _order("ORD-A")
+    receipts = [
+        _receipt("RCP-A1", "ORD-A", datetime(2026, 6, 21, 9, 0, tzinfo=timezone.utc)),
+    ]
+    handles = _enable(
+        mocker,
+        orders=[order_a],
+        get_order_return=None,
+        order_lines=[_line("ORD-A", "OL-1")],
+        receipts=receipts,
+    )
+
+    r = client.get(
+        "/api/manager/queue", params={"status": "manager_sent"}, headers=MANAGER_AUTH
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["received_count"] == 1
+    handles["load_receipts_for_orders"].assert_called_once_with(["ORD-A"])
+    handles["load_receipts"].assert_not_called()
+
+
 def test_queue_sent_lane_sets_received_counts(mocker):
     order_a = _order("ORD-A")  # 2 receipts, one with discrepancy
     order_b = _order("ORD-B")  # 1 clean receipt
@@ -350,7 +393,7 @@ def test_queue_submitted_lane_skips_receipt_scan(mocker):
     row = r.json()[0]
     assert row["received_count"] == 0
     assert row["received_discrepancy_count"] == 0
-    handles["load_receipts"].assert_not_called()
+    handles["load_receipts_for_orders"].assert_not_called()
 
 
 def test_queue_sent_lane_degrades_when_receipts_tab_missing(mocker):

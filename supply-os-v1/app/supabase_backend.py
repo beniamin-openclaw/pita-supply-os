@@ -572,6 +572,19 @@ def load_receipt_lines() -> list[ReceiptLine]:
     )
 
 
+def load_receipts_for_orders(order_ids: list[str]) -> list[Receipt]:
+    """Receipts for a specific set of orders — a targeted query, not a full-table
+    scan (F5, mirrors ``load_order_lines_for_orders``). ``order_id`` is indexed;
+    an empty id list short-circuits to ``[]`` (no query)."""
+    if not order_ids:
+        return []
+    return _fetch_all(
+        "SELECT * FROM receipts WHERE order_id = ANY(:ids) ORDER BY receipt_id",
+        Receipt,
+        {"ids": list(order_ids)},
+    )
+
+
 def append_receipt(receipt: Receipt) -> None:
     _insert("receipts", _RECEIPT_COLUMNS, receipt)
 
