@@ -139,11 +139,15 @@ Diagnoza okazała się trafna: brakowało deployu, nie poprawności wartości.
       Jeśli okaże się duplikatem istniejącego rozmiaru: usunąć P142, przenieść progi 5/40
       na właściwe SKU. Wiersz `location_product_settings` istnieje tylko dla NORBLIN,
       więc pomyłka nie dotyka WOLA/Bracki.
-- [ ] **3 pozycje z arkusza bez odpowiednika w katalogu** — `Tacki papierowe` (3/20),
-      `Kubeczki papierowe` (1/2) u Blue Service, `Bifteki burgers` (0,5/1,5) u Pago.
-      Do dodania jako produkty + `supplier_products` (potrzebne: jednostka zakupu,
-      szt./opak., cena szacunkowa). **To ten sam otwarty punkt, co przy Bracce** — wraca
-      drugi raz, więc warto go domknąć zamiast przepisywać dalej.
+- [x] **3 pozycje z arkusza bez odpowiednika w katalogu** — DODANE 2026-08-18 na decyzję
+      operatora („skoro są w arkuszach, to widocznie je zamawiają"): **P143 Tacki papierowe**,
+      **P144 Kubeczki papierowe** (Blue Service, `opak`/`opak`/1) i **P145 Bifteki burgers**
+      (Pago, `kg`, zakup w `karton`). Progi z arkuszy OBU lokali: NORBLIN 3/20 · 1/2 · 0,5/1,5;
+      BRACKA 2/5 · 0/0 (puste pole w arkuszu) · 0,5/1,5. WOLA i KEN nie dostają wierszy —
+      tych pozycji nie ma w ich arkuszach. `price_estimate_pln` **puste** zamiast zgadywanego
+      (jak przy piwach Corfu) — wycena zamówienia po prostu ich nie liczy.
+      Otwarte przy tych pozycjach: ceny wszystkich trzech oraz **ile kg mieści karton
+      biftek** — ta druga wpływa na wielkość sugestii, więc wpisano tymczasowo 1.
 - [ ] **KEN** — nadal kopia progów z WOLA (138 wierszy), czeka na własny arkusz.
 - [ ] **Rotacja tokenów** — otwarte od `feedback-r4`; przy trzecim lokalu warto wymienić
       komplet.

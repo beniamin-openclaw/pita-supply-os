@@ -56,13 +56,13 @@ def test_products_requires_auth():
 def test_products_with_captain_token():
     r = client.get("/api/products", headers=WOLA_AUTH)
     assert r.status_code == 200
-    assert len(r.json()) == 142
+    assert len(r.json()) == 145
 
 
 def test_products_with_manager_token():
     r = client.get("/api/products", headers=MANAGER_AUTH)
     assert r.status_code == 200
-    assert len(r.json()) == 142
+    assert len(r.json()) == 145
 
 
 def test_products_rejects_bad_token():

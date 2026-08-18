@@ -141,3 +141,6 @@ SP_INTERMLECZ_P139,SUP_INTERMLECZ,P139,AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30,
 SP_INTERMLECZ_P140,SUP_INTERMLECZ,P140,KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6,szt,1,full_only,,TRUE,
 SP_INTERMLECZ_P141,SUP_INTERMLECZ,P141,LIPTON HERBATA YELLOW LABEL 100szt./12 koperta,opak,1,full_only,,TRUE,
 SP_PAGO_P142,SUP_PAGO,P142,Rolki do kasy 57 na 50,szt,1,full_only,1.29,TRUE,cena szacunkowa po P130 - do potwierdzenia
+SP_BLUESERV_P143,SUP_BLUESERV,P143,Tacki papierowe,opak,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P144,SUP_BLUESERV,P144,Kubeczki papierowe,opak,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_PAGO_P145,SUP_PAGO,P145,Bifteki burgers,karton,1,full_only,,TRUE,do potwierdzenia: ile kg w kartonie + cena
