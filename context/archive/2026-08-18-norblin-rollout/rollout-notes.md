@@ -87,9 +87,11 @@ delete from supplier_products         where product_id = 'P142';
 delete from products                  where product_id = 'P142';
 ```
 
-`_norblin_lps_backup_20260818` (0 wierszy) dokumentuje, że przed zmianą nie było nic —
-do skasowania po wejściu progów NORBLIN do seeda (`git` staje się trwalszym zapisem
-stanu niż nieśledzona tabela w `public`).
+`_norblin_lps_backup_20260818` (0 wierszy) dokumentował, że przed zmianą nie było nic.
+**Skasowany 2026-08-18** po wejściu progów NORBLIN do seeda: miał 0 wierszy, a rollback
+powyżej i tak jest oparty na `DELETE`, nie na tej tabeli — nie dawał żadnego zabezpieczenia,
+a zostawałby w `public` na zawsze (F7 z impl-review Bracki). Schemat `public` nie ma już
+żadnych tabel roboczych poza `_meta`.
 
 ## Zmiany w repo
 
@@ -131,5 +133,9 @@ oraz liczniki seeda w testach.
       komplet.
 - [ ] **Rozjazd seed ↔ prod na WOLA** — seed ma 134 wiersze `location_product_settings`
       dla WOLA, prod 141. Zastane, niezwiązane z Norblinem.
-- [ ] `_norblin_lps_backup_20260818` — skasować po potwierdzeniu poprawności przez
-      operatora.
+- [x] `_norblin_lps_backup_20260818` — skasowana 2026-08-18 (0 wierszy, rollback i tak
+      oparty na `DELETE`).
+- [ ] **Pozycje spoza arkusza Norblina, które Wola i Bracka zamawiają** — papier toaletowy,
+      worki 60 L, butla gazowa 10 L, Corona / Corona 0% / Fuzetea, wina Ionos 750 ml,
+      Retsina, Mythos, piwa Corfu. Wygląda na lukę w arkuszu, nie na decyzję. Wysłane
+      do menedżera do potwierdzenia; do czasu odpowiedzi zostają na 0/0/0.
