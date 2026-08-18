@@ -230,7 +230,7 @@ w `rollout-notes.md`, czyli w gicie).
 - [x] Faza 1 — dane w prod (backup 0 → lokal → P142 → A 98 → B 9 → C 34 → D 1 = 142 wiersze)
 - [x] Faza 2 — seed + testy (4 pliki seeda +145 wierszy, 3 liczniki w test_main.py)
 - [x] Faza 3 — dokumentacja + rollout-notes (COMPANY_ENTITIES: Norblin → lokale objęte systemem)
-- [ ] Faza 4 — token (operator, Railway) + merge do `main`
+- [x] Faza 4 — token ustawiony przez operatora (Railway) + merge do `main` (PR #20/#21)
 - [x] Weryfikacja lokalna: pytest 438 ✓, ruff ✓, vite build ✓, eslint ✓, vitest 89 ✓
 - [x] SQL post-check: 98/98 zgodnych z arkuszem, 0 rozbieżności; seed↔prod md5 identyczne
-- [ ] Smoke GET w prod (po ustawieniu tokena i deployu)
+- [x] Smoke GET w prod 2026-08-18: orderable Bukat 15 / Pago 19, inventory/products 142, P142 5/40, Gyros 15 KG 0/0 vs 25 KG 2/8 — zgodnie z arkuszem. Zero submitów.
