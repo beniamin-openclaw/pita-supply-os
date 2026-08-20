@@ -144,3 +144,12 @@ SP_PAGO_P142,SUP_PAGO,P142,Rolki do kasy 57 na 50,szt,1,full_only,1.29,TRUE,cena
 SP_BLUESERV_P143,SUP_BLUESERV,P143,Tacki papierowe,opak,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
 SP_BLUESERV_P144,SUP_BLUESERV,P144,Kubeczki papierowe,opak,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
 SP_PAGO_P145,SUP_PAGO,P145,Bifteki burgers,karton,1,full_only,,TRUE,do potwierdzenia: ile kg w kartonie + cena
+SP_BLUESERV_P146,SUP_BLUESERV,P146,Aroma Patyczki zapachowe,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P147,SUP_BLUESERV,P147,Attis odświeżacz powietrza 300 ml,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P148,SUP_BLUESERV,P148,Szczotka do zamiatania na kiju Vileda,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P149,SUP_BLUESERV,P149,Szufelka ze zmiotką,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P150,SUP_BLUESERV,P150,Marker podświetlacz,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P151,SUP_BLUESERV,P151,Płyn do podłogi 5L,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P152,SUP_BLUESERV,P152,Cleaner w sprayu do stolików drewnianych lakierowanych,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P153,SUP_BLUESERV,P153,Zapas do mopa płaskiego Vileda Ultra Max,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P154,SUP_BLUESERV,P154,Tetra,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze

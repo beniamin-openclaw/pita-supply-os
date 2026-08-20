@@ -65,9 +65,9 @@
 - **Rule**: Before asking the user to live-test, drive or explicitly propose the FULL end-to-end deploy first — frontend AND backend AND any DB migration (migration before the code that depends on it) — and confirm the new build is actually live (new Vercel production bundle for the merge commit / commit on `main` / backend health) before handing over the test steps. Never point the user at a screen for a change that is still local, uncommitted, or unmerged.
 - **Applies to**: implement, impl-review
 
-## Master-data ops: diff przed, audyt po
+## Master-data ops: diff before, audit after
 
-- **Context**: prod Supabase (location_product_settings / suppliers / products), batch feedback-r4 2026-07-16 — zbiorcze UPDATE bez formalnego plan.md
-- **Problem**: zbiorcza zmiana master data w prod bez śladu porównawczego nie daje ścieżki rollbacku ani weryfikacji — a pojedynczy błędny wiersz (np. 'TBD' jako email) potrafi cicho zgubić realne zamówienie
-- **Rule**: każdy batch na master data w prod przechodzi 3 kroki: (1) SELECT-diff stare→nowe zapisany przed UPDATE (to jest rollback), (2) apply, (3) audyt po (asercje spójności, np. min≤max, target=max, brak placeholderów) + wpis w context/changes/<change-id>/change.md
-- **Applies to**: wszystkie operacje SQL na prod Supabase poza pojedynczymi oczywistymi UPDATE'ami; w szczególności rollout Bracka/KEN
+- **Context**: prod Supabase (location_product_settings / suppliers / products); the feedback-r4 batch of 2026-07-16, run as bulk UPDATEs without a formal plan.md.
+- **Problem**: a bulk master-data change in prod with no comparison trace gives you neither a rollback path nor a way to verify the result — and a single bad row (e.g. 'TBD' as an email) can silently swallow a real order.
+- **Rule**: every master-data batch in prod goes through 3 steps: (1) a SELECT-diff of old→new saved BEFORE the UPDATE (that diff IS the rollback), (2) apply, (3) audit after (consistency assertions, e.g. min<=max, target=max, no placeholders) plus an entry in context/changes/<change-id>/change.md.
+- **Applies to**: every SQL operation on prod Supabase beyond a single obvious UPDATE; the Bracka/KEN rollouts in particular.

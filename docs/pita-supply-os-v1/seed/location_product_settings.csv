@@ -422,3 +422,20 @@ NORBLIN__P145,NORBLIN,P145,0.5,1.5,1.5,FALSE,FALSE,norblin-rollout 2026-08-18: a
 BRACKA__P143,BRACKA,P143,2,5,5,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz Bracki min/max
 BRACKA__P144,BRACKA,P144,0,0,0,FALSE,FALSE,norblin-rollout 2026-08-18: brak min/max w arkuszu Bracki
 BRACKA__P145,BRACKA,P145,0.5,1.5,1.5,FALSE,FALSE,norblin-rollout 2026-08-18: arkusz Bracki min/max
+WOLA__P143,WOLA,P143,1,3,3,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P146,WOLA,P146,1,2,2,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P147,WOLA,P147,1,3,3,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P148,WOLA,P148,1,2,2,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P149,WOLA,P149,1,2,2,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P150,WOLA,P150,1,3,3,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P151,WOLA,P151,1,2,2,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P152,WOLA,P152,1,2,2,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P153,WOLA,P153,1,2,2,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P154,WOLA,P154,2,5,5,FALSE,FALSE,wolska-blueservice-master-data 2026-08-20: arkusz min/max
+WOLA__P135,WOLA,P135,2,10,10,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
+WOLA__P136,WOLA,P136,6,6,6,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
+WOLA__P137,WOLA,P137,6,6,6,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
+WOLA__P138,WOLA,P138,6,6,6,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
+WOLA__P139,WOLA,P139,0.5,1.5,1.5,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
+WOLA__P140,WOLA,P140,0.5,1.5,1.5,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
+WOLA__P141,WOLA,P141,0.5,1.5,1.5,FALSE,FALSE,domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)
