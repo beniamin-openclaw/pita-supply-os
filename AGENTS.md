@@ -21,13 +21,14 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 
 ## Local setup & gotchas
 - **Local dev needs no Google credentials**: set `SUPPLY_OS_DATA_BACKEND=seed` to read CSVs from `SUPPLY_OS_SEED_DIR` (default `../docs/pita-supply-os-v1/seed`). The `sheet` backend additionally needs `SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON` (inline or file path) + `SUPPLY_OS_GOOGLE_SHEET_ID`.
+- **The seed CSVs are a curated test fixture, NOT a production mirror** — nothing syncs them to prod and they diverge in both directions (see @docs/pita-supply-os-v1/seed/README.md). A green backend suite proves behavior against the fixture, never against production master data; verify prod claims with a prod query. Write tests that assert on behavior, not on facts about the real business.
 - **API URL is env-driven — don't hardcode it.** Dev sets `VITE_API_URL=http://localhost:8901`; in prod `apiClient` uses `BASE_URL=""` and Vercel rewrites `/api/*` to the droplet (see @frontend/vercel.json).
 - **Auth:** `SUPPLY_OS_CAPTAIN_TOKENS` (LOCATION:token pairs) + `SUPPLY_OS_MANAGER_TOKEN`; empty disables auth (dev only). Copy each app's `.env.example` → `.env`.
 
 ## Conventions & deploy
 - **Solo repo — no enforced commit/branch/PR convention; don't impose one.**
 - **Deploy from this repo is NOT wired up yet (migration in progress)** — don't assume `push` auto-deploys; re-pointing Vercel/droplet is a pending step.
-- **No CI yet** — `push` runs no tests; run `/verify` before committing.
+- **CI runs on push + PR** (@.github/workflows/ci.yml): backend `ruff` + `pytest`, a real-Postgres integration job (`pytest -m integration`), and frontend build + lint + vitest. Still run `/verify` before committing — CI is a backstop, not a substitute.
 - Style differs from defaults: ruff `line-length = 100` (not 88); TS `strict` is **off** in `frontend/tsconfig.app.json` — annotate function params, return types, and component props explicitly; don't rely on inferred `any`.
 - Other known gaps: frontend has no test runner; backend has no lockfile. Detail + fixes: @context/foundation/health-check.md.
 
