@@ -1,67 +1,68 @@
--- supplier-per-location — Phase 4 (prod master data)
+-- supplier-per-location — prod master data
 --
 -- STATUS 2026-08-20: NOT APPLIED. Prod writes were blocked in the authoring
--- session, so every statement below is ready to run but unrun. Run sections in
--- order: (2) snapshot -> (3) migration -> deploy -> (4) catalog -> (5) pins ->
--- (6) audit. The section (2) snapshot IS the rollback record.
+-- session, so everything below is ready to run but unrun.
+--
+-- SCOPE CHANGED 2026-08-20, after checking Wolska's own inventory sheet:
+-- the office-supply pin this lane was built around is NOT happening yet, and
+-- what remains here is (a) the schema column and (b) a threshold correction the
+-- operator asked for. See section (1).
 --
 -- Per lessons.md "Master-data ops: diff before, audit after".
 
--- ======================= (1) PRECONDITIONS ==================================
+-- ======================= (1) WHY THE PIN IS NOT HERE ========================
 --
--- P1 [VERIFIED 2026-08-20 — returned 0 rows]. No in-flight order may carry the
---    products about to be pinned. `captain_order_edit` re-validates the FULL line
---    set, so a pin landing between a submit and an edit makes that edit 400 on a
---    line the Captain never touched. RE-RUN this immediately before section (5):
-
-SELECT o.order_id, o.status, ol.product_id
-  FROM orders o JOIN order_lines ol ON ol.order_id = o.order_id
- WHERE o.location_id = 'WOLA'
-   AND o.status IN ('captain_submitted', 'manager_claimed')
-   AND ol.product_id IN ('P127', 'P132', 'P133');
--- Must return zero rows. If it does not, dispatch or cancel those orders first.
+-- The lane's problem statement said Wolska buys staples (P127), markers (P132)
+-- and pens (P133) from Blue Service. Three checks contradicted that:
 --
--- P2 [RESOLVED]. Blue Service carries none of P127/P132/P133 today — they exist
---    only as SP_PAGO_*. Section (4) creates the catalog entries, and it MUST run
---    before section (5); pinning first makes the products orderable from no
---    supplier at all at WOLA (the backend logs "Orphaned supplier pin", but they
---    still vanish from the screen).
+--   * Wolska's inventory sheet ("Wolska - Inwentaryzacja", Drive, modified
+--     2026-08-16) lists all seven Biurowe products under PAGO in every dated
+--     snapshot, with prices matching the database exactly (0,70 / 6,00 / 1,20).
+--   * The same sheet shows Wolska holding real stock of them (Zszywki 2,5 opak,
+--     Markery 10 szt, Długopisy 10 szt), so they are actively used.
+--   * No Blue Service price exists for them anywhere — because Wolska does not
+--     buy them there. The missing price was information, not a gap to fill.
 --
--- P3 [OPEN — operator input]. price_estimate_pln is left NULL on the three new
---    catalog rows. The Blue Service price list was not available and inventing a
---    number would put a fabricated value into order totals. Price feeds only
---    `total_value_estimate_pln`, so NULL degrades an estimate rather than
---    breaking a flow. Fill it in when the first invoice arrives:
---      UPDATE supplier_products SET price_estimate_pln = <x>
---       WHERE supplier_product_id = 'SP_BLUESERV_P127';
+-- The operator then confirmed (2026-08-20): these come from **Selgros or
+-- Allegro**, and is not certain which — it will be checked with the location.
+-- NEITHER supplier exists in `suppliers` today. So the pin is deferred: it needs
+-- a supplier row and a catalog row before any pin can point at it, or the
+-- products become orderable from nobody at Wolska.
 --
--- P4 [OPEN — operator input]. WOLA's targets for P132 (Markery) and P133
---    (Długopisy) are 0/0/0 (min/max/target); P127 is 0.5/5/5. With target 0 the
---    products appear on the Blue Service screen and suggest nothing, and the
---    over-MAX gate stays off (it requires max > 0), so the pin is harmless either
---    way. Set real thresholds when you want them to suggest.
+-- An earlier draft of this file pinned them to Blue Service and moved
+-- WOLA × Pago from 18 items to 15. That was reverted before anything ran; seed
+-- and prod are both unpinned, and the test asserts 18 again.
+--
+-- The real supplier-per-location candidates at Wolska, found in the same sheet
+-- and NOT yet acted on (they need the same missing-supplier decision):
+--     P088 Opakowanie Frytki  — sheet: Selgros   | db: Blue Service
+--     P102 Słomki 250szt      — sheet: Selgros   | db: Blue Service
+--     P095 Folia Aluminiowa   — sheet: Intermlecz| db: Blue Service
+--     P096 Folia spożywcza    — sheet: Intermlecz| db: Blue Service
+--     P097 Papier Pergamin    — sheet: Intermlecz| db: Blue Service
 
 -- ======================= (2) BEFORE — run first, record output ==============
 
-SELECT 'settings'                        AS metric, count(*)::text AS value FROM location_product_settings
-UNION ALL SELECT 'pinned rows',          count(*)::text FROM location_product_settings WHERE source_supplier_id IS NOT NULL
-UNION ALL SELECT 'supplier_products',    count(*)::text FROM supplier_products
-UNION ALL SELECT 'blueserv catalog',     count(*)::text FROM supplier_products WHERE supplier_id = 'SUP_BLUESERV'
-UNION ALL SELECT 'WOLA x PAGO items',    count(*)::text FROM supplier_products sp
+SELECT 'settings'                         AS metric, count(*)::text AS value FROM location_product_settings
+UNION ALL SELECT 'pinned rows',           count(*)::text FROM location_product_settings WHERE source_supplier_id IS NOT NULL
+UNION ALL SELECT 'supplier_products',     count(*)::text FROM supplier_products
+UNION ALL SELECT 'WOLA x PAGO items',     count(*)::text FROM supplier_products sp
     JOIN location_product_settings l ON l.product_id = sp.product_id AND l.location_id = 'WOLA'
-    WHERE sp.supplier_id = 'SUP_PAGO' AND sp.active
-UNION ALL SELECT 'WOLA x BLUESERV items', count(*)::text FROM supplier_products sp
-    JOIN location_product_settings l ON l.product_id = sp.product_id AND l.location_id = 'WOLA'
-    WHERE sp.supplier_id = 'SUP_BLUESERV' AND sp.active;
+    WHERE sp.supplier_id = 'SUP_PAGO' AND sp.active;
 
--- Recorded 2026-08-20, before any of this ran:
---   settings 578 · pinned 0 · supplier_products 154 · blueserv 49
---   WOLA × PAGO 18 · WOLA × BLUESERV 49
--- (the "pinned rows" line errors before section 3 — the column does not exist yet)
+SELECT location_id, product_id, min_stock_qty_base, max_stock_qty_base, target_stock_qty_base
+  FROM location_product_settings
+ WHERE location_id = 'WOLA' AND product_id IN ('P132','P133');
+
+-- Recorded 2026-08-20, before any of this ran (read by query, not eyeballed):
+--   settings 578 · supplier_products 154 · WOLA × PAGO 18
+--   WOLA P132: 0 / 0 / 0     WOLA P133: 0 / 0 / 0
+--   ("pinned rows" errors before section 3 — the column does not exist yet)
 
 -- ======================= (3) SCHEMA — migration 0008 ========================
--- Safe on its own and safe to run before the code deploy: it changes no row, and
--- the old code ignores the column (Pydantic ignores extra fields).
+-- Additive and nullable: changes no row, and safe in either deploy order —
+-- old code ignores an extra column, new code falls back to the default when the
+-- column is absent (both verified).
 
 ALTER TABLE location_product_settings
     ADD COLUMN IF NOT EXISTS source_supplier_id text
@@ -72,61 +73,43 @@ COMMENT ON COLUMN location_product_settings.source_supplier_id IS
     'carrying the product (default, backwards-compatible). Narrows visibility '
     'only; never widens it.';
 
--- >>> DEPLOY THE CODE HERE (merge PR #26). Sections 4-5 change what Captains
--- >>> see, so they belong after the code that understands the column is live.
+-- With no rows pinned, the deployed feature is a no-op until master data opts in.
+-- That is the intended state while the Selgros/Allegro question is open.
 
--- ======================= (4) Blue Service catalog entries ===================
--- Packaging mirrored from the existing Pago rows (all units_per_purchase_unit
--- = 1, full_only — verified 2026-08-20). Price NULL: see P3.
-
-INSERT INTO supplier_products
-    (supplier_product_id, supplier_id, product_id, supplier_product_name,
-     purchase_unit, units_per_purchase_unit, rounding_rule, price_estimate_pln,
-     active, notes)
-VALUES
-    ('SP_BLUESERV_P127', 'SUP_BLUESERV', 'P127', 'Zszywki do zszywacza',
-     'opak', 1.0, 'full_only', NULL, TRUE,
-     'dodane 2026-08-20 (supplier-per-location) - opakowanie odwzorowane z Pago; cena do uzupelnienia z cennika Blue Service'),
-    ('SP_BLUESERV_P132', 'SUP_BLUESERV', 'P132', 'Markery',
-     'szt', 1.0, 'full_only', NULL, TRUE,
-     'dodane 2026-08-20 (supplier-per-location) - opakowanie odwzorowane z Pago; cena do uzupelnienia z cennika Blue Service'),
-    ('SP_BLUESERV_P133', 'SUP_BLUESERV', 'P133', 'Długopisy',
-     'szt', 1.0, 'full_only', NULL, TRUE,
-     'dodane 2026-08-20 (supplier-per-location) - opakowanie odwzorowane z Pago; cena do uzupelnienia z cennika Blue Service')
-ON CONFLICT (supplier_product_id) DO NOTHING;
--- expect: INSERT 0 3
-
--- ======================= (5) Pin WOLA to Blue Service =======================
--- Re-run P1 first. BRACKA / NORBLIN / KEN are deliberately untouched: their rows
--- stay NULL, so they keep seeing these products at Pago with their own thresholds.
+-- ======================= (4) WOLA threshold correction ======================
+-- Operator instruction 2026-08-20: markers min 3 max 10, pens min 5 max 20.
+-- Both sat at 0/0/0 despite the sheet showing 10 szt of each on hand, so they
+-- suggested nothing. target = max follows the Bracka/Norblin convention for
+-- these SKUs (both are 1/3/3) — CHANGE IT if target should differ from max.
+-- Unrelated to the supplier dimension; included because it was asked for in the
+-- same pass and touches the same table.
 
 UPDATE location_product_settings
-   SET source_supplier_id = 'SUP_BLUESERV'
- WHERE location_id = 'WOLA'
-   AND product_id IN ('P127', 'P132', 'P133');
--- expect: UPDATE 3
+   SET min_stock_qty_base = 3, max_stock_qty_base = 10, target_stock_qty_base = 10,
+       notes = 'operator 2026-08-20: min 3 max 10 (target=max per Bracka/Norblin convention)'
+ WHERE location_id = 'WOLA' AND product_id = 'P132';
+-- expect: UPDATE 1
 
--- ======================= (6) AFTER — audit ==================================
+UPDATE location_product_settings
+   SET min_stock_qty_base = 5, max_stock_qty_base = 20, target_stock_qty_base = 20,
+       notes = 'operator 2026-08-20: min 5 max 20 (target=max per Bracka/Norblin convention)'
+ WHERE location_id = 'WOLA' AND product_id = 'P133';
+-- expect: UPDATE 1
+
+-- NOT DONE: KEN carries identical 0/0/0 values for both, because KEN is still on
+-- a copy of Wolska's data. Deliberately left alone — no instruction was given for
+-- KEN, and it deserves its own threshold pass rather than an inherited guess.
+
+-- ======================= (5) AFTER — audit ==================================
 -- Re-run section (2). Expected:
---   pinned rows        0   -> 3
---   supplier_products  154 -> 157
---   blueserv catalog   49  -> 52
---   WOLA × PAGO        18  -> 15   (exactly P127/P132/P133 dropped)
---   WOLA × BLUESERV    49  -> 52
+--   settings           578 (unchanged — this batch updates, never inserts)
+--   pinned rows        0   (unchanged — no pin in this batch)
+--   supplier_products  154 (unchanged)
+--   WOLA × PAGO        18  (UNCHANGED — the office items stay at Pago)
+--   WOLA P132: 3 / 10 / 10     WOLA P133: 5 / 20 / 20
 --
--- Effective per-location visibility — every location EXCEPT WOLA must be
--- unchanged from its pre-batch numbers:
-
-SELECT l.location_id, sp.supplier_id, count(*) AS items
-  FROM supplier_products sp
-  JOIN location_product_settings l ON l.product_id = sp.product_id
- WHERE sp.active
-   AND (l.source_supplier_id IS NULL OR l.source_supplier_id = sp.supplier_id)
- GROUP BY 1, 2
- ORDER BY 1, 2;
-
--- Orphan check — MUST return zero rows after any pinning batch. A row here means
--- a product is orderable from no supplier at that location:
+-- Orphan check — must return zero rows after ANY future pinning batch. A row
+-- here means a product is orderable from no supplier at that location:
 
 SELECT l.location_id, l.product_id, l.source_supplier_id
   FROM location_product_settings l
@@ -138,20 +121,24 @@ SELECT l.location_id, l.product_id, l.source_supplier_id
           AND sp.active
    );
 
--- ======================= (7) Seed mirror — ALREADY DONE =====================
--- Applied in commit 8721b8f (PR #26): the three Blue Service rows in
--- supplier_products.csv, the source_supplier_id column plus WOLA's three pins in
--- location_product_settings.csv, and the tests that assert all three effects
--- (Pago 18 -> 15, the products appearing at Blue Service, and Bracka/Norblin
--- keeping them at Pago).
+-- ======================= (6) Seed mirror — ALREADY DONE =====================
+-- The seed CSVs carry the same two threshold values and no pins, matching what
+-- this batch produces.
 
--- ======================= (8) ROLLBACK =======================================
--- Data only (leaves the column in place):
---   UPDATE location_product_settings SET source_supplier_id = NULL
---    WHERE location_id = 'WOLA' AND product_id IN ('P127','P132','P133');
---   DELETE FROM supplier_products
---    WHERE supplier_product_id IN ('SP_BLUESERV_P127','SP_BLUESERV_P132','SP_BLUESERV_P133');
+-- ======================= (7) ROLLBACK =======================================
+--   UPDATE location_product_settings SET min_stock_qty_base=0, max_stock_qty_base=0,
+--          target_stock_qty_base=0, notes=''
+--    WHERE location_id='WOLA' AND product_id IN ('P132','P133');
 --
--- Schema too (only if the whole change is reverted — revert PR #26 first, since
--- the code reads this column):
+-- Schema (only if the whole change is reverted — revert the code first, since it
+-- reads this column):
 --   ALTER TABLE location_product_settings DROP COLUMN source_supplier_id;
+
+-- ======================= (8) BLOCKED ON THE OPERATOR ========================
+-- Before any pin can be applied at Wolska:
+--   1. Selgros or Allegro? (operator is checking with the location)
+--   2. Add that supplier to `suppliers` — name, email, ordering_method.
+--      Allegro in particular is a marketplace, not an email supplier; it likely
+--      needs ordering_method 'portal' or 'manual', which changes how dispatch
+--      behaves for it.
+--   3. Add catalog rows for whichever products move, THEN pin. Never the reverse.

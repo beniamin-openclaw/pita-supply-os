@@ -118,14 +118,17 @@ def test_captain_orderable_rejects_manager_token():
     assert r.status_code == 401
 
 
-OFFICE_PINNED_TO_BLUESERV = {"P127", "P132", "P133"}
-
-
-def test_captain_orderable_wola_pago_returns_15_items():
-    # F-02 added Wola par-levels for 12 Pago packaging+office SKUs -> 18 orderable.
-    # supplier-per-location then pinned three office products (staples, markers,
-    # pens) to Blue Service AT WOLA ONLY, so Pago drops exactly those three -> 15.
-    # Bracka and Norblin are unpinned and still buy them from Pago.
+def test_captain_orderable_wola_pago_returns_18_items():
+    # F-02: added Wola par-levels for 12 Pago packaging+office SKUs — now 18 orderable.
+    # Core food items (P019, P024–P028) must still be present.
+    #
+    # The supplier-per-location change deliberately does NOT move any of these.
+    # An earlier draft pinned the office items (P127/P132/P133) to Blue Service on
+    # the strength of the lane's problem statement, which would have made this 15.
+    # Wolska's own inventory sheet contradicted it — those products are not bought
+    # at Blue Service — and the operator then confirmed (2026-08-20) that they come
+    # from Selgros or Allegro, neither of which exists in `suppliers` yet. So the
+    # pin is deferred and this count stands at 18. See change.md.
     r = client.get(
         "/api/captain/orderable",
         params={"supplier_id": "SUP_PAGO"},
@@ -133,48 +136,13 @@ def test_captain_orderable_wola_pago_returns_15_items():
     )
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 15
+    assert len(items) == 18
     pids = {item["product_id"] for item in items}
     # Core food items still present
     assert {"P019", "P024", "P025", "P026", "P027", "P028"}.issubset(pids)
-    # Packaging + the office items that were NOT pinned
-    assert {"P089", "P090", "P091", "P092", "P098",
-            "P128", "P129", "P130", "P131"}.issubset(pids)
-    # The pinned three moved away from Pago at this location
-    assert pids.isdisjoint(OFFICE_PINNED_TO_BLUESERV)
-
-
-def test_captain_orderable_wola_blueserv_has_the_pinned_office_items():
-    """The other half of the pin: what left Pago must have arrived at Blue
-    Service. Asserting only the disappearance would pass just as well if the
-    products had fallen out of the catalog entirely."""
-    r = client.get(
-        "/api/captain/orderable",
-        params={"supplier_id": "SUP_BLUESERV"},
-        headers=WOLA_AUTH,
-    )
-    assert r.status_code == 200, r.text
-    pids = {item["product_id"] for item in r.json()}
-    assert OFFICE_PINNED_TO_BLUESERV.issubset(pids)
-
-
-def test_pin_is_scoped_to_one_location():
-    """The whole point of supplier-per-location: Wola's pin must not follow the
-    products to Bracka or Norblin, which are unpinned and still buy them from
-    Pago. Uses the Manager orderable route because it takes location_id
-    explicitly (a Captain token carries its own location, and the test env has
-    no Bracka/Norblin token)."""
-    for location_id in ("BRACKA", "NORBLIN"):
-        r = client.get(
-            "/api/manager/orderable",
-            params={"supplier_id": "SUP_PAGO", "location_id": location_id},
-            headers=MANAGER_AUTH,
-        )
-        assert r.status_code == 200, r.text
-        pids = {item["product_id"] for item in r.json()}
-        assert OFFICE_PINNED_TO_BLUESERV.issubset(pids), (
-            f"{location_id} lost office products to Wola's pin"
-        )
+    # Packaging + office items now also orderable
+    assert {"P089", "P090", "P091", "P092", "P098", "P127", "P128",
+            "P129", "P130", "P131", "P132", "P133"}.issubset(pids)
 
 
 def test_captain_orderable_bukat_exposes_tenth_kg_rule():
@@ -191,8 +159,25 @@ def test_captain_orderable_bukat_exposes_tenth_kg_rule():
     assert items["SP_BUKAT_P011"]["rounding_rule"] == "full_only"
 
 
-def test_captain_orderable_ken_returns_empty():
-    """KEN has no location_product_settings rows in v0."""
+def test_captain_orderable_location_without_settings_returns_empty():
+    """A location with no `location_product_settings` rows gets an empty order
+    screen rather than an error or an unfiltered catalog.
+
+    KEN is only the VEHICLE for that behavior: the seed fixture happens to carry
+    no KEN threshold rows. This is a fact about the fixture, NOT about the
+    business — in production KEN is a live location with 138 threshold rows, so
+    this endpoint returns a populated list there. Do not read this test as
+    "KEN has no products"; see docs/pita-supply-os-v1/seed/README.md.
+    """
+    # Guard the premise, so that if KEN thresholds are ever added to the fixture
+    # this fails loudly as "premise gone" instead of silently testing nothing.
+    from app import seed_loader
+
+    assert not [
+        s for s in seed_loader.load_location_product_settings()
+        if s.location_id == "KEN"
+    ], "fixture now has KEN thresholds — repoint this test at an unconfigured location"
+
     r = client.get(
         "/api/captain/orderable",
         params={"supplier_id": "SUP_PAGO"},
