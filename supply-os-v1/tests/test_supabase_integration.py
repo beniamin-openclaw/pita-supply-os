@@ -93,6 +93,12 @@ def _schema():
     # 0007 adds locations.company_* (email footer); _LOCATION_COLUMNS references
     # them, so the locations insert below errors against a pre-0007 schema.
     company_fields = (MIGRATIONS_DIR / "0007_add_location_company_fields.sql").read_text()
+    # 0008 adds location_product_settings.source_supplier_id (supplier-per-location);
+    # _LOCATION_PRODUCT_SETTING_COLUMNS references it, so the settings insert below
+    # errors against a pre-0008 schema.
+    source_supplier = (
+        MIGRATIONS_DIR / "0008_add_location_product_setting_source_supplier.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -103,6 +109,7 @@ def _schema():
         conn.exec_driver_sql(ordered_by)
         conn.exec_driver_sql(order_note)
         conn.exec_driver_sql(company_fields)
+        conn.exec_driver_sql(source_supplier)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

@@ -1,7 +1,7 @@
 ---
 change_id: supplier-per-location
 title: Supplier dimension at the location level — one product, many suppliers, per-location choice
-status: new
+status: impl_reviewed
 created: 2026-08-20
 updated: 2026-08-20
 archived_at: null
@@ -67,8 +67,29 @@ reads it** — `_build_orderable_items` (`supply-os-v1/app/main.py:346`) checks 
 (`supply-os-v1/tests/test_main.py:119`) asserts exactly 18 items for WOLA×Pago and
 explicitly requires P127, P132, P133 to be present. Track B will change it (→ 15).
 
+### Shape outcome (2026-08-20)
+
+`/10x-shape` complete — see `context/foundation/shape-notes.md`,
+`## Change: Supplier dimension per location`. Six FRs drafted (FR-025…FR-030), each
+with a Socrates round. Decisions taken:
+
+- **Storage: a nullable `source_supplier_id` column on `location_product_settings`**,
+  not a `location_supplier_products` table. `NULL` = every supplier carrying the
+  product; a value = only that supplier. Narrowing only — `supplier_products` stays
+  the universe. Rationale + reversal path in the FR-025 Socrates note.
+- **Substitutes**: the operator confirmed a Captain picks one source per day and never
+  splits one need across suppliers, so a same-day duplicate is an error state —
+  mitigated by an informational badge (FR-028), not a hard block.
+- **Thresholds stay supplier-agnostic** (the existing `UNIQUE (location_id,
+  product_id)` is correct and preserved).
+- **`supplier_products.active` enforcement is in this lane** (FR-029).
+- **Supplier-picker location-awareness is out of this lane** — pre-existing
+  (`CaptainMP.tsx:98` lists every active supplier globally), not regressed here.
+
+Also corrected against prod: **154** products / **154** `supplier_products` rows after
+track A shipped (the 145 recorded above was the pre-track-A count).
+
 ### Next step
 
-`/10x-shape supplier-per-location` — this is a domain-model change touching the PRD's
-governing rule ("single path from location stock counts to supplier dispatch") and its
-Data section, which today states plainly "no schema change in the baseline pilot".
+`/10x-prd` (delta — amend `context/foundation/prd.md` in place, as the Location
+Inventory Count change did).

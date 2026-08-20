@@ -142,10 +142,36 @@ def locations(_actor: str = Depends(require_any_auth)):
 
 # ---------- Captain Submit (auth required) ----------
 
+def _supplier_allowed(
+    setting: Optional[LocationProductSetting], supplier_id: str
+) -> bool:
+    """True when this location may order this product from ``supplier_id``.
+
+    The supplier-per-location rule, in one place so the read path
+    (``_build_orderable_items``) and the write path (``_resolve_master_data``)
+    cannot drift:
+
+    - ``source_supplier_id is None`` -> unpinned: every supplier carrying the
+      product is allowed. This is the pre-change behavior and the default, which
+      is why the whole change is a no-op until master data opts in.
+    - a value -> only that supplier.
+
+    ``setting is None`` also returns True *on purpose*: a product with no
+    ``location_product_setting`` at this location is rejected further downstream
+    with a more specific message ("has no location_product_setting at this
+    location"). Filtering it out here would swallow that error into the vaguer
+    "not orderable" one.
+    """
+    if setting is None or setting.source_supplier_id is None:
+        return True
+    return setting.source_supplier_id == supplier_id
+
+
 def _build_orderable_item(
     sp: SupplierProduct,
     products_by_id: dict[str, Product],
     settings_by_pid: dict[str, LocationProductSetting],
+    also_supplied_by: Optional[list[str]] = None,
 ) -> dict:
     """Compose one line for the Captain Submit screen."""
     product = products_by_id[sp.product_id]
@@ -165,6 +191,11 @@ def _build_orderable_item(
         "supplier_product_id": sp.supplier_product_id,
         "supplier_product_name": sp.supplier_product_name,
         "order_note": sp.order_note,
+        # Names of the OTHER suppliers this location may buy this product from
+        # (empty when it is pinned, or carried by only one supplier). Names, not
+        # ids, so the product card needs no lookup table — mirrors how receipt
+        # lines join their display values server-side.
+        "also_supplied_by": also_supplied_by or [],
     }
 
 
@@ -174,23 +205,78 @@ def _build_orderable_items(
     """Orderable line dicts for one location + supplier (shared by the Captain
     and Manager orderable routes).
 
-    Mirrors the prior inline ``captain_orderable`` body: reads through the chosen
-    ``backend`` (so sheet/supabase serve live master data), filters
-    ``supplier_products`` to this supplier AND only products that have a
-    ``location_product_setting`` at this location, then enriches each via
-    ``_build_orderable_item``."""
+    Reads through the chosen ``backend`` (so sheet/supabase serve live master
+    data) and keeps a ``supplier_products`` row only when all four hold:
+
+    1. it belongs to ``supplier_id``;
+    2. it is ``active`` — the flag existed in the schema and the model but no code
+       read it, so ``active = FALSE`` used to be a no-op (FR-029);
+    3. its product has a ``location_product_setting`` at this location, and that
+       product is itself ``active``;
+    4. this location has not pinned the product to a different supplier
+       (``_supplier_allowed``).
+
+    Each surviving row is enriched via ``_build_orderable_item``, carrying the
+    other suppliers this location may buy the same product from.
+    """
     products_by_id = {p.product_id: p for p in backend.load_products()}
     settings_by_pid = {
         s.product_id: s
         for s in backend.load_location_product_settings()
         if s.location_id == location_id
     }
-    sps = [
-        sp
-        for sp in backend.load_supplier_products()
-        if sp.supplier_id == supplier_id and sp.product_id in settings_by_pid
-    ]
-    return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
+    supplier_names = {s.supplier_id: s.supplier_name for s in backend.load_suppliers()}
+    all_sps = backend.load_supplier_products()
+
+    # Active carriers per product, restricted to products this location stocks —
+    # the universe a location's pin narrows. Built once per call rather than per
+    # line, so the cost stays one pass over the catalog.
+    carriers_by_pid: dict[str, set[str]] = {}
+    for sp in all_sps:
+        if sp.active and sp.product_id in settings_by_pid:
+            carriers_by_pid.setdefault(sp.product_id, set()).add(sp.supplier_id)
+
+    # An orphaned pin — pointing at a supplier that does not carry the product —
+    # makes the product orderable NOWHERE at this location. Master data is entered
+    # by hand with no admin UI and no referential guard against the catalog, so
+    # this is reachable; log it loudly rather than let a product vanish silently.
+    for pid, setting in settings_by_pid.items():
+        pin = setting.source_supplier_id
+        if pin is not None and pin not in carriers_by_pid.get(pid, set()):
+            log.warning(
+                "Orphaned supplier pin: location %s pins product %s to supplier %s, "
+                "which has no active supplier_products row for it — the product is "
+                "orderable from no supplier at this location",
+                location_id,
+                pid,
+                pin,
+            )
+
+    items: list[dict] = []
+    for sp in all_sps:
+        if sp.supplier_id != supplier_id or not sp.active:
+            continue
+        setting = settings_by_pid.get(sp.product_id)
+        if setting is None:
+            continue
+        product = products_by_id.get(sp.product_id)
+        if product is None or not product.active:
+            continue
+        if not _supplier_allowed(setting, supplier_id):
+            continue
+        carriers = carriers_by_pid.get(sp.product_id, set())
+        allowed = (
+            carriers
+            if setting.source_supplier_id is None
+            else carriers & {setting.source_supplier_id}
+        )
+        also = sorted(
+            supplier_names.get(other, other) for other in allowed - {supplier_id}
+        )
+        items.append(
+            _build_orderable_item(sp, products_by_id, settings_by_pid, also)
+        )
+    return items
 
 
 @app.get("/api/captain/orderable")
@@ -314,7 +400,19 @@ class _MasterData:
 
 
 def _resolve_master_data(backend, location_id: str, supplier_id: str) -> _MasterData:
-    """Load and index master data needed to validate one captain submit."""
+    """Load and index master data needed to validate one captain submit.
+
+    This is the WRITE-side twin of ``_build_orderable_items`` — the gate behind
+    ``captain_submit`` and ``captain_order_edit``. It applies the same two filters
+    the read side does (``sp.active`` and ``_supplier_allowed``), because a client
+    does not have to go through the order screen to POST a line: Captain drafts
+    persist in local storage with no expiry by design, so a draft built before a
+    pin and submitted after it would otherwise walk straight through. Filtering
+    ``sps_by_id`` here is enough — the callers' existing "not orderable at this
+    location" 400 then fires for free.
+
+    ``settings_by_pid`` is therefore built BEFORE ``sps_by_id``; the order matters.
+    """
     products_by_id = {p.product_id: p for p in backend.load_products()}
     supplier = next(
         (s for s in backend.load_suppliers() if s.supplier_id == supplier_id),
@@ -322,15 +420,17 @@ def _resolve_master_data(backend, location_id: str, supplier_id: str) -> _Master
     )
     if supplier is None:
         raise HTTPException(status_code=400, detail="Unknown supplier_id")
-    sps_by_id = {
-        sp.supplier_product_id: sp
-        for sp in backend.load_supplier_products()
-        if sp.supplier_id == supplier_id
-    }
     settings_by_pid = {
         s.product_id: s
         for s in backend.load_location_product_settings()
         if s.location_id == location_id
+    }
+    sps_by_id = {
+        sp.supplier_product_id: sp
+        for sp in backend.load_supplier_products()
+        if sp.supplier_id == supplier_id
+        and sp.active
+        and _supplier_allowed(settings_by_pid.get(sp.product_id), supplier_id)
     }
     return _MasterData(products_by_id, supplier, sps_by_id, settings_by_pid)
 

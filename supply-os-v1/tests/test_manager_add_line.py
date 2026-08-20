@@ -23,6 +23,7 @@ from app.models import (
     OrderLine,
     OrderStatus,
     Product,
+    Supplier,
     SupplierProduct,
 )
 
@@ -111,6 +112,10 @@ def _order(
     )
 
 
+def _suppliers() -> list[Supplier]:
+    return [Supplier(supplier_id="SUP_PAGO", supplier_name="Pago")]
+
+
 def _enable_sheet(mocker, order: Order | None = None):
     """Switch the backend selector to `sheets` and stub the reads + the single
     write the add-line path uses. Returns mocks so tests can assert on writes."""
@@ -119,6 +124,9 @@ def _enable_sheet(mocker, order: Order | None = None):
     mocker.patch.object(sheets, "invalidate_cache", return_value=None)
     mocker.patch.object(sheets, "get_order", return_value=order)
     mocker.patch.object(sheets, "load_products", return_value=_products())
+    # supplier-per-location: _build_orderable_items joins supplier NAMES for the
+    # "also supplied by" annotation, so the suppliers read must be stubbed too.
+    mocker.patch.object(sheets, "load_suppliers", return_value=_suppliers())
     mocker.patch.object(sheets, "load_supplier_products", return_value=_supplier_products())
     mocker.patch.object(
         sheets, "load_location_product_settings", return_value=_settings()

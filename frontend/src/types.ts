@@ -75,6 +75,11 @@ export interface OrderableItem {
   // data (e.g. "1 karton = 6 szt (18 kg)"), shown on the product card. Absent on
   // the edit screen (rebuilt from order lines, which don't carry it).
   order_note?: string | null;
+  // supplier-per-location: names of the OTHER suppliers this location may buy
+  // this product from. Empty when the product is pinned to one supplier or only
+  // one carries it. Optional for the same reason as order_note — the edit screen
+  // rebuilds items from order lines, which don't carry it.
+  also_supplied_by?: string[];
 }
 
 // Captain Submit -------------------------------------------------------------

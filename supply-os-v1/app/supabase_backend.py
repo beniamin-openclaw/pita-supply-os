@@ -99,7 +99,7 @@ _SUPPLIER_PRODUCT_COLUMNS = [
 _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "setting_id", "location_id", "product_id", "min_stock_qty_base",
     "max_stock_qty_base", "target_stock_qty_base", "is_critical_for_location",
-    "allow_over_max_due_to_packaging", "notes",
+    "allow_over_max_due_to_packaging", "notes", "source_supplier_id",
 ]
 _ORDER_COLUMNS = [
     "order_id", "location_id", "supplier_id", "order_date",

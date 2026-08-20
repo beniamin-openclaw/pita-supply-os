@@ -2,7 +2,7 @@
 project: "Pita Supply OS"
 context_type: brownfield
 created: 2026-06-03
-updated: 2026-06-04
+updated: 2026-08-20
 product_type: web-app
 target_scale:
   users: small                      # pilot = Wola only; end-state (all company) ~ medium — see Open Questions
@@ -44,7 +44,23 @@ checkpoint:
       decision: operator reviewed the out-of-band role→capability matrix and chose the short "two-token, unchanged" note for the baseline ("go easy, harden later"); per-manager identity → week-1 Non-Goal, token rotation → Open Questions; earlier token-prefix issues reported hardened
     - topic: product framing (Phase 6)
       decision: web-app (unchanged); after_hours_only=false (mixed — day-job + after-hours, operator confirmed); scale small at pilot, ~medium company-wide end-state (Open Q); hard_deadline=null; non-goals rebuilt with operator (4 functional + 2 non-functional; queue-filters NOT locked as a non-goal)
-  frs_drafted: 19   # 14 baseline + 5 for the Location Inventory Count change (see end of file)
+    - topic: supplier dimension per location (track B, 2026-08-20)
+      decision: dimension hangs on the LOCATION not the city; stored as a nullable
+        source_supplier_id column on location_product_settings (NULL = every supplier
+        carrying the product, a value = only that supplier), NOT a
+        location_supplier_products table; thresholds stay supplier-agnostic; one-or-all
+        only (no subsets in v1)
+    - topic: substitutes semantics (track B)
+      decision: operator confirmed a Captain picks ONE source per day and never splits
+        one need across suppliers, so a same-day duplicate is an error state — mitigated
+        informationally (FR-028 badge), not hard-blocked
+    - topic: supplier_products.active (track B)
+      decision: enforcement fixed inside this lane, not deferred — both ways to stop
+        buying a product from a supplier (pin the location, deactivate the row) must work
+    - topic: supplier-picker location-awareness (track B)
+      decision: out of scope — pre-existing (CaptainMP lists all active suppliers
+        globally) and not regressed by track B; recorded as a follow-up
+  frs_drafted: 25   # 14 baseline + 5 Location Inventory Count + 6 Supplier-per-location (see end of file)
   quality_check_status: accepted
 ---
 
@@ -362,3 +378,203 @@ No change. The Captain uses the existing two-token model; the inventory screen i
 - Inventory ↔ ordering coupling = **opt-in, confirmed pre-fill naming the source snapshot**; ordering also works standalone.
 - History = **full snapshots over time** (browsing UI is Phase 2).
 - Sequencing = **parallel early track**, independent of the north star.
+
+---
+
+## Change: Supplier dimension per location (2026-08-20 — model change, extends baseline)
+
+> Brownfield model change shaped on top of the completed baseline above (`/10x-shape`
+> extend-in-place, same pattern as the Location Inventory Count block). Track B of
+> Tushar's 2026-08-20 request; track A (`wolska-blueservice-master-data`, purely
+> additive catalog data) shipped separately via PR #25 and is closed. Feeds the PRD's
+> `## Scope of Change` (FR-025…FR-030) plus a new user story (US-03). Baseline
+> sections above are unchanged.
+
+### Change framing
+
+- **Current system delta** — order-screen visibility is `supplier_products` (global)
+  ∩ `location_product_settings` (per location). There is nowhere to express *from whom*
+  a given location buys a given product. Prod (2026-08-20): 154 products, 154
+  `supplier_products` rows — every product sits at exactly one supplier, so the
+  one-supplier-forever assumption has never been tested by the data.
+- **Vision delta** — add a per-location statement of *from whom*, so one product can
+  live at several suppliers globally while each location sees only the supplier(s) it
+  actually buys from. Thresholds stay where they are (per location + product); only
+  visibility gains the new dimension.
+- **Primary persona** — Owner (records the per-location supplier choice; there is no
+  master-data UI, so this is SQL against Supabase, as in track A). Captain consumes it
+  on the order screen. No new persona.
+- **Sequencing** — independent lane. Nothing in the Bukat/Blue Service dispatch path
+  changes; a location with no per-location setting behaves exactly as today.
+
+### Access Control delta
+
+No change. Two-token model preserved. The order screen stays location-scoped from the
+Captain token; the new field is master data, edited out-of-band by the Owner like every
+other master-data column.
+
+### Success Criteria (this change)
+
+- **Primary:** staples / markers / pens are pinned to Blue Service at WOLA and
+  disappear from WOLA × Pago, while BRACKA and NORBLIN keep them at Pago with their
+  existing thresholds — no threshold row edited, no global re-point.
+- **Secondary:** one product (fries) can carry `supplier_products` rows at several
+  suppliers and show up under each of them at a location that has not pinned it,
+  so the Captain can pick today's source.
+- **Guardrails:** a location/product with no per-location supplier set behaves
+  byte-identically to today; thresholds, the suggestion engine, dispatch, order-line
+  history, and the two-token auth are untouched; no product silently disappears from
+  a location that did not ask for it.
+
+### Functional Requirements (new)
+
+- FR-025: Owner can record, per location and product, which supplier that location
+  buys the product from; leaving it unset means every supplier that carries the
+  product. Priority: must-have. Change: new.
+  > Socrates: Counter-argument considered: "a separate `location_supplier_products`
+  > table is the cleaner model — it expresses arbitrary subsets, not just one-or-all."
+  > Resolution: rejected for v1 on three grounds. (1) Cost: a new entity must be
+  > implemented in all three backends behind `_choose_backend()` (`seed_loader`,
+  > `sheets`, `supabase_backend`) plus a model, a CSV, a sheet tab and a migration,
+  > versus one nullable column that rides on the existing
+  > `load_location_product_settings`. (2) Backfill: preserving today's behavior with a
+  > membership table means either backfilling ~578 rows (WOLA 151 + BRACKA 144 +
+  > NORBLIN 145 + KEN 138) as a hard cutover, or adopting "no row = all suppliers",
+  > which is exactly the nullable-column semantics with an extra table on top.
+  > (3) The `UNIQUE (location_id, product_id)` on `location_product_settings` keeps
+  > thresholds supplier-agnostic, which is the correct model — a location wants N kg
+  > of fries on site regardless of who delivers them. Subsets (exactly 2 of 3
+  > suppliers) have zero instances in the data today; if they ever appear, non-null
+  > pins migrate into a membership table one row each.
+- FR-026: Captain sees a product on the order screen only under the supplier(s)
+  allowed by that location's setting. Priority: must-have. Change: modified
+  (narrows the FR-002/FR-003 visibility rule).
+  > Socrates: Counter-argument considered: "narrowing visibility can silently hide a
+  > product a Captain needs, and the Captain has no way to see that it was hidden."
+  > Resolution: accepted as a real risk, mitigated rather than dismissed — narrowing
+  > only happens where the Owner explicitly pins, unset stays open, and every batch
+  > that sets pins runs the repo's diff-before → apply → audit-after protocol so the
+  > before/after per-location item counts are recorded.
+- FR-027: A product carried by several suppliers appears under each allowed supplier
+  with the same location target and each supplier's own purchase unit, rounding rule
+  and price. Priority: must-have. Change: new.
+  > Socrates: Counter-argument considered: "the same suggestion shown at three
+  > suppliers invites ordering it three times — a failure mode that cannot happen
+  > today." Resolution: real and new; the operator confirmed (2026-08-20) that a
+  > Captain picks one source per day and never splits one need across suppliers, so
+  > a duplicate is an error, not an operation. Mitigated by FR-028 rather than by a
+  > hard block, because a block would also stop legitimate same-day re-orders and
+  > would contradict the suggest-only / human-commits governing rule.
+- FR-028: On a line available from more than one supplier at this location, the
+  Captain can see which other suppliers carry it. Priority: should-have. Change: new.
+  > Socrates: Counter-argument considered: "a badge is not a guard — it does not
+  > prevent the double order it is meant to address." Resolution: kept as
+  > should-have and deliberately informational. It serves the operator's actual
+  > behavior (choose today's source), and the alternative — a cross-order same-day
+  > uniqueness gate — is a hard block on a flow the operator has not asked to
+  > constrain. Revisit if a duplicate ever reaches a supplier.
+- FR-029: A `supplier_products` row marked inactive is not orderable. Priority:
+  must-have. Change: modified (defect — the column exists in the schema and the
+  model but no code reads it, so `active = FALSE` is currently a no-op).
+  > Socrates: Counter-argument considered: "this is an unrelated bug and belongs in
+  > its own lane." Resolution: rejected — without it, 'stop buying this product from
+  > this supplier' has two half-working paths (pin the location, or deactivate the
+  > row) and only one of them works, which is worse than either alone.
+- FR-030: A location/product with no per-location supplier set behaves exactly as it
+  does today. Priority: must-have. Change: preserved.
+  > Socrates: Counter-argument considered: "making the default permissive means the
+  > model change is invisible and no one adopts it." Resolution: kept — invisibility
+  > is the point. This is a live ordering system for four locations; the change must
+  > be a no-op until master data opts in, one product at a time.
+
+### User Stories
+
+### US-03: Two locations buy the same product from different suppliers
+
+- **Given** staples, markers and pens exist as products with thresholds at WOLA,
+  BRACKA and NORBLIN, and `supplier_products` rows at both Pago and Blue Service
+- **When** the Owner records that WOLA buys them from Blue Service, and leaves
+  BRACKA and NORBLIN unset
+- **Then** the WOLA Captain sees them only under Blue Service, the BRACKA and
+  NORBLIN Captains keep seeing them under Pago with their existing thresholds, and
+  no other product at any location changes visibility
+
+#### Acceptance Criteria
+
+- WOLA × Pago drops exactly the three pinned products; every other WOLA × Pago line
+  is unchanged.
+- BRACKA and NORBLIN order screens are byte-identical before and after.
+- The three products keep one threshold row per location (`UNIQUE (location_id,
+  product_id)` intact); no threshold value is edited by this change.
+- A product with `supplier_products` rows at several suppliers and no pin at a
+  location appears under each of those suppliers at that location.
+- Setting `active = FALSE` on a `supplier_products` row removes that line from the
+  order screen.
+
+### Business Logic delta
+
+**No new domain rule.** The governing rule — single path from location stock counts to
+supplier dispatch — is unchanged, and the engine still only suggests. What changes is
+the *scope* of one existing rule: order-screen membership stops being
+"global supplier catalog ∩ local thresholds" and becomes "global supplier catalog ∩
+local thresholds ∩ local supplier choice". Thresholds remain supplier-agnostic; the
+suggestion math is untouched and simply runs once per allowed supplier using that
+supplier's packaging.
+
+### Non-Functional Requirements (new)
+
+- No product disappears from any location's order screen as a side effect of this
+  change; every master-data batch that narrows visibility records per-location item
+  counts before and after (repo protocol: diff before → apply → audit after).
+
+### Constraints & Preserved Behavior delta
+
+- **Schema:** one nullable column on the existing `location_product_settings` table
+  (`source_supplier_id`, FK to `suppliers`, `NULL` = unpinned). No new entity, no new
+  loader function, no new sheet tab or seed CSV. The column rides on the existing
+  `load_location_product_settings` seam in all three backends.
+- **Preserved:** thresholds and their `UNIQUE (location_id, product_id)` constraint;
+  the suggestion engine; dispatch and the Gmail draft path; `order_lines` columns and
+  history; two-token auth; the inventory-count screen (which reads
+  `location_product_settings` by location and is unaffected by supplier multiplicity).
+- **Prod master data is gated:** no prod row is written without explicit operator
+  consent, per batch. Adding Selgros to `suppliers` (absent today) is prod master data
+  and is gated the same way.
+- **Known test impact:** `test_captain_orderable_wola_pago_returns_18_items`
+  (`supply-os-v1/tests/test_main.py:119`) asserts 18 items for WOLA × Pago and names
+  P127/P132/P133 explicitly. Pinning those three to Blue Service at WOLA changes it
+  to 15; the test is updated as part of the change, not worked around.
+
+### Non-Goals (new)
+
+- **Per-supplier thresholds** — a location keeps one target/min/max per product
+  regardless of who supplies it. Splitting thresholds per supplier is explicitly out.
+- **Arbitrary supplier subsets per location** — v1 is one-or-all. See the FR-025
+  Socrates note for the migration path if this is ever needed.
+- **A master-data admin UI** — the per-location supplier choice is set by SQL like
+  every other master-data column. Building a CRUD surface is a separate lane.
+- **Making the supplier picker location-aware** — the Captain screen lists every
+  active supplier globally (`CaptainMP.tsx:98`), so a supplier with zero lines at a
+  location shows an empty screen. This predates track B and is not made worse by it;
+  recorded here as a follow-up, not fixed in this lane.
+- **A hard block on ordering one product from two suppliers the same day** — see
+  FR-028; informational only in v1.
+
+### Gray areas resolved (this change)
+
+- Substitutes semantics: the operator confirmed (2026-08-20) that a Captain **picks
+  one source per day (a) and never splits one need across suppliers (b)**. Duplicate
+  same-day orders are therefore an error state, mitigated informationally (FR-028),
+  not blocked.
+- Storage: **nullable column on `location_product_settings`**, not a
+  `location_supplier_products` table — rationale and reversal path in the FR-025
+  Socrates note.
+- Semantics of the column: **`NULL` = every supplier carrying the product; a value =
+  only that supplier**. Narrowing only, never widening — `supplier_products` remains
+  the universe.
+- Thresholds stay **supplier-agnostic** (one row per location+product), because a
+  location wants N units on site regardless of who delivers them.
+- `supplier_products.active` enforcement is **in this lane**, not deferred — the two
+  ways to stop buying a product from a supplier must both work.
+- Supplier-picker location-awareness is **out of this lane** (pre-existing, not
+  regressed by track B).

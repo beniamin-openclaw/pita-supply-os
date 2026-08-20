@@ -11,7 +11,14 @@
 // - Touch: inputs py-3 (≥44px)
 // - Visual: card wash via bg-{color}-50, transition-colors
 
-import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lucide-react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  MinusCircle,
+  Store,
+} from "lucide-react";
 import type { OrderableItem, CardState } from "../types";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
@@ -88,6 +95,11 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
     line.current_stock_qty_base !== "" &&
     item.min_stock_qty_base > 0 &&
     currentVal < item.min_stock_qty_base;
+  // supplier-per-location: the other suppliers this location may buy this
+  // product from. Informational only — it never blocks or changes an order; the
+  // Captain picks one source per day, so this just tells them what the options
+  // are. Absent on the edit screen (items rebuilt from order lines).
+  const alsoSuppliedBy: string[] = item.also_supplied_by ?? [];
   const { base: suggestedBase, purchase: suggestedPurchase } = computeSuggestion(
     item,
     currentVal,
@@ -144,9 +156,18 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
           })}
         </div>
 
-        {/* Master-data annotation + below-minimum signal (both optional) */}
-        {(item.order_note || belowMin) && (
+        {/* Master-data annotation + below-minimum signal + alternative
+            suppliers (all optional, all reuse this one block) */}
+        {(item.order_note || belowMin || alsoSuppliedBy.length > 0) && (
           <div className="-mt-2 mb-3 space-y-1">
+            {alsoSuppliedBy.length > 0 && (
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <Store size={12} aria-hidden="true" className="shrink-0 text-slate-400" />
+                <span className="line-clamp-1">
+                  {t("card.alsoSuppliedBy", { suppliers: alsoSuppliedBy.join(", ") })}
+                </span>
+              </div>
+            )}
             {item.order_note && (
               <div className="flex items-center gap-1 text-xs text-slate-600">
                 <Info size={12} aria-hidden="true" className="shrink-0 text-slate-400" />
