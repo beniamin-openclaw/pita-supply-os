@@ -342,10 +342,10 @@ w prod nie ma historii zamówień dla żadnej z tych pozycji.
 
 #### Automated
 
-- [x] 1.1 Backend testy przechodzą (`python -m pytest`)
-- [x] 1.2 Lint czysty (`ruff check .`)
-- [x] 1.3 Spójność id P146–P154 w trzech plikach seed
-- [x] 1.4 `test_captain_orderable_wola_pago_returns_18_items` nadal zielony
+- [x] 1.1 Backend testy przechodzą (`python -m pytest`) — 249dc7b
+- [x] 1.2 Lint czysty (`ruff check .`) — 249dc7b
+- [x] 1.3 Spójność id P146–P154 w trzech plikach seed — 249dc7b
+- [x] 1.4 `test_captain_orderable_wola_pago_returns_18_items` nadal zielony — 249dc7b
 
 #### Manual
 
@@ -355,8 +355,8 @@ w prod nie ma historii zamówień dla żadnej z tych pozycji.
 
 #### Automated
 
-- [ ] 2.1 Backend testy przechodzą
-- [ ] 2.2 Liczba wierszy WOLA w seedzie = 151
+- [x] 2.1 Backend testy przechodzą
+- [x] 2.2 Liczba wierszy WOLA w seedzie = 151
 - [ ] 2.3 Zbiór product_id dla WOLA zgodny z prod
 
 ### Phase 3: Wdrożenie na prod (Supabase)
