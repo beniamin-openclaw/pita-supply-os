@@ -355,17 +355,17 @@ w prod nie ma historii zamówień dla żadnej z tych pozycji.
 
 #### Automated
 
-- [x] 2.1 Backend testy przechodzą
-- [x] 2.2 Liczba wierszy WOLA w seedzie = 151
-- [ ] 2.3 Zbiór product_id dla WOLA zgodny z prod
+- [x] 2.1 Backend testy przechodzą — f19b035
+- [x] 2.2 Liczba wierszy WOLA w seedzie = 151 — f19b035
+- [x] 2.3 Zbiór product_id dla WOLA zgodny z prod
 
 ### Phase 3: Wdrożenie na prod (Supabase)
 
 #### Automated
 
-- [ ] 3.1 Zapytanie kontrolne: products=154, supplier_products=154, progi WOLA=151
+- [x] 3.1 Zapytanie kontrolne: products=154, supplier_products=154, progi WOLA=151
 - [ ] 3.2 `/api/captain/orderable` dla Blue Service zwraca 10 nowych pozycji
-- [ ] 3.3 Powtórne uruchomienie SQL nie zmienia liczb (idempotencja)
+- [x] 3.3 Powtórne uruchomienie SQL nie zmienia liczb (idempotencja)
 
 #### Manual
 
