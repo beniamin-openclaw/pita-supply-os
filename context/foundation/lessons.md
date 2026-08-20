@@ -71,3 +71,10 @@
 - **Problem**: a bulk master-data change in prod with no comparison trace gives you neither a rollback path nor a way to verify the result — and a single bad row (e.g. 'TBD' as an email) can silently swallow a real order.
 - **Rule**: every master-data batch in prod goes through 3 steps: (1) a SELECT-diff of old→new saved BEFORE the UPDATE (that diff IS the rollback), (2) apply, (3) audit after (consistency assertions, e.g. min<=max, target=max, no placeholders) plus an entry in context/changes/<change-id>/change.md.
 - **Applies to**: every SQL operation on prod Supabase beyond a single obvious UPDATE; the Bracka/KEN rollouts in particular.
+
+## Verify a master-data premise against the location's own records before building on it
+
+- **Context**: the supplier-per-location lane (2026-08-20). Its problem statement said Wolska buys staples/markers/pens from Blue Service. Shape, PRD, plan, implementation, tests and a prod SQL batch were all written on top of that sentence.
+- **Problem**: it was wrong. Wolska's own inventory sheet listed all seven office products under Pago in every dated snapshot, at prices matching the database, with real stock on hand — and the operator then said they actually come from Selgros or Allegro. The pin would have moved products to a supplier that never sold them. Two signals had already pointed at it and were read as gaps rather than as evidence: the products existed at only one supplier in the catalog, and no Blue Service price existed for them anywhere.
+- **Rule**: before writing master data that re-points, hides or re-prices a product, read the location's own source document (the per-location Drive inventory sheet) and confirm the premise. When a required value cannot be found anywhere, treat that absence as a claim about reality to be explained, not as a blank to fill in.
+- **Applies to**: any change touching `supplier_products` or `location_product_settings`; every future per-location supplier pin; any lane whose problem statement arrives second-hand rather than from the location.
