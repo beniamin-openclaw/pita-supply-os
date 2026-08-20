@@ -118,9 +118,14 @@ def test_captain_orderable_rejects_manager_token():
     assert r.status_code == 401
 
 
-def test_captain_orderable_wola_pago_returns_18_items():
-    # F-02: added Wola par-levels for 12 Pago packaging+office SKUs — now 18 orderable.
-    # Core food items (P019, P024–P028) must still be present.
+OFFICE_PINNED_TO_BLUESERV = {"P127", "P132", "P133"}
+
+
+def test_captain_orderable_wola_pago_returns_15_items():
+    # F-02 added Wola par-levels for 12 Pago packaging+office SKUs -> 18 orderable.
+    # supplier-per-location then pinned three office products (staples, markers,
+    # pens) to Blue Service AT WOLA ONLY, so Pago drops exactly those three -> 15.
+    # Bracka and Norblin are unpinned and still buy them from Pago.
     r = client.get(
         "/api/captain/orderable",
         params={"supplier_id": "SUP_PAGO"},
@@ -128,13 +133,48 @@ def test_captain_orderable_wola_pago_returns_18_items():
     )
     assert r.status_code == 200
     items = r.json()
-    assert len(items) == 18
+    assert len(items) == 15
     pids = {item["product_id"] for item in items}
     # Core food items still present
     assert {"P019", "P024", "P025", "P026", "P027", "P028"}.issubset(pids)
-    # Packaging + office items now also orderable
-    assert {"P089", "P090", "P091", "P092", "P098", "P127", "P128",
-            "P129", "P130", "P131", "P132", "P133"}.issubset(pids)
+    # Packaging + the office items that were NOT pinned
+    assert {"P089", "P090", "P091", "P092", "P098",
+            "P128", "P129", "P130", "P131"}.issubset(pids)
+    # The pinned three moved away from Pago at this location
+    assert pids.isdisjoint(OFFICE_PINNED_TO_BLUESERV)
+
+
+def test_captain_orderable_wola_blueserv_has_the_pinned_office_items():
+    """The other half of the pin: what left Pago must have arrived at Blue
+    Service. Asserting only the disappearance would pass just as well if the
+    products had fallen out of the catalog entirely."""
+    r = client.get(
+        "/api/captain/orderable",
+        params={"supplier_id": "SUP_BLUESERV"},
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    pids = {item["product_id"] for item in r.json()}
+    assert OFFICE_PINNED_TO_BLUESERV.issubset(pids)
+
+
+def test_pin_is_scoped_to_one_location():
+    """The whole point of supplier-per-location: Wola's pin must not follow the
+    products to Bracka or Norblin, which are unpinned and still buy them from
+    Pago. Uses the Manager orderable route because it takes location_id
+    explicitly (a Captain token carries its own location, and the test env has
+    no Bracka/Norblin token)."""
+    for location_id in ("BRACKA", "NORBLIN"):
+        r = client.get(
+            "/api/manager/orderable",
+            params={"supplier_id": "SUP_PAGO", "location_id": location_id},
+            headers=MANAGER_AUTH,
+        )
+        assert r.status_code == 200, r.text
+        pids = {item["product_id"] for item in r.json()}
+        assert OFFICE_PINNED_TO_BLUESERV.issubset(pids), (
+            f"{location_id} lost office products to Wola's pin"
+        )
 
 
 def test_captain_orderable_bukat_exposes_tenth_kg_rule():

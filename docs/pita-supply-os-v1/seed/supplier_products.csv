@@ -153,3 +153,6 @@ SP_BLUESERV_P151,SUP_BLUESERV,P151,Płyn do podłogi 5L,szt,1,full_only,,TRUE,ce
 SP_BLUESERV_P152,SUP_BLUESERV,P152,Cleaner w sprayu do stolików drewnianych lakierowanych,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
 SP_BLUESERV_P153,SUP_BLUESERV,P153,Zapas do mopa płaskiego Vileda Ultra Max,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
 SP_BLUESERV_P154,SUP_BLUESERV,P154,Tetra,szt,1,full_only,,TRUE,cena do uzupelnienia po pierwszej fakturze
+SP_BLUESERV_P127,SUP_BLUESERV,P127,Zszywki do zszywacza,opak,1,full_only,,TRUE,dodane 2026-08-20 (supplier-per-location) - opakowanie odwzorowane z Pago; cena do uzupelnienia z cennika Blue Service
+SP_BLUESERV_P132,SUP_BLUESERV,P132,Markery,szt,1,full_only,,TRUE,dodane 2026-08-20 (supplier-per-location) - opakowanie odwzorowane z Pago; cena do uzupelnienia z cennika Blue Service
+SP_BLUESERV_P133,SUP_BLUESERV,P133,Długopisy,szt,1,full_only,,TRUE,dodane 2026-08-20 (supplier-per-location) - opakowanie odwzorowane z Pago; cena do uzupelnienia z cennika Blue Service
