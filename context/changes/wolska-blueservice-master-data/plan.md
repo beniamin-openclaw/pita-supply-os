@@ -1,136 +1,139 @@
-# WOLA — 9 nowych pozycji Blue Service + progi dla tacek papierowych (tor A)
+# WOLA — 9 new Blue Service products + thresholds for paper trays (track A)
 
 ## Overview
 
-Tushar zgłosił 13 pozycji do dodania dla Wolskiej u Blue Service oraz 3 do usunięcia
-z Pago. Po weryfikacji okazało się, że te dwie listy się zazębiają: 3 „do usunięcia"
-to te same produkty co 3 „do dodania" — czyli przepięcie dostawcy, nie usuń+dodaj.
-Przepięcie jest zablokowane architekturą (`supplier_products` nie ma wymiaru
-lokalizacji) i trafiło do osobnego lane'a `supplier-per-location`.
+Tushar reported 13 items to add for Wolska at Blue Service and 3 to remove from Pago.
+Verification showed the two lists overlap: the 3 "removals" are the same products as
+3 of the "additions" — a supplier re-point, not a delete+add. The re-point is blocked
+by the data model (`supplier_products` has no location dimension) and moved to the
+`supplier-per-location` lane.
 
-Ten plan realizuje **pozostałe 10 pozycji**, które są od tamtej decyzji całkowicie
-niezależne: 9 nowych produktów w katalogu + próg dla WOLA przy istniejącym P143.
-Zmiana jest czysto addytywna — nie rusza żadnego istniejącego wiersza, nie zmienia
-schematu, nie dotyka Bracki, Norblina ani KEN-a.
+This plan delivers the **remaining 10 items**, which are fully independent of that
+decision: 9 new catalog products plus a WOLA threshold row for the existing P143. The
+change is purely additive — it touches no existing row, changes no schema, and does
+not affect Bracka, Norblin or KEN.
 
 ## Current State Analysis
 
-**Model danych.** Widoczność pozycji na ekranie zamówienia to przecięcie dwóch
-warstw: `supplier_products` (globalna — kto sprzedaje, w jakim opakowaniu, za ile)
-oraz `location_product_settings` (per lokal — min/max/target). Ekran inwentaryzacji
-to `products` ∩ progi lokalu, niezależnie od dostawcy.
+**Data model.** Visibility on the order screen is the intersection of two layers:
+`supplier_products` (global — who sells it, in what pack, at what price) and
+`location_product_settings` (per location — min/max/target). The inventory screen is
+`products` ∩ location thresholds, regardless of supplier.
 
-**Stan w prod (Supabase, sprawdzony 2026-08-20):**
+**Prod state (Supabase, checked 2026-08-20):**
 
-| Tabela | Wierszy |
+| Table | Rows |
 |---|---|
-| `products` | 145 (ostatni id: P145) |
-| `supplier_products` | 145 — 0 produktów u dwóch dostawców, 0 bez dostawcy |
+| `products` | 145 (last id: P145) |
+| `supplier_products` | 145 — 0 products with two suppliers, 0 without |
 | `location_product_settings` | 568 — WOLA 141 · BRACKA 144 · NORBLIN 145 · KEN 138 |
 
-**Czego brakuje.** Dziewięciu pozycji z arkusza Wolskiej nie ma w katalogu w ogóle.
-Dziesiąta (`Tacki papierowe 14x25 100 sztuk`) istnieje jako **P143** u Blue Service —
-dodana przy rolloucie Norblina — ale WOLA nie ma dla niej wiersza progów, więc nie
-pojawia się ani w inwentaryzacji, ani w zamówieniu.
+**What is missing.** Nine items from the Wolska sheet are not in the catalog at all.
+The tenth (`Tacki papierowe 14x25 100 sztuk`) exists as **P143** at Blue Service —
+added during the Norblin rollout — but WOLA has no threshold row for it, so it appears
+neither in the inventory count nor on the order screen.
 
-**Zastany dryf.** Seed dla WOLA ma 134 wiersze, prod 141. Brakuje P135–P141
-(Bombilla/Bukat, Corfu Lager/Weiss/Free/Filber, AGROS/KAWA/LIPTON/Intermlecz),
-dołożonych w prod przy lane'ach feedback-r6 i r7 bez odzwierciedlenia w seedzie.
+**Pre-existing drift.** Seed carries 134 WOLA rows against prod's 141. Missing:
+P135–P141 (Bombilla/Bukat, Corfu Lager/Weiss/Free/Filber, AGROS/KAWA/LIPTON/Intermlecz),
+added to prod during the feedback-r6 and r7 lanes without a matching seed edit.
 
 ## Desired End State
 
-Kapitan Wolskiej widzi na ekranie inwentaryzacji 10 nowych pozycji (9 nowych + tacki
-papierowe), a na ekranie zamówienia u Blue Service — te same 10 pozycji z progami
-z arkusza Tushara i policzoną sugestią. Bracka, Norblin i KEN nie widzą żadnej zmiany.
-Seed w repo zgadza się z prod co do wiersza dla WOLA (141 + 10 = 151).
+The Wolska captain sees 10 new items on the inventory screen (9 new + paper trays) and
+the same 10 on the Blue Service order screen, with thresholds from Tushar's sheet and a
+computed suggestion. Bracka, Norblin and KEN see no change. Seed matches prod row for
+row for WOLA (141 + 10 = 151).
 
 ### Key Discoveries:
 
-- **`order_lines` w prod nie ma ani jednego wiersza dla P143** — decyzja o użyciu
-  istniejącego produktu zamiast tworzenia nowego jest odwracalna bez kosztu.
-- **Seed nie działa na prod.** `_choose_backend()` (`supply-os-v1/app/main.py:399`)
-  wybiera Supabase, gdy skonfigurowany; `seed_loader` to fallback dla testów i dev.
-  Skutek: **efekt produkcyjny daje wyłącznie SQL**, a nie merge do main.
-- **Tor A nie zmienia kodu**, więc **deploy backendu nie jest potrzebny** — inaczej
-  niż przy `product-order-note-and-min-flag`, gdzie SQL musiał wyprzedzić deploy.
-- Konwencja `target_stock_qty_base = max_stock_qty_base` obowiązuje we wszystkich
-  141 wierszach WOLA w prod — bez wyjątku.
-- Konwencja pustej ceny przy nieznanym cenniku (piwa Corfu, P143–P145, commit
-  `23dbb78`): `price_estimate_pln` zostaje **puste**, nie zgadywane. Wycena
-  zamówienia po prostu tych pozycji nie liczy.
-- `supplier_products.csv` w seedzie **nie ma kolumny `order_note`** — istnieje tylko
-  w Supabase (migracja 0006). Model ma default `None`, więc brak kolumny jest OK.
-- Testy inwentaryzacji używają `len(items) > 0`, nie liczb dokładnych
-  (`tests/test_inventory_submit.py:32`). Jedyna twarda liczba produktów to
+- **Prod has zero `order_lines` rows for P143** — reusing the existing product rather
+  than creating a new one is reversible at no cost.
+- **Seed does not drive prod.** `_choose_backend()` (`supply-os-v1/app/main.py:399`)
+  picks Supabase when configured; `seed_loader` is the fallback for tests and dev.
+  Consequence: **only the SQL has a production effect**, not the merge to main.
+- **Track A changes no code**, so **no deploy is needed** — unlike
+  `product-order-note-and-min-flag`, where the SQL had to precede the deploy.
+- The convention `target_stock_qty_base = max_stock_qty_base` holds for all 141 WOLA
+  rows in prod, without exception.
+- The empty-price convention for an unknown price list (Corfu beers, P143–P145, commit
+  `23dbb78`): `price_estimate_pln` stays **empty**, never guessed. Order valuation
+  simply skips those rows.
+- Seed's `supplier_products.csv` has **no `order_note` column** — it exists only in
+  Supabase (migration 0006). The model defaults it to `None`, so its absence is fine.
+- Inventory tests assert `len(items) > 0`, not exact counts
+  (`tests/test_inventory_submit.py:32`). The only hard product count is
   `tests/test_main.py:59,65`.
-- Jedyny test z dokładną liczbą pozycji orderable dotyczy **Pago × WOLA = 18**
-  (`tests/test_main.py:119`). Tor A nie rusza Pago, więc zostaje zielony.
+- The only exact orderable-count test covers **Pago × WOLA = 18**
+  (`tests/test_main.py:119`). Track A does not touch Pago, so it stays green.
 
 ## What We're NOT Doing
 
-- **Nie przepinamy zszywek, markerów ani długopisów** z Pago na Blue Service —
-  to lane `supplier-per-location`.
-- **Nie dodajemy filtra `sp.active`** do `_build_orderable_items`. Bug jest realny
-  (kolumna istnieje, kod jej nie czyta), ale jego naprawa ma sens dopiero razem
-  z wymiarem dostawcy — udokumentowany w lane B.
-- **Nie dodajemy progów dla BRACKA, NORBLIN ani KEN.** Tych pozycji nie ma w ich
-  arkuszach. Precedens: P143–P145 dostały wiersze tylko tam, gdzie były w arkuszu.
-- **Nie zmieniamy nazwy, kategorii ani jednostki P143.** Pola są globalne, a produkt
-  jest już używany przez dwa lokale.
-- **Nie zgadujemy cen.** Wszystkie nowe pozycje wchodzą z pustym `price_estimate_pln`.
-- **Nie ruszamy frontendu.** Ekrany czytają katalog z API; nowe pozycje pojawią się same.
+- **Not re-pointing staples, markers or pens** from Pago to Blue Service — that is the
+  `supplier-per-location` lane.
+- **Not adding an `sp.active` filter** to `_build_orderable_items`. The bug is real
+  (the column exists, no code reads it), but fixing it only makes sense together with
+  the supplier dimension — documented in lane B.
+- **Not adding thresholds for BRACKA, NORBLIN or KEN.** These items are not on their
+  sheets. Precedent: P143–P145 got rows only where the sheet listed them.
+- **Not changing P143's name, category or unit.** Those fields are global and the
+  product is already used by two locations.
+- **Not guessing prices.** All new items land with an empty `price_estimate_pln`.
+- **Not touching the frontend.** The screens read the catalog from the API; new items
+  appear on their own.
 
 ## Implementation Approach
 
-Trzy fazy, każda samodzielnie odwracalna i możliwa do porzucenia bez blokowania
-pozostałych:
+Three phases, each independently reversible and droppable without blocking the others:
 
-1. **Katalog** — wiersze w trzech plikach seed + aktualizacja dwóch asercji w testach.
-2. **Domknięcie dryfu** — 7 brakujących wierszy WOLA w seedzie (osobno, bo to
-   sprzątanie po cudzym lane'ie, nie zgłoszenie Tushara).
-3. **Prod** — przygotowany, idempotentny SQL + smoke. Uruchomienie za Twoją zgodą.
+1. **Catalog** — rows in three seed files plus two test-assertion updates.
+2. **Drift closure** — 7 missing WOLA rows in seed (kept separate because it is cleanup
+   after another lane, not part of Tushar's request).
+3. **Prod** — a prepared, idempotent SQL script plus a post-audit.
 
-Kolejność faz 1→2 jest dowolna; faza 3 musi być ostatnia, bo jej weryfikacja liczy
-wiersze dołożone w obu poprzednich.
+Phase order 1→2 is free; phase 3 must be last, because its verification counts rows
+added by both earlier phases.
 
 ## Critical Implementation Details
 
-**Seed a prod to dwa niezależne zapisy tej samej zmiany.** Prod czyta Supabase, seed
-obsługuje testy i dev. Merge do main **nie zmieni nic** dla kapitana Wolskiej —
-zmianę produkcyjną robi wyłącznie SQL z fazy 3. To odwrotność intuicji z większości
-lane'ów w tym repo i najłatwiejszy błąd do popełnienia przy tym planie.
+**Seed and prod are two independent recordings of the same change.** Prod reads
+Supabase; seed serves tests and dev. Merging to main **changes nothing** for the Wolska
+captain — only the phase 3 SQL does. This inverts the intuition from most lanes in this
+repo and is the easiest mistake to make with this plan.
 
-**Literówki w arkuszu prostujemy w katalogu.** Arkusz ma `Szczotlka` i `stolikow`.
-W katalogu wchodzą poprawne `Szczotka` i `stolików` — nazwa zostaje rozpoznawalna,
-a kapitan i tak liczy z papieru, nie porównuje znak po znaku.
+**Sheet typos are corrected in the catalog.** The sheet has `Szczotlka` and `stolikow`.
+The catalog takes the correct `Szczotka` and `stolików` — the name stays recognizable,
+and the captain counts from paper rather than comparing character by character.
 
-**Kategoria `Chemia` dla wszystkich dziewięciu, łącznie z `Marker podświetlacz`.**
-Zakreślacz „należy" do `Biurowe`, ale arkusz Tushara ma go w `Chemia`, a kategoria
-steruje grupowaniem na ekranie inwentaryzacji. Ekran ma się zgadzać z kartką, z której
-kapitan liczy — spójność z arkuszem wygrywa nad czystością taksonomii.
+**Category `Chemia` for all nine, including `Marker podświetlacz`.** A highlighter
+"belongs" in `Biurowe`, but Tushar's sheet files it under `Chemia`, and the category
+drives grouping on the inventory screen. The screen should match the sheet the captain
+counts from — consistency with the sheet beats taxonomic purity.
 
-## Phase 1: Katalog — 9 nowych produktów + Blue Service + progi WOLA
+**Polish diacritics must survive into prod.** Prod stores proper Polish
+(e.g. `Płyn Tytan 5L`). An ASCII-stripped INSERT would show the captain mangled names.
+
+## Phase 1: Catalog — 9 new products + Blue Service + WOLA thresholds
 
 ### Overview
 
-Dodaje dziewięć produktów do katalogu, wiąże je z Blue Service i nadaje im progi
-Wolskiej z arkusza. Przy okazji dokłada brakujący próg WOLA dla istniejącego P143.
+Adds nine products to the catalog, links them to Blue Service, and gives them Wolska's
+thresholds from the sheet. Also adds the missing WOLA threshold row for the existing P143.
 
 ### Changes Required:
 
-#### 1. Katalog produktów
+#### 1. Product catalog
 
 **File**: `docs/pita-supply-os-v1/seed/products.csv`
 
-**Intent**: Dziewięć nowych pozycji z arkusza Wolskiej, których nie ma w katalogu.
-Numeracja ciągła od ostatniego wolnego id.
+**Intent**: Nine new items from the Wolska sheet that are absent from the catalog.
+Numbering continues from the last free id.
 
-**Contract**: Dziewięć wierszy P146–P154, kolumny
+**Contract**: Nine rows P146–P154, columns
 `product_id,gostock_id,product_name_pl,product_category,inventory_unit,is_critical,active,notes`.
-`gostock_id` puste (pozycje spoza GoStocka), `product_category` = `Chemia`,
+`gostock_id` empty (these are not GoStock items), `product_category` = `Chemia`,
 `inventory_unit` = `szt`, `is_critical` = `FALSE`, `active` = `TRUE`.
 
-| id | nazwa |
+| id | name |
 |---|---|
 | P146 | Aroma Patyczki zapachowe |
 | P147 | Attis odświeżacz powietrza 300 ml |
@@ -142,31 +145,31 @@ Numeracja ciągła od ostatniego wolnego id.
 | P153 | Zapas do mopa płaskiego Vileda Ultra Max |
 | P154 | Tetra |
 
-#### 2. Powiązanie z dostawcą
+#### 2. Supplier link
 
 **File**: `docs/pita-supply-os-v1/seed/supplier_products.csv`
 
-**Intent**: Każdy z dziewięciu produktów kupowany jest w Blue Service, na sztuki,
-bez przeliczania opakowań. Cena nieznana — zostaje pusta zgodnie z konwencją.
+**Intent**: All nine products are bought at Blue Service, by the piece, with no pack
+conversion. Price unknown — left empty per convention.
 
-**Contract**: Dziewięć wierszy `SP_BLUESERV_P146` … `SP_BLUESERV_P154`,
-`supplier_id` = `SUP_BLUESERV`, `supplier_product_name` = nazwa jak w `products.csv`,
+**Contract**: Nine rows `SP_BLUESERV_P146` … `SP_BLUESERV_P154`,
+`supplier_id` = `SUP_BLUESERV`, `supplier_product_name` = the name from `products.csv`,
 `purchase_unit` = `szt`, `units_per_purchase_unit` = `1`, `rounding_rule` = `full_only`,
-`price_estimate_pln` **puste**, `active` = `TRUE`,
+`price_estimate_pln` **empty**, `active` = `TRUE`,
 `notes` = `cena do uzupelnienia po pierwszej fakturze`.
 
-#### 3. Progi Wolskiej
+#### 3. Wolska thresholds
 
 **File**: `docs/pita-supply-os-v1/seed/location_product_settings.csv`
 
-**Intent**: Dziesięć wierszy dla WOLA — dziewięć nowych plus brakujący P143 —
-z min/max przepisanymi z arkusza. `target` = `max` zgodnie z konwencją repo.
+**Intent**: Ten WOLA rows — nine new plus the missing P143 — with min/max transcribed
+from the sheet. `target` = `max` per the repo convention.
 
-**Contract**: `setting_id` w formacie `WOLA__P1NN`, `location_id` = `WOLA`,
+**Contract**: `setting_id` formatted `WOLA__P1NN`, `location_id` = `WOLA`,
 `is_critical_for_location` = `FALSE`, `allow_over_max_due_to_packaging` = `FALSE`,
 `notes` = `wolska-blueservice-master-data 2026-08-20: arkusz min/max`.
 
-| product_id | min | max | target | pozycja w arkuszu |
+| product_id | min | max | target | sheet row |
 |---|---|---|---|---|
 | P143 | 1 | 3 | 3 | Tacki papierowe 14x25 100 sztuk |
 | P146 | 1 | 2 | 2 | Aroma Patyczki zapachowe |
@@ -179,119 +182,122 @@ z min/max przepisanymi z arkusza. `target` = `max` zgodnie z konwencją repo.
 | P153 | 1 | 2 | 2 | Zapas do mop płaski vileda Ultra Max |
 | P154 | 2 | 5 | 5 | Tetra |
 
-#### 4. Asercje liczby produktów
+#### 4. Product-count assertions
 
 **File**: `supply-os-v1/tests/test_main.py`
 
-**Intent**: Dwa testy pilnują dokładnej liczby produktów w katalogu; dziewięć nowych
-pozycji je zmienia. To celowa aktualizacja oczekiwania, nie obejście.
+**Intent**: Two tests pin the exact catalog size; nine new items change it. This is a
+deliberate expectation update, not a workaround.
 
-**Contract**: `test_products_with_captain_token` (linia 59) i
-`test_products_with_manager_token` (linia 65): `145` → `154`.
+**Contract**: `test_products_with_captain_token` (line 59) and
+`test_products_with_manager_token` (line 65): `145` → `154`.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- Backend testy przechodzą: `cd supply-os-v1 && python -m pytest`
-- Lint czysty: `cd supply-os-v1 && ruff check .`
-- Wszystkie trzy pliki seed parsują się i mają spójne id: `python3 -c` sprawdzający,
-  że każdy `product_id` z P146–P154 ma dokładnie jeden wiersz w `products.csv`,
-  jeden w `supplier_products.csv` i jeden w `location_product_settings.csv` dla WOLA
-- `test_captain_orderable_wola_pago_returns_18_items` nadal zielony (dowód, że Pago
-  nie został tknięty)
+- Backend tests pass: `cd supply-os-v1 && python -m pytest`
+- Lint clean: `cd supply-os-v1 && ruff check .`
+- All three seed files parse with consistent ids: a `python3 -c` check that every
+  `product_id` in P146–P154 has exactly one row in `products.csv`, one in
+  `supplier_products.csv` and one WOLA row in `location_product_settings.csv`
+- `test_captain_orderable_wola_pago_returns_18_items` still green (proof Pago is untouched)
 
 #### Manual Verification:
 
-- Przegląd diffa: żaden istniejący wiersz nie został zmieniony — same dopiski na końcu plików
+- Diff review: no existing row modified — appends only
 
 ---
 
-## Phase 2: Domknięcie dryfu seed↔prod dla WOLA
+## Phase 2: Close the seed↔prod drift for WOLA
 
 ### Overview
 
-Seed dla WOLA jest o 7 wierszy uboższy niż prod. Faza domyka różnicę, żeby seed
-znów był wiernym lustrem prod — inaczej dryf narasta przy każdym kolejnym lane'ie.
+Seed is 7 rows lighter than prod for WOLA. This phase closes the gap so seed is again a
+faithful mirror — otherwise the drift compounds with every subsequent lane.
 
 ### Changes Required:
 
-#### 1. Brakujące progi WOLA
+#### 1. Missing WOLA thresholds
 
 **File**: `docs/pita-supply-os-v1/seed/location_product_settings.csv`
 
-**Intent**: Odtworzyć w seedzie siedem wierszy dołożonych w prod przy feedback-r6/r7.
-Wartości przepisane z prod, nie wymyślone.
+**Intent**: Recreate in seed the seven rows added to prod during feedback-r6/r7.
+Values transcribed from prod, not invented.
 
-**Contract**: Siedem wierszy `WOLA__P135` … `WOLA__P141` z min/max/target odczytanymi
-z prod: P135 Bombilla 2/10, P136 Corfu Lager 6/6, P137 Corfu Weiss 6/6,
-P138 Corfu Free 6/6, P139 AGROS 0.5/1.5, P140 KAWA 0.5/1.5, P141 LIPTON 0.5/1.5.
+**Contract**: Seven rows `WOLA__P135` … `WOLA__P141` with min/max/target read from prod:
+P135 Bombilla 2/10, P136 Corfu Lager 6/6, P137 Corfu Weiss 6/6, P138 Corfu Free 6/6,
+P139 AGROS 0.5/1.5, P140 KAWA 0.5/1.5, P141 LIPTON 0.5/1.5.
 `notes` = `domkniecie dryfu seed<->prod 2026-08-20 (feedback-r6/r7)`.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- Backend testy przechodzą: `cd supply-os-v1 && python -m pytest`
-- Liczba wierszy WOLA w seedzie = 151 (134 + 10 z fazy 1 + 7 z fazy 2)
-- Zbiór `product_id` dla WOLA w seedzie jest identyczny ze zbiorem w prod
-  (po zastosowaniu SQL z fazy 3)
+- Backend tests pass: `cd supply-os-v1 && python -m pytest`
+- WOLA row count in seed = 151 (134 + 10 from phase 1 + 7 from phase 2)
+- The WOLA `product_id` set in seed is identical to prod's (after the phase 3 SQL)
 
 #### Manual Verification:
 
-- Brak — faza dotyczy wyłącznie pliku używanego przez testy i dev
+- None — this phase touches only a file used by tests and dev
 
 ---
 
-## Phase 3: Wdrożenie na prod (Supabase)
+## Phase 3: Apply to prod (Supabase)
 
 ### Overview
 
-Jedyna faza z realnym efektem dla kapitana. Przygotowuje idempotentny SQL i weryfikuje
-wynik zapytaniem kontrolnym. **Uruchomienie wymaga Twojej wyraźnej zgody.**
+The only phase with a real effect for the captain. Follows the `lessons.md` master-data
+rule: a saved BEFORE diff (the rollback path), apply, then a post-audit.
 
 ### Changes Required:
 
-#### 1. Skrypt SQL
+#### 1. SQL script
 
 **File**: `context/changes/wolska-blueservice-master-data/prod-sql.sql`
 
-**Intent**: Wprowadzić do prod dokładnie te same wiersze co faza 1. Idempotentny, żeby
-dwukrotne uruchomienie nie zdublowało danych i nie nadpisało ręcznych korekt operatora.
+**Intent**: Put into prod exactly the rows from phase 1. Idempotent, so a second run
+neither duplicates data nor overwrites a manual operator correction.
 
-**Contract**: Trzy bloki `INSERT … ON CONFLICT DO NOTHING` — `products` (P146–P154),
-`supplier_products` (SP_BLUESERV_P146–P154), `location_product_settings`
-(WOLA__P143 + WOLA__P146–P154). Bez `ALTER`, bez `UPDATE`, bez `DELETE` — wyłącznie
-dopiski. Faza 2 **nie** ma odpowiednika w SQL: te wiersze w prod już są.
+**Contract**: A BEFORE snapshot block, then three `INSERT … ON CONFLICT DO NOTHING`
+blocks — `products` (P146–P154), `supplier_products` (SP_BLUESERV_P146–P154) and
+`location_product_settings` (WOLA__P143 + WOLA__P146–P154). No `ALTER`, no `UPDATE`,
+no `DELETE` — appends only. Phase 2 has **no** SQL counterpart: those rows already
+exist in prod. Names must carry full Polish diacritics.
 
-#### 2. Zapytanie weryfikacyjne
+#### 2. Post-audit and rollback
 
-**File**: `context/changes/wolska-blueservice-master-data/prod-sql.sql` (sekcja na końcu, zakomentowana)
+**File**: `context/changes/wolska-blueservice-master-data/prod-sql.sql` (trailing commented sections)
 
-**Intent**: Potwierdzić wynik liczbami, a nie „wygląda dobrze".
+**Intent**: Confirm the result with numbers rather than "looks right", and leave a
+ready rollback.
 
-**Contract**: `SELECT` zwracający: `products` = 154, `supplier_products` = 154,
-progi WOLA = 151, oraz listę 10 pozycji Blue Service widocznych dla WOLA.
+**Contract**: A `SELECT` returning `products` = 154, `supplier_products` = 154, WOLA
+thresholds = 151, plus four assertions expected to return zero rows: thresholds
+violating `min ≤ max = target`; placeholder or off-category names; products not
+resolving to exactly one `supplier_product`; rows landing at a location other than
+WOLA. Rollback: `DELETE` in FK order restoring the BEFORE snapshot.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- Zapytanie kontrolne zwraca: `products` = 154, `supplier_products` = 154,
-  `location_product_settings` dla WOLA = 151
-- `GET /api/captain/orderable?supplier_id=SUP_BLUESERV` z tokenem WOLA zwraca
-  10 nowych pozycji więcej niż przed zmianą
-- Powtórne uruchomienie SQL nie zmienia żadnej z powyższych liczb (dowód idempotencji)
+- Audit query returns: `products` = 154, `supplier_products` = 154,
+  `location_product_settings` for WOLA = 151, and zero rows from all four assertions
+- `GET /api/captain/orderable?supplier_id=SUP_BLUESERV` with a WOLA token returns
+  10 more items than before
+- Re-running the SQL changes none of the above numbers (idempotence proof)
 
 #### Manual Verification:
 
-- Kapitan Wolskiej widzi 10 nowych pozycji na ekranie inwentaryzacji, w grupie `Chemia`
-- Na ekranie zamówienia u Blue Service pozycje mają policzoną sugestię i widoczną matematykę
-- Bracka i Norblin: liczba pozycji u Blue Service **bez zmian**
-- Wycena zamówienia nie pokazuje 0 zł ani błędu przy pozycjach z pustą ceną
+- The Wolska captain sees 10 new items on the inventory screen, in the `Chemia` group
+- On the Blue Service order screen the items show a computed suggestion and visible math
+- Bracka and Norblin: Blue Service item count **unchanged**
+- Order valuation shows neither 0 zł nor an error for the empty-price items
 
-**Implementation Note**: Po fazie 3 zatrzymaj się i poczekaj na potwierdzenie od
-operatora, że kapitan faktycznie widzi pozycje, zanim lane zostanie zamknięty.
+**Implementation Note**: After phase 3, pause and wait for operator confirmation that
+the captain actually sees the items before closing the lane.
 
 ---
 
@@ -299,77 +305,77 @@ operatora, że kapitan faktycznie widzi pozycje, zanim lane zostanie zamknięty.
 
 ### Unit Tests:
 
-- Bez nowych testów. Zmiana jest wyłącznie danymi; istniejący zestaw (438 testów)
-  pokrywa ścieżki, które te dane przechodzą.
-- Dwie asercje liczby produktów wymagają aktualizacji (faza 1, zmiana nr 4).
+- No new tests. The change is data only; the existing suite (438 tests) covers the paths
+  this data travels.
+- Two product-count assertions need updating (phase 1, change 4).
 
 ### Integration Tests:
 
-- `test_captain_orderable_wola_pago_returns_18_items` pełni tu rolę testu regresji:
-  jeśli zzielenieje na innej liczbie, znaczy że tor A dotknął Pago i wszedł w zakres toru B.
+- `test_captain_orderable_wola_pago_returns_18_items` acts as the regression guard: if
+  it goes green on a different number, track A touched Pago and strayed into track B.
 
 ### Manual Testing Steps:
 
-1. Zaloguj się tokenem kapitana Wolskiej, otwórz inwentaryzację, odszukaj grupę `Chemia`.
-2. Sprawdź obecność wszystkich 10 pozycji i poprawność polskich znaków w nazwach.
-3. Wpisz stan poniżej minimum przy `Tetra` (min 2) i potwierdź, że sugestia się liczy.
-4. Otwórz zamówienie u Blue Service i sprawdź, że pozycje mają widoczną matematykę sugestii.
-5. Przełącz się na Brackę i Norblin — potwierdź brak zmian w liczbie pozycji.
+1. Sign in with the Wolska captain token, open the inventory screen, find the `Chemia` group.
+2. Check that all 10 items are present and the Polish characters render correctly.
+3. Enter a stock level below minimum for `Tetra` (min 2) and confirm the suggestion computes.
+4. Open the Blue Service order screen and confirm the items show visible suggestion math.
+5. Switch to Bracka and Norblin — confirm the item count is unchanged.
 
 ## Migration Notes
 
-Zmiana jest addytywna i nie wymaga backfillu. Rollback: usunięcie wierszy P146–P154
-z trzech tabel prod (`DELETE FROM location_product_settings WHERE product_id BETWEEN
-'P146' AND 'P154' AND location_id='WOLA'`, analogicznie `supplier_products` i
-`products`, w tej kolejności ze względu na klucze obce) plus revert commita. Wiersz
-`WOLA__P143` przy rollbacku również do usunięcia. Ryzyko utraty danych zerowe —
-w prod nie ma historii zamówień dla żadnej z tych pozycji.
+The change is additive and needs no backfill. Rollback: delete rows P146–P154 from the
+three prod tables (`location_product_settings`, then `supplier_products`, then
+`products`, in that order because of foreign keys) plus revert the commit. `WOLA__P143`
+must also be deleted on rollback. Data-loss risk is zero — prod holds no order history
+for any of these items.
 
-**Deploy nie jest potrzebny** — tor A nie zmienia kodu backendu ani frontendu.
+**No deploy required** — track A changes neither backend nor frontend code.
 
 ## References
 
-- Lane B (zablokowane 3 pozycje biurowe): `context/changes/supplier-per-location/change.md`
-- Precedens dodania produktów spoza katalogu: commit `23dbb78` (P143–P145, norblin-rollout)
-- Precedens SQL uruchamianego przez operatora: `context/changes/product-order-note-and-min-flag/prod-sql.sql`
-- Arkusz źródłowy „Wolska stock" (gid=0), zweryfikowany 2026-08-20
+- Track B (the 3 blocked office items): `context/changes/supplier-per-location/change.md`
+- Precedent for adding off-catalog products: commit `23dbb78` (P143–P145, norblin-rollout)
+- Precedent for operator-run prod SQL: `context/changes/product-order-note-and-min-flag/prod-sql.sql`
+- Source sheet "Wolska stock" (gid=0), verified 2026-08-20
+- `context/foundation/lessons.md` — "Master-data ops: diff before, audit after"
 
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands.
 
-### Phase 1: Katalog — 9 nowych produktów + Blue Service + progi WOLA
+### Phase 1: Catalog — 9 new products + Blue Service + WOLA thresholds
 
 #### Automated
 
-- [x] 1.1 Backend testy przechodzą (`python -m pytest`) — 249dc7b
-- [x] 1.2 Lint czysty (`ruff check .`) — 249dc7b
-- [x] 1.3 Spójność id P146–P154 w trzech plikach seed — 249dc7b
-- [x] 1.4 `test_captain_orderable_wola_pago_returns_18_items` nadal zielony — 249dc7b
+- [x] 1.1 Backend tests pass (`python -m pytest`) — 249dc7b
+- [x] 1.2 Lint clean (`ruff check .`) — 249dc7b
+- [x] 1.3 Id consistency for P146–P154 across the three seed files — 249dc7b
+- [x] 1.4 `test_captain_orderable_wola_pago_returns_18_items` still green — 249dc7b
 
 #### Manual
 
-- [ ] 1.5 Przegląd diffa — żaden istniejący wiersz nie zmieniony
+- [ ] 1.5 Diff review — no existing row modified
 
-### Phase 2: Domknięcie dryfu seed↔prod dla WOLA
-
-#### Automated
-
-- [x] 2.1 Backend testy przechodzą — f19b035
-- [x] 2.2 Liczba wierszy WOLA w seedzie = 151 — f19b035
-- [x] 2.3 Zbiór product_id dla WOLA zgodny z prod
-
-### Phase 3: Wdrożenie na prod (Supabase)
+### Phase 2: Close the seed↔prod drift for WOLA
 
 #### Automated
 
-- [x] 3.1 Zapytanie kontrolne: products=154, supplier_products=154, progi WOLA=151
-- [ ] 3.2 `/api/captain/orderable` dla Blue Service zwraca 10 nowych pozycji
-- [x] 3.3 Powtórne uruchomienie SQL nie zmienia liczb (idempotencja)
+- [x] 2.1 Backend tests pass — f19b035
+- [x] 2.2 WOLA row count in seed = 151 — f19b035
+- [x] 2.3 WOLA product_id set matches prod — 3de90be
+
+### Phase 3: Apply to prod (Supabase)
+
+#### Automated
+
+- [x] 3.1 Audit query: products=154, supplier_products=154, WOLA thresholds=151 — 3de90be
+- [ ] 3.2 `/api/captain/orderable` for Blue Service returns 10 more items
+- [x] 3.3 Re-running the SQL changes no counts (idempotence) — 3de90be
 
 #### Manual
 
-- [ ] 3.4 Kapitan Wolskiej widzi 10 pozycji w grupie `Chemia`
-- [ ] 3.5 Sugestia i matematyka liczą się na ekranie zamówienia
-- [ ] 3.6 Bracka i Norblin bez zmian
-- [ ] 3.7 Wycena nie błęduje przy pustych cenach
+- [ ] 3.4 The Wolska captain sees 10 items in the `Chemia` group
+- [ ] 3.5 Suggestion and math compute on the order screen
+- [ ] 3.6 Bracka and Norblin unchanged
+- [ ] 3.7 Valuation does not error on empty prices

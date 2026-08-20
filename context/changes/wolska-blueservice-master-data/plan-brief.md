@@ -1,85 +1,86 @@
-# WOLA — 9 nowych pozycji Blue Service + tacki papierowe (tor A) — Plan Brief
+# WOLA — 9 new Blue Service products + paper trays (track A) — Plan Brief
 
-> Pełny plan: `context/changes/wolska-blueservice-master-data/plan.md`
-> Tor B (zablokowane pozycje biurowe): `context/changes/supplier-per-location/change.md`
+> Full plan: `context/changes/wolska-blueservice-master-data/plan.md`
+> Track B (blocked office items): `context/changes/supplier-per-location/change.md`
 
 ## What & Why
 
-Tushar zgłosił 13 pozycji do dodania dla Wolskiej u Blue Service i 3 do usunięcia
-z Pago. Weryfikacja pokazała, że listy się zazębiają: 3 „do usunięcia" to te same
-produkty co 3 „do dodania" — czyli przepięcie dostawcy, zablokowane architekturą.
-Ten plan realizuje **10 pozycji, które są od tamtej decyzji niezależne**, żeby
-Tushar dostał 10 z 13 od razu, a decyzja architektoniczna nie zapadała pod presją.
+Tushar reported 13 items to add for Wolska at Blue Service and 3 to remove from Pago.
+Verification showed the lists overlap: the 3 "removals" are the same products as 3 of
+the "additions" — a supplier re-point, blocked by the data model. This plan delivers
+the **10 items independent of that decision**, so Tushar gets 10 of 13 immediately and
+the architectural decision is not made under time pressure.
 
 ## Starting Point
 
-Prod (Supabase): 145 produktów, 145 wierszy `supplier_products` (reguła 1 produkt =
-1 dostawca obowiązuje w praktyce), progi WOLA 141. Dziewięciu pozycji z arkusza
-Wolskiej nie ma w katalogu wcale; dziesiąta (`Tacki papierowe`) istnieje jako P143,
-ale WOLA nie ma dla niej progów, więc jest niewidoczna. Arkusz Tushara sprawdzony —
-uzupełniony, wszystkie 13 pozycji z min/max w sekcji `Chemia`.
+Prod (Supabase): 145 products, 145 `supplier_products` rows (the "one product = one
+supplier" rule holds in practice), 141 WOLA thresholds. Nine items from the Wolska
+sheet are absent from the catalog entirely; a tenth (`Tacki papierowe`) exists as P143
+but has no WOLA thresholds, so it is invisible. Tushar's sheet was verified — filled
+in, all 13 items with min/max under `Chemia`.
 
 ## Desired End State
 
-Kapitan Wolskiej widzi 10 nowych pozycji w inwentaryzacji (grupa `Chemia`) i na
-ekranie zamówienia u Blue Service, z policzoną sugestią. Bracka, Norblin i KEN bez
-żadnej zmiany. Seed w repo zgadza się z prod co do wiersza dla WOLA.
+The Wolska captain sees 10 new items in the inventory count (`Chemia` group) and on the
+Blue Service order screen, with a computed suggestion. Bracka, Norblin and KEN unchanged.
+Seed matches prod row for row for WOLA.
 
 ## Key Decisions Made
 
-| Decyzja | Wybór | Dlaczego | Źródło |
+| Decision | Choice | Why | Source |
 |---|---|---|---|
-| Zakres | Podział na tor A / tor B | 10 pozycji odblokowanych od razu; architektura bez presji czasu | Operator |
-| Wymiar dostawcy | Na lokalu, nie na mieście | Dwa lokale w jednym mieście mogą mieć różnych dostawców | Operator |
-| Tacki papierowe | Użyć istniejącego P143 | Brak historii zamówień → rozdzielenie później kosztuje zero | Plan |
-| Nazwa/kategoria/jednostka P143 | Bez zmian | Pola globalne, produkt używany przez Brackę i Norblin | Plan |
-| Kategoria 9 nowych | `Chemia` (też dla zakreślacza) | Ekran ma się zgadzać z kartką, z której kapitan liczy | Plan |
-| Ceny | Puste, nie zgadywane | Konwencja z piw Corfu i P143–P145 (`23dbb78`) | Plan |
-| Progi dla innych lokali | Nie dodajemy | Pozycji nie ma w ich arkuszach; precedens P143–P145 | Plan |
-| Dryf seed↔prod | Domknąć w osobnej fazie | Ten sam plik; nie domknięty rośnie przy każdym lane'ie | Plan |
-| Bug `sp.active` | Odłożony do toru B | Naprawa ma sens dopiero z wymiarem dostawcy | Plan |
+| Scope | Split into track A / track B | 10 items unblocked now; architecture without time pressure | Operator |
+| Supplier dimension | On the location, not the city | Two locations in one city can have different suppliers | Operator |
+| Paper trays | Reuse the existing P143 | No order history → splitting later costs nothing | Plan |
+| P143 name/category/unit | Unchanged | Global fields; product already used by Bracka and Norblin | Plan |
+| Category of the 9 new | `Chemia` (highlighter included) | The screen should match the sheet the captain counts from | Plan |
+| Prices | Left empty, never guessed | Convention from the Corfu beers and P143–P145 (`23dbb78`) | Plan |
+| Thresholds for other locations | Not added | Items are not on their sheets; P143–P145 precedent | Plan |
+| Seed↔prod drift | Closed in its own phase | Same file; left open it grows with every lane | Plan |
+| `sp.active` bug | Deferred to track B | The fix only makes sense with the supplier dimension | Plan |
 
 ## Scope
 
-**W zakresie:** 9 nowych produktów (P146–P154) · 9 powiązań z Blue Service ·
-10 wierszy progów dla WOLA (9 nowych + P143) · aktualizacja 2 asercji w testach ·
-domknięcie dryfu seed↔prod (7 wierszy) · idempotentny SQL na prod.
+**In scope:** 9 new products (P146–P154) · 9 Blue Service links · 10 WOLA threshold rows
+(9 new + P143) · 2 test-assertion updates · seed↔prod drift closure (7 rows) ·
+idempotent prod SQL.
 
-**Poza zakresem:** przepięcie zszywek/markerów/długopisów z Pago (tor B) ·
-filtr `sp.active` w kodzie (tor B) · progi dla BRACKA/NORBLIN/KEN · zgadywanie cen ·
-zmiany nazwy/kategorii/jednostki P143 · frontend · deploy backendu.
+**Out of scope:** re-pointing staples/markers/pens from Pago (track B) · the `sp.active`
+filter (track B) · thresholds for BRACKA/NORBLIN/KEN · guessing prices · changing P143's
+name/category/unit · frontend · backend deploy.
 
 ## Architecture / Approach
 
-Zmiana wyłącznie danymi, w dwóch niezależnych zapisach: **seed CSV** (testy + dev)
-i **SQL na Supabase** (prod). Kluczowa nieoczywistość: prod czyta Supabase, więc
-**merge do main nie zmienia nic** dla kapitana — efekt produkcyjny daje wyłącznie SQL
-z fazy 3. Kod backendu i frontendu nietknięty, więc **deploy nie jest potrzebny**.
+A data-only change, recorded twice and independently: **seed CSV** (tests + dev) and
+**SQL against Supabase** (prod). The key non-obvious point: prod reads Supabase, so
+**merging to main changes nothing** for the captain — only the phase 3 SQL does. No
+backend or frontend code is touched, so **no deploy is required**.
 
 ## Phases at a Glance
 
-| Faza | Co dostarcza | Główne ryzyko |
+| Phase | Delivers | Key risk |
 |---|---|---|
-| 1. Katalog | 9 produktów + Blue Service + 10 progów WOLA w seedzie | Literówka w id rozjeżdża trzy pliki — łapie to test spójności |
-| 2. Dryf seed↔prod | 7 brakujących wierszy WOLA (P135–P141) | Żadne — plik używany tylko przez testy i dev |
-| 3. Prod | Idempotentny SQL + smoke | Jedyna faza z realnym efektem; wymaga wyraźnej zgody operatora |
+| 1. Catalog | 9 products + Blue Service links + 10 WOLA thresholds in seed | An id typo desyncs three files — caught by the consistency check |
+| 2. Seed↔prod drift | 7 missing WOLA rows (P135–P141) | None — file used only by tests and dev |
+| 3. Prod | Idempotent SQL + post-audit | The only phase with a real effect; needs explicit operator go-ahead |
 
-**Prerequisites:** dostęp do Supabase prod (jest) · potwierdzony arkusz Tushara (jest).
-**Estimated effort:** jedna sesja; fazy 1–2 mechaniczne, faza 3 to jedno uruchomienie SQL + smoke.
+**Prerequisites:** access to prod Supabase (have it) · Tushar's sheet confirmed (done).
+**Estimated effort:** one session; phases 1–2 mechanical, phase 3 one SQL run plus audit.
 
 ## Open Risks & Assumptions
 
-- **Zakładam, że `Tacki papierowe 14x25 100 sztuk` z arkusza Wolskiej to ten sam
-  produkt co P143 u Bracki i Norblina.** Arkusz Wolskiej podaje rozmiar, tamte nie.
-  Do potwierdzenia z Tusharem po wdrożeniu — jeśli to inny rozmiar, rozdzielenie na
-  osobny produkt kosztuje zero (brak historii zamówień).
-- P143 ma jednostkę `opak` i kategorię `Opakowania`, a arkusz Wolskiej `szt` i `Chemia`.
-  Zostawiam wartości globalne; kapitan znajdzie pozycję w innej grupie niż na papierze.
-- Ceny wszystkich 9 pozycji nieznane — wycena zamówienia ich nie policzy do pierwszej faktury.
+- **Assumes `Tacki papierowe 14x25 100 sztuk` on the Wolska sheet is the same product as
+  P143 at Bracka and Norblin.** The Wolska sheet states a size; theirs do not. To confirm
+  with Tushar after rollout — if it is a different size, splitting it out costs nothing
+  (no order history).
+- P143 carries unit `opak` and category `Opakowania`, while the Wolska sheet says `szt`
+  and `Chemia`. Global values left alone, so the captain finds it in a different group
+  than on paper.
+- Prices for all 9 items are unknown — order valuation will skip them until the first invoice.
 
 ## Success Criteria (Summary)
 
-- Kapitan Wolskiej widzi i może zamówić wszystkie 10 pozycji u Blue Service.
-- Bracka i Norblin nie zauważają żadnej zmiany.
-- Tushar dostaje odpowiedź, że 10 z 13 jest zrobione, a 3 pozostałe czekają na
-  decyzję o wymiarze dostawcy — z konkretnym powodem, nie „w trakcie".
+- The Wolska captain can see and order all 10 items from Blue Service.
+- Bracka and Norblin notice no change.
+- Tushar gets an answer that 10 of 13 are done and 3 await the supplier-dimension
+  decision — with a concrete reason, not "in progress".
