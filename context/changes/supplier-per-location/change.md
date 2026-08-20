@@ -108,26 +108,52 @@ Code phases 1-3: **PR #26**, branch `claude/supplier-per-location`. Green on all
 four gates (453 pytest, ruff, build, lint, 89 vitest). Provably a no-op against
 current prod data.
 
-### Seed half — DONE (commit 8721b8f)
+### The lane's problem statement was wrong — corrected 2026-08-20
 
-The mechanism is proven end-to-end on seed data, not just unit-mocked:
+A seed pin for P127/P132/P133 was written (commit 8721b8f) and then **reverted**
+(commit 5b5af29) after checking Wolska's own data. Recorded here because the
+finding outlives the lane:
 
-- Three Blue Service catalog entries for P127/P132/P133. Packaging mirrored from
-  the verified Pago rows (`units_per_purchase_unit` 1, `full_only`); price left
-  NULL — the Blue Service price list was unavailable, and a fabricated number
-  would land in `total_value_estimate_pln`.
-- WOLA's three threshold rows pinned to `SUP_BLUESERV`; the other 437 stay
-  unpinned.
-- `test_captain_orderable_wola_pago_returns_18_items` → `_returns_15_items`, and
-  it now asserts the three are ABSENT. Two new tests: they must APPEAR at WOLA ×
-  Blue Service (otherwise "gone from Pago" would also pass if they had fallen
-  out of the catalog entirely), and the pin must NOT follow them to BRACKA or
-  NORBLIN — the premise of the whole feature.
+- **Wolska's inventory sheet** ("Wolska - Inwentaryzacja", Drive, modified
+  2026-08-16) lists all seven `Biurowe` products under **Pago** in every dated
+  snapshot, at prices matching the database exactly (0,70 / 6,00 / 1,20), with
+  real stock on hand (Zszywki 2,5 · Markery 10 · Długopisy 10).
+- The absent Blue Service price was **information, not a gap**: no such price
+  exists because Wolska does not buy them there.
+- **Operator, 2026-08-20:** they come from **Selgros or Allegro** — not certain
+  which, being checked with the location. Neither exists in `suppliers`, so a pin
+  has nothing to point at.
 
-455 pytest · ruff · build · eslint · 89 vitest, all green locally AND on CI,
-including the real-Postgres integration job, which applies migration 0008 against
-a fresh schema. (Note: `AGENTS.md` still says "No CI yet" — stale; CI exists and
-runs backend, integration and frontend jobs.)
+The lesson generalises: this lane's whole premise came from a problem statement
+nobody had checked against the location's own records. The check took one Drive
+read and inverted the answer.
+
+**The real supplier-per-location candidates at Wolska** — same sheet, five
+products where sheet and database genuinely disagree, all still blocked on the
+same missing-supplier decision:
+
+| product | sheet | database |
+|---|---|---|
+| P088 Opakowanie Frytki | Selgros | Blue Service |
+| P102 Słomki 250szt | Selgros | Blue Service |
+| P095 Folia Aluminiowa | Intermlecz | Blue Service |
+| P096 Folia spożywcza | Intermlecz | Blue Service |
+| P097 Papier Pergamin | Intermlecz | Blue Service |
+
+The sheet also carries these products under **two different suppliers in
+different sections** — which is the "interchangeable supplier" case the lane
+exists to model, visible in the source data.
+
+**Applied instead** (operator instruction, unrelated to the supplier dimension):
+WOLA markers 0/0/0 → min 3 max 10, pens 0/0/0 → min 5 max 20. They suggested
+nothing despite 10 szt of each on hand. `target = max` follows the
+Bracka/Norblin convention for these SKUs. KEN holds identical zeros because it
+is still on a copy of Wolska's data — deliberately left alone.
+
+**The mechanism is unaffected.** The 15 tests in `test_orderable_supplier_pin.py`
+use synthetic fixtures and never depended on this master data;
+`test_captain_orderable_wola_pago_returns_18_items` is back to 18 with a comment
+recording why. 453 pytest · ruff · build clean.
 
 ### Blocked: three actions this session could not perform
 
@@ -151,7 +177,14 @@ where they currently sit at 0/0/0).
 
 ### Next step
 
-Merge #26, then run `prod-sql.sql` §2 → §3 → deploy → §4 → §5 → §6.
+1. **Ask the location: Selgros or Allegro** for the office supplies. Allegro is a
+   marketplace rather than an email supplier, so it likely needs
+   `ordering_method` `portal` or `manual`, which changes how dispatch behaves —
+   that is a design question, not just a master-data row.
+2. Merge #26, then run `prod-sql.sql` §2 → §3 → §4 → §5. No pin in this batch.
+3. Once a supplier is decided: add it to `suppliers`, add catalog rows, **then**
+   pin. Never the reverse — a pin without a catalog row makes the product
+   orderable from nobody.
 
 Phase 5 (fries substitutes) stays deferred behind PRD Open Questions 5 and 6 —
 the third source is not in `suppliers`, and no per-location pass has been made.
