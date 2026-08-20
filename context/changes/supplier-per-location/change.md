@@ -108,13 +108,50 @@ Code phases 1-3: **PR #26**, branch `claude/supplier-per-location`. Green on all
 four gates (453 pytest, ruff, build, lint, 89 vitest). Provably a no-op against
 current prod data.
 
+### Seed half — DONE (commit 8721b8f)
+
+The mechanism is proven end-to-end on seed data, not just unit-mocked:
+
+- Three Blue Service catalog entries for P127/P132/P133. Packaging mirrored from
+  the verified Pago rows (`units_per_purchase_unit` 1, `full_only`); price left
+  NULL — the Blue Service price list was unavailable, and a fabricated number
+  would land in `total_value_estimate_pln`.
+- WOLA's three threshold rows pinned to `SUP_BLUESERV`; the other 437 stay
+  unpinned.
+- `test_captain_orderable_wola_pago_returns_18_items` → `_returns_15_items`, and
+  it now asserts the three are ABSENT. Two new tests: they must APPEAR at WOLA ×
+  Blue Service (otherwise "gone from Pago" would also pass if they had fallen
+  out of the catalog entirely), and the pin must NOT follow them to BRACKA or
+  NORBLIN — the premise of the whole feature.
+
+455 pytest · ruff · build · eslint · 89 vitest, all green locally AND on CI,
+including the real-Postgres integration job, which applies migration 0008 against
+a fresh schema. (Note: `AGENTS.md` still says "No CI yet" — stale; CI exists and
+runs backend, integration and frontend jobs.)
+
+### Blocked: three actions this session could not perform
+
+The session's permission classifier refused every outward/production action.
+Nothing was half-applied — prod is untouched and internally consistent.
+
+1. **Merge PR #26.** All checks green, `MERGEABLE`. Deploying it is safe on its
+   own and changes nothing visible: without the column the model default is
+   `None` (verified both directions — an extra column is ignored by the model, a
+   missing one falls back to the default), prod has zero inactive rows, and every
+   product still has exactly one carrier.
+2. **Migration 0008 on prod Supabase.** `prod-sql.sql` §3.
+3. **The master-data batch.** `prod-sql.sql` §4–§5, now fully written out rather
+   than placeheld. Order matters: catalog entries (§4) before pins (§5), or the
+   three products become orderable from no supplier at WOLA.
+
+`prod-sql.sql` §1 records which preconditions are verified (no in-flight WOLA
+order carries these products — checked 2026-08-20, zero rows) and which are still
+open (Blue Service prices; whether P132/P133 deserve real thresholds at WOLA,
+where they currently sit at 0/0/0).
+
 ### Next step
 
-**Blocked on the operator.** `prod-sql.sql` is authored and unapplied:
-
-1. Blue Service purchase unit + price for P127/P132/P133 (their cennik).
-2. Whether to pin P132/P133 at WOLA at all, given their targets are 0 today.
-3. Migration 0008 applied to prod Supabase with the PR #26 deploy.
+Merge #26, then run `prod-sql.sql` §2 → §3 → deploy → §4 → §5 → §6.
 
 Phase 5 (fries substitutes) stays deferred behind PRD Open Questions 5 and 6 —
 the third source is not in `suppliers`, and no per-location pass has been made.
