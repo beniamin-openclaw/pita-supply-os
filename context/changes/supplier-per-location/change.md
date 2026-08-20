@@ -89,7 +89,32 @@ with a Socrates round. Decisions taken:
 Also corrected against prod: **154** products / **154** `supplier_products` rows after
 track A shipped (the 145 recorded above was the pre-track-A count).
 
+### Workflow record (2026-08-20)
+
+Full lane run in one session: shape -> prd (delta, v3) -> research -> plan ->
+plan-review -> implement -> impl-review -> verify. Research and both review passes
+were run inline rather than fanned out to sub-agents (session configuration).
+
+- `research.md` — found the blocking fact: P127/P132/P133 exist only at Pago, so
+  the headline scenario needs Blue Service catalog entries BEFORE any pin.
+- `reviews/plan-review.md` — 1 CRITICAL: the plan named the read path as "the
+  single chokepoint", but the write path (`_resolve_master_data`) is a separate
+  function and would have accepted a pinned-away line from a stale local-storage
+  draft. Fixed before implementation.
+- `reviews/impl-review.md` — APPROVED; the one warning (pin landing on an
+  in-flight order) became a precondition in the Phase 4 runbook.
+
+Code phases 1-3: **PR #26**, branch `claude/supplier-per-location`. Green on all
+four gates (453 pytest, ruff, build, lint, 89 vitest). Provably a no-op against
+current prod data.
+
 ### Next step
 
-`/10x-prd` (delta — amend `context/foundation/prd.md` in place, as the Location
-Inventory Count change did).
+**Blocked on the operator.** `prod-sql.sql` is authored and unapplied:
+
+1. Blue Service purchase unit + price for P127/P132/P133 (their cennik).
+2. Whether to pin P132/P133 at WOLA at all, given their targets are 0 today.
+3. Migration 0008 applied to prod Supabase with the PR #26 deploy.
+
+Phase 5 (fries substitutes) stays deferred behind PRD Open Questions 5 and 6 —
+the third source is not in `suppliers`, and no per-location pass has been made.
