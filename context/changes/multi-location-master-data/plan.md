@@ -124,20 +124,21 @@ sheets in `scratchpad/sheets/`, prod read-only state of 2026-08-21.
 ### Phase A2: Reports over all 12 sheets
 
 #### Automated
-- [ ] CLI run over `scratchpad/sheets/` + a prod snapshot (read-only queries dumped
+- [x] CLI run over `scratchpad/sheets/` + a prod snapshot (read-only queries dumped
       to JSON) → 12 per-location reports + cross-location summary committed under
       `context/changes/multi-location-master-data/reports/`
-- [ ] summary includes the operator gap list (per location: missing thresholds,
+- [x] summary includes the operator gap list (per location: missing thresholds,
       missing city/address/company, unresolved supplier conflicts, near-miss names)
 
 ### Phase B1: SQL generation
 
 #### Automated
-- [ ] `emit_sql` covered by tests (golden-file: one small location fixture → exact
+- [x] `emit_sql` covered by tests (golden-file: one small location fixture → exact
       SQL text)
-- [ ] batches generated for: shared suppliers batch, 7 new locations, and
-      pin/conflict batches for existing 4 locations
-- [ ] every batch carries diff-before / audit-after and the 0008 precondition where
+- [x] batches generated (21 files): shared suppliers, 21 new products (+ the
+      quarantined-names decision list), 74 catalog pairs, locations, 8 settings
+      batches, 8 per-location activation batches
+- [x] every batch carries diff-before / audit-after and the 0008 precondition where
       pins are present
 
 ### Phase B2: Prod attempt (gated pattern)
@@ -159,19 +160,22 @@ sheets in `scratchpad/sheets/`, prod read-only state of 2026-08-21.
 ### Phase C1: H-01 hardening
 
 #### Automated
-- [ ] `requirements.lock` generated + CI installs from it
-- [ ] ruff rules `I`, `B`, `UP` enabled and green
-- [ ] pyright config + advisory CI job
-- [ ] TS strict staged: enabled if fixable tonight, else reverted with an error
-      inventory committed to the change folder
-- [ ] `/verify` green after each sub-step
+- [x] `requirements.lock` generated (64 pins, clean venv) + CI installs from it,
+      proven by a full-suite run on the CI runtime (3.12) and on 3.14
+- [x] ruff rules `I`, `B`, `UP` enabled and green — `B905` caught a real bug
+      (`zip()` over the snapshot JSONs could silently mis-align columns)
+- [x] pyright config + advisory CI job (`continue-on-error`, 60 pre-existing errors)
+- [x] TS strict enabled and kept — the codebase was already clean under it
+- [x] `/verify` green after each sub-step
 
 ### Phase D: Verification + closeout
 
 #### Automated
-- [ ] `/verify`: backend ruff+pytest, frontend build+lint+vitest — all green
-- [ ] proof saved under `verification/`
+- [x] `/verify`: backend ruff+pytest (522), frontend build+lint+vitest (89) — green
+- [x] proof saved under `verification/verify-output.md`, including the 14-pair
+      exposure found while writing it
 #### Manual
-- [ ] decision report for the operator (what was chosen and why, gap list, what is
+- [x] decision report for the operator (what was chosen and why, gap list, what is
       ready-to-run vs applied) written to change.md and summarized in chat
-- [ ] `10x-archive` proposed, not run
+- [x] `10x-archive` proposed, not run — deferred until PR #26 ships and the
+      operator closes the gap list
