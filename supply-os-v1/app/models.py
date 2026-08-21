@@ -111,6 +111,15 @@ class LocationProductSetting(BaseModel):
     is_critical_for_location: bool = False
     allow_over_max_due_to_packaging: bool = False
     notes: str = ""
+    # Which supplier THIS location buys THIS product from (supplier-per-location).
+    # None = unpinned: the product is orderable from every active supplier that
+    # carries it, which is the pre-change behavior and therefore the default. A
+    # value narrows to exactly that supplier. It never WIDENS — `supplier_products`
+    # stays the universe, so pinning to a supplier that does not carry the product
+    # makes it orderable nowhere (`_build_orderable_items` logs that case).
+    # Thresholds above stay supplier-agnostic on purpose: a location wants N units
+    # on site regardless of who delivers them.
+    source_supplier_id: Optional[str] = None
 
 
 # ---------- Orders ----------

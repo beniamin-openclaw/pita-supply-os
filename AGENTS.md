@@ -15,21 +15,23 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 - `docs/pita-supply-os-v1/` — product docs incl. `RESUME_STATE`.
 
 ## Build, test, run
-- Backend (`supply-os-v1/`): test `python -m pytest` (196 tests) · run `uvicorn app.main:app` · lint `ruff check .`
+- Backend (`supply-os-v1/`): test `python -m pytest` (453 tests, plus 16 integration tests run via `pytest -m integration` against a real Postgres) · run `uvicorn app.main:app` · lint `ruff check .`
 - Frontend (`frontend/`): `npm install`, then `npm run dev | build | lint`
 - Verify before committing: `/verify` (Claude Code skill) or run the four checks above. A `PostToolUse` hook auto-runs `ruff check --fix` (`.py`) / `eslint --fix` (`frontend/`) on edits.
 
 ## Local setup & gotchas
 - **Local dev needs no Google credentials**: set `SUPPLY_OS_DATA_BACKEND=seed` to read CSVs from `SUPPLY_OS_SEED_DIR` (default `../docs/pita-supply-os-v1/seed`). The `sheet` backend additionally needs `SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON` (inline or file path) + `SUPPLY_OS_GOOGLE_SHEET_ID`.
-- **API URL is env-driven — don't hardcode it.** Dev sets `VITE_API_URL=http://localhost:8901`; in prod `apiClient` uses `BASE_URL=""` and Vercel rewrites `/api/*` to the droplet (see @frontend/vercel.json).
+- **The seed CSVs are a curated test fixture, NOT a production mirror** — nothing syncs them to prod and they diverge in both directions (see @docs/pita-supply-os-v1/seed/README.md). A green backend suite proves behavior against the fixture, never against production master data; verify prod claims with a prod query. Write tests that assert on behavior, not on facts about the real business.
+- **API URL is env-driven — don't hardcode it.** Dev sets `VITE_API_URL=http://localhost:8901`; in prod `apiClient` uses `BASE_URL=""` and Vercel rewrites `/api/*` to the Railway backend (see @frontend/vercel.json).
 - **Auth:** `SUPPLY_OS_CAPTAIN_TOKENS` (LOCATION:token pairs) + `SUPPLY_OS_MANAGER_TOKEN`; empty disables auth (dev only). Copy each app's `.env.example` → `.env`.
 
 ## Conventions & deploy
 - **Solo repo — no enforced commit/branch/PR convention; don't impose one.**
-- **Deploy from this repo is NOT wired up yet (migration in progress)** — don't assume `push` auto-deploys; re-pointing Vercel/droplet is a pending step.
-- **No CI yet** — `push` runs no tests; run `/verify` before committing.
+- **Deploy is wired up from `main`** — backend on Railway (auto-deploy on push to `main`; @supply-os-v1/Procfile), frontend on Vercel, which rewrites `/api/*` to the Railway service (@frontend/vercel.json). A push to `main` ships to production; branch first if that is not what you want. Runbook: @docs/pita-supply-os-v1/RAILWAY_DEPLOY_RUNBOOK.md.
+- **CI runs on push + PR** (@.github/workflows/ci.yml): backend `ruff` + `pytest`, a real-Postgres integration job (`pytest -m integration`), and frontend build + lint + vitest. Still run `/verify` before committing — CI is a backstop, not a substitute.
 - Style differs from defaults: ruff `line-length = 100` (not 88); TS `strict` is **off** in `frontend/tsconfig.app.json` — annotate function params, return types, and component props explicitly; don't rely on inferred `any`.
-- Other known gaps: frontend has no test runner; backend has no lockfile. Detail + fixes: @context/foundation/health-check.md.
+- Frontend tests: Vitest + @testing-library/react + jsdom (`npm run test` → 89 tests / 10 files), covering pure helpers and some component rendering. No E2E harness.
+- Other known gaps: backend has no lockfile. Detail + fixes: @context/foundation/health-check.md.
 
 ## Tooling & vendors
 The user holds paid premium subscriptions on the platforms in @docs/tooling.md — informational only; no tool or host preference is set yet (decisions pending).

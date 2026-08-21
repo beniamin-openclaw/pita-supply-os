@@ -109,6 +109,10 @@ export const STRINGS = {
     en: "target {target} {inventoryUnit} · max {max} · 1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
   },
   "card.critical": { pl: "KRYTYCZNY", en: "CRITICAL" },
+  "card.alsoSuppliedBy": {
+    pl: "Dostępne też u: {suppliers}",
+    en: "Also available from: {suppliers}",
+  },
   "card.currentStock": { pl: "Obecny stan", en: "Current stock" },
   "card.suggestionGroupLabel": { pl: "Sugestia systemu", en: "System suggestion" },
   "card.suggestion": { pl: "Sugestia ↓", en: "Suggestion ↓" },
