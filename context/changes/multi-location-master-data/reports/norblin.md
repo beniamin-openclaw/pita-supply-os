@@ -28,9 +28,6 @@
 | Product | Suppliers |
 | --- | --- |
 | Feta blok | Bukat, Pago |
-| Folia Alumiuniowa | Blue Service, Intermlecz |
-| Folia spożywcza | Blue Service, Intermlecz |
-| Papier Pergamin do pieczenia | Blue Service, Intermlecz |
 
 ## Stock vs price-list conflicts
 
@@ -69,11 +66,13 @@ _none_
 
 ## Min/max coverage
 
-- Total price-list rows: 147
-- With min/max: 107
+- Total price-list rows: 144
+- With min/max: 104
 - Without min/max: 40
 
 ## Gaps for the operator
+
+- Quarantined names: 4 (see prod-sql/01b-quarantined-names.md)
 
 ### Near-miss names needing a human call
 

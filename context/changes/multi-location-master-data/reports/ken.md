@@ -4,7 +4,6 @@
 
 | Product | Category | Supplier |
 | --- | --- | --- |
-| 3.5 | Blue Service | Bowl opakowanie papierowe miska 1300 ml |
 | Burn | Napoje | Coca Cola Hub |
 | Corfu Pilsner | Napoje | Filber Wyspy Piwne |
 | Jogurt naturalny | Chłodnia | Intermlecz |
@@ -56,11 +55,13 @@ _none_
 
 ## Min/max coverage
 
-- Total price-list rows: 143
+- Total price-list rows: 142
 - With min/max: 0
-- Without min/max: 143
+- Without min/max: 142
 
 ## Gaps for the operator
+
+- Quarantined names: 0 (see prod-sql/01b-quarantined-names.md)
 
 ### Near-miss names needing a human call
 
@@ -76,7 +77,6 @@ _none_
 
 | Sheet name |
 | --- |
-| 3.5 |
 | Burn |
 | Corfu Pilsner |
 | Jogurt naturalny |
@@ -87,7 +87,6 @@ _none_
 
 | Sheet name |
 | --- |
-| 3.5 |
 | Awokado |
 | Bowl opakowanie papierowe miska 1300 ml |
 | Bowl opakowanie pokrywka plastik 1300 ml |

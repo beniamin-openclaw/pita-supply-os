@@ -20,17 +20,17 @@
 | Cytryna | Selgros | Bukat |
 | Papryka zielona | Selgros | Bukat |
 | Awokado | Selgros | Bukat |
-| Ogórek | Selgros/Bukat | Bukat |
-| Pomidor | Selgros/Bukat | Bukat |
-| Rucola 125 gr | Selgros/Bukat | Bukat |
-| Sałata bolero mix 150gr | Selgros/Bukat | Bukat |
-| Natka Pietruszki | Selgros/Bukat | Bukat |
-| Czosnek | Selgros/Bukat | Bukat |
+| Ogórek | Selgros | Bukat |
+| Pomidor | Selgros | Bukat |
+| Rucola 125 gr | Selgros | Bukat |
+| Sałata bolero mix 150gr | Selgros | Bukat |
+| Natka Pietruszki | Selgros | Bukat |
+| Czosnek | Selgros | Bukat |
 | Oliwki kalamata | Kuchnie Świata | Intermlecz |
 | Halloumi | Kuchnie Świata | Intermlecz |
-| Cebula czerwona | Selgros/Bukat | Bukat |
+| Cebula czerwona | Selgros | Bukat |
 | Florinis | Kuchnie Świata | Intermlecz |
-| Cebula Biała | Selgros/Bukat | Bukat |
+| Cebula Biała | Selgros | Bukat |
 | Frytki Aviko (opakowania) | Kuchnie Świata | Intermlecz |
 | Frytki z batatów (opakowania) | Selgros | Intermlecz |
 | Fasolka Szparagowa (op.) | Selgros | Intermlecz |
@@ -61,20 +61,19 @@
 
 | Product | Suppliers |
 | --- | --- |
+| Cebula Biała | Bukat, Selgros |
+| Cebula czerwona | Bukat, Selgros |
+| Czosnek | Bukat, Selgros |
 | Feta blok | Bukat, Pago |
+| Natka Pietruszki | Bukat, Selgros |
+| Ogórek | Bukat, Selgros |
+| Pomidor | Bukat, Selgros |
+| Rucola 125 gr | Bukat, Selgros |
+| Sałata bolero mix 150gr | Bukat, Selgros |
 
 ## Stock vs price-list conflicts
 
-| Product | Stock supplier(s) | Price-list supplier(s) |
-| --- | --- | --- |
-| Cebula Biała | Selgros | Selgros/Bukat |
-| Cebula czerwona | Selgros | Selgros/Bukat |
-| Czosnek | Selgros | Selgros/Bukat |
-| Natka Pietruszki | Selgros | Selgros/Bukat |
-| Ogórek | Selgros | Selgros/Bukat |
-| Pomidor | Selgros | Selgros/Bukat |
-| Rucola 125 gr | Selgros | Selgros/Bukat |
-| Sałata bolero mix 150gr | Selgros | Selgros/Bukat |
+_none_
 
 ## Unit mismatches
 
@@ -108,11 +107,13 @@
 
 ## Min/max coverage
 
-- Total price-list rows: 135
+- Total price-list rows: 143
 - With min/max: 0
-- Without min/max: 135
+- Without min/max: 143
 
 ## Gaps for the operator
+
+- Quarantined names: 4 (see prod-sql/01b-quarantined-names.md)
 
 ### Near-miss names needing a human call
 

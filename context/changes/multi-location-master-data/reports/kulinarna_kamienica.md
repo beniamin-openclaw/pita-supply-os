@@ -4,11 +4,13 @@
 
 | Product | Category | Supplier |
 | --- | --- | --- |
-| Rucola 1 kg | Chłodnia | Selgros/Bukat |
-| Rucola 100 gr | Chłodnia | Selgros/Bukat |
+| Rucola 1 kg | Chłodnia | Bukat |
+| Rucola 1 kg | Chłodnia | Selgros |
+| Rucola 100 gr | Chłodnia | Bukat |
+| Rucola 100 gr | Chłodnia | Selgros |
 | Ręcznik papierowy rolka | Chemia | Blue Service |
-| Sałata bolero mix 1kg | Chłodnia | Selgros/Bukat |
-| Suma | Dostawca | Produkt |
+| Sałata bolero mix 1kg | Chłodnia | Bukat |
+| Sałata bolero mix 1kg | Chłodnia | Selgros |
 | milk | Spożywcze | Selgros |
 
 ## Supplier conflicts
@@ -16,20 +18,20 @@
 | Product | Sheet supplier | Snapshot supplier(s) |
 | --- | --- | --- |
 | Masło MR 500g | Selgros | Intermlecz |
-| Cytryna | Selgros/Bukat | Bukat |
-| Papryka zielona | Selgros/Bukat | Bukat |
-| Awokado | Selgros/Bukat | Bukat |
-| Ogórek | Selgros/Bukat | Bukat |
-| Pomidor | Selgros/Bukat | Bukat |
-| Rucola 125 gr | Selgros/Bukat | Bukat |
-| Sałata bolero mix 150gr | Selgros/Bukat | Bukat |
-| Natka Pietruszki | Selgros/Bukat | Bukat |
-| Czosnek | Selgros/Bukat | Bukat |
+| Cytryna | Selgros | Bukat |
+| Papryka zielona | Selgros | Bukat |
+| Awokado | Selgros | Bukat |
+| Ogórek | Selgros | Bukat |
+| Pomidor | Selgros | Bukat |
+| Rucola 125 gr | Selgros | Bukat |
+| Sałata bolero mix 150gr | Selgros | Bukat |
+| Natka Pietruszki | Selgros | Bukat |
+| Czosnek | Selgros | Bukat |
 | Oliwki kalamata | Kuchnie Świata | Intermlecz |
 | Halloumi | Kuchnie Świata | Intermlecz |
-| Cebula czerwona | Selgros/Bukat | Bukat |
+| Cebula czerwona | Selgros | Bukat |
 | Florinis | Kuchnie Świata | Intermlecz |
-| Cebula Biała | Selgros/Bukat | Bukat |
+| Cebula Biała | Selgros | Bukat |
 | Frytki Aviko (opakowania) | Kuchnie Świata | Intermlecz |
 | Frytki z batatów (opakowania) | Kuchnie Świata | Intermlecz |
 | Fasolka Szparagowa (op.) | Selgros | Intermlecz |
@@ -64,8 +66,13 @@
 
 | Product | Suppliers |
 | --- | --- |
+| Awokado | Bukat, Selgros |
+| Cebula Biała | Bukat, Selgros |
+| Cebula czerwona | Bukat, Selgros |
 | Cieciorka | Intermlecz, Selgros |
 | Cukier w saszetkach 5g | Intermlecz, Selgros |
+| Cytryna | Bukat, Selgros |
+| Czosnek | Bukat, Selgros |
 | Develey Musztarda 3 kg | Intermlecz, Selgros |
 | Fanex Majonez 4kg | Intermlecz, Selgros |
 | Feta blok | Bukat, Pago |
@@ -73,13 +80,22 @@
 | Ketchup Fanex VII 1,1 kg | Intermlecz, Selgros |
 | Liść Laurowy | Intermlecz, Selgros |
 | Miód 1 kg | Intermlecz, Selgros |
+| Natka Pietruszki | Bukat, Selgros |
 | Ocet spirytusowy | Intermlecz, Selgros |
+| Ogórek | Bukat, Selgros |
 | Olej Rzepakowy 5 L | Intermlecz, Selgros |
 | Oliwa z Oliwek Extra Virgin 1L | Intermlecz, Selgros |
 | Oregano | Intermlecz, Selgros |
 | Papryka słodka - mielona | Intermlecz, Selgros |
+| Papryka zielona | Bukat, Selgros |
 | Pieprz | Intermlecz, Selgros |
 | Pieprz  w saszetkach 5g | Intermlecz, Selgros |
+| Pomidor | Bukat, Selgros |
+| Rucola 1 kg | Bukat, Selgros |
+| Rucola 100 gr | Bukat, Selgros |
+| Rucola 125 gr | Bukat, Selgros |
+| Sałata bolero mix 150gr | Bukat, Selgros |
+| Sałata bolero mix 1kg | Bukat, Selgros |
 | Sriracha chili 730 ml | Intermlecz, Selgros |
 | Sól 1kg | Intermlecz, Selgros |
 | Sól w saszetkach 5g | Intermlecz, Selgros |
@@ -88,19 +104,7 @@
 
 ## Stock vs price-list conflicts
 
-| Product | Stock supplier(s) | Price-list supplier(s) |
-| --- | --- | --- |
-| Awokado | Selgros | Selgros/Bukat |
-| Cebula Biała | Selgros | Selgros/Bukat |
-| Cebula czerwona | Selgros | Selgros/Bukat |
-| Cytryna | Selgros | Selgros/Bukat |
-| Czosnek | Selgros | Selgros/Bukat |
-| Natka Pietruszki | Selgros | Selgros/Bukat |
-| Ogórek | Selgros | Selgros/Bukat |
-| Papryka zielona | Selgros | Selgros/Bukat |
-| Pomidor | Selgros | Selgros/Bukat |
-| Rucola 125 gr | Selgros | Selgros/Bukat |
-| Sałata bolero mix 150gr | Selgros | Selgros/Bukat |
+_none_
 
 ## Unit mismatches
 
@@ -125,11 +129,13 @@
 
 ## Min/max coverage
 
-- Total price-list rows: 142
+- Total price-list rows: 155
 - With min/max: 0
-- Without min/max: 142
+- Without min/max: 155
 
 ## Gaps for the operator
+
+- Quarantined names: 3 (see prod-sql/01b-quarantined-names.md)
 
 ### Near-miss names needing a human call
 
@@ -143,10 +149,12 @@
 | Sheet name |
 | --- |
 | Rucola 1 kg |
+| Rucola 1 kg |
+| Rucola 100 gr |
 | Rucola 100 gr |
 | Ręcznik papierowy rolka |
 | Sałata bolero mix 1kg |
-| Suma |
+| Sałata bolero mix 1kg |
 | milk |
 
 ### Products with no min/max in the sheet
@@ -255,7 +263,6 @@
 | Spicy Mayo |
 | Sprite |
 | Sriracha chili 730 ml |
-| Suma |
 | Sól 1kg |
 | Sól w saszetkach 5g |
 | Słomki 250szt |

@@ -37,7 +37,7 @@ import pathlib
 import re
 import sys
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 # ---------- Vocabulary (research §2 / proto_parse.py) ----------
@@ -132,6 +132,13 @@ class Report:
     # separate from `missing_products` (which is about catalog matching, not
     # threshold coverage). Used by the operator gap list.
     no_minmax_products: list[str] = field(default_factory=list)
+    # How many of this location's `missing_products` are quarantined (Round-2
+    # fix, coordinator review 2026-08-22) rather than confidently new — see
+    # `prod-sql/01b-quarantined-names.md` for the grouped detail. Computed
+    # from THIS location's own missing-product pool (self-contained; cluster
+    # membership can differ slightly from `emit_onboarding_sql.py`'s
+    # whole-corpus batch, though rule (a)'s catalog check is identical).
+    quarantined_count: int = 0
 
 
 # ---------- normalize_name ----------
@@ -299,6 +306,222 @@ def match_catalog(names: list[str], catalog: dict[str, str]) -> MatchResult:
     return result
 
 
+# ---------- Quarantine classification (Round-2 fix, coordinator review 2026-08-22) ----------
+#
+# Phase B1's first pass minted near-duplicate junk as brand-new products
+# (three spellings of an existing gas-bottle product, six "Rolki do kasy"
+# notation variants, four "Rucola" spellings, etc.) — exactly the master-data
+# pollution lessons.md warns against. `classify_quarantine` is the shared,
+# three-rule filter both `reconcile()` (per-location report counts) and
+# `scripts/emit_onboarding_sql.py` (batch 01 / 01b) apply to a location's
+# "missing" (hard-gap) product names before any of them becomes a new row.
+
+_NUMERIC_SEP_SLASH_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
+_NUMERIC_SEP_NA_RE = re.compile(r"(\d+)\s*na\s*(\d+)")
+
+
+@dataclass
+class QuarantineCluster:
+    """One quarantined group for the operator (`prod-sql/01b-quarantined-names.md`
+    and each location report's gap list). `rule` is "a" (relaxed catalog
+    match), "b" (intra-batch clustering), or "c" (lowercase singleton).
+    `catalog_suspect` is only set for rule "a": (product_id, display_name)
+    of the existing catalog row the name is suspected of duplicating.
+    """
+    rule: str
+    names: list[str] = field(default_factory=list)
+    catalog_suspect: Optional[tuple[str, str]] = None
+
+
+@dataclass
+class QuarantineResult:
+    confident: list[str] = field(default_factory=list)
+    clusters: list[QuarantineCluster] = field(default_factory=list)
+
+    @property
+    def quarantined_names(self) -> set[str]:
+        return {n for c in self.clusters for n in c.names}
+
+
+def _numeric_pattern_normalize(norm: str) -> str:
+    """Collapse "/", " na ", "na" (glued, no space) separators BETWEEN two
+    digit runs into a single space, so "80/80", "80 na 80" and "80na 80"
+    all reduce to the same string ("... 80 80"). Used ONLY by the rule-(b)
+    intra-batch clustering check below — not general name normalization."""
+    s = _NUMERIC_SEP_SLASH_RE.sub(r"\1 \2", norm)
+    s = _NUMERIC_SEP_NA_RE.sub(r"\1 \2", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _close_enough(a: str, b: str) -> bool:
+    """Levenshtein <= 3 AND proportional to length: short words ("Pepsi" vs
+    "Pieprz", "Stella" vs "Tetra") can land within a flat edit-distance-3
+    purely by coincidence — both pairs measure distance 3 despite being
+    unrelated products, at a 50% edit ratio. Every real quarantine case
+    found (typo'd digits, a trailing "gr"/"gm" spelling, an extra
+    parenthetical) sits at <= 25% of the longer string's length; capping the
+    ratio at 30% keeps all of those while rejecting short-word coincidences.
+    """
+    d = _levenshtein(a, b)
+    if d > 3:
+        return False
+    longer = max(len(a), len(b))
+    if longer == 0:
+        return d == 0
+    return (d / longer) <= 0.3
+
+
+def _is_negation_pair(a: str, b: str) -> bool:
+    """True when `a` and `b` differ in exactly one whitespace-token, and that
+    token differs only by a "nie" (Polish negation) prefix — e.g. "gazowana"
+    vs "niegazowana" (sparkling vs still water). The existing catalog already
+    carries both halves of that exact pair as separate active products
+    (P070 "Kropla Beskidu Niegazowana", P071 "...Gazowana") — a negation is a
+    meaning flip, never a spelling variant, and must not be merged/quarantined
+    as one regardless of how short the edit distance looks."""
+    ta, tb = a.split(), b.split()
+    if len(ta) != len(tb):
+        return False
+    diffs = [(x, y) for x, y in zip(ta, tb) if x != y]
+    if len(diffs) != 1:
+        return False
+    x, y = diffs[0]
+    return x == "nie" + y or y == "nie" + x
+
+
+def _relaxed_catalog_quarantine_pid(norm: str, catalog: dict[str, str]) -> Optional[str]:
+    """Rule (a): Levenshtein <= 3 (length-proportional, see `_close_enough`)
+    against ANY catalog entry, with the numeric-token-conflict guard
+    DELIBERATELY DISABLED (a quarantine check wants "80 na 804" to hit
+    catalog "80 na 80" — the opposite of near-miss's guard, which exists
+    precisely to keep the two apart there). Falls back to a single-token
+    subset match (name is exactly one token, and that token is a member of
+    some catalog entry's token set, >= 3 chars) — e.g. "Sól" (P053's own
+    name is "Sól 1kg") — catching a bare-word truncation.
+    """
+    name_tokens = set(norm.split())
+    best_pid: Optional[str] = None
+    best_dist: Optional[int] = None
+    for cand_norm, cand_pid in catalog.items():
+        if not _close_enough(norm, cand_norm) or _is_negation_pair(norm, cand_norm):
+            continue
+        d = _levenshtein(norm, cand_norm)
+        if best_dist is None or d < best_dist:
+            best_dist = d
+            best_pid = cand_pid
+    if best_pid is not None:
+        return best_pid
+    if len(name_tokens) == 1:
+        (token,) = tuple(name_tokens)
+        if len(token) >= 3:
+            for cand_norm, cand_pid in catalog.items():
+                if name_tokens <= set(cand_norm.split()):
+                    return cand_pid
+    return None
+
+
+def _cluster_remaining(names: list[str]) -> list[list[str]]:
+    """Rule (b): connected components over `names` (already rule-(a)-cleared,
+    caller-sorted for determinism) under an edge relation of "Levenshtein <= 3,
+    length-proportional (`_close_enough`) OR numeric-pattern-equivalent OR
+    equal once a parenthetical annotation is stripped" (the last one reuses
+    `_strip_parenthetical`, already used by the near-miss token-subset check,
+    to catch e.g. "Tonic Water" == "Tonic water (wszystkie)" — a trailing
+    "(...)" note otherwise makes the two strings too different in raw length
+    for either of the other two criteria to fire). A component of size 1 is
+    not a cluster (returned separately by the caller)."""
+    norms = {n: normalize_name(n) for n in names}
+    numpat = {n: _numeric_pattern_normalize(norms[n]) for n in names}
+    stripped = {n: _strip_parenthetical(norms[n]) for n in names}
+    parent = {n: n for n in names}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for i in range(len(names)):
+        for j in range(i + 1, len(names)):
+            a, b = names[i], names[j]
+            if _is_negation_pair(norms[a], norms[b]):
+                continue
+            if (
+                _close_enough(norms[a], norms[b])
+                or numpat[a] == numpat[b]
+                or (stripped[a] == stripped[b] and stripped[a])
+            ):
+                union(a, b)
+
+    groups: dict[str, list[str]] = {}
+    for n in names:
+        groups.setdefault(find(n), []).append(n)
+    return [sorted(members) for members in groups.values()]
+
+
+def classify_quarantine(
+    names: list[str], catalog: dict[str, str], catalog_display_by_pid: dict[str, str]
+) -> QuarantineResult:
+    """Partition `names` (raw, deduped, SORTED display names — determinism is
+    the caller's responsibility) into `confident` (safe to mint as a new
+    product) and `clusters` (quarantined, grouped for a human decision).
+
+    Order: (a) relaxed catalog match first, (b) cluster whatever is left
+    among itself, (c) drop lowercase-only single-token leftovers (e.g.
+    "milk") — a capitalized single-token brand name (Pepsi, 7Up) survives
+    all three and stays confident.
+    """
+    clusters: list[QuarantineCluster] = []
+
+    after_a: list[str] = []
+    for name in names:
+        pid = _relaxed_catalog_quarantine_pid(normalize_name(name), catalog)
+        if pid is not None:
+            clusters.append(
+                QuarantineCluster(
+                    rule="a",
+                    names=[name],
+                    catalog_suspect=(pid, catalog_display_by_pid.get(pid, pid)),
+                )
+            )
+        else:
+            after_a.append(name)
+
+    after_b: list[str] = []
+    for group in _cluster_remaining(after_a):
+        if len(group) >= 2:
+            clusters.append(QuarantineCluster(rule="b", names=group))
+        else:
+            after_b.extend(group)
+
+    confident: list[str] = []
+    for name in after_b:
+        if len(name.split()) == 1 and name.islower():
+            clusters.append(QuarantineCluster(rule="c", names=[name]))
+        elif _looks_like_freetext_note(name):
+            clusters.append(QuarantineCluster(rule="c", names=[name]))
+        else:
+            confident.append(name)
+
+    return QuarantineResult(confident=sorted(confident), clusters=clusters)
+
+
+# Free-text NOTES typed into a product-name cell, not product names: a currency
+# glyph, or a multi-space run in the RAW (un-normalized) name — e.g. bracka's
+# "Butla gazowa 10L.     2$ pelne 2 puste", a stock annotation ("2 full 2
+# empty") that round-2 review would otherwise have minted as a product.
+_FREETEXT_NOTE_RE = re.compile(r"[$€£]|\s{3,}")
+
+
+def _looks_like_freetext_note(name: str) -> bool:
+    return bool(_FREETEXT_NOTE_RE.search(name))
+
+
 # ---------- Cell helpers (pipe-table grammar) ----------
 
 def _cells_of(line: str) -> list[str]:
@@ -352,6 +575,25 @@ def _get(cells: list[str], header_map: dict[str, int], name: str) -> str:
     if idx is None or idx >= len(cells):
         return ""
     return cells[idx] or ""
+
+
+def _split_combined_suppliers(raw: str) -> list[str]:
+    """A sheet sometimes writes a substitute pair as ONE combined cell — e.g.
+    "Selgros/Bukat" (kulinarna_kamienica, stary_browar) — instead of two
+    separate price-list rows the way every other sheet expresses a
+    substitute (research §2 documents only the two-row form; this "/"
+    form was found generating Phase B1 SQL over the full corpus). Split
+    into the individual names ONLY when every "/"-separated part is a
+    known supplier from the SUPPLIERS vocabulary — a single, genuinely new
+    supplier name that happens to contain a slash is not this pattern and
+    is returned unchanged.
+    """
+    if "/" not in raw:
+        return [raw]
+    parts = [p.strip() for p in raw.split("/")]
+    if len(parts) > 1 and all(p in SUPPLIERS for p in parts):
+        return parts
+    return [raw]
 
 
 def _is_price_header(cells: list[str]) -> bool:
@@ -459,6 +701,7 @@ def _parse_pipe_table(text: str) -> SheetData:
     price_rows: list[PriceRow] = []
     stock_rows: list[StockRow] = []
     header_map: Optional[dict[str, int]] = None
+    header_width = 0
     seen_price_keys: set[tuple[str, str]] = set()
 
     for line in text.split("\n"):
@@ -469,14 +712,35 @@ def _parse_pipe_table(text: str) -> SheetData:
             continue
         if _is_price_header(cells):
             header_map = _index_map(cells)
+            header_width = len(cells)
             continue
-        if header_map is not None and cells[0] and _IDX_RE.match(cells[0]):
+        # Width guard (real bug found generating Phase B1 SQL over the full
+        # corpus — ken.json line ~5368): a STOCK-section row can coincide with
+        # a stray leading digit (a typo'd "3" where a category name belongs)
+        # and, once a genuine price-list header appears EARLIER in the same
+        # file, that stray digit satisfies `_IDX_RE` and gets misread as a
+        # price-list continuation via the stale header_map — even though the
+        # row is much shorter than the header it is being mapped against and
+        # belongs to an unrelated stock table further down the sheet. Requiring
+        # at least as many cells as the header row itself rules this out
+        # without rejecting any real price-list row (every verified sheet's
+        # data rows carry the full header width).
+        if (
+            header_map is not None
+            and cells[0]
+            and _IDX_RE.match(cells[0])
+            and len(cells) >= header_width
+        ):
             row = _extract_price_row(cells, header_map)
             if row is not None:
-                key = (row.supplier, normalize_name(row.product))
-                if key not in seen_price_keys:
-                    seen_price_keys.add(key)
-                    price_rows.append(row)
+                for supplier_name in _split_combined_suppliers(row.supplier):
+                    split_row = row if supplier_name == row.supplier else replace(
+                        row, supplier=supplier_name
+                    )
+                    key = (split_row.supplier, normalize_name(split_row.product))
+                    if key not in seen_price_keys:
+                        seen_price_keys.add(key)
+                        price_rows.append(split_row)
                 continue
         stock_rows.extend(_extract_stock_rows(cells))
 
@@ -682,6 +946,13 @@ def reconcile(sheet: SheetData, snapshot: Snapshot) -> Report:
             )
     missing_products.sort(key=lambda d: (d["product"], d["supplier"]))
 
+    # ---- quarantined_count: how many missing_products look like near-duplicate
+    # junk (Round-2 fix) rather than confidently new ----
+    missing_names_sorted = sorted({m["product"] for m in missing_products})
+    catalog_display_by_pid = {p["product_id"]: p["product_name_pl"] for p in snapshot.products}
+    quarantine = classify_quarantine(missing_names_sorted, catalog, catalog_display_by_pid)
+    quarantined_count = len(quarantine.quarantined_names)
+
     # ---- price-list supplier sets per matched product_id ----
     price_suppliers_by_pid: dict[str, set[str]] = {}
     price_suppliers_by_display: dict[str, set[str]] = {}
@@ -801,6 +1072,7 @@ def reconcile(sheet: SheetData, snapshot: Snapshot) -> Report:
         minmax_coverage=minmax_coverage,
         near_misses=dict(match.near_miss),
         no_minmax_products=no_minmax_products,
+        quarantined_count=quarantined_count,
     )
 
 
@@ -876,6 +1148,10 @@ def render_report(location: str, report: Report) -> str:
     )
 
     parts.append("## Gaps for the operator\n")
+    parts.append(
+        f"- Quarantined names: {report.quarantined_count} "
+        f"(see prod-sql/01b-quarantined-names.md)\n"
+    )
     parts.append("### Near-miss names needing a human call\n")
     parts.append(
         _md_table(
@@ -898,14 +1174,15 @@ def render_report(location: str, report: Report) -> str:
 
 def _render_summary(reports: dict[str, Report]) -> str:
     lines = ["# Cross-location summary\n"]
-    lines.append("| Location | Missing | Supplier conflicts | Dual supplier | Stock vs price | Unit mismatches | Min/max coverage |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| Location | Missing | Quarantined | Supplier conflicts | Dual supplier | Stock vs price | Unit mismatches | Min/max coverage |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     all_missing: dict[str, int] = {}
     for loc, r in sorted(reports.items()):
         cov = r.minmax_coverage
         cov_str = f"{cov.get('with_min_max', 0)}/{cov.get('total_price_rows', 0)}"
         lines.append(
-            f"| {loc} | {len(r.missing_products)} | {len(r.supplier_conflicts)} | "
+            f"| {loc} | {len(r.missing_products)} | {r.quarantined_count} | "
+            f"{len(r.supplier_conflicts)} | "
             f"{len(r.dual_supplier_in_sheet)} | {len(r.stock_vs_pricelist_conflicts)} | "
             f"{len(r.unit_mismatches)} | {cov_str} |"
         )
@@ -926,6 +1203,9 @@ def _render_summary(reports: dict[str, Report]) -> str:
         lines.append(f"- Missing thresholds (no min/max): see `{loc}.md` Min/max coverage")
         lines.append(f"- Unresolved supplier conflicts: {len(r.supplier_conflicts)}")
         lines.append(f"- Near-miss names needing a human call: {len(r.near_misses)}")
+        lines.append(
+            f"- Quarantined names: {r.quarantined_count} (see prod-sql/01b-quarantined-names.md)"
+        )
         lines.append("")
 
     return "\n".join(lines) + "\n"

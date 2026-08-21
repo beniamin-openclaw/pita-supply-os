@@ -109,6 +109,8 @@
 
 ## Gaps for the operator
 
+- Quarantined names: 0 (see prod-sql/01b-quarantined-names.md)
+
 ### Near-miss names needing a human call
 
 | Sheet name | Candidate product_id |

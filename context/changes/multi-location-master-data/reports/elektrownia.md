@@ -60,6 +60,8 @@ _none_
 
 ## Gaps for the operator
 
+- Quarantined names: 3 (see prod-sql/01b-quarantined-names.md)
+
 ### Near-miss names needing a human call
 
 | Sheet name | Candidate product_id |

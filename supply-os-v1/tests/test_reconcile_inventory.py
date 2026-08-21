@@ -18,6 +18,7 @@ from scripts.reconcile_inventory import (
     SheetData,
     Snapshot,
     _to_float,  # noqa: F401 -- internal helper, tested directly for one edge case
+    classify_quarantine,
     match_catalog,
     normalize_name,
     parse_sheet,
@@ -101,6 +102,39 @@ class TestParsePriceRows:
         assert row.supplier == "Blue Service"
         assert row.price == pytest.approx(11.60)
         assert row.vat == "23%"
+
+    def test_stray_digit_in_a_later_stock_row_is_not_a_price_row(self):
+        # ken.json ~line 5368: a stock-section row starts with a stray "3"
+        # (a typo where a category name belongs). Once a genuine price-list
+        # header appears EARLIER in the same file, that "3" satisfies the
+        # idx check and — pre-fix — got misread as a price-list continuation
+        # via the stale header, producing a fake "Bowl opakowanie papierowe
+        # miska 1300 ml" SUPPLIER row (discovered generating Phase B1 SQL:
+        # emit_onboarding_sql's discover_missing_suppliers surfaced it as a
+        # phantom new supplier). The row is much shorter than the header it
+        # would be mapped against — the width guard rejects it and it falls
+        # through to stock-row parsing instead, where it belongs.
+        sheet = parse_sheet(_load_json_sheet("ken_stray_digit_snippet.json"))
+        assert not any(
+            "Bowl opakowanie" in r.supplier or r.supplier == "3" for r in sheet.price_rows
+        )
+        stock_pairs = {(r.supplier, r.product) for r in sheet.stock_rows}
+        assert ("Blue Service", "Bowl opakowanie papierowe miska 1300 ml") in stock_pairs
+
+    def test_slash_combined_supplier_cell_splits_into_two_rows(self):
+        # kulinarna_kamienica / stary_browar write a substitute pair as ONE
+        # cell, "Selgros/Bukat", instead of two separate price-list rows
+        # like every other sheet (found generating Phase B1 SQL — it
+        # otherwise surfaced as a phantom "Selgros/Bukat" supplier).
+        sheet = parse_sheet(
+            _load_json_sheet("kulinarna_kamienica_slash_supplier_snippet.json")
+        )
+        cytryna_suppliers = {r.supplier for r in sheet.price_rows if r.product == "Cytryna"}
+        assert cytryna_suppliers == {"Selgros", "Bukat"}
+        # A plain, non-combined cell (Masło MR 500g / Selgros) must be
+        # unaffected — still exactly one row, unsplit.
+        maslo_suppliers = [r.supplier for r in sheet.price_rows if r.product == "Masło MR 500g"]
+        assert maslo_suppliers == ["Selgros"]
 
     def test_price_header_with_blank_supplier_label_elektrownia(self):
         # elektrownia's price-list header has a genuinely BLANK cell where
@@ -506,3 +540,107 @@ class TestTokenSubsetNearMiss:
         assert sheet_name not in result.matched
         assert sheet_name not in result.near_miss
         assert sheet_name in result.unmatched
+
+
+# ---------- classify_quarantine (Round-2 fix, coordinator review 2026-08-22) ----------
+
+
+class TestClassifyQuarantine:
+    """Round 1 minted near-duplicate junk as brand-new products (three
+    spellings of an existing gas-bottle product, six "Rolki do kasy"
+    notation variants, four "Rucola" spellings, etc.). These tests use the
+    REAL names the coordinator flagged, against small controlled catalogs."""
+
+    RAW_CATALOG = {
+        "P129": "Rolki do kasy 80 na 80",
+        "P053": "Sól 1kg",
+        "P050": "Pieprz",
+        "P070": "Kropla Beskidu Niegazowana",
+    }
+    CATALOG = {normalize_name(name): pid for pid, name in RAW_CATALOG.items()}
+
+    def test_rule_a_relaxed_levenshtein_catches_typo_of_existing_product(self):
+        # "804" is a typo of "80" — edit distance 1 against catalog P129, but
+        # the numeric-token-conflict guard (near-miss's own protection) would
+        # normally block this; quarantine deliberately disables that guard.
+        result = classify_quarantine(
+            ["Rolki do kasy 80 na 804"], self.CATALOG, self.RAW_CATALOG
+        )
+        assert result.confident == []
+        assert len(result.clusters) == 1
+        cluster = result.clusters[0]
+        assert cluster.rule == "a"
+        assert cluster.names == ["Rolki do kasy 80 na 804"]
+        assert cluster.catalog_suspect == ("P129", "Rolki do kasy 80 na 80")
+
+    def test_rule_a_single_token_subset_catches_bare_word(self):
+        # "Sól" (bare) ⊂ catalog's own "Sól 1kg" — shared token "sol" is 3
+        # chars, meeting the >= 3 threshold.
+        result = classify_quarantine(["Sól"], self.CATALOG, self.RAW_CATALOG)
+        assert result.confident == []
+        assert len(result.clusters) == 1
+        assert result.clusters[0].rule == "a"
+        assert result.clusters[0].catalog_suspect == ("P053", "Sól 1kg")
+
+    def test_rule_b_intra_batch_clustering_groups_notation_variants(self):
+        # Neither spelling matches any catalog entry (empty catalog here),
+        # but they duplicate EACH OTHER — a plural/singular inflection.
+        result = classify_quarantine(
+            ["Ręcznik papierowy rolka", "Ręczniki papierowe rolka"], {}, {}
+        )
+        assert result.confident == []
+        assert len(result.clusters) == 1
+        cluster = result.clusters[0]
+        assert cluster.rule == "b"
+        assert set(cluster.names) == {"Ręcznik papierowy rolka", "Ręczniki papierowe rolka"}
+
+    def test_rule_b_numeric_pattern_equivalence_slash_vs_na(self):
+        # "80/80" and "80 na 80" collapse to the same canonical form once the
+        # "/"/" na " separator is normalized — full-string edit distance
+        # alone is too large (~4) to catch this pair otherwise.
+        result = classify_quarantine(
+            ["Rolki do kasy 57/80", "Rolki do kasy 80/80"], {}, {}
+        )
+        assert result.confident == []
+        assert len(result.clusters) == 1
+        assert result.clusters[0].rule == "b"
+
+    def test_rule_c_lowercase_singleton_quarantined(self):
+        result = classify_quarantine(["milk"], {}, {})
+        assert result.confident == []
+        assert len(result.clusters) == 1
+        assert result.clusters[0].rule == "c"
+        assert result.clusters[0].names == ["milk"]
+
+    def test_rule_c_freetext_note_quarantined(self):
+        # A stock ANNOTATION typed into the name cell, not a product name —
+        # bracka's real "Butla gazowa 10L.     2$ pelne 2 puste" ("2 full,
+        # 2 empty"). Currency glyphs and multi-space runs mark free text;
+        # round-2 review found this one about to be minted as a product.
+        result = classify_quarantine(
+            ["Butla gazowa 10L.     2$ pelne 2 puste"], {}, {}
+        )
+        assert result.confident == []
+        assert len(result.clusters) == 1
+        assert result.clusters[0].rule == "c"
+
+    def test_confident_singleton_capitalized_brand_stays_confident(self):
+        # "Pepsi" vs catalog "Pieprz" (pepper) is edit distance 3 — within
+        # the RAW rule-(a) threshold — but at a 50% edit ratio for a 5-6
+        # char word; the length-proportional guard must reject it. This is
+        # exactly the coordinator's "Pepsi must stay confident" case.
+        result = classify_quarantine(["Pepsi"], self.CATALOG, self.RAW_CATALOG)
+        assert result.confident == ["Pepsi"]
+        assert result.clusters == []
+
+    def test_negation_pair_not_treated_as_duplicate(self):
+        # "Gazowana" (sparkling) vs "Niegazowana" (still) is a MEANING FLIP,
+        # not a spelling variant — the existing catalog already carries both
+        # halves of this exact pair as separate products (P070/P071-style).
+        # A new candidate that is the negation of an existing catalog name
+        # must stay confident, not get quarantined as a "near-duplicate".
+        result = classify_quarantine(
+            ["Kropla Beskidu Gazowana"], self.CATALOG, self.RAW_CATALOG
+        )
+        assert result.confident == ["Kropla Beskidu Gazowana"]
+        assert result.clusters == []
