@@ -143,12 +143,18 @@ sheets in `scratchpad/sheets/`, prod read-only state of 2026-08-21.
 ### Phase B2: Prod attempt (gated pattern)
 
 #### Manual
-- [ ] attempt the additive shared-suppliers batch (Selgros inactive) live; on
-      classifier block, record as ready-to-run
-- [ ] attempt new-locations + settings batches (all inactive) live; same downgrade
-      rule
-- [ ] NO pin batch applied to prod (blocked on 0008 + PR #26 by design)
-- [ ] audit-after recorded in change.md for anything applied
+- [x] shared-suppliers batch applied live (SUP_SELGROS + SUP_SPEC, inactive)
+- [x] new products (21, P155–P175), new pairs (74, ALL `active=FALSE`),
+      locations (6 new inactive + KAMIENICA rename), settings (908 rows / 8
+      locations) applied live 2026-08-22
+- [x] NO pin batch applied (blocked on 0008 + PR #26 by design)
+- [x] audit-after: lps 578→1486; per-location counts match the generator's
+      expected table exactly; live invariants unchanged (10 active suppliers,
+      4 active locations, WOLA/BRACKA/NORBLIN/KEN untouched, all 74 new pairs
+      inactive). Two mechanical, semantics-preserving deviations from the
+      committed files: batch-10's `source_supplier_id` column stripped (absent
+      pre-0008 — generator fix dispatched) and row-INSERTs compacted to
+      multi-VALUES/SELECT form (same rows, same ON CONFLICT).
 
 ### Phase C1: H-01 hardening
 
