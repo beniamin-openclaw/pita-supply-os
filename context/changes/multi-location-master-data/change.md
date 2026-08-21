@@ -1,9 +1,9 @@
 ---
 change_id: multi-location-master-data
 title: Per-location master data for every location, generated from inventory sheets
-status: new
+status: implemented
 created: 2026-08-21
-updated: 2026-08-21
+updated: 2026-08-22
 archived_at: null
 ---
 
