@@ -175,6 +175,53 @@ order carries these products — checked 2026-08-20, zero rows) and which are st
 open (Blue Service prices; whether P132/P133 deserve real thresholds at WOLA,
 where they currently sit at 0/0/0).
 
+### Prod batch APPLIED 2026-08-20 — Allegro supplier
+
+Operator instruction. Diff before → apply → audit after, per lessons.md.
+
+**Before:** `suppliers` 10 rows, 10 active, no `SUP_ALLEGRO`.
+
+```sql
+INSERT INTO suppliers
+    (supplier_id, supplier_name, email, ordering_method, delivery_days,
+     cutoff_time, minimum_order_value_pln, active, notes)
+VALUES ('SUP_ALLEGRO', 'Allegro', NULL, 'portal', NULL, NULL, NULL, FALSE, '<notes>')
+ON CONFLICT (supplier_id) DO NOTHING;
+```
+
+**After (verified):** 11 rows, 10 active + 1 inactive. `SUP_ALLEGRO` = portal,
+`active = false`, `email` NULL, 0 catalog rows.
+
+Three decisions embedded in that row, each reversible with one UPDATE:
+
+- **`ordering_method = 'portal'`, not `manual`.** The two differ materially in the
+  Manager UI. `portal` renders the portal link, a copy-paste line list
+  (`Produkt | Ilość | Kod`), and a confirmation gate — "Czy na pewno złożyłeś już
+  to zamówienie w portalu dostawcy?" → **"Tak, zamówienie złożone ✓"**. `manual`
+  gives only a note and a bare "Oznacz jako zamówione ✓". Allegro is a portal, so
+  it gets the portal treatment. This is the same path Coca Cola Hub uses.
+- **`active = FALSE` on purpose.** The Captain supplier picker lists every active
+  supplier company-wide with no location filter
+  (`CaptainMP.tsx:98` — a known non-goal of this lane). An active Allegro with no
+  catalog rows would show an empty "Allegro" tab to every Captain at all four
+  locations. Flip to TRUE in the same batch that adds its first
+  `supplier_products` rows.
+- **The portal URL lives in `notes`.** `DispatchPanel.parsePortalUrl` extracts the
+  first `https?://…` from the supplier's free-text notes; there is no dedicated
+  column. Without a URL there the panel falls back to "URL do potwierdzenia z
+  operatorem" — which is exactly what Coca Cola Hub shows today, since its notes
+  carry no link.
+
+**Not mirrored into seed.** Seed is a fixture, not a prod mirror (see
+`docs/pita-supply-os-v1/seed/README.md`), and an inactive supplier with no catalog
+rows adds nothing testable while breaking the supplier-count assertion in
+`test_suppliers_with_captain_token`. Add it to seed together with its first
+catalog rows, when there is behavior to cover.
+
+**Note on provenance:** "Allegro" came from the operator, not from any data
+source. It appears nowhere in Wolska's inventory sheet (0 hits, against 41 for
+Selgros) and nowhere in the repo outside this lane's own files.
+
 ### Next step
 
 1. **Ask the location: Selgros or Allegro** for the office supplies. Allegro is a

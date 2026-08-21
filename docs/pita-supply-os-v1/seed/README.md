@@ -32,19 +32,27 @@ Fixture is **behind** production:
 
 - `locations.csv` also carries `BROWARY`, `KAMIENICA`, `KULINARNA` — v0-era
   rollout placeholders, all `active=FALSE`, none of them live locations.
-- Threshold **values** drift too. Verified examples at WOLA: `P127` is
-  `min/max/target = 1/2/2` here vs `0.5/5/5` in prod; `P132` is `2/4/4` and
-  `P133` is `3/8/8` here, both `0/0/0` in prod. **Breadth unaudited** — these
-  three were spot-checked during the supplier-per-location lane; assume other
-  SKUs differ too.
+- Threshold **values** drift pervasively — this is the big one. A full
+  row-by-row diff of WOLA against prod (2026-08-20) found **92 of 151 rows
+  (60%) differ**, and **85 differ on `target_stock_qty_base`** — the field the
+  suggestion engine actually consumes. The product-id sets match exactly, so
+  this is pure value drift, not missing rows. Examples: `P127` is
+  `min/max/target = 1/2/2` here vs `0.5/5/5` in prod; `P011` is `18/30/30` vs
+  `6/36/36`; `P129` is `3/10/10` vs `6/60/60`. BRACKA and NORBLIN were not
+  diffed row-by-row — assume comparable drift.
 
-Fixture is **ahead** of production:
+  Practical consequence: **any suggestion-engine number produced against this
+  fixture is arbitrary with respect to production.** A test asserting a specific
+  suggested quantity is testing the formula, never the real replenishment
+  behavior of a real location.
 
-- `supplier_products` has 157 rows vs prod's 154. The extra three
-  (`SP_BLUESERV_P127`, `SP_BLUESERV_P132`, `SP_BLUESERV_P133`) and the matching
-  `source_supplier_id=SUP_BLUESERV` pins on WOLA's `P127`/`P132`/`P133` were
-  added by the supplier-per-location lane so the change is testable. The
-  corresponding production master-data batch is gated and **not yet applied**.
+Currently NOT diverging (but historically did):
+
+- `supplier_products` sits at 154 rows, matching prod. The supplier-per-location
+  lane briefly added three `SP_BLUESERV_*` office rows plus matching
+  `source_supplier_id` pins on WOLA; commit `5b5af29` reverted both, so the
+  fixture carries **zero** `source_supplier_id` pins today. The corresponding
+  production master-data batch remains gated and unapplied.
 
 ## Changing these files
 
