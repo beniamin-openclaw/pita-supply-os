@@ -29,7 +29,7 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 - **Solo repo — no enforced commit/branch/PR convention; don't impose one.**
 - **Deploy is wired up from `main`** — backend on Railway (auto-deploy on push to `main`; @supply-os-v1/Procfile), frontend on Vercel, which rewrites `/api/*` to the Railway service (@frontend/vercel.json). A push to `main` ships to production; branch first if that is not what you want. Runbook: @docs/pita-supply-os-v1/RAILWAY_DEPLOY_RUNBOOK.md.
 - **CI runs on push + PR** (@.github/workflows/ci.yml): backend `ruff` + `pytest`, a real-Postgres integration job (`pytest -m integration`), and frontend build + lint + vitest. Still run `/verify` before committing — CI is a backstop, not a substitute.
-- Style differs from defaults: ruff `line-length = 100` (not 88); TS `strict` is **off** in `frontend/tsconfig.app.json` — annotate function params, return types, and component props explicitly; don't rely on inferred `any`.
+- Style differs from defaults: ruff `line-length = 100` (not 88); TS `strict` is **on** in `frontend/tsconfig.app.json` (enabled 2026-08-22 — the codebase was already clean under it); keep annotating function params, return types, and component props explicitly.
 - Frontend tests: Vitest + @testing-library/react + jsdom (`npm run test` → 89 tests / 10 files), covering pure helpers and some component rendering. No E2E harness.
 - Other known gaps: backend has no lockfile. Detail + fixes: @context/foundation/health-check.md.
 

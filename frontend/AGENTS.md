@@ -17,6 +17,6 @@ Component files PascalCase; hooks and utilities camelCase.
 
 ## Tripwires
 - Vitest is the runner (`npm run test` → `vitest run`); unit-test pure helpers (`src/lib/`, `src/components/ui/number.ts`, etc.). No component/E2E harness yet — UI flows are still verified by hand.
-- TypeScript `strict` is not enabled in @./tsconfig.app.json — prefer explicit types; do not lean on inference.
+- TypeScript `strict` IS enabled in @./tsconfig.app.json (since 2026-08-22) — keep explicit types on exported/public boundaries; new `any`s now fail the build.
 
 See @../AGENTS.md for the repo-wide operating constitution.
