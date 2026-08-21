@@ -30,7 +30,6 @@ import pathlib
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import Optional
 
 try:
     # Works when this file is imported as a package module, e.g.
@@ -117,13 +116,13 @@ ONBOARDING_SHEET_STEMS: tuple[str, ...] = tuple(
 
 # ---------- SQL rendering helpers ----------
 
-def sql_str(v: Optional[str]) -> str:
+def sql_str(v: str | None) -> str:
     if v is None:
         return "NULL"
     return "'" + v.replace("'", "''") + "'"
 
 
-def sql_num(v: Optional[float]) -> str:
+def sql_num(v: float | None) -> str:
     if v is None:
         return "NULL"
     if isinstance(v, float) and v.is_integer():
@@ -139,13 +138,21 @@ def render_batch(
     statements: list[str],
     audit_after: list[str],
     rollback: list[str],
+    extra_header_lines: list[str] | None = None,
 ) -> str:
     """Shared header+body shape for every batch — diff-before -> apply ->
-    audit-after -> rollback (master-data protocol, lessons.md)."""
+    audit-after -> rollback (master-data protocol, lessons.md).
+
+    `extra_header_lines` renders right after Purpose, one "-- " line each —
+    used for a post-hoc note like "APPLIED to prod ..." without mangling the
+    Purpose line itself with embedded newlines.
+    """
     lines = [
         f"-- Batch: {filename}",
         f"-- Purpose: {purpose}",
     ]
+    for extra in extra_header_lines or []:
+        lines.append(f"-- {extra}")
     lines.append("-- Preconditions:")
     if preconditions:
         for p in preconditions:
@@ -300,7 +307,7 @@ class QuarantinedProductGroup:
     sheet(s) each quarantined name came from, for the 01b operator report."""
     rule: str
     entries: list[QuarantinedEntry]
-    catalog_suspect: Optional[tuple[str, str]] = None
+    catalog_suspect: tuple[str, str] | None = None
 
 
 def collect_new_products(
@@ -413,7 +420,7 @@ _RULE_LABELS = {
 }
 
 
-def emit_batch_01b(quarantined_groups: list["QuarantinedProductGroup"]) -> str:
+def emit_batch_01b(quarantined_groups: list[QuarantinedProductGroup]) -> str:
     """Render `01b-quarantined-names.md` -- every name held back from batch 01
     (Round-2 fix), grouped by which rule caught it, with the sheets each name
     came from and, for a rule-(a) group, the existing catalog row it is
@@ -490,7 +497,7 @@ class NewPair:
     purchase_unit: str
     units_per_purchase_unit: float
     rounding_rule: str
-    price_estimate_pln: Optional[float]
+    price_estimate_pln: float | None
     notes: str
     sheet_stems: list[str] = field(default_factory=list)
 
@@ -703,6 +710,12 @@ def collect_location_settings(
 
 
 def emit_batch_10(loc_id: str, rows: list[SettingRow]) -> str:
+    # `source_supplier_id` is DELIBERATELY ABSENT from this INSERT — it does
+    # not exist on prod until migration 0008 (unmerged PR #26), so a batch 10
+    # that referenced it errored on pre-0008 prod (found during the live B2
+    # apply; applied there with the column stripped by hand, semantically
+    # identical since its default is NULL). Pins belong exclusively to the
+    # 20-<loc>-activation batches, which already carry the 0008 precondition.
     statements: list[str] = []
     for r in rows:
         setting_id = f"{loc_id}__{r.product_id}"
@@ -710,10 +723,10 @@ def emit_batch_10(loc_id: str, rows: list[SettingRow]) -> str:
             "INSERT INTO location_product_settings "
             "(setting_id, location_id, product_id, min_stock_qty_base, "
             "max_stock_qty_base, target_stock_qty_base, is_critical_for_location, "
-            "allow_over_max_due_to_packaging, notes, source_supplier_id)\n"
+            "allow_over_max_due_to_packaging, notes)\n"
             f"VALUES ({sql_str(setting_id)}, {sql_str(loc_id)}, {sql_str(r.product_id)}, "
             f"{sql_num(r.min_qty)}, {sql_num(r.max_qty)}, {sql_num(r.target_qty)}, "
-            f"FALSE, FALSE, {sql_str(r.notes)}, NULL)\n"
+            f"FALSE, FALSE, {sql_str(r.notes)})\n"
             "ON CONFLICT (location_id, product_id) DO NOTHING;"
         )
     pid_list = ", ".join(sql_str(r.product_id) for r in rows) if rows else "NULL"
@@ -733,6 +746,10 @@ def emit_batch_10(loc_id: str, rows: list[SettingRow]) -> str:
             f"SELECT count(*) FROM location_product_settings WHERE location_id = {sql_str(loc_id)};"
         ],
         [f"DELETE FROM location_product_settings WHERE location_id = {sql_str(loc_id)};"],
+        extra_header_lines=[
+            "APPLIED to prod 2026-08-22 (column source_supplier_id stripped "
+            "-- pre-0008 schema); ON CONFLICT makes re-runs safe."
+        ],
     )
 
 
@@ -1016,7 +1033,7 @@ def generate_all(sheets_dir: pathlib.Path, snapshot_dir: pathlib.Path, out_dir: 
     }
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description="Generate onboarding SQL batches (Phase B1).")

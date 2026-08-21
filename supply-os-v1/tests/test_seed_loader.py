@@ -7,7 +7,6 @@ import pytest
 from app.models import Product
 from app.seed_loader import _normalize, _read, _read_cached
 
-
 # ---------- _normalize ----------
 
 def test_normalize_empty_string_to_none():

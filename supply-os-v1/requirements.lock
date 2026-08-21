@@ -1,0 +1,88 @@
+# Locked dependency versions for supply-os-v1 (H-01 hardening, Track C —
+# roadmap item, 2026-08-22). Pinned so `pip install -r requirements.lock`
+# reproduces the exact dependency graph CI and a fresh dev clone install,
+# instead of `pip install -e ".[dev]"` re-resolving against whatever is
+# newest on PyPI that day.
+#
+# Produced from a clean venv:
+#   python3.14 -m venv .venv && source .venv/bin/activate
+#   pip install -e ".[dev]"
+#   pip freeze --exclude-editable > requirements.lock
+#
+# Verified: (1) full pytest suite green (522 passed) under that python3.14
+# venv; (2) this exact file re-installed cleanly into a separate, clean
+# python3.12 venv (CI's actual runtime — see .github/workflows/ci.yml) and
+# the full pytest suite + ruff were ALSO green there before this file was
+# wired into CI. No 3.14-vs-3.12 mismatch in practice for this dependency
+# set — every pin resolved a compatible wheel on both.
+#
+# To regenerate: repeat the three commands above from a clean venv (any
+# Python 3.10+ the project supports), review the diff, and re-verify against
+# CI's python-version (.github/workflows/ci.yml, `setup-python`) before
+# committing — a future dependency may not be as version-agnostic as this
+# set turned out to be.
+
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+backoff==2.2.1
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+click==8.4.2
+cryptography==50.0.0
+deprecation==2.1.0
+distro==1.9.0
+fastapi==0.141.1
+google-auth==2.56.3
+google-auth-oauthlib==1.4.0
+gspread==6.2.1
+h11==0.16.0
+h2==4.4.1
+hpack==4.2.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+hyperframe==6.1.0
+idna==3.19
+iniconfig==2.3.0
+multidict==6.7.1
+oauthlib==3.3.1
+packaging==26.3
+pluggy==1.6.0
+postgrest==2.31.0
+posthog==7.42.0
+propcache==0.5.2
+psycopg2-binary==2.9.12
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic-settings==2.15.0
+pydantic_core==2.46.4
+Pygments==2.21.0
+PyJWT==2.13.0
+pytest==9.1.1
+pytest-mock==3.15.1
+python-dotenv==1.2.3
+python-multipart==0.0.32
+PyYAML==6.0.3
+realtime==2.31.0
+requests==2.34.2
+requests-oauthlib==2.0.0
+ruff==0.15.22
+SQLAlchemy==2.0.52
+starlette==1.6.0
+storage3==2.31.0
+StrEnum==0.4.15
+supabase==2.31.0
+supabase-auth==2.31.0
+supabase-functions==2.31.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.7.0
+uvicorn==0.52.4
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==15.0.1
+yarl==1.24.5

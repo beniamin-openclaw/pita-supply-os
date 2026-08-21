@@ -1,10 +1,8 @@
 """Pydantic models matching docs/pita-supply-os-v1/DATA_MODEL.md."""
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ---------- Enums ----------
 
@@ -45,7 +43,7 @@ class RoundingRule(str, Enum):
 
 class Product(BaseModel):
     product_id: str
-    gostock_id: Optional[int] = None
+    gostock_id: int | None = None
     product_name_pl: str
     product_category: str
     inventory_unit: str
@@ -57,11 +55,11 @@ class Product(BaseModel):
 class Supplier(BaseModel):
     supplier_id: str
     supplier_name: str
-    email: Optional[str] = None
+    email: str | None = None
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
-    delivery_days: Optional[str] = None
-    cutoff_time: Optional[str] = None
-    minimum_order_value_pln: Optional[float] = None
+    delivery_days: str | None = None
+    cutoff_time: str | None = None
+    minimum_order_value_pln: float | None = None
     active: bool = True
     notes: str = ""
 
@@ -69,16 +67,16 @@ class Supplier(BaseModel):
 class Location(BaseModel):
     location_id: str
     location_name: str
-    delivery_address: Optional[str] = None
-    city: Optional[str] = None
+    delivery_address: str | None = None
+    city: str | None = None
     active: bool = True
     notes: str = ""
     # Operating company for the supplier-email footer (locations belong to
     # different spółki — feedback r5). Optional: absent columns (sheets/seed)
     # and unfilled rows simply skip the footer block.
-    company_name: Optional[str] = None
-    company_address: Optional[str] = None
-    company_nip: Optional[str] = None
+    company_name: str | None = None
+    company_address: str | None = None
+    company_nip: str | None = None
 
 
 class SupplierProduct(BaseModel):
@@ -89,7 +87,7 @@ class SupplierProduct(BaseModel):
     purchase_unit: str
     units_per_purchase_unit: float = 1.0
     rounding_rule: RoundingRule = RoundingRule.FULL_ONLY
-    price_estimate_pln: Optional[float] = None
+    price_estimate_pln: float | None = None
     active: bool = True
     notes: str = ""
     # Short per-line packaging/ordering annotation shown on the Captain product
@@ -98,7 +96,7 @@ class SupplierProduct(BaseModel):
     # >60-char hand edit would then fail model construction on READ and 500 the
     # orderable screen. The 60-char "few words" cap is enforced at the DB
     # (varchar(60), migration 0006), where the value is actually entered.
-    order_note: Optional[str] = None
+    order_note: str | None = None
 
 
 class LocationProductSetting(BaseModel):
@@ -119,7 +117,7 @@ class LocationProductSetting(BaseModel):
     # makes it orderable nowhere (`_build_orderable_items` logs that case).
     # Thresholds above stay supplier-agnostic on purpose: a location wants N units
     # on site regardless of who delivers them.
-    source_supplier_id: Optional[str] = None
+    source_supplier_id: str | None = None
 
 
 # ---------- Orders ----------
@@ -137,8 +135,8 @@ class OrderLine(BaseModel):
     captain_final_qty_base: float = 0
     manager_final_qty_purchase: float = 0
     manager_final_qty_base: float = 0
-    delta_vs_suggestion_pct: Optional[float] = None
-    reason_code: Optional[ReasonCode] = None
+    delta_vs_suggestion_pct: float | None = None
+    reason_code: ReasonCode | None = None
     captain_comment: str = ""
     manager_comment: str = ""
 
@@ -148,26 +146,26 @@ class Order(BaseModel):
     location_id: str
     supplier_id: str
     order_date: date
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     status: OrderStatus = OrderStatus.DRAFT
-    captain_user: Optional[str] = None
-    captain_submitted_at: Optional[datetime] = None
-    manager_user: Optional[str] = None
-    manager_sent_at: Optional[datetime] = None
-    sent_method: Optional[str] = None
-    supplier_order_reference: Optional[str] = None
-    total_value_estimate_pln: Optional[float] = None
+    captain_user: str | None = None
+    captain_submitted_at: datetime | None = None
+    manager_user: str | None = None
+    manager_sent_at: datetime | None = None
+    sent_method: str | None = None
+    supplier_order_reference: str | None = None
+    total_value_estimate_pln: float | None = None
     # Free-text "who orders" attribution captured at submit. Required on input
     # (CaptainSubmitRequest), Optional here so legacy rows with no value stay
     # valid. Mirrors Receipt.received_by / InventoryCount.count_user; not a
     # person-identity (the v0 per-user Non-Goal stands), never overwritten by the
     # captain edit.
-    ordered_by: Optional[str] = None
-    last_edited_at: Optional[datetime] = None  # set on captain edit; None = never edited
+    ordered_by: str | None = None
+    last_edited_at: datetime | None = None  # set on captain edit; None = never edited
     # Soft-delete trace (Manager cancel): all None/"" until cancelled. Status goes
     # to CANCELLED; the order is never hard-deleted.
-    cancelled_at: Optional[datetime] = None
-    cancelled_by: Optional[str] = None
+    cancelled_at: datetime | None = None
+    cancelled_by: str | None = None
     cancel_reason: str = ""
     notes: str = ""
     lines: list[OrderLine] = Field(default_factory=list)
@@ -182,15 +180,15 @@ class OrderLineSubmit(BaseModel):
     # gate skips the deviation/critical reason check (there is no real suggestion
     # to deviate from) and forces a reason only on an over-MAX order; the line is
     # persisted with current_stock_qty_base=0 (the column stays NOT NULL).
-    current_stock_qty_base: Optional[float] = Field(default=None, ge=0)
+    current_stock_qty_base: float | None = Field(default=None, ge=0)
     captain_final_qty_purchase: float = Field(ge=0)
-    reason_code: Optional[ReasonCode] = None
+    reason_code: ReasonCode | None = None
     captain_comment: str = ""
 
 
 class CaptainSubmitRequest(BaseModel):
     supplier_id: str
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     lines: list[OrderLineSubmit] = Field(min_length=1)
     # Required free-text "who orders" attribution (FR/spec) — mirrors
     # ReceiptSubmitRequest.received_by / InventoryCountSubmitRequest.count_user.
@@ -228,8 +226,8 @@ class ManagerDispatchResponse(BaseModel):
     order_id: str
     status: OrderStatus
     # Only present for email dispatch; None for portal/phone/manual channels.
-    gmail_compose_url: Optional[str] = None
-    supplier_email: Optional[str] = None
+    gmail_compose_url: str | None = None
+    supplier_email: str | None = None
     total_value_estimate_pln: float
 
 
@@ -265,17 +263,17 @@ class ManagerQueueItem(BaseModel):
     supplier_id: str
     supplier_name: str  # joined from suppliers tab
     order_date: date
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     status: OrderStatus
-    captain_user: Optional[str] = None
-    captain_submitted_at: Optional[datetime] = None
-    ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
+    captain_user: str | None = None
+    captain_submitted_at: datetime | None = None
+    ordered_by: str | None = None  # free-text "who orders" (shown as "Zamówił: X")
     line_count: int
-    total_value_estimate_pln: Optional[float] = None
+    total_value_estimate_pln: float | None = None
     deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.25
     reason_count: int  # lines z non-null reason_code
-    last_edited_at: Optional[datetime] = None  # set if captain edited after submit
-    cutoff_iso: Optional[datetime] = None  # absolute cutoff datetime for ordering (Tue 14:00 dla Pago)
+    last_edited_at: datetime | None = None  # set if captain edited after submit
+    cutoff_iso: datetime | None = None  # absolute cutoff datetime for ordering (Tue 14:00 dla Pago)
     # Goods-receipt signal (manager-receiving-view). Set only on the manager_sent
     # lane; 0 on every other lane / legacy row. received_count = receipts for this
     # order; received_discrepancy_count = receipts with discrepancy_count > 0. The
@@ -296,7 +294,7 @@ class ManagerOrderLineDetail(BaseModel):
     purchase_unit: str
     units_per_purchase_unit: float
     rounding_rule: RoundingRule = RoundingRule.FULL_ONLY  # SKU snap rule, for FE parity
-    price_estimate_pln: Optional[float] = None
+    price_estimate_pln: float | None = None
     current_stock_qty_base: float
     target_stock_qty_base: float
     # Storage ceiling + packaging override, joined from location_product_settings.
@@ -311,8 +309,8 @@ class ManagerOrderLineDetail(BaseModel):
     captain_final_qty_base: float
     manager_final_qty_purchase: float
     manager_final_qty_base: float
-    delta_vs_suggestion_pct: Optional[float] = None
-    reason_code: Optional[ReasonCode] = None
+    delta_vs_suggestion_pct: float | None = None
+    reason_code: ReasonCode | None = None
     captain_comment: str = ""
     manager_comment: str = ""
 
@@ -338,8 +336,8 @@ class ManagerOrderReceipt(BaseModel):
     newest-first. Mirrors the Captain receipt overlay, read-only."""
     receipt_id: str
     receipt_date: date
-    received_by: Optional[str] = None
-    received_submitted_at: Optional[datetime] = None
+    received_by: str | None = None
+    received_submitted_at: datetime | None = None
     line_count: int = 0
     discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
     received_with_missing_wz: bool = True
@@ -355,33 +353,33 @@ class ManagerOrderDetail(BaseModel):
     # Delivery address, joined from locations — the supplier email address line
     # is location_name + delivery_address + city (empty parts skipped). Optional
     # so legacy/absent locations stay valid (mirrors the Location master-data).
-    delivery_address: Optional[str] = None
-    city: Optional[str] = None
+    delivery_address: str | None = None
+    city: str | None = None
     # Operating-company footer data, joined from locations (feedback r5): the
     # editable email body appends spółka + adres + NIP when present.
-    company_name: Optional[str] = None
-    company_address: Optional[str] = None
-    company_nip: Optional[str] = None
+    company_name: str | None = None
+    company_address: str | None = None
+    company_nip: str | None = None
     supplier_id: str
     supplier_name: str  # joined
-    supplier_email: Optional[str] = None  # for the Gmail draft preview
+    supplier_email: str | None = None  # for the Gmail draft preview
     # Standing office copy (DW) for the supplier email, from settings.order_cc_email
     # (feedback r7). The FE owns the authoritative Gmail URL, so it must receive the
     # cc from the backend rather than hardcoding a second source of truth. None/empty
     # => the dispatch panel shows no DW row and adds no cc parameter.
-    cc_email: Optional[str] = None
+    cc_email: str | None = None
     # Channel the dispatch panel must branch on (email|portal|phone|manual).
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
     supplier_notes: str = ""  # fallback source for a phone number etc.
     order_date: date
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     status: OrderStatus
-    captain_user: Optional[str] = None
-    captain_submitted_at: Optional[datetime] = None
-    ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
-    manager_user: Optional[str] = None
-    manager_sent_at: Optional[datetime] = None
-    total_value_estimate_pln: Optional[float] = None
+    captain_user: str | None = None
+    captain_submitted_at: datetime | None = None
+    ordered_by: str | None = None  # free-text "who orders" (shown as "Zamówił: X")
+    manager_user: str | None = None
+    manager_sent_at: datetime | None = None
+    total_value_estimate_pln: float | None = None
     notes: str = ""
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
     # Goods-receipts against this order (0..N, newest-first), read-only — closes
@@ -398,14 +396,14 @@ class CaptainOrderListItem(BaseModel):
     supplier_id: str
     supplier_name: str  # joined
     order_date: date
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     status: OrderStatus
-    captain_submitted_at: Optional[datetime] = None
-    last_edited_at: Optional[datetime] = None
+    captain_submitted_at: datetime | None = None
+    last_edited_at: datetime | None = None
     line_count: int
     deviation_count: int
     reason_count: int
-    total_value_estimate_pln: Optional[float] = None
+    total_value_estimate_pln: float | None = None
     # Editable only while captain_submitted (manager hasn't started yet).
     editable: bool
 
@@ -422,13 +420,13 @@ class CaptainOrderDetail(BaseModel):
     supplier_id: str
     supplier_name: str
     order_date: date
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     status: OrderStatus
-    captain_user: Optional[str] = None
-    captain_submitted_at: Optional[datetime] = None
-    ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
-    last_edited_at: Optional[datetime] = None
-    total_value_estimate_pln: Optional[float] = None
+    captain_user: str | None = None
+    captain_submitted_at: datetime | None = None
+    ordered_by: str | None = None  # free-text "who orders" (shown as "Zamówił: X")
+    last_edited_at: datetime | None = None
+    total_value_estimate_pln: float | None = None
     notes: str = ""
     editable: bool
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
@@ -437,7 +435,7 @@ class CaptainOrderDetail(BaseModel):
 class CaptainEditRequest(BaseModel):
     """Payload for PATCH /api/captain/order/{order_id}. Same shape as
     CaptainSubmitRequest, minus supplier_id (it cannot be changed)."""
-    requested_delivery_date: Optional[date] = None
+    requested_delivery_date: date | None = None
     lines: list[OrderLineSubmit] = Field(min_length=1)
     notes: str = ""
 
@@ -540,8 +538,8 @@ class InventoryCount(BaseModel):
     count_id: str
     location_id: str
     count_date: date
-    count_user: Optional[str] = None  # proxy = location_id in v0 (no per-user identity)
-    count_submitted_at: Optional[datetime] = None
+    count_user: str | None = None  # proxy = location_id in v0 (no per-user identity)
+    count_submitted_at: datetime | None = None
     line_count: int = 0
     notes: str = ""
     lines: list[InventoryCountLine] = Field(default_factory=list)
@@ -564,7 +562,7 @@ class InventoryCountSubmitRequest(BaseModel):
     Warsaw local time. A future date is rejected by the endpoint."""
     lines: list[InventoryCountLineSubmit] = Field(min_length=1)
     count_user: str = Field(min_length=1)
-    count_date: Optional[date] = None
+    count_date: date | None = None
     notes: str = ""
 
 
@@ -588,8 +586,8 @@ class InventoryLatestResponse(BaseModel):
     in its confirmation so a stale count can't silently enter an order."""
     count_id: str
     count_date: date
-    count_submitted_at: Optional[datetime] = None
-    count_user: Optional[str] = None  # who counted (FR-022 banner); may be absent on legacy rows
+    count_submitted_at: datetime | None = None
+    count_user: str | None = None  # who counted (FR-022 banner); may be absent on legacy rows
     line_count: int = 0
     lines: list[InventoryLatestLine] = Field(default_factory=list)
 
@@ -603,8 +601,8 @@ class InventoryCountSummary(BaseModel):
     count_id: str
     location_id: str
     count_date: date
-    count_submitted_at: Optional[datetime] = None
-    count_user: Optional[str] = None
+    count_submitted_at: datetime | None = None
+    count_user: str | None = None
     line_count: int = 0
 
 
@@ -618,8 +616,8 @@ class InventoryCountManagerItem(BaseModel):
     location_id: str
     location_name: str  # joined from locations
     count_date: date
-    count_submitted_at: Optional[datetime] = None
-    count_user: Optional[str] = None
+    count_submitted_at: datetime | None = None
+    count_user: str | None = None
     line_count: int = 0
 
 
@@ -644,8 +642,8 @@ class InventoryCountDetail(BaseModel):
     location_id: str
     location_name: str  # joined
     count_date: date
-    count_submitted_at: Optional[datetime] = None
-    count_user: Optional[str] = None
+    count_submitted_at: datetime | None = None
+    count_user: str | None = None
     line_count: int = 0
     notes: str = ""
     lines: list[InventoryCountDetailLine] = Field(default_factory=list)
@@ -703,12 +701,12 @@ class Receipt(BaseModel):
     location_id: str
     supplier_id: str
     receipt_date: date
-    received_by: Optional[str] = None  # free-text attribution (no per-user identity in v0)
-    received_submitted_at: Optional[datetime] = None
+    received_by: str | None = None  # free-text attribution (no per-user identity in v0)
+    received_submitted_at: datetime | None = None
     line_count: int = 0
     discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
     received_with_missing_wz: bool = True
-    wz_photo_path_prefix: Optional[str] = None  # Supabase Storage prefix: wz/<order_id>
+    wz_photo_path_prefix: str | None = None  # Supabase Storage prefix: wz/<order_id>
     wz_photo_count: int = 0
     notes: str = ""
     lines: list[ReceiptLine] = Field(default_factory=list)
@@ -726,7 +724,7 @@ class ReceiptSubmitRequest(BaseModel):
     defaults to Warsaw-today when omitted (a future date is rejected)."""
     order_id: str
     received_by: str = Field(min_length=1)
-    receipt_date: Optional[date] = None
+    receipt_date: date | None = None
     lines: list[ReceiptLineSubmit] = Field(min_length=1)
     notes: str = ""
 
@@ -766,12 +764,12 @@ class ReceiptDetail(BaseModel):
     supplier_id: str
     supplier_name: str  # joined
     receipt_date: date
-    received_by: Optional[str] = None
-    received_submitted_at: Optional[datetime] = None
+    received_by: str | None = None
+    received_submitted_at: datetime | None = None
     line_count: int = 0
     discrepancy_count: int = 0
     received_with_missing_wz: bool = True
-    wz_photo_path_prefix: Optional[str] = None
+    wz_photo_path_prefix: str | None = None
     wz_photo_count: int = 0
     notes: str = ""
     lines: list[ReceiptDetailLine] = Field(default_factory=list)
@@ -783,8 +781,8 @@ class ReceiptSummary(BaseModel):
     order_id: str
     location_id: str
     receipt_date: date
-    received_submitted_at: Optional[datetime] = None
-    received_by: Optional[str] = None
+    received_submitted_at: datetime | None = None
+    received_by: str | None = None
     line_count: int = 0
     discrepancy_count: int = 0
     received_with_missing_wz: bool = True

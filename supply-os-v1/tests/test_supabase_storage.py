@@ -14,7 +14,6 @@ from pydantic import SecretStr
 
 from app import supabase_storage as ss
 
-
 # ---------- is_configured ----------
 
 def test_is_configured_false_without_url(mocker):

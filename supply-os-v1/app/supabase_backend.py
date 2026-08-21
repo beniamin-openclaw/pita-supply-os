@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 import threading
 from enum import Enum
-from typing import Optional, Type, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
@@ -227,7 +227,7 @@ def _bind(col: str) -> str:
     return f":{col}"
 
 
-def _fetch_all(sql: str, model_cls: Type[T], params: Optional[dict] = None) -> list[T]:
+def _fetch_all(sql: str, model_cls: type[T], params: dict | None = None) -> list[T]:
     """Run a SELECT, map each row by column name onto ``model_cls``."""
     with _get_engine().connect() as conn:
         mappings = conn.execute(text(sql), params or {}).mappings().all()
@@ -441,7 +441,7 @@ def replace_order_lines_atomic(
     order_id: str,
     new_lines: list[OrderLine],
     *,
-    order_updates: Optional[dict] = None,
+    order_updates: dict | None = None,
     expected_status=None,
 ) -> None:
     """Atomically replace an order's full line set AND apply ``order_updates``,

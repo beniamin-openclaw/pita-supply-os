@@ -14,7 +14,6 @@ import pytest
 from app import sheets
 from app.models import InventoryCount, InventoryCountLine
 
-
 # ---------- Sheet column layouts (must match models.py field order) ----------
 
 INVENTORY_COUNT_HEADERS = [

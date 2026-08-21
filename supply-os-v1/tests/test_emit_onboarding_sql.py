@@ -119,7 +119,18 @@ class TestGoldenBatches:
         assert by_pid["P001"].notes == ""
         assert by_pid["P002"].notes == "threshold TBC (sheet had no min/max)"
         assert by_pid["P003"].notes == "threshold TBC (sheet had no min/max)"
-        assert emit_batch_10("WESTFIELD", rows) == GOLDEN["BATCH_10"]
+        text = emit_batch_10("WESTFIELD", rows)
+        assert text == GOLDEN["BATCH_10"]
+        # F1 (coordinator review 2026-08-22, found during the live B2 apply):
+        # `source_supplier_id` does not exist on prod pre-migration-0008, so
+        # no ACTUAL SQL STATEMENT in batch 10 may reference it -- pins belong
+        # exclusively to the 20-<loc>-activation batches, which already carry
+        # the 0008 precondition. The header's own "-- APPLIED to prod ..."
+        # note names the column in a comment, on purpose (documents what was
+        # stripped), so the check is scoped to non-comment lines.
+        sql_lines = [ln for ln in text.split("\n") if not ln.strip().startswith("--")]
+        assert not any("source_supplier_id" in ln for ln in sql_lines)
+        assert "APPLIED to prod 2026-08-22" in text
 
     def test_batch_20_activation(self):
         snapshot, sheets, westfield_sheet = _load_scenario()

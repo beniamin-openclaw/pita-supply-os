@@ -14,7 +14,6 @@ import pytest
 from app import sheets
 from app.models import Receipt, ReceiptLine
 
-
 # ---------- Sheet column layouts (must cover every required model field) ----------
 
 RECEIPT_HEADERS = [

@@ -38,7 +38,6 @@ import re
 import sys
 import unicodedata
 from dataclasses import dataclass, field, replace
-from typing import Optional
 
 # ---------- Vocabulary (research §2 / proto_parse.py) ----------
 
@@ -92,11 +91,11 @@ class PriceRow:
     category: str
     supplier: str
     product: str
-    unit: Optional[str]
-    min_qty: Optional[float]
-    max_qty: Optional[float]
-    price: Optional[float]
-    vat: Optional[str]
+    unit: str | None
+    min_qty: float | None
+    max_qty: float | None
+    price: float | None
+    vat: str | None
 
 
 @dataclass
@@ -216,7 +215,7 @@ def _numeric_tokens_conflict(name_tokens: set[str], cand_tokens: set[str]) -> bo
     return bool(name_nums) and bool(cand_nums) and name_nums != cand_nums
 
 
-def _token_subset_candidate(norm: str, catalog: dict[str, str]) -> Optional[str]:
+def _token_subset_candidate(norm: str, catalog: dict[str, str]) -> str | None:
     """Token-subset near-miss (plan.md: "edit distance <= 2 OR token-subset";
     dropped from the original brief — F2, coordinator review 2026-08-21).
 
@@ -239,7 +238,7 @@ def _token_subset_candidate(norm: str, catalog: dict[str, str]) -> Optional[str]
     name_tokens = set(norm.split())
     if not name_tokens:
         return None
-    best_pid: Optional[str] = None
+    best_pid: str | None = None
     best_shared = 0
     for cand_norm, cand_pid in catalog.items():
         cand_tokens = set(_strip_parenthetical(cand_norm).split())
@@ -284,8 +283,8 @@ def match_catalog(names: list[str], catalog: dict[str, str]) -> MatchResult:
             result.matched[name] = pid
             continue
         name_tokens = set(norm.split())
-        best_pid: Optional[str] = None
-        best_dist: Optional[int] = None
+        best_pid: str | None = None
+        best_dist: int | None = None
         for cand_norm, cand_pid in catalog.items():
             d = _levenshtein(norm, cand_norm)
             if d <= 2 and (best_dist is None or d < best_dist):
@@ -330,7 +329,7 @@ class QuarantineCluster:
     """
     rule: str
     names: list[str] = field(default_factory=list)
-    catalog_suspect: Optional[tuple[str, str]] = None
+    catalog_suspect: tuple[str, str] | None = None
 
 
 @dataclass
@@ -382,14 +381,14 @@ def _is_negation_pair(a: str, b: str) -> bool:
     ta, tb = a.split(), b.split()
     if len(ta) != len(tb):
         return False
-    diffs = [(x, y) for x, y in zip(ta, tb) if x != y]
+    diffs = [(x, y) for x, y in zip(ta, tb, strict=True) if x != y]
     if len(diffs) != 1:
         return False
     x, y = diffs[0]
     return x == "nie" + y or y == "nie" + x
 
 
-def _relaxed_catalog_quarantine_pid(norm: str, catalog: dict[str, str]) -> Optional[str]:
+def _relaxed_catalog_quarantine_pid(norm: str, catalog: dict[str, str]) -> str | None:
     """Rule (a): Levenshtein <= 3 (length-proportional, see `_close_enough`)
     against ANY catalog entry, with the numeric-token-conflict guard
     DELIBERATELY DISABLED (a quarantine check wants "80 na 804" to hit
@@ -400,8 +399,8 @@ def _relaxed_catalog_quarantine_pid(norm: str, catalog: dict[str, str]) -> Optio
     name is "Sól 1kg") — catching a bare-word truncation.
     """
     name_tokens = set(norm.split())
-    best_pid: Optional[str] = None
-    best_dist: Optional[int] = None
+    best_pid: str | None = None
+    best_dist: int | None = None
     for cand_norm, cand_pid in catalog.items():
         if not _close_enough(norm, cand_norm) or _is_negation_pair(norm, cand_norm):
             continue
@@ -541,7 +540,7 @@ def _cells_of(line: str) -> list[str]:
     return parts
 
 
-def _to_float(raw: Optional[str]) -> Optional[float]:
+def _to_float(raw: str | None) -> float | None:
     """Polish-decimal-comma string -> float. Tolerates garbage (`\\#REF\\!`,
     blank, non-numeric) by returning None rather than raising."""
     if not raw:
@@ -606,7 +605,7 @@ def _is_price_header(cells: list[str]) -> bool:
     return "Kategoria" in cells and "Produkt" in cells and "Cena" in cells
 
 
-def _resolve_supplier_index(header_map: dict[str, int]) -> Optional[int]:
+def _resolve_supplier_index(header_map: dict[str, int]) -> int | None:
     """Column index of the supplier cell in a price-list data row.
 
     Normally the named "Dostawca" column. When the header's supplier cell is
@@ -623,7 +622,7 @@ def _resolve_supplier_index(header_map: dict[str, int]) -> Optional[int]:
     return None
 
 
-def _extract_price_row(cells: list[str], header_map: dict[str, int]) -> Optional[PriceRow]:
+def _extract_price_row(cells: list[str], header_map: dict[str, int]) -> PriceRow | None:
     supplier_idx = _resolve_supplier_index(header_map)
     supplier = cells[supplier_idx] if supplier_idx is not None and supplier_idx < len(cells) else ""
     supplier = supplier or ""
@@ -671,8 +670,8 @@ def _extract_stock_rows(cells: list[str]) -> list[StockRow]:
     i = 0
     while i < n:
         cell = cells[i]
-        supplier: Optional[str] = None
-        product_idx: Optional[int] = None
+        supplier: str | None = None
+        product_idx: int | None = None
         if cell in CATEGORIES and i + 1 < n and cells[i + 1] in SUPPLIERS:
             supplier = cells[i + 1]
             product_idx = i + 2
@@ -700,7 +699,7 @@ def _extract_stock_rows(cells: list[str]) -> list[StockRow]:
 def _parse_pipe_table(text: str) -> SheetData:
     price_rows: list[PriceRow] = []
     stock_rows: list[StockRow] = []
-    header_map: Optional[dict[str, int]] = None
+    header_map: dict[str, int] | None = None
     header_width = 0
     seen_price_keys: set[tuple[str, str]] = set()
 
@@ -851,8 +850,15 @@ _LOCATION_PRODUCT_SETTINGS_COLUMNS = [
 
 
 def _load_rows(path: pathlib.Path, columns: list[str]) -> list[dict]:
+    """Load a snapshot JSON array-of-arrays into array-of-dicts via the given
+    column order. `strict=True` (B905 fix, H-01 hardening) is deliberate here,
+    not just linter-appeasement: these are hand-maintained snapshot files
+    (context/changes/*/snapshot/*.json), and a row with the wrong number of
+    fields would otherwise silently mis-align columns (e.g. a product's
+    `active` flag landing in the `is_critical` slot) instead of failing
+    loudly."""
     raw = json.loads(path.read_text(encoding="utf-8"))
-    return [dict(zip(columns, row)) for row in raw]
+    return [dict(zip(columns, row, strict=True)) for row in raw]
 
 
 @dataclass
@@ -890,7 +896,7 @@ class Snapshot:
         }
 
     @classmethod
-    def load(cls, snapshot_dir: str) -> "Snapshot":
+    def load(cls, snapshot_dir: str) -> Snapshot:
         base = pathlib.Path(snapshot_dir)
         return cls(
             products=_load_rows(base / "products.json", _PRODUCTS_COLUMNS),
@@ -908,7 +914,7 @@ class Snapshot:
 
 # ---------- reconcile ----------
 
-def _units_equivalent(a: Optional[str], b: Optional[str]) -> bool:
+def _units_equivalent(a: str | None, b: str | None) -> bool:
     if a is None or b is None:
         return True  # nothing to compare — not a mismatch
     fa, fb = a.strip().casefold(), b.strip().casefold()
@@ -1226,7 +1232,7 @@ def _read_sheet_file(path: pathlib.Path) -> str:
     return raw
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Reconcile per-location Inwentaryzacja sheets against a DB snapshot."
     )

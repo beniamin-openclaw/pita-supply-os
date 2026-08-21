@@ -24,7 +24,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -r requirements.lock && pip install -e . --no-deps
       - name: Lint (ruff)
         run: ruff check .
       - name: Test (pytest)
@@ -64,9 +64,27 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -r requirements.lock && pip install -e . --no-deps
       - name: Integration tests (pytest -m integration)
         run: pytest -m integration
+
+  backend-types:
+    name: Backend types (pyright, advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: supply-os-v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.lock && pip install -e . --no-deps
+      - name: Type check (pyright, advisory only — findings do not fail CI)
+        run: npx -y pyright@latest
 
   frontend:
     name: Frontend (build + lint)
