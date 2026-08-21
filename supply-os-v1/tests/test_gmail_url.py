@@ -20,7 +20,6 @@ from app.models import (
     SupplierProduct,
 )
 
-
 # ---------- Fixtures ----------
 
 def _make_order(

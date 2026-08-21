@@ -16,7 +16,6 @@ dev mode. Never leave tokens empty in production.
 """
 import logging
 import secrets
-from typing import Optional
 
 from fastapi import Header, HTTPException, status
 
@@ -27,7 +26,7 @@ log = logging.getLogger(__name__)
 _DEV_WARNED = {"captain": False, "manager": False, "any": False}
 
 
-def _strip_bearer(authorization: Optional[str]) -> Optional[str]:
+def _strip_bearer(authorization: str | None) -> str | None:
     if not authorization:
         return None
     parts = authorization.split(maxsplit=1)
@@ -49,7 +48,7 @@ def _parse_captain_tokens(raw: str) -> dict[str, str]:
     return out
 
 
-def require_captain(authorization: Optional[str] = Header(None)) -> str:
+def require_captain(authorization: str | None = Header(None)) -> str:
     """FastAPI dependency. Returns the Captain's location_id from Bearer token.
 
     Dev mode (no captain_tokens configured): warns once, returns "WOLA".
@@ -85,7 +84,7 @@ def require_captain(authorization: Optional[str] = Header(None)) -> str:
     )
 
 
-def require_manager(authorization: Optional[str] = Header(None)) -> None:
+def require_manager(authorization: str | None = Header(None)) -> None:
     """FastAPI dependency. Verifies the shared Manager Bearer token.
 
     Dev mode (no manager_token configured): warns once, allows access.
@@ -109,7 +108,7 @@ def require_manager(authorization: Optional[str] = Header(None)) -> None:
         )
 
 
-def require_any_auth(authorization: Optional[str] = Header(None)) -> str:
+def require_any_auth(authorization: str | None = Header(None)) -> str:
     """FastAPI dependency. Accepts EITHER a Captain token (any location)
     OR the Manager token. Returns:
 

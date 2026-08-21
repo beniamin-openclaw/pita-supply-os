@@ -3,7 +3,6 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
@@ -50,9 +49,9 @@ from .models import (
     ManagerSaveRequest,
     ManagerSaveResponse,
     Order,
+    OrderingMethod,
     OrderLine,
     OrderLineSubmit,
-    OrderingMethod,
     OrderStatus,
     Product,
     Receipt,
@@ -143,7 +142,7 @@ def locations(_actor: str = Depends(require_any_auth)):
 # ---------- Captain Submit (auth required) ----------
 
 def _supplier_allowed(
-    setting: Optional[LocationProductSetting], supplier_id: str
+    setting: LocationProductSetting | None, supplier_id: str
 ) -> bool:
     """True when this location may order this product from ``supplier_id``.
 
@@ -171,7 +170,7 @@ def _build_orderable_item(
     sp: SupplierProduct,
     products_by_id: dict[str, Product],
     settings_by_pid: dict[str, LocationProductSetting],
-    also_supplied_by: Optional[list[str]] = None,
+    also_supplied_by: list[str] | None = None,
 ) -> dict:
     """Compose one line for the Captain Submit screen."""
     product = products_by_id[sp.product_id]
@@ -343,7 +342,7 @@ def captain_suggest(
         out = compute_suggestion(inp)
     except ValueError as e:
         # Pydantic constraints catch most bad input; this is defense-in-depth.
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {
         "suggested_qty_base": out.suggested_qty_base,
         "suggested_qty_purchase": out.suggested_qty_purchase,
@@ -476,7 +475,7 @@ def _evaluate_submit_line(
     product: Product,
     order_line_id: str,
     order_id: str,
-) -> tuple[OrderLine, Optional[str], float]:
+) -> tuple[OrderLine, str | None, float]:
     """Validate one captain-submitted line and build its persisted OrderLine.
 
     Shared by ``captain_submit`` and ``captain_order_edit`` so their per-line
@@ -512,7 +511,7 @@ def _evaluate_submit_line(
     suggested_qty_purchase = suggestion.suggested_qty_purchase
     suggested_qty_base = suggestion.suggested_qty_base
 
-    warning: Optional[str] = None
+    warning: str | None = None
     order_base = line.captain_final_qty_purchase * sp.units_per_purchase_unit
 
     if stock is None:
@@ -538,7 +537,7 @@ def _evaluate_submit_line(
                 f"reason: {line.reason_code.value}"
             )
         stored_stock = 0.0
-        delta_pct: Optional[float] = None
+        delta_pct: float | None = None
     else:
         delta_pct = abs(
             line.captain_final_qty_purchase - suggested_qty_purchase
@@ -720,7 +719,7 @@ WEEKDAY_MAP: dict[str, int] = {
 _WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
 
-def _parse_cutoff_time(raw: Optional[str]) -> Optional[tuple[int, int]]:
+def _parse_cutoff_time(raw: str | None) -> tuple[int, int] | None:
     """Parse 'HH:MM' (or 'H:MM') -> (hour, minute). Returns None on bad input."""
     if not raw:
         return None
@@ -738,7 +737,7 @@ def _parse_cutoff_time(raw: Optional[str]) -> Optional[tuple[int, int]]:
     return h, m
 
 
-def _parse_weekdays(raw: Optional[str]) -> Optional[list[int]]:
+def _parse_weekdays(raw: str | None) -> list[int] | None:
     """Parse supplier.delivery_days into a sorted list of weekday ints (0=Mon).
 
     Accepts 'Tue', 'Mon, Wed, Fri', 'daily', 'codziennie'. Returns None when
@@ -772,7 +771,7 @@ def _parse_weekdays(raw: Optional[str]) -> Optional[list[int]]:
     return sorted(out)
 
 
-def _compute_next_cutoff(supplier: Supplier, now_utc: datetime) -> Optional[datetime]:
+def _compute_next_cutoff(supplier: Supplier, now_utc: datetime) -> datetime | None:
     """Next delivery-day cutoff for ``supplier`` in Europe/Warsaw time.
 
     Returns a timezone-aware ``datetime`` in UTC, or ``None`` when either
@@ -800,7 +799,7 @@ def _compute_next_cutoff(supplier: Supplier, now_utc: datetime) -> Optional[date
 
 @app.get("/api/manager/queue", response_model=list[ManagerQueueItem])
 def manager_queue(
-    location_id: Optional[str] = None,
+    location_id: str | None = None,
     status: OrderStatus = OrderStatus.CAPTAIN_SUBMITTED,
     limit: int = 50,
     _: None = Depends(require_manager),
@@ -1125,7 +1124,7 @@ def _enrich_lines_for_detail(
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
     sps_by_id: dict[str, SupplierProduct],
-    settings_by_pid: Optional[dict[str, LocationProductSetting]] = None,
+    settings_by_pid: dict[str, LocationProductSetting] | None = None,
 ) -> list[ManagerOrderLineDetail]:
     """Shared helper — turn OrderLine rows into ManagerOrderLineDetail with joins.
 
@@ -1177,7 +1176,7 @@ def _enrich_lines_for_detail(
 
 @app.get("/api/captain/orders", response_model=list[CaptainOrderListItem])
 def captain_orders(
-    status: Optional[OrderStatus] = None,
+    status: OrderStatus | None = None,
     limit: int = 20,
     location_id: str = Depends(require_captain),
 ):
@@ -1451,7 +1450,7 @@ def captain_order_edit(
                 f"Order {order_id} is no longer editable (it was claimed or "
                 f"changed concurrently). Skontaktuj się z menedżerem."
             ),
-        )
+        ) from None
 
     return CaptainEditResponse(
         order_id=order_id,
@@ -1512,7 +1511,7 @@ def manager_claim(
                 f"Order {order_id} was claimed or changed concurrently "
                 f"(expected captain_submitted)"
             ),
-        )
+        ) from None
     return ManagerClaimResponse(
         order_id=order_id, status=OrderStatus.MANAGER_CLAIMED
     )
@@ -1564,7 +1563,7 @@ def manager_release(
                 f"Order {order_id} was changed concurrently "
                 f"(expected manager_claimed)"
             ),
-        )
+        ) from None
     return ManagerReleaseResponse(
         order_id=order_id, status=OrderStatus.CAPTAIN_SUBMITTED
     )
@@ -1625,7 +1624,7 @@ def manager_cancel(
                 f"Order {order_id} was changed concurrently "
                 f"(expected {order.status.value})"
             ),
-        )
+        ) from None
     return ManagerCancelResponse(order_id=order_id, status=OrderStatus.CANCELLED)
 
 
@@ -1737,7 +1736,7 @@ def manager_dispatch(
 
     # Email channel: build the Gmail URL FIRST so we never persist manager_sent
     # without a usable URL. Non-email channels skip this entirely (url stays None).
-    url: Optional[str] = None
+    url: str | None = None
     if is_email_channel:
         try:
             url = gmail_url.build_draft_url(
@@ -1749,7 +1748,7 @@ def manager_dispatch(
                 cc_email=settings.order_cc_email,
             )
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}")
+            raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}") from e
 
     # Persist: lines first, then order status. Order matters: if status write
     # fails after lines write, retry is safe (lines are idempotent overwrites).
@@ -1770,7 +1769,7 @@ def manager_dispatch(
         raise HTTPException(
             status_code=409,
             detail=f"Order {req.order_id} was already dispatched or changed concurrently",
-        )
+        ) from None
 
     return ManagerDispatchResponse(
         order_id=req.order_id,
@@ -1883,7 +1882,7 @@ def manager_order_save(
                     f"Order {order_id} is no longer manager_claimed (it may have "
                     f"been dispatched or released — refresh the queue)"
                 ),
-            )
+            ) from None
 
     return ManagerSaveResponse(
         order_id=order_id,
@@ -2182,7 +2181,7 @@ def captain_inventory_submit(
                 "'inventory_counts' and 'inventory_count_lines' tabs "
                 "(see Migration Notes) before submitting."
             ),
-        )
+        ) from None
     if not persisted:
         warnings.append(
             "Inventory count was not persisted (read-only backend) — "
@@ -2199,7 +2198,7 @@ def captain_inventory_submit(
 
 @app.get(
     "/api/captain/inventory/latest",
-    response_model=Optional[InventoryLatestResponse],
+    response_model=InventoryLatestResponse | None,
 )
 def captain_inventory_latest(
     location_id: str = Depends(require_captain),
@@ -2342,7 +2341,7 @@ def captain_inventory_count_detail(
                 "'inventory_counts' and 'inventory_count_lines' tabs "
                 "(see Migration Notes)."
             ),
-        )
+        ) from None
     if count is None or count.location_id != location_id:
         raise HTTPException(
             status_code=404, detail=f"Inventory count {count_id} not found"
@@ -2372,7 +2371,7 @@ def captain_inventory_count_detail(
 def _enrich_inventory_count_detail(
     count: InventoryCount,
     products_by_id: dict[str, Product],
-    location: Optional[Location],
+    location: Location | None,
 ) -> InventoryCountDetail:
     """Join product master-data + location_name onto a snapshot for the
     Manager/owner read view (S-08). Mirrors `manager_order_detail`'s line
@@ -2409,7 +2408,7 @@ def _enrich_inventory_count_detail(
     response_model=list[InventoryCountManagerItem],
 )
 def manager_inventory_counts(
-    location_id: Optional[str] = None,
+    location_id: str | None = None,
     _: None = Depends(require_manager),
 ):
     """List submitted inventory snapshots across locations for the Manager view
@@ -2490,7 +2489,7 @@ def manager_inventory_count_detail(
                 "Inventory worksheets not configured — create the "
                 "'inventory_counts' and 'inventory_count_lines' tabs."
             ),
-        )
+        ) from None
     if count is None:
         raise HTTPException(
             status_code=404, detail=f"Inventory count {count_id} not found"
@@ -2743,7 +2742,7 @@ def captain_receipt_submit(
                 "'receipts' and 'receipt_lines' tabs (see Migration Notes) "
                 "before confirming a delivery."
             ),
-        )
+        ) from None
     if not persisted:
         warnings.append(
             "Receipt was not persisted (read-only backend) — data is in-memory only."
@@ -2781,7 +2780,7 @@ def captain_receipt_submit(
 
 @app.get("/api/captain/receipts", response_model=list[ReceiptSummary])
 def captain_receipts(
-    order_id: Optional[str] = None,
+    order_id: str | None = None,
     location_id: str = Depends(require_captain),
 ):
     """List goods-receipts for this Captain's location, optionally narrowed to one
@@ -2846,7 +2845,7 @@ def captain_receipt_detail(
                 "Goods-receipt worksheets not configured — create the "
                 "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
             ),
-        )
+        ) from None
     if receipt is None or receipt.location_id != location_id:
         raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
 
@@ -2903,7 +2902,7 @@ def captain_receipt_detail(
 )
 def captain_receipt_photos(
     receipt_id: str,
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(...),  # noqa: B008 -- FastAPI's own idiom for a required file upload
     location_id: str = Depends(require_captain),
 ):
     """Upload one or more WZ delivery-note photos for a receipt to its order's
@@ -2940,7 +2939,7 @@ def captain_receipt_photos(
                 "Goods-receipt worksheets not configured — create the "
                 "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
             ),
-        )
+        ) from None
     if receipt is None or receipt.location_id != location_id:
         raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
     if not files:
@@ -3025,7 +3024,7 @@ def captain_receipt_photo_urls(
                 "Goods-receipt worksheets not configured — create the "
                 "'receipts' and 'receipt_lines' tabs (see Migration Notes)."
             ),
-        )
+        ) from None
     if receipt is None or receipt.location_id != location_id:
         raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
 

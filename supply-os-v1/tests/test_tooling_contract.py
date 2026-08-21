@@ -1,7 +1,8 @@
 """Regression tests for CI tooling versions."""
 
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 
 def test_ruff_is_bounded_below_next_breaking_minor() -> None:

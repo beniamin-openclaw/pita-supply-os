@@ -14,10 +14,8 @@ turns those into 4xx.
 from __future__ import annotations
 
 import urllib.parse
-from typing import Optional
 
 from .models import Location, Order, OrderLine, Product, Supplier
-
 
 GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/"
 MAX_GMAIL_URL_LENGTH = 8000
@@ -30,7 +28,7 @@ def _effective_qty(line: OrderLine) -> float:
     return line.captain_final_qty_purchase
 
 
-def _format_delivery_address(location: Optional[Location]) -> str:
+def _format_delivery_address(location: Location | None) -> str:
     """Supplier-facing delivery address: ``location_name, delivery_address, city``
     joined by ``", "`` with empty/missing parts skipped.
 
@@ -46,7 +44,7 @@ def _format_delivery_address(location: Optional[Location]) -> str:
     return ", ".join(p.strip() for p in parts if p and p.strip())
 
 
-def _build_subject(order: Order, location: Optional[Location]) -> str:
+def _build_subject(order: Order, location: Location | None) -> str:
     """Supplier-facing subject: ``Zamówienie {location_name}``.
 
     Falls back to the order id when the location is unknown (``location`` is
@@ -62,7 +60,7 @@ def _build_body(
     supplier: Supplier,
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
-    location: Optional[Location],
+    location: Location | None,
 ) -> str:
     """Plaintext Polish body. Lines with effective qty 0 are skipped."""
     body_lines: list[str] = []
@@ -157,8 +155,8 @@ def build_draft_url(
     supplier: Supplier,
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
-    location: Optional[Location] = None,
-    cc_email: Optional[str] = None,
+    location: Location | None = None,
+    cc_email: str | None = None,
 ) -> str:
     """Return a https://mail.google.com/mail/?... URL with prefilled to/cc/subject/body.
 

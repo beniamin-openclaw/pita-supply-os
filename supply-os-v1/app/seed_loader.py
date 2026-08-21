@@ -6,7 +6,7 @@ data-input session when seed values are being refreshed live).
 """
 import csv
 from pathlib import Path
-from typing import Type, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -45,7 +45,7 @@ def _normalize(raw: dict) -> dict:
     return out
 
 
-def _read(path: Path, model: Type[T]) -> list[T]:
+def _read(path: Path, model: type[T]) -> list[T]:
     """Parse a CSV at `path` into a list of `model` instances. No caching."""
     if not path.exists():
         raise FileNotFoundError(f"Seed file missing: {path}")
@@ -59,7 +59,7 @@ def _read(path: Path, model: Type[T]) -> list[T]:
         return rows
 
 
-def _read_cached(path: Path, model: Type[T]) -> list[T]:
+def _read_cached(path: Path, model: type[T]) -> list[T]:
     """Read with mtime-aware cache. Returns the cached list on hit."""
     if not path.exists():
         raise FileNotFoundError(f"Seed file missing: {path}")

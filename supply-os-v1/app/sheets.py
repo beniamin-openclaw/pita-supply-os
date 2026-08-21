@@ -19,12 +19,12 @@ import logging
 import time
 from datetime import date, datetime
 from enum import Enum
-from typing import Type, TypeVar
+from typing import TypeVar
 
 import gspread
+from google.oauth2.service_account import Credentials
 from gspread.exceptions import APIError, SpreadsheetNotFound, WorksheetNotFound
 from gspread.utils import rowcol_to_a1
-from google.oauth2.service_account import Credentials
 from pydantic import BaseModel
 
 from .config import has_service_account_creds, resolve_service_account_info, settings
@@ -134,7 +134,7 @@ def _sheet():
         raise SpreadsheetNotFound(
             f"Spreadsheet not found for sheet_id='{settings.google_sheet_id}'. "
             f"Check SUPPLY_OS_GOOGLE_SHEET_ID and that the service account has access."
-        )
+        ) from None
     return _sheet_instance
 
 
@@ -172,7 +172,7 @@ def _open_worksheet(worksheet_name: str):
             f"Worksheet '{worksheet_name}' not found in sheet_id="
             f"'{settings.google_sheet_id}'. Available tabs: "
             f"{[w.title for w in sh.worksheets()]}"
-        )
+        ) from None
 
 
 def _fetch_rows_with_retry(ws) -> tuple[list[str], list[dict]]:
@@ -197,7 +197,7 @@ def _fetch_rows_with_retry(ws) -> tuple[list[str], list[dict]]:
 
 
 def _validate_headers(
-    worksheet_name: str, actual_headers: list[str], model_cls: Type[BaseModel]
+    worksheet_name: str, actual_headers: list[str], model_cls: type[BaseModel]
 ) -> None:
     """Raise ConfigDriftError if any *required* model field is missing from headers.
 
@@ -226,7 +226,7 @@ def _validate_headers(
 
 def _read_with_ttl(
     worksheet_name: str,
-    model_cls: Type[T],
+    model_cls: type[T],
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
 ) -> list[T]:
     """Fetch worksheet rows → list of Pydantic models with TTL caching."""
@@ -567,7 +567,7 @@ def update_order_lines(order_id: str, line_updates: dict[str, dict]) -> None:
     except ValueError as e:
         raise ConfigDriftError(
             f"'order_lines' sheet missing required column: {e}"
-        )
+        ) from e
 
     order_id_values = ws.col_values(order_id_col)
     line_id_values = ws.col_values(line_id_col)
@@ -644,7 +644,7 @@ def delete_order_lines(order_id: str) -> int:
     except ValueError:
         raise ConfigDriftError(
             "'order_lines' sheet missing required column: order_id"
-        )
+        ) from None
     order_id_values = ws.col_values(order_id_col)
     # Collect 1-based row indices to delete, skipping the header row.
     target_rows = sorted(

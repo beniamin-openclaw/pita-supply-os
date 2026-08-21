@@ -4,6 +4,7 @@
 .codex/
 .vercel/
 *.lock
+!supply-os-v1/requirements.lock
 node_modules/
 .env
 .env.*
