@@ -101,21 +101,25 @@ sheets in `scratchpad/sheets/`, prod read-only state of 2026-08-21.
 ### Phase A0: Prod snapshot (first, while access works — plan-review F4)
 
 #### Automated
-- [ ] dump products / suppliers / supplier_products / location_product_settings /
+- [x] dump products / suppliers / supplier_products / location_product_settings /
       locations to `context/changes/multi-location-master-data/snapshot/*.json`
       (read-only; retry once; on classifier block record the gap and fall back to
-      the freshest in-context data)
+      the freshest in-context data) — captured live 2026-08-21, counts verified
+      (154/11/7/154/578)
 
 ### Phase A1: Engine core (TDD)
 
 #### Automated
-- [ ] fixtures: representative sheet snippets (price-list rows with/without min-max,
-      stock rows both variants, Westfield notes format, typo cases) cut from the
-      real downloads into `tests/fixtures/inventory_sheets/`
-- [ ] failing tests first: `test_reconcile_inventory.py` — parse, normalize, match
-      (near-miss NOT auto-linked), reconcile findings, report rendering
-- [ ] implement `scripts/reconcile_inventory.py` to green
-- [ ] `ruff check .` clean; full pytest green
+- [x] fixtures: representative sheet snippets cut from the real downloads
+- [x] failing tests first (37 added; confirmed failing before implementation)
+- [x] implement `scripts/reconcile_inventory.py` to green (885 lines; 490 passed)
+- [x] `ruff check .` clean; full pytest green — verified independently by the
+      orchestrator. Implementer surfaced 3 real grammar edge cases: blank
+      "Dostawca" header cell (elektrownia), NBSP thousands separators, and the
+      two-column side-by-side stock table (the prototype silently dropped every
+      right-column entry). Post-A2 review found 2 defects (supplier alias false
+      positives; near-miss missing suffix variants — orchestrator brief error);
+      fix dispatched to the implementer.
 
 ### Phase A2: Reports over all 12 sheets
 
