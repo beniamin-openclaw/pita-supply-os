@@ -291,7 +291,10 @@ export async function apiPostFormData<T>(
 export const api = {
   // Master data (any auth)
   products: () => apiGet<Product[]>("/api/products", "captain"),
-  suppliers: () => apiGet<Supplier[]>("/api/suppliers", "captain"),
+  // `role` selects WHICH stored token is sent. The endpoint itself takes either
+  // (require_any_auth), but a Manager-only screen holds no captain token — calling
+  // this without `"manager"` there sends no Authorization header and 401s.
+  suppliers: (role: Role = "captain") => apiGet<Supplier[]>("/api/suppliers", role),
   locations: () => apiGet<Location[]>("/api/locations", "captain"),
   // Captain
   orderable: (supplier_id: string) =>

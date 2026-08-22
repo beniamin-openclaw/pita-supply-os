@@ -891,6 +891,10 @@ export const STRINGS = {
   "manager.transport.title": { pl: "Transport zbiorczy", en: "Combined transport" },
   "manager.transport.back": { pl: "Powrót do menedżera", en: "Back to manager" },
   "manager.transport.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  "manager.transport.noSuppliers": {
+    pl: "Brak aktywnych dostawców w danych podstawowych.",
+    en: "No active suppliers in master data.",
+  },
   "manager.transport.eligible.title": { pl: "Do połączenia", en: "To combine" },
   "manager.transport.eligible.loading": { pl: "Ładowanie…", en: "Loading…" },
   "manager.transport.eligible.empty": {

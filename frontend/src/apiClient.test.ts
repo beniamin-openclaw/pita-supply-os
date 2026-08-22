@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 
-import { formatErrorDetail } from "./apiClient";
+import { api, formatErrorDetail } from "./apiClient";
 
 describe("formatErrorDetail", () => {
   it("maps a single 422 validation entry to 'field: msg'", () => {
@@ -51,5 +51,74 @@ describe("formatErrorDetail", () => {
   it("never returns '[object Object]' for an array of opaque objects", () => {
     const out = formatErrorDetail({ detail: [{ foo: "bar" }] }, "fb");
     expect(out).not.toContain("[object Object]");
+  });
+});
+
+describe("api.suppliers — role/token selection (regression)", () => {
+  // /api/suppliers accepts EITHER token server-side (require_any_auth), so the
+  // bug this guards is client-side: a Manager-only screen holds no captain
+  // token, so calling api.suppliers() with the default captain role sends no
+  // Authorization header at all and 401s. That shipped once and left
+  // /manager/transport with an empty picker and both sections stuck loading.
+  //
+  // localStorage is stubbed rather than used directly: this jsdom build exposes
+  // it without working methods (see src/test/setup.ts's own guard).
+  function stubStorage(entries: Record<string, string>): void {
+    const store = new Map(Object.entries(entries));
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    });
+  }
+
+  function stubFetchOk(): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function authHeaderOf(fetchMock: ReturnType<typeof vi.fn>): string | undefined {
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    return (init.headers as Record<string, string>)["Authorization"];
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the MANAGER token when called with 'manager'", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchOk();
+
+    await api.suppliers("manager");
+
+    expect(authHeaderOf(fetchMock)).toBe("Bearer mgr-token");
+  });
+
+  it("still authenticates on a manager-only screen (no captain token stored)", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchOk();
+
+    await api.suppliers("manager");
+
+    // The regression sent NO Authorization header here, producing a silent 401.
+    expect(authHeaderOf(fetchMock)).toBeDefined();
+  });
+
+  it("defaults to the captain token (unchanged for captain screens)", async () => {
+    stubStorage({ supply_os_captain_token: "cap-token" });
+    const fetchMock = stubFetchOk();
+
+    await api.suppliers();
+
+    expect(authHeaderOf(fetchMock)).toBe("Bearer cap-token");
   });
 });

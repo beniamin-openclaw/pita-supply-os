@@ -97,14 +97,23 @@ export function TransportPage() {
   useEffect(() => {
     let cancelled = false;
     api
-      .suppliers()
+      // "manager": this screen only ever holds a Manager token, so the default
+      // captain role would send no Authorization header and 401 — leaving the
+      // picker empty and both sections stuck on "Ładowanie…".
+      .suppliers("manager")
       .then((data) => {
         if (cancelled) return;
         const active = data.filter((s) => s.active);
         setSuppliers(active);
         const pago = active.find((s) => s.supplier_id === "SUP_PAGO");
         const defaultId = pago ? pago.supplier_id : (active[0]?.supplier_id ?? "");
-        if (defaultId) selectSupplier(defaultId);
+        if (defaultId) {
+          selectSupplier(defaultId);
+        } else {
+          // No active supplier to pick: nothing will ever trigger a load, so
+          // say so instead of spinning forever.
+          setSuppliersError(t("manager.transport.noSuppliers"));
+        }
       })
       .catch((e: ApiError) => {
         if (!cancelled && e.status !== 401) setSuppliersError(e.detail);
@@ -112,7 +121,7 @@ export function TransportPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectSupplier]);
+  }, [selectSupplier, t]);
 
   const supplier = useMemo(
     () => suppliers?.find((s) => s.supplier_id === supplierId) ?? null,
