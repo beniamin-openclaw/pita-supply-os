@@ -316,7 +316,7 @@ export interface ManagerQueueItem {
   captain_submitted_at?: string; // ISO datetime
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   line_count: number;
-  total_value_estimate_pln?: number;
+  total_value_estimate_pln?: number | null;
   deviation_count: number;
   reason_count: number;
   last_edited_at?: string | null;
@@ -326,6 +326,11 @@ export interface ManagerQueueItem {
   // received_count > 0.
   received_count: number;
   received_discrepancy_count: number;
+  // Reverse link to a Manager Transport batch (to-ordering-pago): set when this
+  // order was combined via POST /api/manager/transport/create (a "TRN-…"
+  // marker), absent for a normal per-order dispatch. Lets the queue show a
+  // "TRN" chip instead of implying a real per-supplier email dispatch.
+  supplier_order_reference?: string | null;
 }
 
 // Manager Order Detail -------------------------------------------------------
@@ -410,16 +415,19 @@ export interface ManagerOrderDetail {
   requested_delivery_date?: string;
   status: OrderStatus;
   captain_user?: string;
-  captain_submitted_at?: string;
+  captain_submitted_at?: string | null;
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   manager_user?: string;
   manager_sent_at?: string;
-  total_value_estimate_pln?: number;
+  total_value_estimate_pln?: number | null;
   notes: string;
   lines: ManagerOrderLineDetail[];
   // Goods-receipts against this order (0..N, newest-first), read-only — closes
   // the suggested→captain→manager→RECEIVED loop on the Manager screen.
   receipts: ManagerOrderReceipt[];
+  // Reverse link to a Manager Transport batch — see ManagerQueueItem's field
+  // of the same name for the full explanation.
+  supplier_order_reference?: string | null;
 }
 
 // Manager Dispatch -----------------------------------------------------------
@@ -549,4 +557,102 @@ export interface ReceiptPhotoUploadResponse {
   wz_photo_count: number;
   received_with_missing_wz: boolean;
   uploaded: ReceiptPhotoItem[];
+}
+
+// Manager Transport (to-ordering-pago) — combine several locations' orders for
+// one supplier into a single physical delivery run. Match
+// supply-os-v1/app/models.py's Transport* models exactly. -------------------
+
+/** One location's contribution to a product's total within a Transport
+ * aggregate — the smallest audit unit of the per-location usage breakdown.
+ * Two lines for the SAME product from the SAME location across two source
+ * orders stay as two separate entries (one per order_id). */
+export interface TransportLocationQty {
+  location_id: string;
+  location_name: string;
+  order_id: string;
+  qty_purchase: number;
+}
+
+/** One product's roll-up across a set of source orders: the per-product total
+ * (for the supplier order / driver totals) plus the per-location breakdown
+ * (per_location — the private driver list / usage record). */
+export interface TransportAggregateLine {
+  product_id: string;
+  product_name_pl: string;
+  supplier_product_id: string;
+  supplier_product_name: string;
+  purchase_unit: string;
+  total_qty_purchase: number;
+  per_location: TransportLocationQty[];
+}
+
+/** One row on the Transport "orders to combine" picker. */
+export interface TransportEligibleOrder {
+  order_id: string;
+  location_id: string;
+  location_name: string;
+  supplier_id: string;
+  supplier_name: string;
+  order_date: string; // ISO date
+  status: OrderStatus;
+  captain_submitted_at?: string | null;
+  ordered_by?: string | null;
+  line_count: number;
+  total_value_estimate_pln?: number | null;
+}
+
+/** One member order of a Transport batch — compact row for the batch
+ * detail's source-orders list. */
+export interface TransportBatchOrder {
+  order_id: string;
+  location_id: string;
+  location_name: string;
+  status: OrderStatus;
+  total_value_estimate_pln?: number | null;
+}
+
+/** One past Transport batch — the set of orders sharing a
+ * supplier_order_reference marker that starts with "TRN-". */
+export interface TransportBatchSummary {
+  transport_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  created?: string | null; // ISO datetime — earliest member manager_sent_at
+  order_count: number;
+  location_ids: string[]; // sorted unique
+}
+
+/** Full Transport batch: the summary fields plus the member orders and the
+ * aggregate lines (per-product totals AND the per-product x per-location
+ * breakdown — the usage/zużycie record). */
+export interface TransportBatchDetail {
+  transport_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  created?: string | null;
+  order_count: number;
+  location_ids: string[];
+  orders: TransportBatchOrder[];
+  lines: TransportAggregateLine[];
+}
+
+/** One order the create endpoint could not combine, with a short
+ * human-readable reason. Never raises for a single bad order, so a partial
+ * batch is always explicit rather than silently dropped. */
+export interface TransportSkippedOrder {
+  order_id: string;
+  reason: string;
+}
+
+export interface TransportCreateRequest {
+  supplier_id: string;
+  order_ids: string[];
+  append_to?: string;
+}
+
+export interface TransportCreateResponse {
+  transport_id: string;
+  combined: string[];
+  skipped: TransportSkippedOrder[];
 }

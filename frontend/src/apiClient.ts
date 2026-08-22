@@ -46,6 +46,11 @@ import type {
   ReceiptSummary,
   Supplier,
   OrderStatus,
+  TransportBatchDetail,
+  TransportBatchSummary,
+  TransportCreateRequest,
+  TransportCreateResponse,
+  TransportEligibleOrder,
 } from "./types";
 
 // Production: API calls go same-origin to /api/* and are proxied to the droplet
@@ -420,6 +425,27 @@ export const api = {
   // worst-deviation first; [] in seed mode.
   managerSuggestionReview: () =>
     apiGet<SuggestionReviewItem[]>("/api/manager/suggestion-review", "manager"),
+  // Manager Transport (to-ordering-pago) — combine several locations' orders
+  // for one supplier into a single Transport ("TO") batch.
+  transportEligible: (supplier_id: string) =>
+    apiGet<TransportEligibleOrder[]>(
+      `/api/manager/transport/eligible?supplier_id=${encodeURIComponent(supplier_id)}`,
+      "manager",
+    ),
+  transportBatches: (supplier_id?: string, limit?: number) => {
+    const qs = new URLSearchParams();
+    if (supplier_id) qs.set("supplier_id", supplier_id);
+    if (limit) qs.set("limit", String(limit));
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return apiGet<TransportBatchSummary[]>(`/api/manager/transport/batches${suffix}`, "manager");
+  },
+  transportBatch: (transport_id: string) =>
+    apiGet<TransportBatchDetail>(
+      `/api/manager/transport/batch/${encodeURIComponent(transport_id)}`,
+      "manager",
+    ),
+  transportCreate: (req: TransportCreateRequest) =>
+    apiPost<TransportCreateResponse>("/api/manager/transport/create", req, "manager"),
 };
 
 export { BASE_URL };

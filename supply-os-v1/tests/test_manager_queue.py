@@ -197,6 +197,32 @@ def test_queue_returns_only_matching_status(mocker):
     assert payload[0]["status"] == "captain_submitted"
     # ordered_by ("who orders") round-trips onto the queue item.
     assert payload[0]["ordered_by"] == "Jan Kowalski"
+    # A normal (non-Transport) order carries no reverse-link marker.
+    assert payload[0]["supplier_order_reference"] is None
+
+
+def test_queue_exposes_transport_marker(mocker):
+    """to-ordering-pago Phase 2: a Transport-combined order (marker starting
+    'TRN-') surfaces its `supplier_order_reference` on the sent lane so the FE
+    can render a 'TRN' chip instead of implying a real per-supplier dispatch."""
+    order = _order("ORD-A", status=OrderStatus.MANAGER_SENT).model_copy(
+        update={"supplier_order_reference": "TRN-20260520-PAGO-abc123"}
+    )
+    _enable_sheet_backend(mocker, orders=[order])
+    # The manager_sent lane also runs the goods-receipt scan (manager-receiving-
+    # view) — mock it out so this test stays about the Transport marker only
+    # (mirrors test_manager_receiving.py's `load_receipts_for_orders` mock).
+    mocker.patch.object(sheets, "load_receipts_for_orders", return_value=[])
+
+    r = client.get(
+        "/api/manager/queue",
+        params={"status": "manager_sent"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert len(payload) == 1
+    assert payload[0]["supplier_order_reference"] == "TRN-20260520-PAGO-abc123"
 
 
 def test_queue_returns_only_matching_location(mocker):
@@ -461,6 +487,26 @@ def test_order_detail_happy_path(mocker):
     assert len(payload["lines"]) == 2
     # ordered_by ("who orders") round-trips onto the order detail.
     assert payload["ordered_by"] == "Jan Kowalski"
+    # A normal (non-Transport) order carries no reverse-link marker.
+    assert payload["supplier_order_reference"] is None
+
+
+def test_order_detail_exposes_transport_marker(mocker):
+    """to-ordering-pago Phase 2: a Transport-combined order's detail exposes
+    the same `supplier_order_reference` reverse link as the queue row."""
+    order_id = "ORD-TRN"
+    order = _order(order_id, status=OrderStatus.MANAGER_SENT).model_copy(
+        update={"supplier_order_reference": "TRN-20260520-PAGO-abc123"}
+    )
+    _enable_sheet_backend(mocker, orders=[order], get_order_return=order)
+    # manager_sent status also triggers the receipts block (manager-receiving-
+    # view) — mock it out so this test stays about the Transport marker only.
+    mocker.patch.object(sheets, "load_receipts", return_value=[])
+    mocker.patch.object(sheets, "load_receipt_lines", return_value=[])
+
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["supplier_order_reference"] == "TRN-20260520-PAGO-abc123"
 
 
 def test_order_detail_not_found(mocker):

@@ -151,6 +151,14 @@ function QueueCard({
               {t("orders.editedBadge")}
             </span>
           )}
+          {item.supplier_order_reference?.startsWith("TRN-") && (
+            <span
+              className="rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-indigo-800"
+              title={t("manager.queue.transportChipTooltip")}
+            >
+              {t("manager.queue.transportChip")}
+            </span>
+          )}
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-600">

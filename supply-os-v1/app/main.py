@@ -68,6 +68,15 @@ from .models import (
     SuggestionReviewItem,
     Supplier,
     SupplierProduct,
+    TransportAggregateLine,
+    TransportBatchDetail,
+    TransportBatchOrder,
+    TransportBatchSummary,
+    TransportCreateRequest,
+    TransportCreateResponse,
+    TransportEligibleOrder,
+    TransportLocationQty,
+    TransportSkippedOrder,
 )
 from .suggestion import SuggestionInput, compute_suggestion, rounding_step
 
@@ -818,6 +827,7 @@ def manager_queue(
                 received_discrepancy_count=received_discrepancy_by_order.get(
                     order.order_id, 0
                 ),
+                supplier_order_reference=order.supplier_order_reference,
             )
         )
 
@@ -1015,6 +1025,7 @@ def manager_order_detail(
         notes=order.notes,
         lines=enriched_lines,
         receipts=order_receipts,
+        supplier_order_reference=order.supplier_order_reference,
     )
 
 
@@ -2939,3 +2950,538 @@ def captain_receipt_photo_urls(
         )
         for path in supabase_storage.list_photos(prefix)
     ]
+
+
+# ---------- Manager Transport (Phase 1 read side / to-ordering-pago) ----------
+
+
+def _aggregate_transport_lines(
+    orders: list[Order],
+    lines: list[OrderLine],
+    products_by_id: dict[str, Product],
+    sps_by_id: dict[str, SupplierProduct],
+    locations_by_id: dict[str, Location],
+) -> list[TransportAggregateLine]:
+    """Pure roll-up of a set of orders' frozen ``order_lines`` into the
+    Transport aggregate: per-product totals plus the per-product x
+    per-location breakdown (the private driver list / zużycie usage record).
+
+    Effective quantity per line is ``_effective_ordered_qty`` (manager_final
+    if > 0 else captain_final — the same rule ``gmail_url._effective_qty``
+    and the goods-receiving path use; not reinvented here). A zero effective
+    quantity drops the line entirely, mirroring the dispatch email builder
+    skipping zero-qty lines. A line whose ``order_id`` has no matching entry
+    in ``orders`` is skipped (defensive — callers pass matched sets).
+
+    Grouping key is ``product_id`` (not ``product_id`` + ``supplier_product_id``):
+    every order aggregated together shares one ``supplier_id`` by construction
+    (a Transport batch is single-supplier), so a product has one
+    supplier_product in practice. The FIRST line encountered for a product
+    supplies its ``supplier_product_id`` / ``supplier_product_name`` /
+    ``purchase_unit`` display fields. Two lines for the SAME product from the
+    SAME location in TWO different source orders are kept as two separate
+    ``per_location`` entries (auditability — each traces back to its own
+    ``order_id``) and summed into ``total_qty_purchase``.
+
+    Missing product / supplier_product / location master data falls back to
+    the raw id in the display field (mirrors ``_aggregate_suggestion_review``
+    / ``manager_queue``), never raises. Output is sorted by
+    ``product_name_pl`` for a stable, copyable list.
+    """
+    orders_by_id = {o.order_id: o for o in orders}
+    groups: dict[str, dict] = {}
+
+    for line in lines:
+        order = orders_by_id.get(line.order_id)
+        if order is None:
+            continue
+        qty = _effective_ordered_qty(line)
+        if qty <= 0:
+            continue
+
+        group = groups.get(line.product_id)
+        if group is None:
+            product = products_by_id.get(line.product_id)
+            sp = sps_by_id.get(line.supplier_product_id)
+            group = {
+                "product_id": line.product_id,
+                "product_name_pl": (
+                    product.product_name_pl if product else line.product_id
+                ),
+                "supplier_product_id": line.supplier_product_id,
+                "supplier_product_name": (
+                    sp.supplier_product_name if sp else line.supplier_product_id
+                ),
+                "purchase_unit": sp.purchase_unit if sp else "",
+                "per_location": [],
+            }
+            groups[line.product_id] = group
+
+        location = locations_by_id.get(order.location_id)
+        group["per_location"].append(
+            TransportLocationQty(
+                location_id=order.location_id,
+                location_name=location.location_name if location else order.location_id,
+                order_id=order.order_id,
+                qty_purchase=qty,
+            )
+        )
+
+    items = [
+        TransportAggregateLine(
+            product_id=g["product_id"],
+            product_name_pl=g["product_name_pl"],
+            supplier_product_id=g["supplier_product_id"],
+            supplier_product_name=g["supplier_product_name"],
+            purchase_unit=g["purchase_unit"],
+            total_qty_purchase=round(
+                sum(pl.qty_purchase for pl in g["per_location"]), 3
+            ),
+            per_location=g["per_location"],
+        )
+        for g in groups.values()
+    ]
+    items.sort(key=lambda it: it.product_name_pl)
+    return items
+
+
+@app.get(
+    "/api/manager/transport/eligible", response_model=list[TransportEligibleOrder]
+)
+def manager_transport_eligible(
+    supplier_id: str,
+    _: None = Depends(require_manager),
+):
+    """Orders a Transport batch can combine: ``captain_submitted`` or
+    ``manager_claimed`` orders for ``supplier_id``, across every location,
+    newest ``captain_submitted_at`` first. Reuses the ``manager_queue``
+    load/enrich pattern (targeted ``load_order_lines_for_orders``).
+
+    Deliberately UNCAPPED — no ``limit`` param, unlike ``manager_queue`` /
+    ``manager_transport_batches``: those cap ever-growing history lanes,
+    while this set is self-draining (an order leaves it the moment it is
+    claimed elsewhere, dispatched, cancelled, or combined) AND must be
+    COMPLETE for correctness — a hidden eligible order would be silently
+    left out of a Transport batch.
+
+    Seed mode -> [] (orders are not persisted there; mirrors ``manager_queue``).
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        log.warning(
+            "manager_transport_eligible called against read-only seed backend — "
+            "returning [] (orders are not persisted in seed mode)"
+        )
+        return []
+
+    orders = backend.load_orders()
+    filtered = [
+        o
+        for o in orders
+        if o.supplier_id == supplier_id
+        and o.status in (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_CLAIMED)
+    ]
+    if not filtered:
+        return []
+
+    filtered.sort(
+        key=lambda o: -(
+            o.captain_submitted_at.timestamp() if o.captain_submitted_at else 0.0
+        )
+    )
+
+    order_ids = [o.order_id for o in filtered]
+    lines_by_order: dict[str, list[OrderLine]] = {}
+    for line in backend.load_order_lines_for_orders(order_ids):
+        lines_by_order.setdefault(line.order_id, []).append(line)
+
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+
+    items: list[TransportEligibleOrder] = []
+    for order in filtered:
+        supplier = suppliers_by_id.get(order.supplier_id)
+        location = locations_by_id.get(order.location_id)
+        lines = lines_by_order.get(order.order_id, [])
+        items.append(
+            TransportEligibleOrder(
+                order_id=order.order_id,
+                location_id=order.location_id,
+                location_name=location.location_name if location else order.location_id,
+                supplier_id=order.supplier_id,
+                supplier_name=supplier.supplier_name if supplier else order.supplier_id,
+                order_date=order.order_date,
+                status=order.status,
+                captain_submitted_at=order.captain_submitted_at,
+                ordered_by=order.ordered_by,
+                line_count=len(lines),
+                total_value_estimate_pln=order.total_value_estimate_pln,
+            )
+        )
+    return items
+
+
+@app.get(
+    "/api/manager/transport/batches", response_model=list[TransportBatchSummary]
+)
+def manager_transport_batches(
+    supplier_id: str | None = None,
+    limit: int = 50,
+    _: None = Depends(require_manager),
+):
+    """Past Transport batches: group ``load_orders()`` by non-null
+    ``supplier_order_reference`` values starting with ``"TRN-"`` (the marker
+    Phase 2's combine endpoint stamps), optionally filtered to
+    ``supplier_id``. Newest first by ``created`` (the earliest member
+    ``manager_sent_at``), capped at ``limit`` (default 50, clamped 1..200 —
+    mirrors ``manager_queue``).
+
+    Seed mode -> [] (orders are not persisted there; mirrors ``manager_queue``).
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        return []
+
+    limit = max(1, min(limit, 200))
+
+    orders = backend.load_orders()
+    by_transport: dict[str, list[Order]] = {}
+    for order in orders:
+        ref = order.supplier_order_reference
+        if not ref or not ref.startswith("TRN-"):
+            continue
+        if supplier_id is not None and order.supplier_id != supplier_id:
+            continue
+        by_transport.setdefault(ref, []).append(order)
+
+    if not by_transport:
+        return []
+
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+
+    def _created(group: list[Order]) -> datetime | None:
+        timestamps = [o.manager_sent_at for o in group if o.manager_sent_at is not None]
+        return min(timestamps) if timestamps else None
+
+    summaries: list[TransportBatchSummary] = []
+    for transport_id, group in by_transport.items():
+        supplier = suppliers_by_id.get(group[0].supplier_id)
+        summaries.append(
+            TransportBatchSummary(
+                transport_id=transport_id,
+                supplier_id=group[0].supplier_id,
+                supplier_name=(
+                    supplier.supplier_name if supplier else group[0].supplier_id
+                ),
+                created=_created(group),
+                order_count=len(group),
+                location_ids=sorted({o.location_id for o in group}),
+            )
+        )
+
+    summaries.sort(key=lambda s: -(s.created.timestamp() if s.created else 0.0))
+    return summaries[:limit]
+
+
+@app.get(
+    "/api/manager/transport/batch/{transport_id}", response_model=TransportBatchDetail
+)
+def manager_transport_batch_detail(
+    transport_id: str,
+    _: None = Depends(require_manager),
+):
+    """One Transport batch: its member orders (compact) plus the aggregate
+    lines (per-product totals AND the per-location usage breakdown), via
+    ``_aggregate_transport_lines`` over the targeted
+    ``load_order_lines_for_orders`` read.
+
+    Seed mode -> 503 (mirrors ``manager_order_detail``); no order carries the
+    marker -> 404.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport batch detail requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    orders = backend.load_orders()
+    group = [o for o in orders if o.supplier_order_reference == transport_id]
+    if not group:
+        raise HTTPException(
+            status_code=404, detail=f"Transport batch {transport_id} not found"
+        )
+
+    order_ids = [o.order_id for o in group]
+    lines = backend.load_order_lines_for_orders(order_ids)
+
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+
+    supplier = suppliers_by_id.get(group[0].supplier_id)
+
+    orders_out: list[TransportBatchOrder] = []
+    for order in group:
+        location = locations_by_id.get(order.location_id)
+        orders_out.append(
+            TransportBatchOrder(
+                order_id=order.order_id,
+                location_id=order.location_id,
+                location_name=(
+                    location.location_name if location else order.location_id
+                ),
+                status=order.status,
+                total_value_estimate_pln=order.total_value_estimate_pln,
+            )
+        )
+
+    aggregate_lines = _aggregate_transport_lines(
+        group, lines, products_by_id, sps_by_id, locations_by_id
+    )
+
+    timestamps = [o.manager_sent_at for o in group if o.manager_sent_at is not None]
+    created = min(timestamps) if timestamps else None
+
+    return TransportBatchDetail(
+        transport_id=transport_id,
+        supplier_id=group[0].supplier_id,
+        supplier_name=supplier.supplier_name if supplier else group[0].supplier_id,
+        created=created,
+        order_count=len(group),
+        location_ids=sorted({o.location_id for o in group}),
+        orders=orders_out,
+        lines=aggregate_lines,
+    )
+
+
+# ---------- Manager Transport create (Phase 2 write side / to-ordering-pago) ----------
+
+
+def _generate_transport_id(supplier_id: str, today: date) -> str:
+    """TRN-YYYYMMDD-<SUP4>-<6hex> (mirrors `_generate_order_id`, `main.py:443`)."""
+    sup_core = supplier_id.replace("SUP_", "")[:4]
+    sup = (sup_core or "XXXX").upper()
+    rand = secrets.token_hex(3)
+    return f"TRN-{today.strftime('%Y%m%d')}-{sup}-{rand}"
+
+
+_TRANSPORT_ELIGIBLE_STATUSES = (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_CLAIMED)
+# Both guard exceptions map to a skipped[] entry — the same Sheets/Supabase
+# asymmetry `manager_dispatch` catches (`main.py:1774`): Supabase raises
+# OrderStatusConflictError from a 0-row conditional UPDATE, Sheets raises
+# OrderAlreadyDispatchedError from its dispatch guard on an already-sent order.
+_TRANSPORT_GUARD_EXCEPTIONS = (errors.OrderStatusConflictError, errors.OrderAlreadyDispatchedError)
+
+
+def _release_claim_best_effort(
+    backend, transport_id: str, order_id: str, claimed_here: bool
+) -> None:
+    """Best-effort release of an order this create-loop just claimed but then
+    failed to send: put it back to ``captain_submitted`` so it isn't stranded
+    in ``manager_claimed``. Never raises — a failed release (second concurrent
+    change, backend outage) only logs; the order stays ``manager_claimed``
+    (not lost, just not in this batch)."""
+    if not claimed_here:
+        return
+    try:
+        backend.update_order(
+            order_id,
+            status=OrderStatus.CAPTAIN_SUBMITTED.value,
+            expected_status=OrderStatus.MANAGER_CLAIMED.value,
+        )
+    except Exception:
+        log.warning(
+            "Transport create %s: order %s claimed then failed to send, and "
+            "the best-effort release ALSO failed — order left manager_claimed "
+            "(not lost, just not in this batch)",
+            transport_id,
+            order_id,
+        )
+
+
+@app.post("/api/manager/transport/create", response_model=TransportCreateResponse)
+def manager_transport_create(
+    req: TransportCreateRequest,
+    _: None = Depends(require_manager),
+):
+    """Combine the given orders into one Transport batch, or append them to an
+    existing batch named by ``append_to`` — the write half of Manager
+    Transport (to-ordering-pago Phase 2).
+
+    Per order, a claim-first two-step guarded transition (mirrors
+    ``manager_dispatch``'s guarded send, ``main.py:1764-1778``):
+
+    1. A ``captain_submitted`` order is first claimed
+       (``status=manager_claimed, expected_status=captain_submitted``); a
+       ``manager_claimed`` order skips straight to step 2.
+    2. Every surviving order is then "sent" via Transport
+       (``status=manager_sent, sent_method="transport",
+       supplier_order_reference=<transport_id>, manager_user="manager-default",
+       manager_sent_at=now, expected_status=manager_claimed``).
+
+    Either step raising ``OrderStatusConflictError`` or
+    ``OrderAlreadyDispatchedError`` (see ``_TRANSPORT_GUARD_EXCEPTIONS``)
+    skips that order — it is never retried, and one order's conflict never
+    aborts the rest of the batch (there is deliberately no cross-order
+    transaction; Sheets cannot give one, and Supabase's per-row conditional
+    UPDATE already makes each transition independently atomic). If step 1
+    succeeded but step 2 failed, a best-effort release
+    (``status=captain_submitted, expected_status=manager_claimed``) puts the
+    order back where the captain/manager last left it; if THAT release also
+    fails (only possible under a second concurrent change), it only logs —
+    the order is left ``manager_claimed`` rather than lost.
+
+    Validation, in order: unknown ``supplier_id`` -> 400. When ``append_to``
+    is given it must name a marker some order already carries, and that
+    order's supplier must equal ``supplier_id`` -> 400 otherwise; the given
+    marker is reused as ``transport_id``. Otherwise a fresh ``transport_id``
+    is minted (``TRN-YYYYMMDD-<SUP4>-<6hex>``, mirrors ``_generate_order_id``).
+    Then, preserving request order, each ``order_id`` is skipped (never
+    raises) for: appearing twice in the request ("duplicate" — the first
+    occurrence is still processed normally), not existing ("not found"),
+    belonging to a different supplier ("different supplier"), or being in a
+    non-eligible status ("status <x> not eligible"). ``transport_id`` is
+    ALWAYS returned, even when every order ends up in ``skipped`` — the
+    simplest honest contract: nothing is ever silently dropped without being
+    named in the response.
+
+    Seed mode -> 503 (mirrors every other manager write route).
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport create requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    if req.supplier_id not in suppliers_by_id:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown supplier_id '{req.supplier_id}'"
+        )
+
+    # Preflight ONCE (not per-order): a fresh read before any write, mirroring
+    # every other guarded manager transition route's TOCTOU defense.
+    backend.invalidate_cache("orders")
+    orders_by_id = {o.order_id: o for o in backend.load_orders()}
+
+    if req.append_to is not None:
+        existing_batch = [
+            o for o in orders_by_id.values()
+            if o.supplier_order_reference == req.append_to
+        ]
+        if not existing_batch:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Transport batch '{req.append_to}' not found",
+            )
+        batch_supplier_id = existing_batch[0].supplier_id
+        if batch_supplier_id != req.supplier_id:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Transport batch '{req.append_to}' belongs to supplier "
+                    f"'{batch_supplier_id}', not '{req.supplier_id}'"
+                ),
+            )
+        transport_id = req.append_to
+    else:
+        transport_id = _generate_transport_id(
+            req.supplier_id, datetime.now(timezone.utc).date()
+        )
+
+    combined: list[str] = []
+    skipped: list[TransportSkippedOrder] = []
+    seen: set[str] = set()
+
+    for order_id in req.order_ids:
+        if order_id in seen:
+            skipped.append(TransportSkippedOrder(order_id=order_id, reason="duplicate"))
+            continue
+        seen.add(order_id)
+
+        order = orders_by_id.get(order_id)
+        if order is None:
+            skipped.append(TransportSkippedOrder(order_id=order_id, reason="not found"))
+            continue
+        if order.supplier_id != req.supplier_id:
+            skipped.append(
+                TransportSkippedOrder(order_id=order_id, reason="different supplier")
+            )
+            continue
+        if order.status not in _TRANSPORT_ELIGIBLE_STATUSES:
+            skipped.append(
+                TransportSkippedOrder(
+                    order_id=order_id,
+                    reason=f"status {order.status.value} not eligible",
+                )
+            )
+            continue
+
+        claimed_here = False
+        if order.status == OrderStatus.CAPTAIN_SUBMITTED:
+            try:
+                backend.update_order(
+                    order_id,
+                    status=OrderStatus.MANAGER_CLAIMED.value,
+                    expected_status=OrderStatus.CAPTAIN_SUBMITTED.value,
+                )
+            except _TRANSPORT_GUARD_EXCEPTIONS:
+                skipped.append(
+                    TransportSkippedOrder(order_id=order_id, reason="claim conflict")
+                )
+                continue
+            except Exception:
+                # A non-guard failure (backend outage, OrderNotFoundError on a
+                # row that vanished after preflight, ConfigDriftError…) must
+                # degrade to a skipped[] entry, NOT abort the whole request:
+                # earlier orders in this same loop may already be durably
+                # manager_sent, and a 500 here would hide both them and the
+                # transport_id from the client.
+                log.exception(
+                    "Transport create %s: unexpected error claiming order %s",
+                    transport_id,
+                    order_id,
+                )
+                skipped.append(
+                    TransportSkippedOrder(order_id=order_id, reason="backend error")
+                )
+                continue
+            claimed_here = True
+
+        try:
+            backend.update_order(
+                order_id,
+                status=OrderStatus.MANAGER_SENT.value,
+                sent_method="transport",
+                supplier_order_reference=transport_id,
+                manager_user="manager-default",  # proxy until real Manager auth
+                manager_sent_at=datetime.now(timezone.utc).isoformat(),
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except _TRANSPORT_GUARD_EXCEPTIONS:
+            _release_claim_best_effort(backend, transport_id, order_id, claimed_here)
+            skipped.append(
+                TransportSkippedOrder(order_id=order_id, reason="send conflict")
+            )
+            continue
+        except Exception:
+            # Same degrade-to-skipped contract as the claim step (see above).
+            log.exception(
+                "Transport create %s: unexpected error sending order %s",
+                transport_id,
+                order_id,
+            )
+            _release_claim_best_effort(backend, transport_id, order_id, claimed_here)
+            skipped.append(
+                TransportSkippedOrder(order_id=order_id, reason="backend error")
+            )
+            continue
+
+        combined.append(order_id)
+
+    return TransportCreateResponse(
+        transport_id=transport_id, combined=combined, skipped=skipped
+    )

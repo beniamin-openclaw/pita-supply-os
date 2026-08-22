@@ -12,6 +12,7 @@ import { ReceiveDeliveryPage } from "./pages/captain-mp/ReceiveDeliveryPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
 import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
+import { TransportPage } from "./pages/manager/TransportPage";
 import { DebugPage } from "./pages/DebugPage";
 import { BASE_URL } from "./apiClient";
 import { LangProvider } from "./i18n";
@@ -127,6 +128,14 @@ export default function App() {
             element={
               <AuthGate role="manager">
                 <ManagerSuggestionReviewPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/manager/transport"
+            element={
+              <AuthGate role="manager">
+                <TransportPage />
               </AuthGate>
             }
           />

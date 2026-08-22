@@ -885,6 +885,111 @@ export const STRINGS = {
     pl: "Dodano produkt do zamówienia",
     en: "Product added to order",
   },
+  // Manager Transport (to-ordering-pago) — combine several locations' orders
+  // for one supplier into a single Transport ("TO") batch.
+  "manager.transport.navLink": { pl: "Transport (TO)", en: "Transport" },
+  "manager.transport.title": { pl: "Transport zbiorczy", en: "Combined transport" },
+  "manager.transport.back": { pl: "Powrót do menedżera", en: "Back to manager" },
+  "manager.transport.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  "manager.transport.eligible.title": { pl: "Do połączenia", en: "To combine" },
+  "manager.transport.eligible.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "manager.transport.eligible.empty": {
+    pl: "Brak zamówień do połączenia dla tego dostawcy.",
+    en: "No orders to combine for this supplier.",
+  },
+  "manager.transport.eligible.fetchError": {
+    pl: "Nie udało się pobrać zamówień: {detail}",
+    en: "Couldn't load orders: {detail}",
+  },
+  "manager.transport.eligible.orderedBy": { pl: "Zamówił: {who}", en: "Ordered by: {who}" },
+  "manager.transport.eligible.selectedSummary": {
+    pl: "{count} zaznaczonych · {total} PLN",
+    en: "{count} selected · {total} PLN",
+  },
+  "manager.transport.createButton": { pl: "Utwórz transport", en: "Create transport" },
+  "manager.transport.createBusy": { pl: "Tworzenie…", en: "Creating…" },
+  "manager.transport.createError": {
+    pl: "Nie udało się utworzyć transportu: {detail}",
+    en: "Couldn't create the transport: {detail}",
+  },
+  "manager.transport.createResult.combined": {
+    pl: "Połączono {count} zamówień w {id}.",
+    en: "Combined {count} orders into {id}.",
+  },
+  "manager.transport.createResult.skippedHeader": { pl: "Pominięte:", en: "Skipped:" },
+  "manager.transport.batches.title": { pl: "Utworzone transporty", en: "Created transports" },
+  "manager.transport.batches.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "manager.transport.batches.empty": {
+    pl: "Brak utworzonych transportów dla tego dostawcy.",
+    en: "No transports created for this supplier yet.",
+  },
+  "manager.transport.batches.fetchError": {
+    pl: "Nie udało się pobrać transportów: {detail}",
+    en: "Couldn't load transports: {detail}",
+  },
+  "manager.transport.batches.rowSubtitle": {
+    pl: "{count} zamówień · {locations}",
+    en: "{count} orders · {locations}",
+  },
+  "manager.transport.detail.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "manager.transport.detail.fetchError": {
+    pl: "Nie udało się pobrać szczegółów: {detail}",
+    en: "Couldn't load detail: {detail}",
+  },
+  "manager.transport.detail.totalsTitle": { pl: "Sumy produktów", en: "Product totals" },
+  "manager.transport.detail.productCol": { pl: "Produkt", en: "Product" },
+  "manager.transport.detail.qtyCol": { pl: "Ilość", en: "Qty" },
+  "manager.transport.detail.matrixTitle": {
+    pl: "Rozbicie na lokalizacje (tylko dla kierowcy)",
+    en: "Per-location breakdown (driver only)",
+  },
+  "manager.transport.detail.copyButton": {
+    pl: "Kopiuj listę dla kierowcy",
+    en: "Copy driver list",
+  },
+  "manager.transport.detail.copyToast": {
+    pl: "Skopiowano listę dla kierowcy.",
+    en: "Driver list copied.",
+  },
+  "manager.transport.detail.copyError": { pl: "Nie udało się skopiować.", en: "Couldn't copy." },
+  "manager.transport.detail.emailButton": { pl: "Otwórz email", en: "Open email" },
+  "manager.transport.detail.emailHint": {
+    pl: "uzupełnij email dostawcy w master data",
+    en: "add the supplier's email in master data",
+  },
+  "manager.transport.detail.emailTooLong": {
+    pl: "Zbyt długi projekt e-maila — skopiuj listę zamiast tego.",
+    en: "Draft too long — copy the list instead.",
+  },
+  "manager.transport.detail.ordersTitle": { pl: "Zamówienia źródłowe", en: "Source orders" },
+  "manager.transport.driverText.header": {
+    pl: "Transport {id} — {date}",
+    en: "Transport {id} — {date}",
+  },
+  "manager.transport.driverText.supplierLine": {
+    pl: "Dostawca: {supplier}",
+    en: "Supplier: {supplier}",
+  },
+  "manager.transport.email.subject": {
+    pl: "Zamówienie zbiorcze {supplier} — {date}",
+    en: "Combined order {supplier} — {date}",
+  },
+  "manager.transport.email.greeting": { pl: "Dzień dobry,", en: "Hello," },
+  "manager.transport.email.intro": {
+    pl: "Poniżej zbiorcze zamówienie transportowe:",
+    en: "Please find below the combined transport order:",
+  },
+  "manager.transport.email.lineHeader": {
+    pl: "Lp. | Produkt | Ilość",
+    en: "No. | Product | Qty",
+  },
+  "manager.transport.email.closing": { pl: "Pozdrawiam,", en: "Best regards," },
+  "manager.transport.email.signature": { pl: "Pita Bros", en: "Pita Bros" },
+  "manager.queue.transportChip": { pl: "TO", en: "TO" },
+  "manager.queue.transportChipTooltip": {
+    pl: "Zamówienie połączone w transport",
+    en: "Order combined into a transport batch",
+  },
 } as const satisfies Record<string, StringEntry>;
 
 export type StringKey = keyof typeof STRINGS;

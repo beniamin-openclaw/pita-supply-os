@@ -273,6 +273,11 @@ class ManagerQueueItem(BaseModel):
     # FE renders a ⚠ chip when discrepancy > 0, else a neutral ✓ chip when count > 0.
     received_count: int = 0
     received_discrepancy_count: int = 0
+    # Reverse link to a Manager Transport batch (to-ordering-pago Phase 2): set
+    # when this order was combined via POST /api/manager/transport/create
+    # (a "TRN-…" marker), None for a normal per-order dispatch. Lets the queue
+    # show a "TRN" chip instead of implying a real per-supplier email dispatch.
+    supplier_order_reference: str | None = None
 
 
 class ManagerOrderLineDetail(BaseModel):
@@ -379,6 +384,9 @@ class ManagerOrderDetail(BaseModel):
     # the suggested→captain→manager→RECEIVED loop on the Manager screen. Empty
     # when none / receipts tab absent (manager-receiving-view).
     receipts: list[ManagerOrderReceipt] = Field(default_factory=list)
+    # Reverse link to a Manager Transport batch (to-ordering-pago Phase 2) —
+    # see ManagerQueueItem.supplier_order_reference for the same field's meaning.
+    supplier_order_reference: str | None = None
 
 
 # ---------- Captain own-orders view + edit (Phase E3) ----------
@@ -796,3 +804,123 @@ class ReceiptPhotoUploadResponse(BaseModel):
     wz_photo_count: int
     received_with_missing_wz: bool
     uploaded: list[ReceiptPhotoItem] = Field(default_factory=list)
+
+
+# ---------- Manager Transport (Phase 1 read side / to-ordering-pago) ----------
+
+
+class TransportLocationQty(BaseModel):
+    """One location's contribution to a product's total within a Transport
+    aggregate — the smallest audit unit of the per-location usage (zużycie)
+    breakdown. Two lines for the SAME product from the SAME location across
+    TWO different source orders stay as two separate entries (one per
+    ``order_id``) rather than being merged, so every quantity traces back to
+    the order it came from."""
+    location_id: str
+    location_name: str  # joined from locations (id fallback)
+    order_id: str
+    qty_purchase: float = 0
+
+
+class TransportAggregateLine(BaseModel):
+    """One product's roll-up across a set of source orders — the per-product
+    total (for the supplier order / driver totals) plus the per-location
+    breakdown (``per_location``, the private driver list / usage record).
+    ``total_qty_purchase`` is the sum of ``per_location[].qty_purchase``."""
+    product_id: str
+    product_name_pl: str  # joined from products (id fallback)
+    supplier_product_id: str
+    supplier_product_name: str  # joined from supplier_products (id fallback)
+    purchase_unit: str  # joined from supplier_products ("" fallback)
+    total_qty_purchase: float = 0
+    per_location: list[TransportLocationQty] = Field(default_factory=list)
+
+
+class TransportEligibleOrder(BaseModel):
+    """One row on the Transport "orders to combine" picker — a submitted or
+    manager-claimed order for one supplier that a Transport batch can absorb.
+    Mirrors the enriched fields of ``ManagerQueueItem`` (joined location/
+    supplier names, line_count, total) without the dispatch-specific fields
+    that don't apply pre-combine."""
+    order_id: str
+    location_id: str
+    location_name: str  # joined from locations (id fallback)
+    supplier_id: str
+    supplier_name: str  # joined from suppliers (id fallback)
+    order_date: date
+    status: OrderStatus
+    captain_submitted_at: datetime | None = None
+    ordered_by: str | None = None
+    line_count: int
+    total_value_estimate_pln: float | None = None
+
+
+class TransportBatchOrder(BaseModel):
+    """One member order of a Transport batch — compact row for the batch
+    detail's source-orders list."""
+    order_id: str
+    location_id: str
+    location_name: str  # joined from locations (id fallback)
+    status: OrderStatus
+    total_value_estimate_pln: float | None = None
+
+
+class TransportBatchSummary(BaseModel):
+    """One past Transport batch — the set of orders sharing a
+    ``supplier_order_reference`` marker that starts with "TRN-". ``created``
+    is the earliest ``manager_sent_at`` among member orders (the moment the
+    batch was combined); ``None`` only if every member order is missing the
+    timestamp (should not happen for a real dispatched batch)."""
+    transport_id: str
+    supplier_id: str
+    supplier_name: str  # joined from suppliers (id fallback)
+    created: datetime | None = None
+    order_count: int
+    location_ids: list[str] = Field(default_factory=list)  # sorted unique
+
+
+class TransportBatchDetail(BaseModel):
+    """Full Transport batch: the summary fields plus the member orders and
+    the aggregate lines (per-product totals AND the per-product x
+    per-location breakdown — the usage/zużycie record)."""
+    transport_id: str
+    supplier_id: str
+    supplier_name: str
+    created: datetime | None = None
+    order_count: int
+    location_ids: list[str] = Field(default_factory=list)
+    orders: list[TransportBatchOrder] = Field(default_factory=list)
+    lines: list[TransportAggregateLine] = Field(default_factory=list)
+
+
+# ---------- Manager Transport create (Phase 2 write side / to-ordering-pago) ----------
+
+
+class TransportCreateRequest(BaseModel):
+    """Payload for POST /api/manager/transport/create — combine the given
+    orders (all belonging to ``supplier_id``) into one Transport batch, or
+    append them to an existing batch named by ``append_to`` (the recovery
+    path when a previous create skipped some orders)."""
+    supplier_id: str
+    order_ids: list[str] = Field(min_length=1)
+    append_to: str | None = None
+
+
+class TransportSkippedOrder(BaseModel):
+    """One order the create endpoint could not combine, with a short
+    human-readable reason (``"not found"``, ``"different supplier"``,
+    ``"status <x> not eligible"``, ``"duplicate"``, or a guard-conflict
+    reason) — never raises for a single bad order, so a partial batch is
+    always explicit rather than silently dropped."""
+    order_id: str
+    reason: str
+
+
+class TransportCreateResponse(BaseModel):
+    """Result of a combine (or append) call. ``transport_id`` is always
+    returned — generated fresh, or echoing ``append_to`` — even when every
+    order in the request ended up in ``skipped`` (simplest honest contract:
+    no order was ever silently dropped without being named)."""
+    transport_id: str
+    combined: list[str] = Field(default_factory=list)
+    skipped: list[TransportSkippedOrder] = Field(default_factory=list)
