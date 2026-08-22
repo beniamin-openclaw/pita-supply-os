@@ -71,3 +71,10 @@
 - **Problem**: a bulk master-data change in prod with no comparison trace gives you neither a rollback path nor a way to verify the result — and a single bad row (e.g. 'TBD' as an email) can silently swallow a real order.
 - **Rule**: every master-data batch in prod goes through 3 steps: (1) a SELECT-diff of old→new saved BEFORE the UPDATE (that diff IS the rollback), (2) apply, (3) audit after (consistency assertions, e.g. min<=max, target=max, no placeholders) plus an entry in context/changes/<change-id>/change.md.
 - **Applies to**: every SQL operation on prod Supabase beyond a single obvious UPDATE; the Bracka/KEN rollouts in particular.
+
+## Preview with auth DISABLED cannot verify a screen's auth/role wiring
+
+- **Context**: any local preview / manual verification of a Captain- or Manager-scoped screen, run against a backend started without `SUPPLY_OS_CAPTAIN_TOKENS` / `SUPPLY_OS_MANAGER_TOKEN` (auth off = the convenient dev default).
+- **Problem**: the Transport screen called `api.suppliers()`, which is hardcoded to the `"captain"` role. A Manager holds no captain token, so in production the request carried NO `Authorization` header, the endpoint 401'd, the page swallowed the 401, and the supplier picker stayed empty with both sections stuck on "Ładowanie…" forever. With auth disabled locally, `/api/suppliers` answered 200 to a request with no token at all — the role bug was invisible, and the screen was shipped and verified "green" (unit tests, build, lint, preview screenshot) while being broken for every real user.
+- **Rule**: verify any auth-scoped screen against a backend with auth ENABLED and only the token that role actually holds (e.g. `SUPPLY_OS_MANAGER_TOKEN=<x>` with `SUPPLY_OS_CAPTAIN_TOKENS=` empty). An auth-off preview proves rendering, never authorization. When a helper in `apiClient.ts` pins a role, check it matches the screen calling it — `require_any_auth` on the backend does NOT save you, because the failure is which token the CLIENT sends.
+- **Applies to**: implement, impl-review, verification/preview of any Captain/Manager screen.
