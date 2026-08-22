@@ -68,14 +68,23 @@ from .models import (
     SuggestionReviewItem,
     Supplier,
     SupplierProduct,
+    TransportAddLocationRequest,
+    TransportAddLocationResponse,
     TransportAggregateLine,
+    TransportBatch,
     TransportBatchDetail,
     TransportBatchOrder,
+    TransportBatchPatchRequest,
+    TransportBatchPatchResponse,
     TransportBatchSummary,
     TransportCreateRequest,
     TransportCreateResponse,
     TransportEligibleOrder,
+    TransportFinalizeRequest,
+    TransportFinalizeResponse,
     TransportLocationQty,
+    TransportRemoveOrderRequest,
+    TransportRemoveOrderResponse,
     TransportSkippedOrder,
 )
 from .suggestion import SuggestionInput, compute_suggestion, rounding_step
@@ -1429,6 +1438,37 @@ def manager_claim(
     )
 
 
+def _reject_if_locked_in_draft_transport(backend, order: Order, action: str) -> None:
+    """409 when ``order`` belongs to a DRAFT Transport batch (carries a TRN-
+    marker whose header row is status='draft').
+
+    Draft members are deliberately parked in ``manager_claimed`` so the batch
+    stays editable — which also makes them reachable from the ordinary Manager
+    queue. Dispatching / releasing / cancelling one there would bypass the
+    batch lifecycle: the batch would silently lose a member, and (worse)
+    release/cancel would leave a stray marker behind. The Transport screen's
+    own finalize / remove-order are the sanctioned exits. Legacy sent batches
+    (marker, no header) and non-transport orders pass straight through; cache
+    is invalidated first so the gate never trusts a stale header (F2)."""
+    ref = order.supplier_order_reference
+    if not ref or not ref.startswith("TRN-"):
+        return
+    backend.invalidate_cache("transport_batches")
+    try:
+        header = backend.get_transport_batch(ref)
+    except sheets.WorksheetNotFound:
+        return
+    if header is not None and header.status == "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order.order_id} belongs to draft transport {ref} — "
+                f"cannot {action} it here. Use the Transport screen "
+                f"(finalize or remove it from the batch) instead."
+            ),
+        )
+
+
 @app.post("/api/manager/release/{order_id}", response_model=ManagerReleaseResponse)
 def manager_release(
     order_id: str,
@@ -1460,6 +1500,7 @@ def manager_release(
                 f"expected manager_claimed (cannot release)"
             ),
         )
+    _reject_if_locked_in_draft_transport(backend, order, "release")
 
     try:
         backend.update_order(
@@ -1519,6 +1560,7 @@ def manager_cancel(
                 f"expected captain_submitted or manager_claimed (cannot cancel)"
             ),
         )
+    _reject_if_locked_in_draft_transport(backend, order, "cancel")
 
     try:
         backend.update_order(
@@ -1571,6 +1613,8 @@ def manager_dispatch(
                 f"expected manager_claimed (claim it first via /api/manager/claim)"
             ),
         )
+
+    _reject_if_locked_in_draft_transport(backend, order, "dispatch")
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     supplier = suppliers_by_id.get(order.supplier_id)
@@ -3080,6 +3124,10 @@ def manager_transport_eligible(
         for o in orders
         if o.supplier_id == supplier_id
         and o.status in (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_CLAIMED)
+        # An order already stamped into a transport (draft member) must NOT be
+        # offered again — a second create would silently re-stamp the marker
+        # and steal it from its batch.
+        and not (o.supplier_order_reference or "").startswith("TRN-")
     ]
     if not filtered:
         return []
@@ -3131,10 +3179,18 @@ def manager_transport_batches(
 ):
     """Past Transport batches: group ``load_orders()`` by non-null
     ``supplier_order_reference`` values starting with ``"TRN-"`` (the marker
-    Phase 2's combine endpoint stamps), optionally filtered to
-    ``supplier_id``. Newest first by ``created`` (the earliest member
-    ``manager_sent_at``), capped at ``limit`` (default 50, clamped 1..200 —
-    mirrors ``manager_queue``).
+    the create endpoint stamps), optionally filtered to ``supplier_id``.
+    Newest first by ``created``, capped at ``limit`` (default 50, clamped
+    1..200 — mirrors ``manager_queue``).
+
+    v2 (draft lifecycle): each marker group is joined against
+    ``transport_batches`` for its header row. A group WITH a header row uses
+    the header's ``created_at`` / ``status`` / ``driver`` / ``vehicle`` /
+    ``pickup_date``. A group with NO header row is a v1-created legacy batch
+    — implicit ``status="sent"``, logistics fields None, ``created`` falls
+    back to the earliest member ``manager_sent_at`` (unchanged v1 behavior).
+    A missing 'transport_batches' worksheet degrades to "no headers" (every
+    group reads as legacy) rather than erroring.
 
     Seed mode -> [] (orders are not persisted there; mirrors ``manager_queue``).
     """
@@ -3154,28 +3210,55 @@ def manager_transport_batches(
             continue
         by_transport.setdefault(ref, []).append(order)
 
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    try:
+        headers_by_id = {b.transport_id: b for b in backend.load_transport_batches()}
+    except sheets.WorksheetNotFound:
+        headers_by_id = {}
+
+    # Header-only batches (an EMPTY draft the manager just started, or one
+    # whose only member was removed) must be listed too — the marker grouping
+    # alone cannot see them. Union them in with zero members.
+    for header in headers_by_id.values():
+        if header.transport_id in by_transport:
+            continue
+        if supplier_id is not None and header.supplier_id != supplier_id:
+            continue
+        by_transport[header.transport_id] = []
+
     if not by_transport:
         return []
 
-    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
-
-    def _created(group: list[Order]) -> datetime | None:
+    def _created(transport_id: str, group: list[Order]) -> datetime | None:
+        header = headers_by_id.get(transport_id)
+        if header is not None and header.created_at is not None:
+            return header.created_at
         timestamps = [o.manager_sent_at for o in group if o.manager_sent_at is not None]
         return min(timestamps) if timestamps else None
 
     summaries: list[TransportBatchSummary] = []
     for transport_id, group in by_transport.items():
-        supplier = suppliers_by_id.get(group[0].supplier_id)
+        header = headers_by_id.get(transport_id)
+        # Supplier comes from the members when any exist, else from the header
+        # (a header-only empty draft has no member orders to read it from).
+        batch_supplier_id = (
+            group[0].supplier_id if group else header.supplier_id if header else ""
+        )
+        supplier = suppliers_by_id.get(batch_supplier_id)
         summaries.append(
             TransportBatchSummary(
                 transport_id=transport_id,
-                supplier_id=group[0].supplier_id,
+                supplier_id=batch_supplier_id,
                 supplier_name=(
-                    supplier.supplier_name if supplier else group[0].supplier_id
+                    supplier.supplier_name if supplier else batch_supplier_id
                 ),
-                created=_created(group),
+                created=_created(transport_id, group),
                 order_count=len(group),
                 location_ids=sorted({o.location_id for o in group}),
+                status=header.status if header is not None else "sent",
+                driver=header.driver if header is not None else None,
+                vehicle=header.vehicle if header is not None else None,
+                pickup_date=header.pickup_date if header is not None else None,
             )
         )
 
@@ -3190,10 +3273,22 @@ def manager_transport_batch_detail(
     transport_id: str,
     _: None = Depends(require_manager),
 ):
-    """One Transport batch: its member orders (compact) plus the aggregate
-    lines (per-product totals AND the per-location usage breakdown), via
-    ``_aggregate_transport_lines`` over the targeted
-    ``load_order_lines_for_orders`` read.
+    """One Transport batch: its member orders — WITH full enriched lines
+    (v2, via ``_enrich_lines_for_detail``, so the FE can render the editable
+    product x location matrix) — plus the aggregate lines (per-product totals
+    AND the per-location usage breakdown, via ``_aggregate_transport_lines``
+    over the targeted ``load_order_lines_for_orders`` read) with a weight
+    preview joined from each line's supplier_product.
+
+    Every member order is included regardless of its lines' quantities (a
+    draft batch's zero-qty orders still show up here); only the aggregate
+    still zero-drops (mirrors the dispatch email / driver list).
+
+    v2 (draft lifecycle): the batch header row (if present) supplies
+    ``status`` / ``driver`` / ``vehicle`` / ``pickup_date`` / ``pickup_time``
+    / ``limit_kg`` / ``notes`` / ``created``. No header row -> legacy v1
+    batch, implicit ``status="sent"`` (read-only, exactly as v1 behaved). A
+    missing 'transport_batches' worksheet degrades the same way.
 
     Seed mode -> 503 (mirrors ``manager_order_detail``); no order carries the
     marker -> 404.
@@ -3207,7 +3302,15 @@ def manager_transport_batch_detail(
 
     orders = backend.load_orders()
     group = [o for o in orders if o.supplier_order_reference == transport_id]
-    if not group:
+
+    # 404 only when NEITHER member orders NOR a header row exist: an empty
+    # draft (header, zero members) is a legitimate v2 state — the manager
+    # starts from nothing and adds locations.
+    try:
+        early_header = backend.get_transport_batch(transport_id)
+    except sheets.WorksheetNotFound:
+        early_header = None
+    if not group and early_header is None:
         raise HTTPException(
             status_code=404, detail=f"Transport batch {transport_id} not found"
         )
@@ -3220,11 +3323,22 @@ def manager_transport_batch_detail(
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
 
-    supplier = suppliers_by_id.get(group[0].supplier_id)
+    settings_by_loc_pid: dict[str, dict[str, LocationProductSetting]] = {}
+    for s in backend.load_location_product_settings():
+        settings_by_loc_pid.setdefault(s.location_id, {})[s.product_id] = s
+
+    header = early_header
+
+    batch_supplier_id = (
+        group[0].supplier_id if group else header.supplier_id if header else ""
+    )
+    supplier = suppliers_by_id.get(batch_supplier_id)
 
     orders_out: list[TransportBatchOrder] = []
     for order in group:
         location = locations_by_id.get(order.location_id)
+        order_lines = [ln for ln in lines if ln.order_id == order.order_id]
+        settings_by_pid = settings_by_loc_pid.get(order.location_id, {})
         orders_out.append(
             TransportBatchOrder(
                 order_id=order.order_id,
@@ -3234,6 +3348,9 @@ def manager_transport_batch_detail(
                 ),
                 status=order.status,
                 total_value_estimate_pln=order.total_value_estimate_pln,
+                lines=_enrich_lines_for_detail(
+                    order_lines, products_by_id, sps_by_id, settings_by_pid
+                ),
             )
         )
 
@@ -3241,18 +3358,51 @@ def manager_transport_batch_detail(
         group, lines, products_by_id, sps_by_id, locations_by_id
     )
 
-    timestamps = [o.manager_sent_at for o in group if o.manager_sent_at is not None]
-    created = min(timestamps) if timestamps else None
+    # Weight preview (v2): join each aggregate line's supplier_product for its
+    # unit_weight_kg. None (not 0) when unknown — counted in
+    # unknown_weight_count instead of silently contributing 0 to the total.
+    total_weight_kg = 0.0
+    unknown_weight_count = 0
+    weighted_lines: list[TransportAggregateLine] = []
+    for al in aggregate_lines:
+        sp = sps_by_id.get(al.supplier_product_id)
+        unit_weight = sp.unit_weight_kg if sp else None
+        if unit_weight is not None:
+            line_weight = round(al.total_qty_purchase * unit_weight, 3)
+            total_weight_kg += line_weight
+        else:
+            line_weight = None
+            unknown_weight_count += 1
+        weighted_lines.append(
+            al.model_copy(
+                update={"unit_weight_kg": unit_weight, "line_weight_kg": line_weight}
+            )
+        )
+
+    if header is not None and header.created_at is not None:
+        created = header.created_at
+    else:
+        timestamps = [o.manager_sent_at for o in group if o.manager_sent_at is not None]
+        created = min(timestamps) if timestamps else None
 
     return TransportBatchDetail(
         transport_id=transport_id,
-        supplier_id=group[0].supplier_id,
-        supplier_name=supplier.supplier_name if supplier else group[0].supplier_id,
+        supplier_id=batch_supplier_id,
+        supplier_name=supplier.supplier_name if supplier else batch_supplier_id,
         created=created,
         order_count=len(group),
         location_ids=sorted({o.location_id for o in group}),
         orders=orders_out,
-        lines=aggregate_lines,
+        lines=weighted_lines,
+        status=header.status if header is not None else "sent",
+        driver=header.driver if header is not None else None,
+        vehicle=header.vehicle if header is not None else None,
+        pickup_date=header.pickup_date if header is not None else None,
+        pickup_time=header.pickup_time if header is not None else None,
+        limit_kg=header.limit_kg if header is not None else None,
+        notes=header.notes if header is not None else "",
+        total_weight_kg=round(total_weight_kg, 3),
+        unknown_weight_count=unknown_weight_count,
     )
 
 
@@ -3306,48 +3456,55 @@ def manager_transport_create(
     req: TransportCreateRequest,
     _: None = Depends(require_manager),
 ):
-    """Combine the given orders into one Transport batch, or append them to an
-    existing batch named by ``append_to`` — the write half of Manager
-    Transport (to-ordering-pago Phase 2).
+    """Combine the given orders into one DRAFT Transport batch, or append them
+    to an existing draft batch named by ``append_to`` — the write half of
+    Manager Transport (to-ordering-pago; v2 draft lifecycle).
 
-    Per order, a claim-first two-step guarded transition (mirrors
-    ``manager_dispatch``'s guarded send, ``main.py:1764-1778``):
+    Per order, a claim-then-stamp two-step guarded transition (mirrors
+    ``manager_dispatch``'s guarded send):
 
     1. A ``captain_submitted`` order is first claimed
        (``status=manager_claimed, expected_status=captain_submitted``); a
        ``manager_claimed`` order skips straight to step 2.
-    2. Every surviving order is then "sent" via Transport
-       (``status=manager_sent, sent_method="transport",
-       supplier_order_reference=<transport_id>, manager_user="manager-default",
-       manager_sent_at=now, expected_status=manager_claimed``).
+    2. Every surviving order then has the ``TRN-`` marker stamped
+       (``supplier_order_reference=<transport_id>,
+       expected_status=manager_claimed``) — status stays ``manager_claimed``.
+       Unlike v1, create NEVER transitions an order to ``manager_sent``; that
+       now only happens at ``POST /api/manager/transport/finalize``. While
+       draft, member orders stay ``manager_claimed`` so all editing rides the
+       existing tested machinery (``manager_order_save``, add-line, etc).
 
     Either step raising ``OrderStatusConflictError`` or
     ``OrderAlreadyDispatchedError`` (see ``_TRANSPORT_GUARD_EXCEPTIONS``)
     skips that order — it is never retried, and one order's conflict never
-    aborts the rest of the batch (there is deliberately no cross-order
-    transaction; Sheets cannot give one, and Supabase's per-row conditional
-    UPDATE already makes each transition independently atomic). If step 1
-    succeeded but step 2 failed, a best-effort release
-    (``status=captain_submitted, expected_status=manager_claimed``) puts the
-    order back where the captain/manager last left it; if THAT release also
-    fails (only possible under a second concurrent change), it only logs —
+    aborts the rest of the batch. If step 1 succeeded but step 2 failed, a
+    best-effort release (``status=captain_submitted,
+    expected_status=manager_claimed``) puts the order back where the
+    captain/manager last left it; if THAT release also fails it only logs —
     the order is left ``manager_claimed`` rather than lost.
 
     Validation, in order: unknown ``supplier_id`` -> 400. When ``append_to``
-    is given it must name a marker some order already carries, and that
-    order's supplier must equal ``supplier_id`` -> 400 otherwise; the given
-    marker is reused as ``transport_id``. Otherwise a fresh ``transport_id``
-    is minted (``TRN-YYYYMMDD-<SUP4>-<6hex>``, mirrors ``_generate_order_id``).
+    is given, the named batch must have a ``transport_batches`` header row
+    AND that header's ``status`` must be ``"draft"`` -> 400 otherwise (a
+    ``sent`` batch is frozen for quantities); the header's supplier must equal
+    ``supplier_id`` -> 400 otherwise; the given marker is reused as
+    ``transport_id``. Otherwise a fresh ``transport_id`` is minted
+    (``TRN-YYYYMMDD-<SUP4>-<6hex>``, mirrors ``_generate_order_id``) and — only
+    when at least one order actually combines — a new ``transport_batches``
+    header row is appended with ``status="draft"``. If every order in the
+    request ends up ``skipped`` and no ``append_to`` was given, NO header row
+    is written (mirrors v1: an empty combine is a no-op besides minting an id).
+
     Then, preserving request order, each ``order_id`` is skipped (never
     raises) for: appearing twice in the request ("duplicate" — the first
     occurrence is still processed normally), not existing ("not found"),
     belonging to a different supplier ("different supplier"), or being in a
     non-eligible status ("status <x> not eligible"). ``transport_id`` is
-    ALWAYS returned, even when every order ends up in ``skipped`` — the
-    simplest honest contract: nothing is ever silently dropped without being
-    named in the response.
+    ALWAYS returned, even when every order ends up in ``skipped``.
 
-    Seed mode -> 503 (mirrors every other manager write route).
+    Seed mode -> 503 (mirrors every other manager write route). A missing
+    'transport_batches' worksheet (append_to lookup, or the header append)
+    -> 503.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -3368,22 +3525,32 @@ def manager_transport_create(
     orders_by_id = {o.order_id: o for o in backend.load_orders()}
 
     if req.append_to is not None:
-        existing_batch = [
-            o for o in orders_by_id.values()
-            if o.supplier_order_reference == req.append_to
-        ]
-        if not existing_batch:
+        backend.invalidate_cache("transport_batches")
+        try:
+            existing_header = backend.get_transport_batch(req.append_to)
+        except sheets.WorksheetNotFound:
+            raise HTTPException(
+                status_code=503, detail="transport_batches worksheet missing"
+            )
+        if existing_header is None:
             raise HTTPException(
                 status_code=400,
                 detail=f"Transport batch '{req.append_to}' not found",
             )
-        batch_supplier_id = existing_batch[0].supplier_id
-        if batch_supplier_id != req.supplier_id:
+        if existing_header.supplier_id != req.supplier_id:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Transport batch '{req.append_to}' belongs to supplier "
-                    f"'{batch_supplier_id}', not '{req.supplier_id}'"
+                    f"'{existing_header.supplier_id}', not '{req.supplier_id}'"
+                ),
+            )
+        if existing_header.status != "draft":
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Transport batch '{req.append_to}' is not draft "
+                    f"(status={existing_header.status}) — cannot append"
                 ),
             )
         transport_id = req.append_to
@@ -3419,6 +3586,15 @@ def manager_transport_create(
                 )
             )
             continue
+        existing_ref = order.supplier_order_reference or ""
+        if existing_ref.startswith("TRN-") and existing_ref != transport_id:
+            skipped.append(
+                TransportSkippedOrder(
+                    order_id=order_id,
+                    reason=f"already in transport {existing_ref}",
+                )
+            )
+            continue
 
         claimed_here = False
         if order.status == OrderStatus.CAPTAIN_SUBMITTED:
@@ -3436,10 +3612,7 @@ def manager_transport_create(
             except Exception:
                 # A non-guard failure (backend outage, OrderNotFoundError on a
                 # row that vanished after preflight, ConfigDriftError…) must
-                # degrade to a skipped[] entry, NOT abort the whole request:
-                # earlier orders in this same loop may already be durably
-                # manager_sent, and a 500 here would hide both them and the
-                # transport_id from the client.
+                # degrade to a skipped[] entry, NOT abort the whole request.
                 log.exception(
                     "Transport create %s: unexpected error claiming order %s",
                     transport_id,
@@ -3454,23 +3627,19 @@ def manager_transport_create(
         try:
             backend.update_order(
                 order_id,
-                status=OrderStatus.MANAGER_SENT.value,
-                sent_method="transport",
                 supplier_order_reference=transport_id,
-                manager_user="manager-default",  # proxy until real Manager auth
-                manager_sent_at=datetime.now(timezone.utc).isoformat(),
                 expected_status=OrderStatus.MANAGER_CLAIMED.value,
             )
         except _TRANSPORT_GUARD_EXCEPTIONS:
             _release_claim_best_effort(backend, transport_id, order_id, claimed_here)
             skipped.append(
-                TransportSkippedOrder(order_id=order_id, reason="send conflict")
+                TransportSkippedOrder(order_id=order_id, reason="marker conflict")
             )
             continue
         except Exception:
             # Same degrade-to-skipped contract as the claim step (see above).
             log.exception(
-                "Transport create %s: unexpected error sending order %s",
+                "Transport create %s: unexpected error stamping marker on order %s",
                 transport_id,
                 order_id,
             )
@@ -3482,6 +3651,390 @@ def manager_transport_create(
 
         combined.append(order_id)
 
+    # New batch (not append_to) -> ALWAYS a fresh draft header row, even with
+    # zero combined orders: an EMPTY draft is a legitimate v2 starting point
+    # (the manager-driven flow begins from nothing and adds locations — with
+    # no submitted Pago orders, requiring one would dead-end the feature).
+    # append_to already has a header (validated above).
+    if req.append_to is None:
+        try:
+            backend.append_transport_batch(
+                TransportBatch(
+                    transport_id=transport_id,
+                    supplier_id=req.supplier_id,
+                    status="draft",
+                    created_at=datetime.now(timezone.utc),
+                    created_by="manager-default",
+                )
+            )
+        except sheets.WorksheetNotFound:
+            raise HTTPException(
+                status_code=503, detail="transport_batches worksheet missing"
+            )
+
     return TransportCreateResponse(
         transport_id=transport_id, combined=combined, skipped=skipped
+    )
+
+
+# ---------- Manager Transport v2: draft lifecycle (to-ordering-pago ADDENDUM v2) ----------
+
+
+@app.post(
+    "/api/manager/transport/finalize", response_model=TransportFinalizeResponse
+)
+def manager_transport_finalize(
+    req: TransportFinalizeRequest,
+    _: None = Depends(require_manager),
+):
+    """Flip a DRAFT batch's member orders ``manager_claimed -> manager_sent``
+    (``sent_method="transport"``) and, when at least one order transitions,
+    the batch header to ``status="sent"``. This is the guarded transition v1's
+    ``create`` used to perform inline — now deferred to here so the batch can
+    be edited (qty, add-line, add-location, remove-order) while draft.
+
+    Gates: seed mode -> 503. Batch not found (no header row) -> 404 — a
+    headerless (legacy v1) marker group has nothing to finalize. Batch
+    ``status != "draft"`` -> 409 (already sent). Each member order not in
+    ``manager_claimed`` is skipped (never raises), mirroring ``create``'s
+    skipped[] contract; a guard conflict or unexpected backend error on the
+    per-order send is likewise skipped, not raised, so one order's problem
+    never aborts the rest of the batch.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport finalize requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("transport_batches")
+    try:
+        batch = backend.get_transport_batch(req.transport_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503, detail="transport_batches worksheet missing"
+        )
+    if batch is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transport batch {req.transport_id} not found"
+        )
+    if batch.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id} is not draft "
+                f"(status={batch.status})"
+            ),
+        )
+
+    backend.invalidate_cache("orders")
+    orders = backend.load_orders()
+    group = [o for o in orders if o.supplier_order_reference == req.transport_id]
+
+    sent: list[str] = []
+    skipped: list[TransportSkippedOrder] = []
+    for order in group:
+        if order.status != OrderStatus.MANAGER_CLAIMED:
+            skipped.append(
+                TransportSkippedOrder(
+                    order_id=order.order_id,
+                    reason=f"status {order.status.value} not eligible",
+                )
+            )
+            continue
+        try:
+            backend.update_order(
+                order.order_id,
+                status=OrderStatus.MANAGER_SENT.value,
+                sent_method="transport",
+                manager_user="manager-default",  # proxy until real Manager auth
+                manager_sent_at=datetime.now(timezone.utc).isoformat(),
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except _TRANSPORT_GUARD_EXCEPTIONS:
+            skipped.append(
+                TransportSkippedOrder(order_id=order.order_id, reason="send conflict")
+            )
+            continue
+        except Exception:
+            log.exception(
+                "Transport finalize %s: unexpected error sending order %s",
+                req.transport_id,
+                order.order_id,
+            )
+            skipped.append(
+                TransportSkippedOrder(order_id=order.order_id, reason="backend error")
+            )
+            continue
+        sent.append(order.order_id)
+
+    if sent:
+        try:
+            backend.update_transport_batch(
+                req.transport_id,
+                status="sent",
+                sent_at=datetime.now(timezone.utc),
+            )
+        except Exception:
+            # Orders are already durably manager_sent at this point; a failure
+            # flipping the header only logs — never fails the request and
+            # never un-sends the orders it just sent.
+            log.exception(
+                "Transport finalize %s: orders sent but header update failed",
+                req.transport_id,
+            )
+
+    return TransportFinalizeResponse(
+        transport_id=req.transport_id, sent=sent, skipped=skipped
+    )
+
+
+@app.post(
+    "/api/manager/transport/add-location", response_model=TransportAddLocationResponse
+)
+def manager_transport_add_location(
+    req: TransportAddLocationRequest,
+    _: None = Depends(require_manager),
+):
+    """Create a skeleton (no-lines) order for ``location_id`` and fold it into
+    a DRAFT batch, so a location without a captain submission can still join.
+    The Manager then adds products via the existing
+    ``POST /api/manager/order/{id}/add-line`` flow.
+
+    Gates: seed mode -> 503. Batch not found -> 404; batch not draft -> 409.
+    Unknown ``location_id`` -> 400. A location already represented by a member
+    order of this batch -> 400 (no duplicate location in one batch).
+
+    The new order is created directly in ``manager_claimed`` (never
+    ``captain_submitted``) with ``captain_user="manager-default"`` — the same
+    marker ``remove-order`` checks to decide cancel vs. release.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport add-location requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("transport_batches")
+    try:
+        batch = backend.get_transport_batch(req.transport_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503, detail="transport_batches worksheet missing"
+        )
+    if batch is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transport batch {req.transport_id} not found"
+        )
+    if batch.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id} is not draft "
+                f"(status={batch.status})"
+            ),
+        )
+
+    locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    if req.location_id not in locations_by_id:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown location_id '{req.location_id}'"
+        )
+
+    backend.invalidate_cache("orders")
+    orders = backend.load_orders()
+    group = [o for o in orders if o.supplier_order_reference == req.transport_id]
+    if any(o.location_id == req.location_id for o in group):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Location '{req.location_id}' is already in batch "
+                f"{req.transport_id}"
+            ),
+        )
+
+    today = datetime.now(timezone.utc).date()
+    order_id = _generate_order_id(req.location_id, batch.supplier_id, today)
+    now = datetime.now(timezone.utc)
+    order = Order(
+        order_id=order_id,
+        location_id=req.location_id,
+        supplier_id=batch.supplier_id,
+        order_date=today,
+        status=OrderStatus.MANAGER_CLAIMED,
+        captain_user="manager-default",
+        captain_submitted_at=now,
+        ordered_by="manager",
+        supplier_order_reference=req.transport_id,
+    )
+    backend.append_order(order)
+    # No lines yet — append_order_lines is a no-op on an empty list, so it is
+    # simply not called here (mirrors captain_submit's empty-lines guard).
+
+    return TransportAddLocationResponse(
+        transport_id=req.transport_id, order_id=order_id
+    )
+
+
+@app.post(
+    "/api/manager/transport/remove-order", response_model=TransportRemoveOrderResponse
+)
+def manager_transport_remove_order(
+    req: TransportRemoveOrderRequest,
+    _: None = Depends(require_manager),
+):
+    """Drop one member order from a DRAFT batch.
+
+    A manager-created empty order (from ``add-location``, never given any
+    lines — ``captain_user == "manager-default"`` AND ``lines == []``) is
+    CANCELLED outright via the existing cancel trace (there is nothing useful
+    to hand back to a captain — it never came from one). Any other order has
+    its marker cleared and is released back to ``captain_submitted`` (guarded
+    ``manager_claimed -> captain_submitted``) so the captain/manager queue
+    picks it up again exactly as if it had never joined a batch.
+
+    Gates: seed mode -> 503. Batch not found -> 404; batch not draft -> 409.
+    Order not found, or not a member of this batch -> 404. Order not
+    ``manager_claimed`` -> 409. A concurrent status change on the
+    cancel/release write -> 409.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport remove-order requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("transport_batches")
+    try:
+        batch = backend.get_transport_batch(req.transport_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503, detail="transport_batches worksheet missing"
+        )
+    if batch is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transport batch {req.transport_id} not found"
+        )
+    if batch.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id} is not draft "
+                f"(status={batch.status})"
+            ),
+        )
+
+    backend.invalidate_cache("orders")
+    order = backend.get_order(req.order_id)
+    if order is None or order.supplier_order_reference != req.transport_id:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Order {req.order_id} not found in batch {req.transport_id}"
+            ),
+        )
+    if order.status != OrderStatus.MANAGER_CLAIMED:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {req.order_id} status is {order.status.value}, "
+                f"expected manager_claimed"
+            ),
+        )
+
+    manager_created_empty = (
+        order.captain_user == "manager-default" and not order.lines
+    )
+    if manager_created_empty:
+        try:
+            backend.update_order(
+                req.order_id,
+                status=OrderStatus.CANCELLED.value,
+                cancelled_at=datetime.now(timezone.utc).isoformat(),
+                cancelled_by="manager-default",
+                cancel_reason="removed from transport",
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except errors.OrderStatusConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Order {req.order_id} was changed concurrently",
+            )
+        action = "cancelled"
+    else:
+        try:
+            backend.update_order(
+                req.order_id,
+                supplier_order_reference=None,
+                status=OrderStatus.CAPTAIN_SUBMITTED.value,
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except errors.OrderStatusConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Order {req.order_id} was changed concurrently",
+            )
+        action = "released"
+
+    return TransportRemoveOrderResponse(
+        transport_id=req.transport_id, order_id=req.order_id, action=action
+    )
+
+
+@app.patch(
+    "/api/manager/transport/batch/{transport_id}",
+    response_model=TransportBatchPatchResponse,
+)
+def manager_transport_batch_patch(
+    transport_id: str,
+    req: TransportBatchPatchRequest,
+    _: None = Depends(require_manager),
+):
+    """Update logistics fields (driver/vehicle/pickup_date/pickup_time/
+    limit_kg/notes) on a batch header. Only the fields present in the request
+    body are written (``exclude_unset``) — omitting a field leaves it
+    untouched, so the FE can PATCH one field at a time.
+
+    Allowed regardless of batch status — logistics can change after sending
+    (e.g. a driver swap the morning of pickup); only quantities are frozen at
+    finalize (v2 design decision 6).
+
+    Gates: seed mode -> 503. Batch not found -> 404.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport batch patch requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("transport_batches")
+    try:
+        batch = backend.get_transport_batch(transport_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503, detail="transport_batches worksheet missing"
+        )
+    if batch is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transport batch {transport_id} not found"
+        )
+
+    updates = req.model_dump(exclude_unset=True)
+    if updates:
+        backend.update_transport_batch(transport_id, **updates)
+
+    merged = batch.model_copy(update=updates)
+    return TransportBatchPatchResponse(
+        transport_id=transport_id,
+        status=merged.status,
+        driver=merged.driver,
+        vehicle=merged.vehicle,
+        pickup_date=merged.pickup_date,
+        pickup_time=merged.pickup_time,
+        limit_kg=merged.limit_kg,
+        notes=merged.notes,
     )

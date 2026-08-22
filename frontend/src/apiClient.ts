@@ -46,11 +46,17 @@ import type {
   ReceiptSummary,
   Supplier,
   OrderStatus,
+  TransportAddLocationRequest,
+  TransportAddLocationResponse,
   TransportBatchDetail,
+  TransportBatchPatchRequest,
+  TransportBatchPatchResponse,
   TransportBatchSummary,
   TransportCreateRequest,
   TransportCreateResponse,
   TransportEligibleOrder,
+  TransportFinalizeResponse,
+  TransportRemoveOrderResponse,
 } from "./types";
 
 // Production: API calls go same-origin to /api/* and are proxied to the droplet
@@ -295,7 +301,13 @@ export const api = {
   // (require_any_auth), but a Manager-only screen holds no captain token — calling
   // this without `"manager"` there sends no Authorization header and 401s.
   suppliers: (role: Role = "captain") => apiGet<Supplier[]>("/api/suppliers", role),
-  locations: () => apiGet<Location[]>("/api/locations", "captain"),
+  // Default role stays "captain" for backward compatibility (every existing
+  // caller runs under a Captain token); the Manager Transport add-location
+  // picker is the first caller that needs `role: "manager"` — passing
+  // "captain" there would send no Authorization header a Manager screen can
+  // use and 401 silently (the same bug `api.suppliers` shipped once before
+  // gaining this same optional param — see lessons.md).
+  locations: (role: Role = "captain") => apiGet<Location[]>("/api/locations", role),
   // Captain
   orderable: (supplier_id: string) =>
     apiGet<OrderableItem[]>(`/api/captain/orderable?supplier_id=${encodeURIComponent(supplier_id)}`, "captain"),
@@ -449,6 +461,32 @@ export const api = {
     ),
   transportCreate: (req: TransportCreateRequest) =>
     apiPost<TransportCreateResponse>("/api/manager/transport/create", req, "manager"),
+  // Manager Transport v2 (to-ordering-pago ADDENDUM v2) — draft lifecycle:
+  // finalize (draft -> sent), add-location, remove-order, logistics patch.
+  transportFinalize: (transport_id: string) =>
+    apiPost<TransportFinalizeResponse>(
+      "/api/manager/transport/finalize",
+      { transport_id },
+      "manager",
+    ),
+  transportAddLocation: (transport_id: string, location_id: string) =>
+    apiPost<TransportAddLocationResponse>(
+      "/api/manager/transport/add-location",
+      { transport_id, location_id } as TransportAddLocationRequest,
+      "manager",
+    ),
+  transportRemoveOrder: (transport_id: string, order_id: string) =>
+    apiPost<TransportRemoveOrderResponse>(
+      "/api/manager/transport/remove-order",
+      { transport_id, order_id },
+      "manager",
+    ),
+  transportBatchPatch: (transport_id: string, req: TransportBatchPatchRequest) =>
+    apiPatch<TransportBatchPatchResponse>(
+      `/api/manager/transport/batch/${encodeURIComponent(transport_id)}`,
+      req,
+      "manager",
+    ),
 };
 
 export { BASE_URL };

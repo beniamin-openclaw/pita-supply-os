@@ -14,8 +14,17 @@
 //     email builder.
 
 import type { StringKey } from "../../../i18n/strings";
-import type { Supplier, TransportBatchDetail } from "../../../types";
+import type {
+  ManagerOrderLineDetail,
+  OrderLineManagerFinal,
+  Supplier,
+  TransportBatchDetail,
+  TransportBatchOrder,
+  TransportBatchSummary,
+} from "../../../types";
 import { buildGmailComposeUrl } from "./emailBody";
+import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
+import { effectiveManagerQtyPurchase } from "./managerLine";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
@@ -134,4 +143,164 @@ export function buildTransportGmailUrl(
     body: buildTransportEmailBody(detail, t),
     cc,
   });
+}
+
+// ---- v2 (ADDENDUM v2): draft workstation helpers ---------------------------
+//
+// A DRAFT batch's member orders carry FULL enriched lines (TransportBatchOrder.
+// lines), so the manager can edit qty/comment per product x location cell using
+// the SAME read-modify-write machinery as the single-order Manager screen
+// (managerSave). The helpers below are pure — no fetch — mirroring lib/draftState.ts
+// but keyed per order_id (one order = one column of the matrix = one managerSave
+// call).
+
+/** One row of the editable product x location matrix: a product, unioned
+ * across every member order that carries it, with each contributing order's
+ * full line keyed by order_id (undefined = this order doesn't carry the
+ * product — an empty/addable cell). */
+export interface TransportMatrixRow {
+  product_id: string;
+  product_name_pl: string;
+  purchase_unit: string;
+  linesByOrderId: Record<string, ManagerOrderLineDetail>;
+}
+
+/** Union of products across every member order's lines, one row per product,
+ * sorted by product_name_pl (pl collation) for a stable, scannable table. */
+export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMatrixRow[] {
+  const byProduct = new Map<string, TransportMatrixRow>();
+  for (const order of orders) {
+    for (const line of order.lines) {
+      let row = byProduct.get(line.product_id);
+      if (!row) {
+        row = {
+          product_id: line.product_id,
+          product_name_pl: line.product_name_pl,
+          purchase_unit: line.purchase_unit,
+          linesByOrderId: {},
+        };
+        byProduct.set(line.product_id, row);
+      }
+      row.linesByOrderId[order.order_id] = line;
+    }
+  }
+  return [...byProduct.values()].sort((a, b) => a.product_name_pl.localeCompare(b.product_name_pl, "pl"));
+}
+
+/** Per-order draft state for a draft batch — one `DraftMap` (order_line_id ->
+ * {qty, comment}) per member order, so each order's dirty tracking and
+ * managerSave payload stay independent (mirrors one column = one order = one
+ * PATCH call). */
+export type TransportDraftMap = Record<string, DraftMap>;
+
+/** Seed every member order's draft map from its own loaded lines (effective
+ * qty = manager_final if > 0 else captain_final; comment = manager_comment) —
+ * the per-order equivalent of draftState.ts's `seedDrafts`. */
+export function seedTransportDrafts(orders: TransportBatchOrder[]): TransportDraftMap {
+  const out: TransportDraftMap = {};
+  for (const order of orders) {
+    const map: DraftMap = {};
+    for (const line of order.lines) {
+      map[line.order_line_id] = {
+        qty: effectiveManagerQtyPurchase(line),
+        comment: line.manager_comment ?? "",
+      };
+    }
+    out[order.order_id] = map;
+  }
+  return out;
+}
+
+/** Draft effective qty for ONE cell of the matrix (order_id x line), falling
+ * back to the line's own baseline when that order has no draft entry yet
+ * (e.g. a column just added via add-location/add-product). */
+export function draftQtyFor(
+  drafts: TransportDraftMap,
+  orderId: string,
+  line: ManagerOrderLineDetail,
+): number {
+  return draftQty(drafts[orderId] ?? {}, line);
+}
+
+/** True when `order`'s draft differs from its seeded baseline in any line. */
+export function transportOrderDirty(order: TransportBatchOrder, drafts: TransportDraftMap): boolean {
+  return hasDirtyDrafts(drafts[order.order_id] ?? {}, order.lines);
+}
+
+/** True when ANY member order has an unsaved edit — drives the batch-level
+ * "Zapisz zmiany" affordance and the switch-batch/supplier confirm guard. */
+export function anyTransportDirty(orders: TransportBatchOrder[], drafts: TransportDraftMap): boolean {
+  return orders.some((order) => transportOrderDirty(order, drafts));
+}
+
+/** One order's managerSave payload — DIRTY lines only (read-modify-write: an
+ * untouched line is simply absent from the payload, so its persisted
+ * manager_comment is never overwritten). */
+export interface TransportOrderSavePayload {
+  order_id: string;
+  finals: OrderLineManagerFinal[];
+}
+
+/** Build one managerSave-shaped payload per order that has at least one dirty
+ * line — the "save every dirty column" batch action. An order with no edits
+ * contributes nothing (empty finals are never returned), so the caller only
+ * issues a managerSave call for orders that actually changed. */
+export function transportDirtySavePayloads(
+  orders: TransportBatchOrder[],
+  drafts: TransportDraftMap,
+): TransportOrderSavePayload[] {
+  const out: TransportOrderSavePayload[] = [];
+  for (const order of orders) {
+    const finals = dirtySavePayload(drafts[order.order_id] ?? {}, order.lines);
+    if (finals.length > 0) out.push({ order_id: order.order_id, finals });
+  }
+  return out;
+}
+
+/** Weight strip math for the batch detail header: total / limit / remaining
+ * (may go negative) / over (>= 0) / isOver, plus the "brak wagi dla N pozycji"
+ * count passed straight through. A null `limit_kg` (no limit set) neutralizes
+ * remaining/over/isOver rather than dividing by/comparing against nothing. */
+export interface TransportWeightStrip {
+  totalKg: number;
+  limitKg: number | null;
+  remainingKg: number | null;
+  overKg: number;
+  isOver: boolean;
+  unknownCount: number;
+}
+
+export function computeWeightStrip(
+  detail: Pick<TransportBatchDetail, "total_weight_kg" | "limit_kg" | "unknown_weight_count">,
+): TransportWeightStrip {
+  const limitKg = detail.limit_kg ?? null;
+  const totalKg = detail.total_weight_kg;
+  if (limitKg == null) {
+    return { totalKg, limitKg: null, remainingKg: null, overKg: 0, isOver: false, unknownCount: detail.unknown_weight_count };
+  }
+  const remainingKg = Math.round((limitKg - totalKg) * 100) / 100;
+  const overKg = Math.max(0, Math.round((totalKg - limitKg) * 100) / 100);
+  return {
+    totalKg,
+    limitKg,
+    remainingKg,
+    overKg,
+    isOver: remainingKg < 0,
+    unknownCount: detail.unknown_weight_count,
+  };
+}
+
+/** Deduped, sorted non-empty values of one logistics field across past
+ * batches — feeds the driver/vehicle `<datalist>` suggestions (v2 design
+ * decision 8: free text, no new master-data surface). */
+export function collectLogisticsSuggestions(
+  batches: TransportBatchSummary[],
+  field: "driver" | "vehicle",
+): string[] {
+  const seen = new Set<string>();
+  for (const b of batches) {
+    const v = b[field];
+    if (v && v.trim() !== "") seen.add(v.trim());
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b, "pl"));
 }

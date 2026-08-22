@@ -1,7 +1,7 @@
 ---
 change_id: to-ordering-pago
 title: Manager Transport — aggregate location orders into one Pago order + usage
-status: implemented
+status: implementing
 created: 2026-08-21
 updated: 2026-08-21
 archived_at: null

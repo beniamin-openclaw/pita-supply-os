@@ -47,12 +47,12 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 # FK-safe drop/truncate order (children before parents).
 _ALL_TABLES = [
     "receipt_lines", "receipts", "inventory_count_lines", "inventory_counts",
-    "order_lines", "orders", "location_product_settings", "supplier_products",
-    "locations", "suppliers", "products", "_meta",
+    "order_lines", "orders", "transport_batches", "location_product_settings",
+    "supplier_products", "locations", "suppliers", "products", "_meta",
 ]
 _TXN_TABLES = [
     "receipt_lines", "receipts", "inventory_count_lines", "inventory_counts",
-    "order_lines", "orders",
+    "order_lines", "orders", "transport_batches",
 ]
 
 
@@ -93,6 +93,12 @@ def _schema():
     # 0007 adds locations.company_* (email footer); _LOCATION_COLUMNS references
     # them, so the locations insert below errors against a pre-0007 schema.
     company_fields = (MIGRATIONS_DIR / "0007_add_location_company_fields.sql").read_text()
+    # 0009 adds transport_batches + supplier_products.unit_weight_kg;
+    # _TRANSPORT_BATCH_COLUMNS / _SUPPLIER_PRODUCT_COLUMNS reference them, so
+    # append_transport_batch / append (supplier_products) error against a
+    # pre-0009 schema. 0008 belongs to a different lane and is deliberately
+    # NOT applied here (lesson: wire every new migration into this fixture).
+    transport_batches = (MIGRATIONS_DIR / "0009_transport_batches.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -103,6 +109,7 @@ def _schema():
         conn.exec_driver_sql(ordered_by)
         conn.exec_driver_sql(order_note)
         conn.exec_driver_sql(company_fields)
+        conn.exec_driver_sql(transport_batches)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

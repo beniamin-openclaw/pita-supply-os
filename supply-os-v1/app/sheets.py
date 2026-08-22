@@ -46,6 +46,7 @@ from .models import (
     ReceiptLine,
     Supplier,
     SupplierProduct,
+    TransportBatch,
 )
 
 log = logging.getLogger(__name__)
@@ -875,3 +876,64 @@ def update_receipt(receipt_id: str, **kwargs) -> None:
     if updates:
         ws.batch_update(updates, value_input_option="USER_ENTERED")
     invalidate_cache("receipts")
+
+
+# ---------- Transport batch header read + write API (v2, to-ordering-pago ADDENDUM v2) ----------
+
+def load_transport_batches() -> list[TransportBatch]:
+    """Read 'transport_batches' worksheet, return TransportBatch instances.
+
+    ORDERS_TTL_SECONDS for the same freshness reason as ``load_orders`` — a
+    freshly-created draft batch should surface as promptly as a freshly
+    submitted order. Raises ``WorksheetNotFound`` when the tab hasn't been
+    created yet (mirrors ``load_receipts``); callers degrade to "no headers"
+    (every marker group reads as an implicit legacy ``status="sent"`` batch).
+    """
+    return _read_with_ttl("transport_batches", TransportBatch, ORDERS_TTL_SECONDS)
+
+
+def get_transport_batch(transport_id: str) -> TransportBatch | None:
+    """Return the TransportBatch with ``transport_id``, or None if absent.
+    Propagates ``WorksheetNotFound`` (mirrors ``load_transport_batches``)."""
+    batches = load_transport_batches()
+    return next((b for b in batches if b.transport_id == transport_id), None)
+
+
+def append_transport_batch(batch: TransportBatch) -> None:
+    """Append one row to 'transport_batches', then invalidate the read cache.
+
+    Mirrors ``append_receipt``. Called once per batch, at create (draft) —
+    never re-appended at finalize (that's an ``update_transport_batch`` call).
+    """
+    ws = _open_worksheet("transport_batches")
+    column_order = _get_column_order(ws)
+    row = _model_to_row(batch, column_order)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    invalidate_cache("transport_batches")
+
+
+def update_transport_batch(transport_id: str, **kwargs) -> None:
+    """Update specific fields on the 'transport_batches' row matching
+    ``transport_id`` (mirrors ``update_receipt``). No status guard here — the
+    route layer preflights the draft/sent gate before calling this. Raises
+    OrderNotFoundError if the batch is absent. No-op when ``kwargs`` is empty.
+    """
+    if not kwargs:
+        return
+    ws = _open_worksheet("transport_batches")
+    column_order = _get_column_order(ws)
+    row_idx = _find_row_index(ws, "transport_id", transport_id)
+    if row_idx is None:
+        raise OrderNotFoundError(
+            f"transport_id={transport_id!r} not found in 'transport_batches' sheet"
+        )
+    updates: list[dict] = []
+    for field_name, raw_value in kwargs.items():
+        if field_name not in column_order:
+            continue
+        col_idx = column_order.index(field_name) + 1
+        a1 = rowcol_to_a1(row_idx, col_idx)
+        updates.append({"range": a1, "values": [[_cell_value(raw_value)]]})
+    if updates:
+        ws.batch_update(updates, value_input_option="USER_ENTERED")
+    invalidate_cache("transport_batches")

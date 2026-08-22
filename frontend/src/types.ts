@@ -585,6 +585,12 @@ export interface TransportAggregateLine {
   purchase_unit: string;
   total_qty_purchase: number;
   per_location: TransportLocationQty[];
+  // Weight preview (v2, to-ordering-pago ADDENDUM v2) — joined from the line's
+  // supplier_product. null when unknown (not yet filled in master data); a
+  // known unit_weight_kg always implies a known line_weight_kg (= total *
+  // unit), and vice versa.
+  unit_weight_kg?: number | null;
+  line_weight_kg?: number | null;
 }
 
 /** One row on the Transport "orders to combine" picker. */
@@ -610,7 +616,17 @@ export interface TransportBatchOrder {
   location_name: string;
   status: OrderStatus;
   total_value_estimate_pln?: number | null;
+  // Full enriched lines (v2, to-ordering-pago ADDENDUM v2) — reuses
+  // ManagerOrderLineDetail so the FE can render the editable product x
+  // location matrix. Empty for a newly-created skeleton order (add-location)
+  // with no lines yet.
+  lines: ManagerOrderLineDetail[];
 }
+
+/** Draft/sent lifecycle status of a Transport batch (v2). A marker group with
+ * no `transport_batches` header row is a v1-created legacy batch — always
+ * "sent" (read-only, exactly as v1 behaved). */
+export type TransportBatchStatus = "draft" | "sent";
 
 /** One past Transport batch — the set of orders sharing a
  * supplier_order_reference marker that starts with "TRN-". */
@@ -621,6 +637,10 @@ export interface TransportBatchSummary {
   created?: string | null; // ISO datetime — earliest member manager_sent_at
   order_count: number;
   location_ids: string[]; // sorted unique
+  status: TransportBatchStatus;
+  driver?: string | null;
+  vehicle?: string | null;
+  pickup_date?: string | null; // ISO date
 }
 
 /** Full Transport batch: the summary fields plus the member orders and the
@@ -635,6 +655,21 @@ export interface TransportBatchDetail {
   location_ids: string[];
   orders: TransportBatchOrder[];
   lines: TransportAggregateLine[];
+  // Draft/sent lifecycle + logistics (v2) — joined from the batch header row
+  // when present; a headerless (legacy v1) batch reports status="sent" and
+  // every logistics field null/empty.
+  status: TransportBatchStatus;
+  driver?: string | null;
+  vehicle?: string | null;
+  pickup_date?: string | null; // ISO date
+  pickup_time?: string | null;
+  limit_kg?: number | null;
+  notes: string;
+  // Weight preview roll-up (v2): sum of the known per-line weights, and how
+  // many lines with qty > 0 have no unit_weight_kg on their supplier_product
+  // (surfaced as a "brak wagi dla N pozycji" warning by the FE).
+  total_weight_kg: number;
+  unknown_weight_count: number;
 }
 
 /** One order the create endpoint could not combine, with a short
@@ -655,4 +690,68 @@ export interface TransportCreateResponse {
   transport_id: string;
   combined: string[];
   skipped: TransportSkippedOrder[];
+}
+
+// Manager Transport v2: draft lifecycle (to-ordering-pago ADDENDUM v2) -------
+
+export interface TransportFinalizeRequest {
+  transport_id: string;
+}
+
+/** Result of finalize. `sent` lists order_ids that transitioned to
+ * manager_sent; `skipped` lists member orders that could not (wrong status,
+ * guard conflict, backend error) — mirrors TransportCreateResponse's
+ * never-silently-drop contract. */
+export interface TransportFinalizeResponse {
+  transport_id: string;
+  sent: string[];
+  skipped: TransportSkippedOrder[];
+}
+
+/** Payload for POST /api/manager/transport/add-location — create a skeleton
+ * (no-lines) order for `location_id` and fold it into the draft batch. */
+export interface TransportAddLocationRequest {
+  transport_id: string;
+  location_id: string;
+}
+
+export interface TransportAddLocationResponse {
+  transport_id: string;
+  order_id: string; // the newly-created skeleton order
+}
+
+/** Payload for POST /api/manager/transport/remove-order — drop one member
+ * order from a draft batch. */
+export interface TransportRemoveOrderRequest {
+  transport_id: string;
+  order_id: string;
+}
+
+export interface TransportRemoveOrderResponse {
+  transport_id: string;
+  order_id: string;
+  action: "released" | "cancelled";
+}
+
+/** Payload for PATCH /api/manager/transport/batch/{transport_id} — logistics
+ * fields only; only the ones provided are updated (undefined = leave
+ * untouched). Allowed regardless of batch status. */
+export interface TransportBatchPatchRequest {
+  driver?: string | null;
+  vehicle?: string | null;
+  pickup_date?: string | null; // ISO date
+  pickup_time?: string | null;
+  limit_kg?: number | null;
+  notes?: string | null;
+}
+
+export interface TransportBatchPatchResponse {
+  transport_id: string;
+  status: TransportBatchStatus;
+  driver?: string | null;
+  vehicle?: string | null;
+  pickup_date?: string | null;
+  pickup_time?: string | null;
+  limit_kg?: number | null;
+  notes: string;
 }

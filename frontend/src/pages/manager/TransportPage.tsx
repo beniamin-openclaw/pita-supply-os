@@ -1,12 +1,11 @@
 // Manager Transport ("TO" — combined delivery run) workspace (to-ordering-pago
-// Phase 3). Combines several locations' submitted/claimed orders for one
-// supplier into a single Transport batch, then lets the manager review the
-// batch: per-product totals, a private per-location driver matrix (copyable),
-// and — when the supplier has a real email on file — a totals-only Gmail
-// draft. One page, three stacked sections (supplier picker / eligible orders
-// to combine / past batches + detail), templated on ManagerInventoryPage's
-// header + list conventions but kept single-page (no back/forward navigation)
-// because the eligible list and the batch list are both always relevant here.
+// Phase 3 + v2 ADDENDUM). Combines several locations' submitted/claimed orders
+// for one supplier into a single Transport batch, then lets the manager work
+// the batch as a DRAFT: edit quantities per product x location cell, add
+// products, add a location with no captain submission, remove a member order,
+// set logistics (driver/vehicle/pickup/limit), preview the total weight — and
+// finally finalize (draft -> sent), which mirrors v1's totals/driver-list/
+// email/copy view exactly, now read-only.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -17,10 +16,27 @@ import { AppHeader } from "../../components/ui/AppHeader";
 import { roundQty } from "../../components/ui/number";
 import { useT } from "../../i18n";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
-import { buildTransportDriverText, buildTransportGmailUrl, hasValidRecipient } from "./lib/transport";
+import {
+  anyTransportDirty,
+  buildTransportDriverText,
+  buildTransportGmailUrl,
+  collectLogisticsSuggestions,
+  hasValidRecipient,
+  seedTransportDrafts,
+  transportDirtySavePayloads,
+  type TransportDraftMap,
+} from "./lib/transport";
+import { AddLocationPicker } from "./transport/AddLocationPicker";
+import { LogisticsPanel } from "./transport/LogisticsPanel";
+import { TransportMatrix } from "./transport/TransportMatrix";
+import { WeightStrip } from "./transport/WeightStrip";
 import type {
+  Location,
+  OrderableItem,
   Supplier,
   TransportBatchDetail,
+  TransportBatchOrder,
+  TransportBatchPatchRequest,
   TransportBatchSummary,
   TransportEligibleOrder,
   TransportSkippedOrder,
@@ -32,6 +48,11 @@ interface CreateResult {
   skipped: TransportSkippedOrder[];
 }
 
+interface FinalizeResult {
+  sentCount: number;
+  skipped: TransportSkippedOrder[];
+}
+
 export function TransportPage() {
   const { t, formatDateTime } = useT();
   const navigate = useNavigate();
@@ -40,6 +61,16 @@ export function TransportPage() {
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState<string>("");
+
+  // Locations master data — for the draft "add location" picker (Manager-only
+  // caller; api.locations needs role="manager" or it 401s silently).
+  const [locations, setLocations] = useState<Location[]>([]);
+  useEffect(() => {
+    api
+      .locations("manager")
+      .then((data) => setLocations(data.filter((l) => l.active)))
+      .catch(() => setLocations([]));
+  }, []);
 
   // Eligible orders to combine ---------------------------------------------------
   const [eligible, setEligible] = useState<TransportEligibleOrder[] | null>(null);
@@ -65,6 +96,27 @@ export function TransportPage() {
   const [detail, setDetail] = useState<TransportBatchDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Per-order draft qty state for the selected DRAFT batch (v2). Reseeded on
+  // every detail load; keyed by order_id (one column = one order).
+  const [drafts, setDrafts] = useState<TransportDraftMap>({});
+
+  // Orderable products per member order (add-product-to-order, per column).
+  const [orderableByOrderId, setOrderableByOrderId] = useState<Record<string, OrderableItem[]>>({});
+
+  // Generic busy/error/toast state for the workstation actions below.
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const showToast = useCallback((msg: string, ok: boolean) => {
+    setToast({ msg, ok });
+    window.setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  const [matrixSaving, setMatrixSaving] = useState(false);
+  const [logisticsSaving, setLogisticsSaving] = useState(false);
+  const [addLocationBusy, setAddLocationBusy] = useState(false);
+  const [busyOrderId, setBusyOrderId] = useState<string | null>(null); // add-product / remove-order per column
+  const [finalizing, setFinalizing] = useState(false);
+  const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
 
   const loadBatches = useCallback((sid: string) => {
     setBatches(null);
@@ -149,13 +201,16 @@ export function TransportPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createResult, setCreateResult] = useState<CreateResult | null>(null);
 
-  const handleCreate = useCallback(() => {
-    if (!supplierId || selected.size === 0 || creating) return;
+  // `orderIds` may be EMPTY — the empty-draft path: with zero submitted
+  // orders (Pago on day one) the manager still starts a draft and adds
+  // locations inside it, mirroring the legacy sheet's from-nothing flow.
+  const runCreate = useCallback((orderIds: string[]) => {
+    if (!supplierId || creating) return;
     setCreating(true);
     setCreateError(null);
     setCreateResult(null);
     api
-      .transportCreate({ supplier_id: supplierId, order_ids: Array.from(selected) })
+      .transportCreate({ supplier_id: supplierId, order_ids: orderIds })
       .then((resp) => {
         setCreateResult({
           transportId: resp.transport_id,
@@ -169,24 +224,252 @@ export function TransportPage() {
         if (e.status !== 401) setCreateError(e.detail);
       })
       .finally(() => setCreating(false));
-  }, [supplierId, selected, creating, loadEligible, loadBatches]);
+  }, [supplierId, creating, loadEligible, loadBatches]);
+
+  const handleCreate = useCallback(() => {
+    if (selected.size === 0) return;
+    runCreate(Array.from(selected));
+  }, [selected, runCreate]);
+
+  const handleCreateEmpty = useCallback(() => {
+    runCreate([]);
+  }, [runCreate]);
 
   // Batch detail ----------------------------------------------------------------
-  const selectBatch = useCallback((transportId: string) => {
-    setSelectedTransportId(transportId);
-    setDetail(null);
-    setDetailError(null);
-    setDetailLoading(true);
-    api
-      .transportBatch(transportId)
-      .then((d) => setDetail(d))
-      .catch((e: ApiError) => {
-        if (e.status !== 401) setDetailError(e.detail);
-      })
-      .finally(() => setDetailLoading(false));
+  const fetchOrderable = useCallback((batchDetail: TransportBatchDetail) => {
+    if (batchDetail.status !== "draft") {
+      setOrderableByOrderId({});
+      return;
+    }
+    Promise.all(
+      batchDetail.orders.map((o) =>
+        api
+          .managerOrderable(batchDetail.supplier_id, o.location_id)
+          .then((items) => [o.order_id, items] as const)
+          .catch(() => [o.order_id, []] as const),
+      ),
+    ).then((pairs) => {
+      setOrderableByOrderId(Object.fromEntries(pairs));
+    });
   }, []);
 
-  // rows = product, cols = detail.location_ids (private driver matrix).
+  const selectBatch = useCallback(
+    (transportId: string) => {
+      setSelectedTransportId(transportId);
+      setDetail(null);
+      setDetailError(null);
+      setDetailLoading(true);
+      setDrafts({});
+      setOrderableByOrderId({});
+      setFinalizeResult(null);
+      api
+        .transportBatch(transportId)
+        .then((d) => {
+          setDetail(d);
+          setDrafts(seedTransportDrafts(d.orders));
+          fetchOrderable(d);
+        })
+        .catch((e: ApiError) => {
+          if (e.status !== 401) setDetailError(e.detail);
+        })
+        .finally(() => setDetailLoading(false));
+    },
+    [fetchOrderable],
+  );
+
+  // List-only refetch: updates the batches rows WITHOUT resetting the
+  // selection/detail (loadBatches resets both — correct on supplier switch,
+  // wrong mid-workstation: it silently closed the draft panel after a
+  // logistics save and discarded unsaved matrix edits).
+  const reloadBatchList = useCallback((sid: string) => {
+    api
+      .transportBatches(sid)
+      .then((data) => setBatches(data))
+      .catch((e: ApiError) => {
+        if (e.status !== 401) setBatchesError(e.detail);
+      });
+  }, []);
+
+  const refreshDetail = useCallback(
+    (transportId: string, preserveDrafts = false) => {
+      reloadBatchList(supplierId);
+      api
+        .transportBatch(transportId)
+        .then((d) => {
+          setDetail(d);
+          // Reseed clears dirty state — right after a matrix save / add /
+          // remove, wrong after a logistics-only save (it would discard
+          // unsaved quantity edits the manager is still working on).
+          if (!preserveDrafts) setDrafts(seedTransportDrafts(d.orders));
+          fetchOrderable(d);
+        })
+        .catch((e: ApiError) => {
+          if (e.status !== 401) setDetailError(e.detail);
+        });
+    },
+    [supplierId, reloadBatchList, fetchOrderable],
+  );
+
+  const isDraft = detail?.status === "draft";
+
+  // ---- v2 draft workstation: matrix edit + save ------------------------------
+
+  const handleQtyChange = useCallback((orderId: string, orderLineId: string, qty: number) => {
+    setDrafts((prev) => {
+      const orderDrafts = prev[orderId] ?? {};
+      const current = orderDrafts[orderLineId];
+      return {
+        ...prev,
+        [orderId]: {
+          ...orderDrafts,
+          [orderLineId]: { qty, comment: current?.comment ?? "" },
+        },
+      };
+    });
+  }, []);
+
+  const dirty = detail ? anyTransportDirty(detail.orders, drafts) : false;
+
+  const handleSaveMatrix = useCallback(() => {
+    if (!detail) return;
+    const payloads = transportDirtySavePayloads(detail.orders, drafts);
+    if (payloads.length === 0) return;
+    setMatrixSaving(true);
+    Promise.allSettled(payloads.map((p) => api.managerSave(p.order_id, p.finals)))
+      .then((results) => {
+        const failed = results.filter((r) => r.status === "rejected");
+        if (failed.length > 0) {
+          const first = failed[0] as PromiseRejectedResult;
+          const msg = first.reason instanceof ApiError ? first.reason.detail : String(first.reason);
+          showToast(t("manager.transport.matrix.saveError", { detail: msg }), false);
+        } else {
+          showToast(t("manager.transport.matrix.saveOk", { count: payloads.length }), true);
+        }
+        refreshDetail(detail.transport_id);
+      })
+      .finally(() => setMatrixSaving(false));
+  }, [detail, drafts, refreshDetail, showToast, t]);
+
+  // ---- v2 draft workstation: add product per column --------------------------
+
+  const handleAddProduct = useCallback(
+    (orderId: string, productId: string, supplierProductId: string) => {
+      if (!detail) return;
+      setBusyOrderId(orderId);
+      api
+        .managerAddLine(orderId, productId, supplierProductId)
+        .then(() => refreshDetail(detail.transport_id))
+        .catch((e: ApiError) => {
+          showToast(t("manager.actionError", { detail: e.detail }), false);
+        })
+        .finally(() => setBusyOrderId(null));
+    },
+    [detail, refreshDetail, showToast, t],
+  );
+
+  // ---- v2 draft workstation: add location -------------------------------------
+
+  const locationsNotInBatch = useMemo(() => {
+    if (!detail) return locations;
+    const present = new Set(detail.orders.map((o) => o.location_id));
+    return locations.filter((l) => !present.has(l.location_id));
+  }, [locations, detail]);
+
+  const handleAddLocation = useCallback(
+    (location: Location) => {
+      if (!detail) return;
+      setAddLocationBusy(true);
+      api
+        .transportAddLocation(detail.transport_id, location.location_id)
+        .then(() => {
+          showToast(t("manager.transport.addLocation.ok"), true);
+          refreshDetail(detail.transport_id);
+        })
+        .catch((e: ApiError) => {
+          showToast(t("manager.transport.addLocation.error", { detail: e.detail }), false);
+        })
+        .finally(() => setAddLocationBusy(false));
+    },
+    [detail, refreshDetail, showToast, t],
+  );
+
+  // ---- v2 draft workstation: remove order --------------------------------------
+
+  const handleRemoveOrder = useCallback(
+    (order: TransportBatchOrder) => {
+      if (!detail) return;
+      if (!window.confirm(t("manager.transport.removeOrder.confirm", { location: order.location_name }))) {
+        return;
+      }
+      setBusyOrderId(order.order_id);
+      api
+        .transportRemoveOrder(detail.transport_id, order.order_id)
+        .then((resp) => {
+          showToast(
+            t(
+              resp.action === "cancelled"
+                ? "manager.transport.removeOrder.okCancelled"
+                : "manager.transport.removeOrder.okReleased",
+            ),
+            true,
+          );
+          refreshDetail(detail.transport_id);
+        })
+        .catch((e: ApiError) => {
+          showToast(t("manager.transport.removeOrder.error", { detail: e.detail }), false);
+        })
+        .finally(() => setBusyOrderId(null));
+    },
+    [detail, refreshDetail, showToast, t],
+  );
+
+  // ---- v2 draft workstation: logistics patch -----------------------------------
+
+  const handleSaveLogistics = useCallback(
+    (patch: TransportBatchPatchRequest) => {
+      if (!detail) return;
+      setLogisticsSaving(true);
+      api
+        .transportBatchPatch(detail.transport_id, patch)
+        .then(() => {
+          showToast(t("manager.transport.logistics.saveOk"), true);
+          refreshDetail(detail.transport_id, true); // keep unsaved matrix edits
+        })
+        .catch((e: ApiError) => {
+          showToast(t("manager.transport.logistics.saveError", { detail: e.detail }), false);
+        })
+        .finally(() => setLogisticsSaving(false));
+    },
+    [detail, refreshDetail, showToast, t],
+  );
+
+  // ---- v2 draft workstation: finalize --------------------------------------------
+
+  const handleFinalize = useCallback(() => {
+    if (!detail) return;
+    if (dirty) {
+      showToast(t("manager.unsavedWarning"), false);
+      return;
+    }
+    if (!window.confirm(t("manager.transport.finalize.confirm", { id: detail.transport_id }))) {
+      return;
+    }
+    setFinalizing(true);
+    setFinalizeResult(null);
+    api
+      .transportFinalize(detail.transport_id)
+      .then((resp) => {
+        setFinalizeResult({ sentCount: resp.sent.length, skipped: resp.skipped });
+        refreshDetail(detail.transport_id);
+      })
+      .catch((e: ApiError) => {
+        showToast(t("manager.transport.finalize.error", { detail: e.detail }), false);
+      })
+      .finally(() => setFinalizing(false));
+  }, [detail, dirty, refreshDetail, showToast, t]);
+
+  // rows = product, cols = detail.location_ids (private driver matrix — sent
+  // view only, unchanged from v1).
   const matrix = useMemo(() => {
     if (!detail) return null;
     return detail.lines.map((line) => {
@@ -232,6 +515,15 @@ export function TransportPage() {
     return null;
   }, [supplier, gmail, t]);
 
+  const driverSuggestions = useMemo(
+    () => collectLogisticsSuggestions(batches ?? [], "driver"),
+    [batches],
+  );
+  const vehicleSuggestions = useMemo(
+    () => collectLogisticsSuggestions(batches ?? [], "vehicle"),
+    [batches],
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-12">
       <AppHeader className="sticky top-0 z-40">
@@ -249,9 +541,16 @@ export function TransportPage() {
       </AppHeader>
 
       <main className="flex-1 max-w-5xl mx-auto w-full p-4 space-y-6">
-        {copyToast && (
-          <div className="rounded border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-900" role="status">
-            {copyToast}
+        {(copyToast || toast) && (
+          <div
+            role={toast && !toast.ok ? "alert" : "status"}
+            className={`rounded border px-3 py-2 text-sm ${
+              toast && !toast.ok
+                ? "border-red-400 bg-red-50 text-red-900"
+                : "border-green-300 bg-green-50 text-green-900"
+            }`}
+          >
+            {copyToast ?? toast?.msg}
           </div>
         )}
 
@@ -263,7 +562,16 @@ export function TransportPage() {
           <select
             id="trn-supplier"
             value={supplierId}
-            onChange={(e) => selectSupplier(e.target.value)}
+            onChange={(e) => {
+              if (
+                dirty &&
+                !window.confirm(t("manager.transport.unsavedSwitchConfirm"))
+              ) {
+                e.target.value = supplierId;
+                return;
+              }
+              selectSupplier(e.target.value);
+            }}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {(suppliers ?? []).map((s) => (
@@ -288,7 +596,18 @@ export function TransportPage() {
           )}
           {!eligibleError && eligible !== null && eligible.length === 0 && (
             <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
-              {t("manager.transport.eligible.empty")}
+              <p>{t("manager.transport.eligible.empty")}</p>
+              {/* The empty-eligible state is EXACTLY when the empty-draft path
+                  matters most (Pago day one: no submitted orders anywhere) —
+                  the manager starts a draft and adds locations inside it. */}
+              <button
+                type="button"
+                disabled={creating}
+                onClick={handleCreateEmpty}
+                className="mt-3 rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+              >
+                {t("manager.transport.createEmptyButton")}
+              </button>
             </div>
           )}
 
@@ -339,21 +658,31 @@ export function TransportPage() {
                     total: selectionTotal.toFixed(2),
                   })}
                 </div>
-                <button
-                  type="button"
-                  disabled={selected.size === 0 || creating}
-                  onClick={handleCreate}
-                  className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-                >
-                  {creating ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                      {t("manager.transport.createBusy")}
-                    </span>
-                  ) : (
-                    t("manager.transport.createButton")
-                  )}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={creating}
+                    onClick={handleCreateEmpty}
+                    className="rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                  >
+                    {t("manager.transport.createEmptyButton")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selected.size === 0 || creating}
+                    onClick={handleCreate}
+                    className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                  >
+                    {creating ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                        {t("manager.transport.createBusy")}
+                      </span>
+                    ) : (
+                      t("manager.transport.createButton")
+                    )}
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -411,20 +740,41 @@ export function TransportPage() {
                 <li key={b.transport_id}>
                   <button
                     type="button"
-                    onClick={() => selectBatch(b.transport_id)}
+                    onClick={() => {
+                      if (
+                        dirty &&
+                        b.transport_id !== selectedTransportId &&
+                        !window.confirm(t("manager.transport.unsavedSwitchConfirm"))
+                      ) {
+                        return;
+                      }
+                      selectBatch(b.transport_id);
+                    }}
                     className={`w-full text-left rounded-lg border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       selectedTransportId === b.transport_id
                         ? "border-blue-500 bg-blue-50 ring-1 ring-blue-400"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="font-medium text-slate-900">{b.transport_id}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-900">{b.transport_id}</span>
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                          b.status === "draft"
+                            ? "border-amber-300 bg-amber-50 text-amber-800"
+                            : "border-slate-300 bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {t(b.status === "draft" ? "manager.transport.status.draft" : "manager.transport.status.sent")}
+                      </span>
+                    </div>
                     <div className="text-xs text-slate-600">{b.created && formatDateTime(b.created)}</div>
                     <div className="text-xs text-slate-500">
                       {t("manager.transport.batches.rowSubtitle", {
                         count: b.order_count,
                         locations: b.location_ids.join(", "),
                       })}
+                      {b.driver ? ` · ${b.driver}` : ""}
                     </div>
                   </button>
                 </li>
@@ -443,108 +793,201 @@ export function TransportPage() {
                 </div>
               )}
 
-              {detail && matrix && (
-                <>
-                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
-                    {t("manager.transport.detail.totalsTitle")}
-                  </h3>
-                  <div className="overflow-x-auto mb-4">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="text-left font-semibold px-3 py-2">
-                            {t("manager.transport.detail.productCol")}
-                          </th>
-                          <th className="text-right font-semibold px-3 py-2">
-                            {t("manager.transport.detail.qtyCol")}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.lines.map((line) => (
-                          <tr key={line.product_id} className="border-t border-gray-100">
-                            <td className="px-3 py-2">{line.product_name_pl}</td>
-                            <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                              {line.total_qty_purchase} {line.purchase_unit}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+              {detail && (
+                <div className="space-y-4">
+                  <WeightStrip detail={detail} />
 
-                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
-                    {t("manager.transport.detail.matrixTitle")}
-                  </h3>
-                  <div className="overflow-x-auto mb-4">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="text-left font-semibold px-3 py-2">
-                            {t("manager.transport.detail.productCol")}
-                          </th>
-                          {detail.location_ids.map((locId) => (
-                            <th key={locId} className="text-right font-semibold px-3 py-2 whitespace-nowrap">
-                              {locationNameById.get(locId) ?? locId}
-                            </th>
+                  <LogisticsPanel
+                    key={detail.transport_id}
+                    detail={detail}
+                    driverSuggestions={driverSuggestions}
+                    vehicleSuggestions={vehicleSuggestions}
+                    busy={logisticsSaving}
+                    onSave={handleSaveLogistics}
+                  />
+
+                  {isDraft ? (
+                    <>
+                      <TransportMatrix
+                        orders={detail.orders}
+                        editable
+                        drafts={drafts}
+                        onQtyChange={handleQtyChange}
+                        orderableByOrderId={orderableByOrderId}
+                        onAddProduct={handleAddProduct}
+                        onRemoveOrder={handleRemoveOrder}
+                        busyOrderId={busyOrderId}
+                      />
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <AddLocationPicker
+                          items={locationsNotInBatch}
+                          disabled={addLocationBusy}
+                          onSelect={handleAddLocation}
+                        />
+                        {dirty && (
+                          <button
+                            type="button"
+                            disabled={matrixSaving}
+                            onClick={handleSaveMatrix}
+                            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                          >
+                            {matrixSaving ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                                {t("manager.transport.matrix.saveBusy")}
+                              </span>
+                            ) : (
+                              t("manager.transport.matrix.saveButton")
+                            )}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={finalizing || dirty || detail.orders.length === 0}
+                          onClick={handleFinalize}
+                          title={dirty ? t("manager.unsavedWarning") : undefined}
+                          className="ml-auto rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                        >
+                          {finalizing ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                              {t("manager.transport.finalize.busy")}
+                            </span>
+                          ) : (
+                            t("manager.transport.finalize.button")
+                          )}
+                        </button>
+                      </div>
+
+                      {finalizeResult && (
+                        <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+                          <div>
+                            {t("manager.transport.finalize.result.sent", { count: finalizeResult.sentCount })}
+                          </div>
+                          {finalizeResult.skipped.length > 0 && (
+                            <div className="mt-2">
+                              <div className="font-semibold">
+                                {t("manager.transport.finalize.result.skippedHeader")}
+                              </div>
+                              <ul className="list-disc list-inside">
+                                {finalizeResult.skipped.map((s) => (
+                                  <li key={s.order_id}>
+                                    {s.order_id}: {s.reason}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    matrix && (
+                      <>
+                        <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                          {t("manager.transport.detail.totalsTitle")}
+                        </h3>
+                        <div className="overflow-x-auto mb-4">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-slate-600">
+                              <tr>
+                                <th className="text-left font-semibold px-3 py-2">
+                                  {t("manager.transport.detail.productCol")}
+                                </th>
+                                <th className="text-right font-semibold px-3 py-2">
+                                  {t("manager.transport.detail.qtyCol")}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {detail.lines.map((line) => (
+                                <tr key={line.product_id} className="border-t border-gray-100">
+                                  <td className="px-3 py-2">{line.product_name_pl}</td>
+                                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                                    {line.total_qty_purchase} {line.purchase_unit}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                          {t("manager.transport.detail.matrixTitle")}
+                        </h3>
+                        <div className="overflow-x-auto mb-4">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-slate-600">
+                              <tr>
+                                <th className="text-left font-semibold px-3 py-2">
+                                  {t("manager.transport.detail.productCol")}
+                                </th>
+                                {detail.location_ids.map((locId) => (
+                                  <th key={locId} className="text-right font-semibold px-3 py-2 whitespace-nowrap">
+                                    {locationNameById.get(locId) ?? locId}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {matrix.map(({ line, byLocation }) => (
+                                <tr key={line.product_id} className="border-t border-gray-100">
+                                  <td className="px-3 py-2">{line.product_name_pl}</td>
+                                  {detail.location_ids.map((locId) => (
+                                    <td key={locId} className="px-3 py-2 text-right tabular-nums">
+                                      {byLocation.has(locId) ? byLocation.get(locId) : "–"}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 mb-4">
+                          <button
+                            type="button"
+                            onClick={copyDriverText}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          >
+                            {t("manager.transport.detail.copyButton")}
+                          </button>
+
+                          {!emailDisabledReason && gmail ? (
+                            <a
+                              href={gmail.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+                            >
+                              {t("manager.transport.detail.emailButton")}
+                            </a>
+                          ) : (
+                            <span
+                              className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400 cursor-not-allowed"
+                              title={emailDisabledReason ?? undefined}
+                            >
+                              {t("manager.transport.detail.emailButton")}
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                          {t("manager.transport.detail.ordersTitle")}
+                        </h3>
+                        <ul className="space-y-1 text-sm text-slate-700">
+                          {detail.orders.map((o) => (
+                            <li key={o.order_id} className="flex items-center justify-between gap-2">
+                              <span className="truncate">{o.location_name}</span>
+                              <span className="text-xs text-slate-500 shrink-0">{o.order_id}</span>
+                            </li>
                           ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {matrix.map(({ line, byLocation }) => (
-                          <tr key={line.product_id} className="border-t border-gray-100">
-                            <td className="px-3 py-2">{line.product_name_pl}</td>
-                            {detail.location_ids.map((locId) => (
-                              <td key={locId} className="px-3 py-2 text-right tabular-nums">
-                                {byLocation.has(locId) ? byLocation.get(locId) : "–"}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    <button
-                      type="button"
-                      onClick={copyDriverText}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    >
-                      {t("manager.transport.detail.copyButton")}
-                    </button>
-
-                    {!emailDisabledReason && gmail ? (
-                      <a
-                        href={gmail.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
-                      >
-                        {t("manager.transport.detail.emailButton")}
-                      </a>
-                    ) : (
-                      <span
-                        className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400 cursor-not-allowed"
-                        title={emailDisabledReason ?? undefined}
-                      >
-                        {t("manager.transport.detail.emailButton")}
-                      </span>
-                    )}
-                  </div>
-
-                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
-                    {t("manager.transport.detail.ordersTitle")}
-                  </h3>
-                  <ul className="space-y-1 text-sm text-slate-700">
-                    {detail.orders.map((o) => (
-                      <li key={o.order_id} className="flex items-center justify-between gap-2">
-                        <span className="truncate">{o.location_name}</span>
-                        <span className="text-xs text-slate-500 shrink-0">{o.order_id}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
+                        </ul>
+                      </>
+                    )
+                  )}
+                </div>
               )}
             </div>
           )}

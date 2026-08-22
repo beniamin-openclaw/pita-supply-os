@@ -56,6 +56,7 @@ from .models import (
     ReceiptLine,
     Supplier,
     SupplierProduct,
+    TransportBatch,
 )
 
 log = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ _LOCATION_COLUMNS = [
 _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",
     "purchase_unit", "units_per_purchase_unit", "rounding_rule",
-    "price_estimate_pln", "active", "notes", "order_note",
+    "price_estimate_pln", "active", "notes", "order_note", "unit_weight_kg",
 ]
 _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "setting_id", "location_id", "product_id", "min_stock_qty_base",
@@ -133,18 +134,25 @@ _RECEIPT_LINE_COLUMNS = [
     "supplier_product_id", "ordered_qty_purchase", "received_qty_purchase",
     "variance_qty_purchase", "receipt_comment",
 ]
+_TRANSPORT_BATCH_COLUMNS = [
+    "transport_id", "supplier_id", "status", "driver", "vehicle", "pickup_date",
+    "pickup_time", "limit_kg", "notes", "created_at", "created_by", "sent_at",
+]
 
 # Temporal columns get an explicit cast in INSERT/UPDATE so a value bound as an
 # ISO string (e.g. dispatch passes ``manager_sent_at`` as ``.isoformat()``) is
 # parsed by Postgres, while a native date/datetime is a no-op cast. Names are
 # unique across tables, so a single global set per type is unambiguous.
 _DATE_COLS = frozenset(
-    {"order_date", "requested_delivery_date", "count_date", "receipt_date"}
+    {
+        "order_date", "requested_delivery_date", "count_date", "receipt_date",
+        "pickup_date",
+    }
 )
 _TIMESTAMPTZ_COLS = frozenset(
     {
         "captain_submitted_at", "manager_sent_at", "last_edited_at", "cancelled_at",
-        "count_submitted_at", "received_submitted_at",
+        "count_submitted_at", "received_submitted_at", "created_at", "sent_at",
     }
 )
 
@@ -630,4 +638,51 @@ def update_receipt(receipt_id: str, **kwargs) -> None:
     if not rows:
         raise OrderNotFoundError(
             f"receipt_id={receipt_id!r} not found in 'receipts'"
+        )
+
+
+# ---------- Transport batches (v2, to-ordering-pago ADDENDUM v2) ----------
+
+def load_transport_batches() -> list[TransportBatch]:
+    return _fetch_all(
+        "SELECT * FROM transport_batches ORDER BY transport_id", TransportBatch
+    )
+
+
+def get_transport_batch(transport_id: str) -> TransportBatch | None:
+    """Return the TransportBatch with ``transport_id``, or None if no header
+    row exists — a marker group with no header row is a v1-created legacy
+    batch (mirrors ``sheets.get_transport_batch``, which returns the same
+    None for the same reason, just via an empty ``load_transport_batches``)."""
+    batches = _fetch_all(
+        "SELECT * FROM transport_batches WHERE transport_id = :tid",
+        TransportBatch,
+        {"tid": transport_id},
+    )
+    return batches[0] if batches else None
+
+
+def append_transport_batch(batch: TransportBatch) -> None:
+    _insert("transport_batches", _TRANSPORT_BATCH_COLUMNS, batch)
+
+
+def update_transport_batch(transport_id: str, **kwargs) -> None:
+    """Update fields on the transport_batches row matching ``transport_id``
+    (mirrors ``update_receipt`` — no status guard; the route layer preflights
+    the draft/sent gate before calling this)."""
+    cols = [c for c in kwargs if c in _TRANSPORT_BATCH_COLUMNS and c != "transport_id"]
+    if not cols:
+        return
+    set_sql = ", ".join(f"{c} = {_bind(c)}" for c in cols)
+    params = {c: _to_db(kwargs[c]) for c in cols}
+    params["_transport_id"] = transport_id
+    sql = (
+        f"UPDATE transport_batches SET {set_sql} "
+        f"WHERE transport_id = :_transport_id RETURNING transport_id"
+    )
+    with _get_engine().begin() as conn:
+        rows = conn.execute(text(sql), params).fetchall()
+    if not rows:
+        raise OrderNotFoundError(
+            f"transport_id={transport_id!r} not found in 'transport_batches'"
         )

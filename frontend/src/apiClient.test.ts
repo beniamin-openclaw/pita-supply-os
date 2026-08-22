@@ -122,3 +122,57 @@ describe("api.suppliers — role/token selection (regression)", () => {
     expect(authHeaderOf(fetchMock)).toBe("Bearer cap-token");
   });
 });
+
+describe("api.locations — role/token selection (regression, mirrors api.suppliers)", () => {
+  // Same shipped bug, same fix, this time on `/api/locations`: the Manager
+  // Transport add-location picker (v2) is the first Manager-only caller, and a
+  // hardcoded default role would silently 401 exactly like api.suppliers once did.
+  function stubStorage(entries: Record<string, string>): void {
+    const store = new Map(Object.entries(entries));
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    });
+  }
+
+  function stubFetchOk(): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function authHeaderOf(fetchMock: ReturnType<typeof vi.fn>): string | undefined {
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    return (init.headers as Record<string, string>)["Authorization"];
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends the MANAGER token when called with 'manager'", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchOk();
+
+    await api.locations("manager");
+
+    expect(authHeaderOf(fetchMock)).toBe("Bearer mgr-token");
+  });
+
+  it("defaults to the captain token (unchanged for captain screens)", async () => {
+    stubStorage({ supply_os_captain_token: "cap-token" });
+    const fetchMock = stubFetchOk();
+
+    await api.locations();
+
+    expect(authHeaderOf(fetchMock)).toBe("Bearer cap-token");
+  });
+});

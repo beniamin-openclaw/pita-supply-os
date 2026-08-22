@@ -87,3 +87,23 @@ Two parallel Opus subagents (plan-drift; safety/quality/patterns) over the trans
 - Backend: `ruff check .` clean; `python3 -m pytest` → **567 passed**, 16 deselected (integration).
 - Frontend: `npm run test` → **101 passed** (11 files); `npm run build` green (TS strict); `npm run lint` clean.
 - Convergence per 10x-autonomous-workflow Phase 5: no CRITICAL or WARNING outstanding; every OBSERVATION fixed or documented above. Residual notes from the drift agent (empty `prod-sql/` dir — removed; inert optional `cc` param on `buildTransportGmailUrl` — harmless, kept for the existing global-CC follow-up) are recorded here as addressed.
+
+---
+
+# v2 review round (2026-08-22) — draft workstation extension
+
+Two Opus subagents (drift + safety) over the v2 working-tree diff, plus an orchestrator-found gap.
+
+## Verdict: APPROVED after fixes
+
+- **Drift**: MATCH on all 8 ADDENDUM v2 design decisions and Phase 4/5 items; only notes were 4 dead i18n keys (removed) and stale checklist ticks (fixed).
+- **G1 (orchestrator-found, functional gap)**: create required ≥1 order — with zero Pago orders on prod the manager could never start. FIXED: empty-draft contract (order_ids may be [], header always written for a new batch, header-only batches now listed and served in detail; FE "Utwórz pusty transport" button). Tests: empty-create, header-only list/detail.
+- **F1 CRITICAL (safety)**: draft members (manager_claimed) were dispatchable/releasable/cancellable from the ordinary queue, bypassing the batch lifecycle and stranding markers. FIXED: `_reject_if_locked_in_draft_transport` gate (409) in manager_dispatch/release/cancel — draft members exit only via finalize/remove-order; legacy marker-without-header unaffected. Tests: 3 lock tests + 1 legacy-pass test.
+- **F2 WARNING**: batch status gates read a TTL-cached header (Sheets) without invalidation. FIXED: `invalidate_cache("transport_batches")` before every status-gated header read (finalize/add-location/remove-order/patch/append_to + the lock gate).
+- **F3 WARNING**: unsaved matrix edits silently discarded on batch/supplier switch; a doc comment falsely claimed a navigate-away guard. FIXED: window.confirm guard on both switches; comment corrected. (Browser tab close still loses edits — accepted, matches the rest of the app.)
+- **F4 OBSERVATION**: manager-created skeleton orders appear in that location's Captain list. ACCEPTED — transparency is desirable (the captain sees a manager order exists for their location); recorded here.
+- **F5 OBSERVATION**: LogisticsPanel local state could desync if the backend ever normalized fields asymmetrically. ACCEPTED — current save path trims symmetrically; noted.
+
+## Post-fix verification
+
+Backend: ruff clean; pytest **525 passed** (85 transport tests). Frontend: **116 passed**, build (TS strict) green, lint clean.

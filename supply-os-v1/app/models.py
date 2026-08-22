@@ -99,6 +99,12 @@ class SupplierProduct(BaseModel):
     # orderable screen. The 60-char "few words" cap is enforced at the DB
     # (varchar(60), migration 0006), where the value is actually entered.
     order_note: Optional[str] = None
+    # Per-purchase-unit weight in kg, for the Transport batch weight preview
+    # (to-ordering-pago v2). Nullable — schema ships empty; the operator fills
+    # it in a separate gated prod master-data batch. None ⇒ unknown weight
+    # (the batch detail's ``unknown_weight_count`` and per-line
+    # ``line_weight_kg`` both surface this rather than assuming 0).
+    unit_weight_kg: Optional[float] = None
 
 
 class LocationProductSetting(BaseModel):
@@ -834,6 +840,14 @@ class TransportAggregateLine(BaseModel):
     purchase_unit: str  # joined from supplier_products ("" fallback)
     total_qty_purchase: float = 0
     per_location: list[TransportLocationQty] = Field(default_factory=list)
+    # Weight preview (v2, to-ordering-pago ADDENDUM v2). ``unit_weight_kg`` is
+    # joined from the line's supplier_product; None when master data hasn't
+    # been filled in yet. ``line_weight_kg`` = total_qty_purchase *
+    # unit_weight_kg, None (not 0) when the weight is unknown — the batch
+    # detail's ``unknown_weight_count`` counts these rather than silently
+    # treating them as zero.
+    unit_weight_kg: Optional[float] = None
+    line_weight_kg: Optional[float] = None
 
 
 class TransportEligibleOrder(BaseModel):
@@ -863,20 +877,33 @@ class TransportBatchOrder(BaseModel):
     location_name: str  # joined from locations (id fallback)
     status: OrderStatus
     total_value_estimate_pln: float | None = None
+    # Full enriched lines (v2, to-ordering-pago ADDENDUM v2) — reuses
+    # ManagerOrderLineDetail (``_enrich_lines_for_detail``) so the FE can
+    # render the editable product x location matrix. Empty for a
+    # newly-created skeleton order (``add-location``) with no lines yet.
+    lines: list["ManagerOrderLineDetail"] = Field(default_factory=list)
 
 
 class TransportBatchSummary(BaseModel):
     """One past Transport batch — the set of orders sharing a
     ``supplier_order_reference`` marker that starts with "TRN-". ``created``
-    is the earliest ``manager_sent_at`` among member orders (the moment the
-    batch was combined); ``None`` only if every member order is missing the
-    timestamp (should not happen for a real dispatched batch)."""
+    is the batch header's ``created_at`` when a header row exists (v2 draft
+    lifecycle), else the earliest ``manager_sent_at`` among member orders
+    (legacy v1 batch, no header row); ``None`` only if neither is available.
+    """
     transport_id: str
     supplier_id: str
     supplier_name: str  # joined from suppliers (id fallback)
     created: datetime | None = None
     order_count: int
     location_ids: list[str] = Field(default_factory=list)  # sorted unique
+    # Draft/sent lifecycle (v2). A marker group with no ``transport_batches``
+    # header row is a v1-created legacy batch — always ``status="sent"``
+    # (read-only, exactly as v1 behaved).
+    status: str = "sent"
+    driver: str | None = None
+    vehicle: str | None = None
+    pickup_date: date | None = None
 
 
 class TransportBatchDetail(BaseModel):
@@ -891,6 +918,43 @@ class TransportBatchDetail(BaseModel):
     location_ids: list[str] = Field(default_factory=list)
     orders: list[TransportBatchOrder] = Field(default_factory=list)
     lines: list[TransportAggregateLine] = Field(default_factory=list)
+    # Draft/sent lifecycle + logistics (v2) — joined from the batch header row
+    # when present; a headerless (legacy v1) batch reports status="sent" and
+    # every logistics field None/empty.
+    status: str = "sent"
+    driver: str | None = None
+    vehicle: str | None = None
+    pickup_date: date | None = None
+    pickup_time: str | None = None
+    limit_kg: float | None = None
+    notes: str = ""
+    # Weight preview roll-up (v2): sum of the known per-line weights, and how
+    # many lines with qty > 0 have no ``unit_weight_kg`` on their
+    # supplier_product (surfaced as a "brak wagi dla N pozycji" warning by the FE).
+    total_weight_kg: float = 0
+    unknown_weight_count: int = 0
+
+
+class TransportBatch(BaseModel):
+    """The persisted ``transport_batches`` header row (v2, to-ordering-pago
+    ADDENDUM v2 / migration 0009) — mirrors the table 1:1. ``status`` starts
+    ``"draft"`` at ``create`` and flips to ``"sent"`` at ``finalize``; while
+    draft, member orders stay ``manager_claimed`` so editing rides the
+    existing manager-save / add-line / add-location / remove-order machinery.
+    A marker group with no matching row here is a v1-created legacy batch
+    (read-only, implicit ``status="sent"`` — see ``TransportBatchSummary``)."""
+    transport_id: str
+    supplier_id: str
+    status: str = "draft"
+    driver: str | None = None
+    vehicle: str | None = None
+    pickup_date: date | None = None
+    pickup_time: str | None = None
+    limit_kg: float | None = 700
+    notes: str = ""
+    created_at: datetime | None = None
+    created_by: str | None = None
+    sent_at: datetime | None = None
 
 
 # ---------- Manager Transport create (Phase 2 write side / to-ordering-pago) ----------
@@ -900,9 +964,14 @@ class TransportCreateRequest(BaseModel):
     """Payload for POST /api/manager/transport/create — combine the given
     orders (all belonging to ``supplier_id``) into one Transport batch, or
     append them to an existing batch named by ``append_to`` (the recovery
-    path when a previous create skipped some orders)."""
+    path when a previous create skipped some orders).
+
+    ``order_ids`` may be EMPTY (v2): the manager can start an empty draft —
+    the legacy sheet's manager-driven flow starts from nothing and adds
+    locations, so requiring a pre-existing order would dead-end a supplier
+    with no submitted orders (Pago on day one)."""
     supplier_id: str
-    order_ids: list[str] = Field(min_length=1)
+    order_ids: list[str] = Field(default_factory=list)
     append_to: str | None = None
 
 
@@ -924,3 +993,78 @@ class TransportCreateResponse(BaseModel):
     transport_id: str
     combined: list[str] = Field(default_factory=list)
     skipped: list[TransportSkippedOrder] = Field(default_factory=list)
+
+
+# ---------- Manager Transport v2: draft lifecycle (to-ordering-pago ADDENDUM v2) ----------
+
+
+class TransportFinalizeRequest(BaseModel):
+    """Payload for POST /api/manager/transport/finalize — flip a draft batch's
+    member orders ``manager_claimed -> manager_sent`` and the batch header to
+    ``status="sent"``. The batch must exist and be ``status="draft"``."""
+    transport_id: str
+
+
+class TransportFinalizeResponse(BaseModel):
+    """Result of finalize. ``sent`` lists order_ids that transitioned;
+    ``skipped`` (reusing ``TransportSkippedOrder``) lists member orders that
+    could not (wrong status, guard conflict, backend error) — mirrors
+    ``TransportCreateResponse``'s never-silently-drop contract."""
+    transport_id: str
+    sent: list[str] = Field(default_factory=list)
+    skipped: list[TransportSkippedOrder] = Field(default_factory=list)
+
+
+class TransportAddLocationRequest(BaseModel):
+    """Payload for POST /api/manager/transport/add-location — create a
+    skeleton (no-lines) order for ``location_id`` and fold it into the draft
+    batch ``transport_id``, so a location without a captain submission can
+    still join. Products are then added via the existing manager add-line
+    flow."""
+    transport_id: str
+    location_id: str
+
+
+class TransportAddLocationResponse(BaseModel):
+    transport_id: str
+    order_id: str  # the newly-created skeleton order
+
+
+class TransportRemoveOrderRequest(BaseModel):
+    """Payload for POST /api/manager/transport/remove-order — drop one member
+    order from a draft batch. A manager-created empty order (from
+    add-location, never given any lines) is cancelled outright via the
+    existing cancel trace; any other order has its marker cleared and is
+    released back to ``captain_submitted``."""
+    transport_id: str
+    order_id: str
+
+
+class TransportRemoveOrderResponse(BaseModel):
+    transport_id: str
+    order_id: str
+    action: str  # "released" | "cancelled"
+
+
+class TransportBatchPatchRequest(BaseModel):
+    """Payload for PATCH /api/manager/transport/batch/{transport_id} —
+    logistics fields only; only the ones provided are updated. Allowed
+    regardless of batch status (logistics can change after sending; only
+    quantities are frozen once finalized)."""
+    driver: str | None = None
+    vehicle: str | None = None
+    pickup_date: date | None = None
+    pickup_time: str | None = None
+    limit_kg: float | None = None
+    notes: str | None = None
+
+
+class TransportBatchPatchResponse(BaseModel):
+    transport_id: str
+    status: str
+    driver: str | None = None
+    vehicle: str | None = None
+    pickup_date: date | None = None
+    pickup_time: str | None = None
+    limit_kg: float | None = None
+    notes: str = ""

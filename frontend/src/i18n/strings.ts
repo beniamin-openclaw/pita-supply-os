@@ -891,6 +891,14 @@ export const STRINGS = {
   "manager.transport.title": { pl: "Transport zbiorczy", en: "Combined transport" },
   "manager.transport.back": { pl: "Powrót do menedżera", en: "Back to manager" },
   "manager.transport.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  "manager.transport.createEmptyButton": {
+    pl: "Utwórz pusty transport",
+    en: "Start empty transport",
+  },
+  "manager.transport.unsavedSwitchConfirm": {
+    pl: "Masz niezapisane zmiany ilości — porzucić je?",
+    en: "You have unsaved quantity changes — discard them?",
+  },
   "manager.transport.noSuppliers": {
     pl: "Brak aktywnych dostawców w danych podstawowych.",
     en: "No active suppliers in master data.",
@@ -917,8 +925,8 @@ export const STRINGS = {
     en: "Couldn't create the transport: {detail}",
   },
   "manager.transport.createResult.combined": {
-    pl: "Połączono {count} zamówień w {id}.",
-    en: "Combined {count} orders into {id}.",
+    pl: "Utworzono szkic {id} z {count} zamówień.",
+    en: "Created draft {id} from {count} orders.",
   },
   "manager.transport.createResult.skippedHeader": { pl: "Pominięte:", en: "Skipped:" },
   "manager.transport.batches.title": { pl: "Utworzone transporty", en: "Created transports" },
@@ -989,6 +997,111 @@ export const STRINGS = {
   },
   "manager.transport.email.closing": { pl: "Pozdrawiam,", en: "Best regards," },
   "manager.transport.email.signature": { pl: "Pita Bros", en: "Pita Bros" },
+
+  // Manager Transport v2 (to-ordering-pago ADDENDUM v2) — draft → sent
+  // lifecycle workstation: editable status, logistics, weight preview, the
+  // editable product x location matrix, add-location/remove-order, finalize.
+  "manager.transport.status.draft": { pl: "Szkic", en: "Draft" },
+  "manager.transport.status.sent": { pl: "Wysłany", en: "Sent" },
+
+  "manager.transport.logistics.title": { pl: "Logistyka", en: "Logistics" },
+  "manager.transport.logistics.driverLabel": { pl: "Kierowca", en: "Driver" },
+  "manager.transport.logistics.vehicleLabel": { pl: "Samochód", en: "Vehicle" },
+  "manager.transport.logistics.pickupDateLabel": { pl: "Data odbioru", en: "Pickup date" },
+  "manager.transport.logistics.pickupTimeLabel": { pl: "Godzina odbioru", en: "Pickup time" },
+  "manager.transport.logistics.limitKgLabel": { pl: "Limit kg", en: "Weight limit (kg)" },
+  "manager.transport.logistics.notesLabel": { pl: "Uwagi", en: "Notes" },
+  "manager.transport.logistics.saveButton": { pl: "Zapisz logistykę", en: "Save logistics" },
+  "manager.transport.logistics.saveBusy": { pl: "Zapisywanie…", en: "Saving…" },
+  "manager.transport.logistics.saveOk": { pl: "Zapisano logistykę.", en: "Logistics saved." },
+  "manager.transport.logistics.saveError": {
+    pl: "Nie udało się zapisać logistyki: {detail}",
+    en: "Couldn't save logistics: {detail}",
+  },
+
+  "manager.transport.weight.totalLabel": { pl: "Łączna waga", en: "Total weight" },
+  "manager.transport.weight.limitLabel": { pl: "Limit", en: "Limit" },
+  "manager.transport.weight.noLimit": { pl: "brak limitu", en: "no limit" },
+  "manager.transport.weight.remainingLabel": { pl: "Do limitu", en: "Remaining" },
+  "manager.transport.weight.overLabel": { pl: "Ponad limit", en: "Over limit" },
+  "manager.transport.weight.unknownWarning": {
+    pl: "Brak wagi dla {count} pozycji",
+    en: "Missing weight for {count} items",
+  },
+
+  "manager.transport.matrix.title": {
+    pl: "Produkty × lokalizacje (edytowalne)",
+    en: "Products × locations (editable)",
+  },
+  "manager.transport.matrix.emptyCell": { pl: "–", en: "–" },
+  "manager.transport.matrix.saveButton": { pl: "Zapisz zmiany", en: "Save changes" },
+  "manager.transport.matrix.saveBusy": { pl: "Zapisywanie…", en: "Saving…" },
+  "manager.transport.matrix.saveOk": {
+    pl: "Zapisano zmiany w {count} zamówieniach.",
+    en: "Saved changes in {count} orders.",
+  },
+  "manager.transport.matrix.saveError": {
+    pl: "Nie udało się zapisać zmian: {detail}",
+    en: "Couldn't save changes: {detail}",
+  },
+  "manager.transport.matrix.zeroHint": {
+    pl: "0 = pozycja znika z sum, listy kierowcy i e-maila",
+    en: "0 = drops the line from totals, the driver list and the email",
+  },
+  "manager.transport.matrix.removeColumnAria": {
+    pl: "Usuń {location} z transportu",
+    en: "Remove {location} from the transport",
+  },
+  "manager.transport.matrix.qtyAria": { pl: "{product} — {location}", en: "{product} — {location}" },
+
+  "manager.transport.addLocation.button": { pl: "Dodaj lokalizację", en: "Add location" },
+  "manager.transport.addLocation.placeholder": {
+    pl: "Szukaj lokalizacji…",
+    en: "Search locations…",
+  },
+  "manager.transport.addLocation.empty": {
+    pl: "Brak lokalizacji do dodania.",
+    en: "No locations left to add.",
+  },
+  "manager.transport.addLocation.ok": { pl: "Dodano lokalizację.", en: "Location added." },
+  "manager.transport.addLocation.error": {
+    pl: "Nie udało się dodać lokalizacji: {detail}",
+    en: "Couldn't add the location: {detail}",
+  },
+
+  "manager.transport.removeOrder.confirm": {
+    pl: "Usunąć {location} z tego transportu?",
+    en: "Remove {location} from this transport?",
+  },
+  "manager.transport.removeOrder.okReleased": {
+    pl: "Zamówienie zwolnione — wraca do kolejki kapitana.",
+    en: "Order released — back in the captain's queue.",
+  },
+  "manager.transport.removeOrder.okCancelled": {
+    pl: "Puste zamówienie anulowane.",
+    en: "Empty order cancelled.",
+  },
+  "manager.transport.removeOrder.error": {
+    pl: "Nie udało się usunąć zamówienia: {detail}",
+    en: "Couldn't remove the order: {detail}",
+  },
+
+  "manager.transport.finalize.button": { pl: "Wyślij transport", en: "Send transport" },
+  "manager.transport.finalize.confirm": {
+    pl: "Wysłać transport {id}? Zamówienia zostaną oznaczone jako wysłane do dostawcy.",
+    en: "Send transport {id}? Member orders will be marked as sent to the supplier.",
+  },
+  "manager.transport.finalize.busy": { pl: "Wysyłanie…", en: "Sending…" },
+  "manager.transport.finalize.error": {
+    pl: "Nie udało się wysłać transportu: {detail}",
+    en: "Couldn't send the transport: {detail}",
+  },
+  "manager.transport.finalize.result.sent": {
+    pl: "Wysłano {count} zamówień.",
+    en: "Sent {count} orders.",
+  },
+  "manager.transport.finalize.result.skippedHeader": { pl: "Pominięte:", en: "Skipped:" },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",

@@ -265,3 +265,99 @@ All reads ride existing TTL caches and the targeted `load_order_lines_for_orders
 - [x] 3.4 Preview verified (selection → create → batch detail → driver-list copy) + screenshot saved
 - [ ] 3.5 Email button: totals-only draft for valid email (Bukat), disabled+hint for TBD (Pago)
 - [ ] 3.6 TRN chip visible on sent lane for a combined order
+
+---
+
+# ADDENDUM v2 (2026-08-22) — operator scope extension: full manager workstation
+
+Operator feedback after the v1 prod deploy: the Transport screen must match the legacy sheet's manager-driven workflow — **preview/edit/add/remove products like in other orders, weight preview, driver + vehicle selection**, and the manager generates the orders himself ("Arkusz był dla managera, on sam generował te zamówienia"). These were v1's documented deferrals ("What We're NOT Doing" + the anticipated escalation clause); this addendum un-defers them.
+
+## Design decisions (v2)
+
+1. **Draft → sent lifecycle.** `create` no longer transitions to `manager_sent`. It CLAIMS each order (guarded `captain_submitted → manager_claimed`), stamps the `TRN-` marker, and creates a `transport_batches` row with `status='draft'`. While draft, member orders stay `manager_claimed`, so ALL editing rides the existing, tested machinery: `manager_order_save` (qty + comment, read-modify-write), `manager_add_line` (add product), qty=0 (remove — zero lines already drop from totals/driver list/email). A new `finalize` endpoint performs the guarded `manager_claimed → manager_sent` transitions (sent_method="transport", skipped[] reporting like create) and flips the batch to `status='sent'`. The frozen-lines invariant that makes read-time aggregation safe is preserved — it now begins at finalize. v1-created batches have no header row; the batches list/detail treats a marker group without a header as an implicit `sent` legacy batch (read-only, exactly as today).
+2. **Header entity at last** — migration `0009_transport_batches.sql` (ADDITIVE ONLY; NOTE: 0008 belongs to the other lane and stays unapplied — 0009 is independent): table `transport_batches` (transport_id PK, supplier_id FK, status text draft|sent, driver text, vehicle text, pickup_date date, pickup_time text, limit_kg numeric default 700, notes text, created_at timestamptz, created_by text, sent_at timestamptz) + `ALTER TABLE supplier_products ADD COLUMN unit_weight_kg numeric` (nullable). Wire into `test_supabase_integration.py` fixture (lesson). Both backends implement `load_transport_batches / get_transport_batch / append_transport_batch / update_transport_batch` (sheets: worksheet `transport_batches`, degrade via WorksheetNotFound like receipts).
+3. **Weight preview.** Aggregate line weight = total_qty_purchase × sp.unit_weight_kg (None ⇒ unknown). Batch detail returns `total_weight_kg` (sum of known), `unknown_weight_count`, and the batch's `limit_kg`; FE renders Łączna waga / Do limitu / Ponad limit like the legacy TRANSPORT header, with a "brak wagi dla N pozycji" warning. Weight VALUES are a separate gated prod master-data batch (operator supplies per-SKU kg); schema ships empty.
+4. **Manager creates an order for a location** — POST `/api/manager/transport/add-location` {transport_id, location_id}: creates a skeleton Order (status manager_claimed, captain_user="manager-default", ordered_by="manager", marker stamped, no lines) so a location without a captain submission can join a draft; products are then added via the existing add-line flow. Guard: location must exist + not already in the batch.
+5. **Remove order from draft** — POST `/api/manager/transport/remove-order` {transport_id, order_id}: clears the marker and releases `manager_claimed → captain_submitted` (guarded). A manager-created empty order is instead cancelled via the existing cancel trace.
+6. **Batch logistics editing** — PATCH `/api/manager/transport/batch/{transport_id}`: driver, vehicle, pickup_date, pickup_time, limit_kg, notes. Allowed in draft AND sent (logistics can change after sending); quantities only while draft.
+7. **Detail payload for editing** — `TransportBatchDetail.orders[*]` gains full enriched `lines: list[ManagerOrderLineDetail]` (reuse `_enrich_lines_for_detail`), so the FE can render the editable product × location matrix (each column = one order; cell edits post through managerSave's read-modify-write contract per order; blank cell + click = manager_add_line then save). Aggregate lines (zero-dropped) stay the source for totals, driver list, and the email.
+8. **Driver/vehicle pickers** — datalist suggestions from previous batches' values (no new master-data surface); free text ultimately stored on the batch.
+
+## Phase 4: Backend v2 (draft lifecycle, batch header, weight, add-location/remove/finalize/patch)
+
+Success criteria (automated): migration file present + integration fixture wired; new/updated endpoint tests green (create=draft semantics, finalize skipped[] paths, add-location, remove-order, patch, weight math incl. unknown weights, legacy headerless batch read path); full backend suite green; ruff clean.
+
+## Phase 5: Frontend v2 (editable draft workstation)
+
+Success criteria (automated): vitest green (matrix edit helpers, weight panel math, draft/sent state gating); build (TS strict) + lint green. Manual: draft flow verified in preview WITH AUTH ENABLED (lesson): create draft → edit qty → add product → add location → weight panel → finalize → sent view unchanged v1 behavior; screenshot.
+
+## Progress (v2)
+
+### Phase 4: Backend v2
+
+#### Automated
+
+- [x] 4.1 Migration 0009 + integration fixture wired
+- [x] 4.2 Backend endpoints + tests green (draft/finalize/add-location/remove/patch/weight)
+- [x] 4.3 ruff clean; full backend suite green
+
+### Phase 5: Frontend v2
+
+#### Automated
+
+- [x] 5.1 vitest green (incl. new helpers)
+- [x] 5.2 build green (TS strict)
+- [x] 5.3 lint green
+
+#### Manual
+
+- [ ] 5.4 Draft→edit→finalize flow verified in preview with auth ON + screenshot
+
+---
+
+# ADDENDUM v3 (2026-08-22) — operator feedback round 2 (demo testing)
+
+Operator decisions: (1) post-send logistics editing STAYS, but EVERY change is recorded; (2) delivered goods MUST go through acceptance exactly like any other delivery. Plus the round-1 feedback items: broken "Wyślij transport" UX, cancel, manager-first grid creation, PDF outputs.
+
+## Design decisions (v3)
+
+1. **Transport event history** — migration `0010_transport_events.sql` (additive): table `transport_events` (event_id text PK, transport_id text NOT NULL, order_id text NULL, event_type text, actor text, at timestamptz, details text — human-readable "field: old → new" summary; append-only, never updated/deleted). Also extends `transport_batches.status` CHECK with `'cancelled'`. Events emitted server-side from: create (per combined order), add-location, remove-order (released|cancelled), finalize (per sent order + batch), logistics PATCH (**with per-field old → new diffs — the post-send audit the operator required**), cancel-draft. Matrix quantity saves ride `manager_order_save`: when the saved order carries a `TRN-` marker, the route logs one event per changed line ("Gyros 25: 5 → 7 karton") — computed from the pre-write read it already does. Both backends implement `append_transport_event` / `load_transport_events_for` (sheets worksheet `transport_events`, WorksheetNotFound degrade = no history shown). Batch detail returns `events` (newest first, capped 100); FE renders a "Historia" section in the batch detail (both draft and sent).
+2. **Delivery acceptance parity (operator: "jak każda inna dostawa")** — transport member orders are `manager_sent` after finalize, so the EXISTING goods-receiving flow (captain confirms received vs ordered, discrepancies, WZ photos; first receipt closes the order) must work unchanged. This phase VERIFIES and closes gaps instead of building anew: (a) captain receiving list/submit works for transport members incl. manager-created skeleton orders (effective ordered qty = manager_final — confirm `_effective_ordered_qty` path and captain-facing display of `ordered_by="manager"` orders); (b) manager queue's receipt chips (✓/⚠) appear for transport orders in the sent lane; (c) **batch detail gains per-order delivery status** (received count / discrepancy count per member, joined from receipts) so the transport view shows which locations confirmed; (d) receiving a transport order emits a transport_event ("dostawa potwierdzona — Wola, 2 rozbieżności") — hooked in `captain_receipt_submit` when the order carries a marker. Tests for every gap found.
+3. **Finalize UX fix** — the "Wyślij transport" click was silently blocked when matrix edits were unsaved (only a 4s toast; zero requests reached the backend — diagnosed from demo logs). Fix: the button is DISABLED while dirty with a permanent inline hint ("najpierw Zapisz zmiany"), plus a one-click "Zapisz i wyślij" path that saves all dirty orders then finalizes.
+4. **Cancel draft** — endpoint `POST /api/manager/transport/cancel` {transport_id}: draft only (409 otherwise); releases every member (claim-release best-effort, marker cleared; manager-created empty orders cancelled) and sets header `status='cancelled'` (kept as audit, listed greyed-out or filtered — FE hides cancelled by default). Emits event. Cancelling a SENT transport stays OUT (open question — risky, order already reached Pago).
+5. **Manager-first grid creation (the legacy sheet flow)** — "Utwórz transport" opens a location multi-select (defaults decided by me, revisable: NO city step in v1 — locations picked directly; city grouping only if the operator insists after seeing it). Creates a draft with one manager-created order per picked location, PRE-FILLED with ALL products of the supplier available at that location (supplier catalog ∩ location_product_settings — exactly the captain's orderable set) as zero-qty lines ("bez wartości"). Manager types quantities into the matrix and saves; the Pago list / driver list / email then derive as today (zero-qty lines drop out). Backend: extend create/add-location with `prefill_products: bool` (batch `append_order_lines` of skeleton zero-qty lines). The combine-captain-orders path STAYS alongside (captain-submitted orders join the same draft).
+6. **PDF outputs, level A now** — print-friendly views for the PRIVATE driver list and the Pago order list (dedicated print stylesheet + window.print → system "Save as PDF"), buttons on the batch detail. Level C (app SENDS the email itself with a generated PDF attached — Gmail API/SMTP) is a separate follow-up BLOCKED on operator decisions: driver→email mapping and consent for the app to send mail from a mailbox (today the app only ever prepares drafts). Recorded in Open Questions.
+
+## Open Questions (carried)
+
+- City grouping in the location picker (v1 ships without it).
+- Cancel of a SENT transport — wanted or forbidden?
+- Level C email automation: driver e-mail addresses + which mailbox sends.
+- Round-1 unanswered: none other — history (decided: event log), acceptance (decided: delivery-time, existing flow).
+
+## Phase 6: Event history (backend + FE section)
+## Phase 7: Finalize UX + cancel draft
+## Phase 8: Delivery-acceptance parity (verify/fix + per-order delivery status on batch detail + receipt events)
+## Phase 9: Manager-first grid creation (location picker + prefilled zero-qty draft)
+## Phase 10: Print/PDF views (driver + Pago lists)
+
+## Progress (v3)
+
+### Phase 6: Event history
+#### Automated
+- [ ] 6.1 Migration 0010 + both backends + event emission tests green
+- [ ] 6.2 Batch detail returns events; FE Historia section; suites green
+### Phase 7: Finalize UX + cancel draft
+#### Automated
+- [ ] 7.1 Cancel endpoint + tests; finalize disabled-state helper tests
+### Phase 8: Delivery-acceptance parity
+#### Automated
+- [ ] 8.1 Receiving path verified/fixed for transport members (tests); per-order delivery status on detail; receipt events
+### Phase 9: Manager-first grid creation
+#### Automated
+- [ ] 9.1 prefill_products backend + tests; FE location picker + prefilled draft flow
+### Phase 10: Print/PDF views
+#### Automated
+- [ ] 10.1 Print views render (helper tests); suites green
+#### Manual
+- [ ] 10.2 Full v3 demo pass on the sandbox (history, cancel, receive, grid-create, print) + screenshots
