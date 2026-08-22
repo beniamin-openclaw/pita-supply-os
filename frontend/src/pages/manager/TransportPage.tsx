@@ -27,7 +27,10 @@ import {
   type TransportDraftMap,
 } from "./lib/transport";
 import { AddLocationPicker } from "./transport/AddLocationPicker";
+import { HistorySection } from "./transport/HistorySection";
+import { LocationMultiSelectModal } from "./transport/LocationMultiSelectModal";
 import { LogisticsPanel } from "./transport/LogisticsPanel";
+import { PrintViews } from "./transport/PrintViews";
 import { TransportMatrix } from "./transport/TransportMatrix";
 import { WeightStrip } from "./transport/WeightStrip";
 import type {
@@ -50,6 +53,12 @@ interface CreateResult {
 
 interface FinalizeResult {
   sentCount: number;
+  skipped: TransportSkippedOrder[];
+}
+
+interface CancelResult {
+  releasedCount: number;
+  cancelledCount: number;
   skipped: TransportSkippedOrder[];
 }
 
@@ -117,19 +126,29 @@ export function TransportPage() {
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null); // add-product / remove-order per column
   const [finalizing, setFinalizing] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
+  const [savingAndSending, setSavingAndSending] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelResult, setCancelResult] = useState<CancelResult | null>(null);
 
-  const loadBatches = useCallback((sid: string) => {
+  // v3 Phase 7 — cancelled batches hidden from the list by default.
+  const [showCancelled, setShowCancelled] = useState(false);
+
+  // v3 Phase 9 — manager-first grid creation (location multi-select modal).
+  const [gridCreateOpen, setGridCreateOpen] = useState(false);
+  const [gridCreateBusy, setGridCreateBusy] = useState(false);
+
+  const loadBatches = useCallback((sid: string, includeCancelled = showCancelled) => {
     setBatches(null);
     setBatchesError(null);
     setSelectedTransportId(null);
     setDetail(null);
     api
-      .transportBatches(sid)
+      .transportBatches(sid, undefined, includeCancelled)
       .then((data) => setBatches(data))
       .catch((e: ApiError) => {
         if (e.status !== 401) setBatchesError(e.detail);
       });
-  }, []);
+  }, [showCancelled]);
 
   // Supplier picker triggers both loads on change — deliberately NOT a
   // useEffect reacting to `supplierId`: that pattern calls setState
@@ -283,12 +302,20 @@ export function TransportPage() {
   // logistics save and discarded unsaved matrix edits).
   const reloadBatchList = useCallback((sid: string) => {
     api
-      .transportBatches(sid)
+      .transportBatches(sid, undefined, showCancelled)
       .then((data) => setBatches(data))
       .catch((e: ApiError) => {
         if (e.status !== 401) setBatchesError(e.detail);
       });
-  }, []);
+  }, [showCancelled]);
+
+  const handleToggleShowCancelled = useCallback(() => {
+    setShowCancelled((prev) => {
+      const next = !prev;
+      if (supplierId) loadBatches(supplierId, next);
+      return next;
+    });
+  }, [supplierId, loadBatches]);
 
   const refreshDetail = useCallback(
     (transportId: string, preserveDrafts = false) => {
@@ -468,6 +495,114 @@ export function TransportPage() {
       .finally(() => setFinalizing(false));
   }, [detail, dirty, refreshDetail, showToast, t]);
 
+  // ---- v3 Phase 7: "Zapisz i wyślij" — save all dirty orders, THEN finalize ----
+  // (single busy state; on save failure abort with a toast, never finalize).
+
+  const handleSaveAndSend = useCallback(() => {
+    if (!detail) return;
+    const payloads = transportDirtySavePayloads(detail.orders, drafts);
+    if (payloads.length === 0) return;
+    if (!window.confirm(t("manager.transport.finalize.confirm", { id: detail.transport_id }))) {
+      return;
+    }
+    setSavingAndSending(true);
+    setFinalizeResult(null);
+    Promise.all(payloads.map((p) => api.managerSave(p.order_id, p.finals)))
+      .then(() => api.transportFinalize(detail.transport_id))
+      .then((resp) => {
+        setFinalizeResult({ sentCount: resp.sent.length, skipped: resp.skipped });
+        refreshDetail(detail.transport_id);
+      })
+      .catch((e: ApiError) => {
+        showToast(t("manager.transport.finalize.saveAndSendSaveFailed", { detail: e.detail }), false);
+        // A save failure aborts before finalize runs, but the matrix may now be
+        // partially saved — refresh so drafts reflect what actually persisted.
+        refreshDetail(detail.transport_id);
+      })
+      .finally(() => setSavingAndSending(false));
+  }, [detail, drafts, refreshDetail, showToast, t]);
+
+  // ---- v3 Phase 7: cancel draft -------------------------------------------------
+
+  const handleCancelDraft = useCallback(() => {
+    if (!detail) return;
+    if (!window.confirm(t("manager.transport.cancel.confirm", { id: detail.transport_id }))) {
+      return;
+    }
+    setCancelling(true);
+    setCancelResult(null);
+    api
+      .transportCancel(detail.transport_id)
+      .then((resp) => {
+        setCancelResult({
+          releasedCount: resp.released.length,
+          cancelledCount: resp.cancelled.length,
+          skipped: resp.skipped,
+        });
+        showToast(
+          t("manager.transport.cancel.ok", {
+            released: resp.released.length,
+            cancelled: resp.cancelled.length,
+          }),
+          true,
+        );
+        // The batch disappears from the default (cancelled-hidden) list —
+        // close the detail panel and go back to the list.
+        setSelectedTransportId(null);
+        setDetail(null);
+        reloadBatchList(supplierId);
+      })
+      .catch((e: ApiError) => {
+        showToast(t("manager.transport.cancel.error", { detail: e.detail }), false);
+      })
+      .finally(() => setCancelling(false));
+  }, [detail, supplierId, reloadBatchList, showToast, t]);
+
+  // ---- v3 Phase 9: manager-first grid creation ---------------------------------
+
+  const handleGridCreateConfirm = useCallback(
+    (locationIds: string[]) => {
+      if (!supplierId || locationIds.length === 0) return;
+      setGridCreateBusy(true);
+      api
+        .transportCreate({ supplier_id: supplierId, order_ids: [] })
+        .then(async (createResp) => {
+          const transportId = createResp.transport_id;
+          const errors: string[] = [];
+          for (const locationId of locationIds) {
+            const location = locations.find((l) => l.location_id === locationId);
+            const label = location?.location_name ?? locationId;
+            try {
+              showToast(t("manager.transport.gridCreate.progress", { location: label }), true);
+              // Sequential by design (plan: "sequentially") — one add-location
+              // call at a time so a per-location failure is isolated and named.
+               
+              await api.transportAddLocation(transportId, locationId, true);
+            } catch (e) {
+              const detailMsg = e instanceof ApiError ? e.detail : String(e);
+              errors.push(`${label}: ${detailMsg}`);
+              showToast(
+                t("manager.transport.gridCreate.locationError", { location: label, detail: detailMsg }),
+                false,
+              );
+            }
+          }
+          if (errors.length === 0) {
+            showToast(t("manager.transport.gridCreate.done", { count: locationIds.length }), true);
+          }
+          setGridCreateOpen(false);
+          loadEligible(supplierId);
+          reloadBatchList(supplierId);
+          selectBatch(transportId);
+        })
+        .catch((e: ApiError) => {
+          showToast(t("manager.transport.createError", { detail: e.detail }), false);
+        })
+        .finally(() => setGridCreateBusy(false));
+    },
+    [supplierId, locations, loadEligible, reloadBatchList, selectBatch, showToast, t],
+  );
+
   // rows = product, cols = detail.location_ids (private driver matrix — sent
   // view only, unchanged from v1).
   const matrix = useMemo(() => {
@@ -600,14 +735,24 @@ export function TransportPage() {
               {/* The empty-eligible state is EXACTLY when the empty-draft path
                   matters most (Pago day one: no submitted orders anywhere) —
                   the manager starts a draft and adds locations inside it. */}
-              <button
-                type="button"
-                disabled={creating}
-                onClick={handleCreateEmpty}
-                className="mt-3 rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-              >
-                {t("manager.transport.createEmptyButton")}
-              </button>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={handleCreateEmpty}
+                  className="rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                >
+                  {t("manager.transport.createEmptyButton")}
+                </button>
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={() => setGridCreateOpen(true)}
+                  className="rounded-lg border border-slate-400 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                >
+                  {t("manager.transport.gridCreate.button")}
+                </button>
+              </div>
             </div>
           )}
 
@@ -669,6 +814,14 @@ export function TransportPage() {
                   </button>
                   <button
                     type="button"
+                    disabled={creating}
+                    onClick={() => setGridCreateOpen(true)}
+                    className="rounded-lg border border-slate-400 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  >
+                    {t("manager.transport.gridCreate.button")}
+                  </button>
+                  <button
+                    type="button"
                     disabled={selected.size === 0 || creating}
                     onClick={handleCreate}
                     className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
@@ -718,7 +871,20 @@ export function TransportPage() {
 
         {/* ---- Past batches + detail ---- */}
         <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-800 mb-3">{t("manager.transport.batches.title")}</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-800">{t("manager.transport.batches.title")}</h2>
+            <button
+              type="button"
+              onClick={handleToggleShowCancelled}
+              className="text-xs font-semibold text-slate-500 underline decoration-dotted hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              {t(
+                showCancelled
+                  ? "manager.transport.batches.hideCancelled"
+                  : "manager.transport.batches.showCancelled",
+              )}
+            </button>
+          </div>
 
           {batchesError && (
             <div className="rounded border-2 border-red-400 bg-red-50 p-3 text-sm text-red-900 mb-3" role="alert">
@@ -751,6 +917,8 @@ export function TransportPage() {
                       selectBatch(b.transport_id);
                     }}
                     className={`w-full text-left rounded-lg border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                      b.status === "cancelled" ? "opacity-60" : ""
+                    } ${
                       selectedTransportId === b.transport_id
                         ? "border-blue-500 bg-blue-50 ring-1 ring-blue-400"
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
@@ -762,10 +930,18 @@ export function TransportPage() {
                         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                           b.status === "draft"
                             ? "border-amber-300 bg-amber-50 text-amber-800"
-                            : "border-slate-300 bg-slate-100 text-slate-700"
+                            : b.status === "cancelled"
+                              ? "border-red-300 bg-red-50 text-red-700"
+                              : "border-slate-300 bg-slate-100 text-slate-700"
                         }`}
                       >
-                        {t(b.status === "draft" ? "manager.transport.status.draft" : "manager.transport.status.sent")}
+                        {t(
+                          b.status === "draft"
+                            ? "manager.transport.status.draft"
+                            : b.status === "cancelled"
+                              ? "manager.transport.status.cancelled"
+                              : "manager.transport.status.sent",
+                        )}
                       </span>
                     </div>
                     <div className="text-xs text-slate-600">{b.created && formatDateTime(b.created)}</div>
@@ -806,6 +982,10 @@ export function TransportPage() {
                     onSave={handleSaveLogistics}
                   />
 
+                  <PrintViews detail={detail} />
+
+                  <HistorySection events={detail.events} />
+
                   {isDraft ? (
                     <>
                       <TransportMatrix
@@ -842,23 +1022,94 @@ export function TransportPage() {
                             )}
                           </button>
                         )}
+
                         <button
                           type="button"
-                          disabled={finalizing || dirty || detail.orders.length === 0}
-                          onClick={handleFinalize}
-                          title={dirty ? t("manager.unsavedWarning") : undefined}
-                          className="ml-auto rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                          disabled={cancelling}
+                          onClick={handleCancelDraft}
+                          className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                         >
-                          {finalizing ? (
+                          {cancelling ? (
                             <span className="inline-flex items-center gap-1.5">
                               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                              {t("manager.transport.finalize.busy")}
+                              {t("manager.transport.cancel.busy")}
                             </span>
                           ) : (
-                            t("manager.transport.finalize.button")
+                            t("manager.transport.cancel.button")
                           )}
                         </button>
+
+                        <div className="ml-auto flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-2">
+                            {dirty && (
+                              <button
+                                type="button"
+                                disabled={savingAndSending}
+                                onClick={handleSaveAndSend}
+                                className="rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                              >
+                                {savingAndSending ? (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                                    {t("manager.transport.finalize.saveAndSendBusy")}
+                                  </span>
+                                ) : (
+                                  t("manager.transport.finalize.saveAndSendButton")
+                                )}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              disabled={finalizing || dirty || detail.orders.length === 0}
+                              onClick={handleFinalize}
+                              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                            >
+                              {finalizing ? (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                                  {t("manager.transport.finalize.busy")}
+                                </span>
+                              ) : (
+                                t("manager.transport.finalize.button")
+                              )}
+                            </button>
+                          </div>
+                          {/* Permanent inline hint while dirty — the finalize UX fix
+                              (v3 design decision 3): the button used to just silently
+                              4s-toast on click with unsaved edits; now it stays
+                              disabled with an always-visible explanation. */}
+                          {dirty && (
+                            <span className="text-xs text-amber-700">
+                              {t("manager.transport.finalize.disabledHint")}
+                            </span>
+                          )}
+                        </div>
                       </div>
+
+                      {cancelResult && (
+                        <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+                          <div>
+                            {t("manager.transport.cancel.ok", {
+                              released: cancelResult.releasedCount,
+                              cancelled: cancelResult.cancelledCount,
+                            })}
+                          </div>
+                          {cancelResult.skipped.length > 0 && (
+                            <div className="mt-2">
+                              <div className="font-semibold">
+                                {t("manager.transport.finalize.result.skippedHeader")}
+                              </div>
+                              <ul className="list-disc list-inside">
+                                {cancelResult.skipped.map((s) => (
+                                  <li key={s.order_id}>
+                                    {s.order_id}: {s.reason}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {finalizeResult && (
                         <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
@@ -977,12 +1228,38 @@ export function TransportPage() {
                           {t("manager.transport.detail.ordersTitle")}
                         </h3>
                         <ul className="space-y-1 text-sm text-slate-700">
-                          {detail.orders.map((o) => (
-                            <li key={o.order_id} className="flex items-center justify-between gap-2">
-                              <span className="truncate">{o.location_name}</span>
-                              <span className="text-xs text-slate-500 shrink-0">{o.order_id}</span>
-                            </li>
-                          ))}
+                          {detail.orders.map((o) => {
+                            const discrepancy = o.received_discrepancy_count ?? 0;
+                            const received = o.received_count ?? 0;
+                            return (
+                              <li key={o.order_id} className="flex items-center justify-between gap-2">
+                                <span className="truncate">{o.location_name}</span>
+                                <span className="flex items-center gap-2 shrink-0">
+                                  {/* Delivery status chip (v3 Phase 8) — mirrors
+                                      ManagerQueue's receipt signal styling. Only
+                                      meaningful once the batch is SENT — a draft
+                                      was never dispatched, so "waiting for
+                                      delivery" would mislead (review OBS). */}
+                                  {detail.status !== "sent" ? null : discrepancy > 0 ? (
+                                    <span className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-800">
+                                      <span aria-hidden="true">⚠</span>{" "}
+                                      {t("manager.transport.delivery.discrepancy", { count: discrepancy })}
+                                    </span>
+                                  ) : received > 0 ? (
+                                    <span className="rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-900">
+                                      <span aria-hidden="true">✓</span>{" "}
+                                      {t("manager.transport.delivery.delivered")}
+                                    </span>
+                                  ) : (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                                      {t("manager.transport.delivery.waiting")}
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-slate-500">{o.order_id}</span>
+                                </span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </>
                     )
@@ -993,6 +1270,15 @@ export function TransportPage() {
           )}
         </section>
       </main>
+
+      {gridCreateOpen && (
+        <LocationMultiSelectModal
+          locations={locations}
+          busy={gridCreateBusy}
+          onCancel={() => setGridCreateOpen(false)}
+          onConfirm={handleGridCreateConfirm}
+        />
+      )}
     </div>
   );
 }

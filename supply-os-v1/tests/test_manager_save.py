@@ -22,6 +22,7 @@ from app.models import (
     Order,
     OrderLine,
     OrderStatus,
+    Product,
     SupplierProduct,
 )
 
@@ -99,9 +100,22 @@ def _activate(mocker, order: Order | None):
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "get_order", return_value=order)
     mocker.patch.object(sheets, "load_supplier_products", return_value=_supplier_products())
+    mocker.patch.object(
+        sheets,
+        "load_products",
+        return_value=[
+            Product(product_id="P027", product_name_pl="Souvlaki Kurczak", product_category="Mięso", inventory_unit="kg"),
+            Product(product_id="P026", product_name_pl="Gyros", product_category="Mięso", inventory_unit="kg"),
+        ],
+    )
     mock_update_lines = mocker.patch.object(sheets, "update_order_lines")
     mock_update_order = mocker.patch.object(sheets, "update_order")
-    return {"update_order_lines": mock_update_lines, "update_order": mock_update_order}
+    mock_event = mocker.patch.object(sheets, "append_transport_event")
+    return {
+        "update_order_lines": mock_update_lines,
+        "update_order": mock_update_order,
+        "append_transport_event": mock_event,
+    }
 
 
 def _patch(body: dict, headers=MANAGER_AUTH):
@@ -214,3 +228,49 @@ def test_save_captain_token_rejected():
         f"/api/manager/order/{ORDER_ID}", json={"manager_finals": []}, headers=CAPTAIN_AUTH
     )
     assert r.status_code == 401
+
+
+# ---------- v3 Phase 6: quantities_changed transport event ----------
+
+def test_save_transport_member_emits_quantities_changed_event(mocker):
+    """A save on an order carrying a TRN- marker logs one `quantities_changed`
+    event listing every line whose EFFECTIVE quantity actually changed."""
+    order = _claimed_order().model_copy(update={"supplier_order_reference": "TRN-20260520-PAGO-abc123"})
+    mocks = _activate(mocker, order)
+    body = {
+        "manager_finals": [
+            {"order_line_id": "OL-001", "manager_final_qty_purchase": 3},
+            # OL-002 "changed" to the SAME effective value (captain default 5) —
+            # must NOT appear in the diff.
+            {"order_line_id": "OL-002", "manager_final_qty_purchase": 5},
+        ]
+    }
+    r = _patch(body)
+    assert r.status_code == 200, r.text
+
+    mocks["append_transport_event"].assert_called_once()
+    event = mocks["append_transport_event"].call_args.args[0]
+    assert event.transport_id == "TRN-20260520-PAGO-abc123"
+    assert event.event_type == "quantities_changed"
+    assert event.order_id == ORDER_ID
+    assert "Souvlaki Kurczak: 5 → 3" in event.details
+    assert "Gyros" not in event.details  # unchanged effective qty, excluded
+
+
+def test_save_non_transport_order_emits_no_event(mocker):
+    """An order with no TRN- marker never touches transport event history."""
+    mocks = _activate(mocker, _claimed_order())
+    body = {"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 3}]}
+    r = _patch(body)
+    assert r.status_code == 200, r.text
+    mocks["append_transport_event"].assert_not_called()
+
+
+def test_save_empty_payload_transport_order_emits_no_event(mocker):
+    """A no-op save (empty manager_finals) never reaches the diff/event path,
+    even for a transport member — there is nothing to have changed."""
+    order = _claimed_order().model_copy(update={"supplier_order_reference": "TRN-X"})
+    mocks = _activate(mocker, order)
+    r = _patch({"manager_finals": []})
+    assert r.status_code == 200, r.text
+    mocks["append_transport_event"].assert_not_called()

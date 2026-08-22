@@ -1102,6 +1102,112 @@ export const STRINGS = {
   },
   "manager.transport.finalize.result.skippedHeader": { pl: "Pominięte:", en: "Skipped:" },
 
+  // ADDENDUM v3 — finalize UX fix: disabled while dirty + one-click save+send.
+  "manager.transport.finalize.disabledHint": {
+    pl: "Najpierw zapisz zmiany (Zapisz zmiany)",
+    en: "Save changes first (Save changes)",
+  },
+  "manager.transport.finalize.saveAndSendButton": {
+    pl: "Zapisz i wyślij",
+    en: "Save and send",
+  },
+  "manager.transport.finalize.saveAndSendBusy": { pl: "Zapisywanie i wysyłanie…", en: "Saving and sending…" },
+  "manager.transport.finalize.saveAndSendSaveFailed": {
+    pl: "Nie udało się zapisać zmian — transport NIE został wysłany: {detail}",
+    en: "Couldn't save changes — the transport was NOT sent: {detail}",
+  },
+
+  // ADDENDUM v3 — cancel draft.
+  "manager.transport.status.cancelled": { pl: "Anulowany", en: "Cancelled" },
+  "manager.transport.cancel.button": { pl: "Anuluj szkic", en: "Cancel draft" },
+  "manager.transport.cancel.confirm": {
+    pl: "Anulować szkic transportu {id}? Wszystkie zamówienia zostaną zwolnione lub anulowane.",
+    en: "Cancel draft transport {id}? Every member order will be released or cancelled.",
+  },
+  "manager.transport.cancel.busy": { pl: "Anulowanie…", en: "Cancelling…" },
+  "manager.transport.cancel.ok": {
+    pl: "Anulowano transport: {released} zwolnionych, {cancelled} anulowanych.",
+    en: "Transport cancelled: {released} released, {cancelled} cancelled.",
+  },
+  "manager.transport.cancel.error": {
+    pl: "Nie udało się anulować transportu: {detail}",
+    en: "Couldn't cancel the transport: {detail}",
+  },
+  "manager.transport.batches.showCancelled": { pl: "Pokaż anulowane", en: "Show cancelled" },
+  "manager.transport.batches.hideCancelled": { pl: "Ukryj anulowane", en: "Hide cancelled" },
+
+  // ADDENDUM v3 — per-order delivery status (Phase 8).
+  "manager.transport.delivery.waiting": { pl: "oczekuje", en: "waiting" },
+  "manager.transport.delivery.delivered": { pl: "dostarczono", en: "delivered" },
+  "manager.transport.delivery.discrepancy": {
+    pl: "{count} rozbieżności",
+    en: "{count} discrepancies",
+  },
+
+  // ADDENDUM v3 — event history (Phase 6).
+  "manager.transport.events.title": { pl: "Historia zmian", en: "Change history" },
+  "manager.transport.events.empty": { pl: "Brak historii.", en: "No history yet." },
+  "manager.transport.events.toggleShow": { pl: "Pokaż historię", en: "Show history" },
+  "manager.transport.events.toggleHide": { pl: "Ukryj historię", en: "Hide history" },
+  "manager.transport.events.type.orderCombined": { pl: "Zamówienie połączone", en: "Order combined" },
+  "manager.transport.events.type.locationAdded": { pl: "Dodano lokalizację", en: "Location added" },
+  "manager.transport.events.type.orderRemoved": { pl: "Zamówienie usunięte", en: "Order removed" },
+  "manager.transport.events.type.orderSent": { pl: "Zamówienie wysłane", en: "Order sent" },
+  "manager.transport.events.type.batchSent": { pl: "Transport wysłany", en: "Transport sent" },
+  "manager.transport.events.type.batchCancelled": { pl: "Transport anulowany", en: "Transport cancelled" },
+  "manager.transport.events.type.logisticsChanged": { pl: "Zmieniono logistykę", en: "Logistics changed" },
+  "manager.transport.events.type.quantitiesChanged": { pl: "Zmieniono ilości", en: "Quantities changed" },
+  "manager.transport.events.type.deliveryConfirmed": { pl: "Potwierdzono dostawę", en: "Delivery confirmed" },
+
+  // ADDENDUM v3 — manager-first grid creation (Phase 9).
+  "manager.transport.gridCreate.button": {
+    pl: "Nowy transport z lokalizacjami",
+    en: "New transport with locations",
+  },
+  "manager.transport.gridCreate.title": {
+    pl: "Wybierz lokalizacje do transportu",
+    en: "Pick locations for the transport",
+  },
+  "manager.transport.gridCreate.confirm": { pl: "Utwórz transport", en: "Create transport" },
+  "manager.transport.gridCreate.cancel": { pl: "Anuluj", en: "Cancel" },
+  "manager.transport.gridCreate.empty": { pl: "Brak aktywnych lokalizacji.", en: "No active locations." },
+  "manager.transport.gridCreate.busy": { pl: "Tworzenie transportu…", en: "Creating transport…" },
+  "manager.transport.gridCreate.progress": {
+    pl: "Dodawanie {location}…",
+    en: "Adding {location}…",
+  },
+  "manager.transport.gridCreate.locationError": {
+    pl: "Nie udało się dodać {location}: {detail}",
+    en: "Couldn't add {location}: {detail}",
+  },
+  "manager.transport.gridCreate.done": {
+    pl: "Utworzono transport z {count} lokalizacjami.",
+    en: "Created transport with {count} locations.",
+  },
+  "manager.transport.gridCreate.selectedCount": {
+    pl: "Wybrano: {count}",
+    en: "Selected: {count}",
+  },
+
+  // ADDENDUM v3 — print/PDF views (Phase 10).
+  "manager.transport.print.driverButton": {
+    pl: "Drukuj / PDF — lista kierowcy",
+    en: "Print / PDF — driver list",
+  },
+  "manager.transport.print.pagoButton": {
+    pl: "Drukuj / PDF — zamówienie",
+    en: "Print / PDF — order",
+  },
+  "manager.transport.print.driverTitle": { pl: "Lista dla kierowcy", en: "Driver list" },
+  "manager.transport.print.pagoTitle": { pl: "Zamówienie zbiorcze", en: "Combined order" },
+  "manager.transport.print.driverLabel": { pl: "Kierowca", en: "Driver" },
+  "manager.transport.print.vehicleLabel": { pl: "Samochód", en: "Vehicle" },
+  "manager.transport.print.dateLabel": { pl: "Data", en: "Date" },
+  "manager.transport.print.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  "manager.transport.print.productCol": { pl: "Produkt", en: "Product" },
+  "manager.transport.print.qtyCol": { pl: "Ilość", en: "Qty" },
+  "manager.transport.print.locationCol": { pl: "Lokalizacja", en: "Location" },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",

@@ -57,6 +57,7 @@ from .models import (
     Supplier,
     SupplierProduct,
     TransportBatch,
+    TransportEvent,
 )
 
 log = logging.getLogger(__name__)
@@ -138,6 +139,9 @@ _TRANSPORT_BATCH_COLUMNS = [
     "transport_id", "supplier_id", "status", "driver", "vehicle", "pickup_date",
     "pickup_time", "limit_kg", "notes", "created_at", "created_by", "sent_at",
 ]
+_TRANSPORT_EVENT_COLUMNS = [
+    "event_id", "transport_id", "order_id", "event_type", "actor", "at", "details",
+]
 
 # Temporal columns get an explicit cast in INSERT/UPDATE so a value bound as an
 # ISO string (e.g. dispatch passes ``manager_sent_at`` as ``.isoformat()``) is
@@ -149,10 +153,14 @@ _DATE_COLS = frozenset(
         "pickup_date",
     }
 )
+# NOTE: these casting sets are GLOBAL across tables, keyed by bare column name
+# (e.g. transport_events."at"). A future table reusing one of these names for a
+# non-timestamptz/date column would be silently miscast — scope the sets per
+# table before that happens (review OBS, 2026-08-22).
 _TIMESTAMPTZ_COLS = frozenset(
     {
         "captain_submitted_at", "manager_sent_at", "last_edited_at", "cancelled_at",
-        "count_submitted_at", "received_submitted_at", "created_at", "sent_at",
+        "count_submitted_at", "received_submitted_at", "created_at", "sent_at", "at",
     }
 )
 
@@ -686,3 +694,22 @@ def update_transport_batch(transport_id: str, **kwargs) -> None:
         raise OrderNotFoundError(
             f"transport_id={transport_id!r} not found in 'transport_batches'"
         )
+
+
+# ---------- Transport event history (v3, to-ordering-pago ADDENDUM v3) ----------
+
+def load_transport_events_for(transport_id: str) -> list[TransportEvent]:
+    """Targeted read for one batch's event history — not a full-table scan
+    (mirrors ``load_receipts_for_orders``)."""
+    return _fetch_all(
+        "SELECT * FROM transport_events WHERE transport_id = :tid ORDER BY at DESC",
+        TransportEvent,
+        {"tid": transport_id},
+    )
+
+
+def append_transport_event(event: TransportEvent) -> None:
+    """Append-only — there is no update/delete for an audit-trail row.
+    Callers (``main._log_transport_event``) treat this as best-effort and
+    never let a failure here break the business action that triggered it."""
+    _insert("transport_events", _TRANSPORT_EVENT_COLUMNS, event)

@@ -8,20 +8,25 @@ import type {
   TransportBatchDetail,
   TransportBatchOrder,
   TransportBatchSummary,
+  TransportEvent,
 } from "../../../types";
 import {
   anyTransportDirty,
+  buildTransportDriverPrintDoc,
   buildTransportDriverText,
   buildTransportEmailBody,
   buildTransportEmailSubject,
   buildTransportGmailUrl,
   buildTransportMatrix,
+  buildTransportPagoPrintDoc,
   collectLogisticsSuggestions,
   computeWeightStrip,
   hasValidRecipient,
   seedTransportDrafts,
+  sortTransportEvents,
   splitRecipients,
   transportDirtySavePayloads,
+  transportEventTypeLabel,
 } from "./transport";
 
 /** Minimal `t` fixture driven by the real STRINGS table (mirrors emailBody.test.ts's
@@ -44,6 +49,7 @@ function batch(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDet
     notes: "",
     total_weight_kg: 0,
     unknown_weight_count: 0,
+    events: [],
     orders: [
       { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [] },
       { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [] },
@@ -396,5 +402,188 @@ describe("collectLogisticsSuggestions", () => {
   it("does the same for the vehicle field independently", () => {
     const batches = [summary({ vehicle: "Ducato" }), summary({ vehicle: "Transit" }), summary({ vehicle: "Ducato" })];
     expect(collectLogisticsSuggestions(batches, "vehicle")).toEqual(["Ducato", "Transit"]);
+  });
+});
+
+// ---- v3 Phase 6: event history ----------------------------------------------
+
+function event(overrides: Partial<TransportEvent> = {}): TransportEvent {
+  return {
+    event_id: "EVT-1",
+    transport_id: "TRN-1",
+    event_type: "order_combined",
+    actor: "manager-default",
+    at: "2026-08-22T10:00:00+00:00",
+    details: "",
+    ...overrides,
+  };
+}
+
+describe("transportEventTypeLabel", () => {
+  it("resolves every known event_type to a non-empty, non-raw label", () => {
+    const known = [
+      "order_combined",
+      "location_added",
+      "order_removed",
+      "order_sent",
+      "batch_sent",
+      "batch_cancelled",
+      "logistics_changed",
+      "quantities_changed",
+      "delivery_confirmed",
+    ];
+    for (const type of known) {
+      const label = transportEventTypeLabel(makeT(), type);
+      expect(label).not.toBe("");
+      expect(label).not.toBe(type);
+    }
+  });
+
+  it("falls back to the raw event_type for an unrecognized value", () => {
+    expect(transportEventTypeLabel(makeT(), "some_future_event")).toBe("some_future_event");
+  });
+});
+
+describe("sortTransportEvents", () => {
+  it("sorts newest first", () => {
+    const events = [
+      event({ event_id: "e1", at: "2026-08-20T09:00:00+00:00" }),
+      event({ event_id: "e2", at: "2026-08-22T09:00:00+00:00" }),
+      event({ event_id: "e3", at: "2026-08-21T09:00:00+00:00" }),
+    ];
+    expect(sortTransportEvents(events).map((e) => e.event_id)).toEqual(["e2", "e3", "e1"]);
+  });
+
+  it("treats a null `at` as oldest without crashing", () => {
+    const events = [
+      event({ event_id: "e1", at: null }),
+      event({ event_id: "e2", at: "2026-08-22T09:00:00+00:00" }),
+    ];
+    expect(sortTransportEvents(events).map((e) => e.event_id)).toEqual(["e2", "e1"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const events = [event({ event_id: "e1", at: "2026-08-20T09:00:00+00:00" }), event({ event_id: "e2", at: "2026-08-22T09:00:00+00:00" })];
+    const original = [...events];
+    sortTransportEvents(events);
+    expect(events).toEqual(original);
+  });
+});
+
+// ---- v3 Phase 10: print/PDF views -------------------------------------------
+
+describe("buildTransportDriverPrintDoc", () => {
+  it("carries logistics header + per-product totals WITH the per-location breakdown", () => {
+    const b = batch({ driver: "Jan Kowalski", vehicle: "Ducato", pickup_date: "2026-08-23" });
+    const doc = buildTransportDriverPrintDoc(b);
+    expect(doc.transportId).toBe("TRN-20260821-BUKA-abc123");
+    expect(doc.date).toBe("2026-08-23");
+    expect(doc.driver).toBe("Jan Kowalski");
+    expect(doc.vehicle).toBe("Ducato");
+    expect(doc.supplierName).toBe("Bukat");
+    expect(doc.products).toHaveLength(1);
+    expect(doc.products[0].name).toBe("Pomidory");
+    expect(doc.products[0].totalQty).toBe(12);
+    expect(doc.products[0].perLocation).toEqual([
+      { location: "Pita Bros Wola", qty: 5 },
+      { location: "Pita Bros Bracka", qty: 7 },
+    ]);
+  });
+
+  it("falls back to created date and empty driver/vehicle when logistics are unset", () => {
+    const b = batch({ driver: null, vehicle: null, pickup_date: null });
+    const doc = buildTransportDriverPrintDoc(b);
+    expect(doc.date).toBe("2026-08-21");
+    expect(doc.driver).toBe("");
+    expect(doc.vehicle).toBe("");
+  });
+
+  it("drops zero-qty product lines and zero-qty per-location entries", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P1",
+          product_name_pl: "Pomidory",
+          supplier_product_id: "SP1",
+          supplier_product_name: "Pomidory malinowe",
+          purchase_unit: "kg",
+          total_qty_purchase: 0,
+          per_location: [],
+        },
+        {
+          product_id: "P2",
+          product_name_pl: "Cebula",
+          supplier_product_id: "SP2",
+          supplier_product_name: "Cebula czerwona",
+          purchase_unit: "karton",
+          total_qty_purchase: 3,
+          per_location: [
+            { location_id: "WOLA", location_name: "Wola", order_id: "ORD-1", qty_purchase: 3 },
+            { location_id: "BRACKA", location_name: "Bracka", order_id: "ORD-2", qty_purchase: 0 },
+          ],
+        },
+      ],
+    });
+    const doc = buildTransportDriverPrintDoc(b);
+    expect(doc.products.map((p) => p.productId)).toEqual(["P2"]);
+    expect(doc.products[0].perLocation).toEqual([{ location: "Wola", qty: 3 }]);
+  });
+});
+
+describe("buildTransportPagoPrintDoc", () => {
+  it("carries per-product totals only — NO location name anywhere in the doc", () => {
+    const b = batch({ pickup_date: "2026-08-23" });
+    const doc = buildTransportPagoPrintDoc(b);
+    expect(doc.transportId).toBe("TRN-20260821-BUKA-abc123");
+    expect(doc.supplierName).toBe("Bukat");
+    expect(doc.pickupDate).toBe("2026-08-23");
+    expect(doc.products).toEqual([{ productId: "P1", name: "Pomidory malinowe", unit: "kg", qty: 12 }]);
+
+    // The no-location-leak assertion: serialize the whole doc and confirm no
+    // location name/id from the source batch appears anywhere in it.
+    const serialized = JSON.stringify(doc);
+    expect(serialized).not.toContain("Wola");
+    expect(serialized).not.toContain("Bracka");
+    expect(serialized).not.toContain("WOLA");
+    expect(serialized).not.toContain("BRACKA");
+    // Structurally: no product line carries a `location` key at all.
+    for (const p of doc.products) {
+      expect(Object.keys(p)).not.toContain("location");
+    }
+  });
+
+  it("falls back to product_name_pl when there is no supplier-facing name", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P2",
+          product_name_pl: "Cebula",
+          supplier_product_id: "SP2",
+          supplier_product_name: "",
+          purchase_unit: "kg",
+          total_qty_purchase: 3,
+          per_location: [],
+        },
+      ],
+    });
+    const doc = buildTransportPagoPrintDoc(b);
+    expect(doc.products[0].name).toBe("Cebula");
+  });
+
+  it("drops zero-qty lines", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P1",
+          product_name_pl: "Pomidory",
+          supplier_product_id: "SP1",
+          supplier_product_name: "Pomidory malinowe",
+          purchase_unit: "kg",
+          total_qty_purchase: 0,
+          per_location: [],
+        },
+      ],
+    });
+    expect(buildTransportPagoPrintDoc(b).products).toEqual([]);
   });
 });

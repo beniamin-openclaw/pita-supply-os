@@ -145,6 +145,67 @@ def test_receipt_submit_happy_path(mocker):
     assert ol1.variance_qty_purchase == 0
 
 
+# ---------- v3 Phase 8: transport delivery-acceptance parity ----------
+
+def test_receipt_submit_transport_member_emits_delivery_confirmed_event(mocker):
+    """A receipt against an order that carries a TRN- marker (a Transport
+    batch member) logs a `delivery_confirmed` transport event, actor=location
+    (a captain-driven action) — the post-send audit the operator required."""
+    _patch_sheet_backend(mocker)
+    order = _fake_order().model_copy(update={"supplier_order_reference": "TRN-20260605-BUKA-abc123"})
+    mocker.patch.object(sheets, "get_order", return_value=order)
+    mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(sheets, "update_order")
+    event_mock = mocker.patch.object(sheets, "append_transport_event")
+
+    body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+
+    event_mock.assert_called_once()
+    event = event_mock.call_args.args[0]
+    assert event.transport_id == "TRN-20260605-BUKA-abc123"
+    assert event.event_type == "delivery_confirmed"
+    assert event.order_id == ORDER_ID
+    assert event.actor == "WOLA"
+    assert "WOLA" in event.details
+    assert "1" in event.details  # 1 discrepancy (OL-2: 5 vs 6)
+
+
+def test_receipt_submit_non_transport_order_emits_no_event(mocker):
+    """An order with no TRN- marker never touches transport event history."""
+    _patch_sheet_backend(mocker)
+    mocker.patch.object(sheets, "get_order", return_value=_fake_order())
+    mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(sheets, "update_order")
+    event_mock = mocker.patch.object(sheets, "append_transport_event")
+
+    body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    event_mock.assert_not_called()
+
+
+def test_receipt_submit_transport_event_failure_does_not_fail_receipt(mocker):
+    """Best-effort: a broken 'transport_events' worksheet must not break an
+    otherwise-successful receipt confirmation."""
+    _patch_sheet_backend(mocker)
+    order = _fake_order().model_copy(update={"supplier_order_reference": "TRN-X"})
+    mocker.patch.object(sheets, "get_order", return_value=order)
+    mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(sheets, "update_order")
+    mocker.patch.object(
+        sheets, "append_transport_event", side_effect=sheets.WorksheetNotFound("x")
+    )
+
+    body = {"order_id": ORDER_ID, "received_by": RECEIVED_BY, "lines": _two_lines()}
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+
+
 def test_receipt_submit_order_not_found_404(mocker):
     _patch_sheet_backend(mocker)
     mocker.patch.object(sheets, "get_order", return_value=None)

@@ -21,6 +21,7 @@ import type {
   TransportBatchDetail,
   TransportBatchOrder,
   TransportBatchSummary,
+  TransportEvent,
 } from "../../../types";
 import { buildGmailComposeUrl } from "./emailBody";
 import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
@@ -303,4 +304,129 @@ export function collectLogisticsSuggestions(
     if (v && v.trim() !== "") seen.add(v.trim());
   }
   return [...seen].sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+// ---- v3 Phase 6: event history ---------------------------------------------
+//
+// One i18n key per known event_type ("field: old → new" diffs live in
+// event.details, computed server-side — the FE only supplies the type label).
+// An unmapped/unknown event_type falls back to the raw string so a future
+// backend event type never disappears from the Historia section.
+
+const EVENT_TYPE_LABEL_KEYS: Record<string, StringKey> = {
+  order_combined: "manager.transport.events.type.orderCombined",
+  location_added: "manager.transport.events.type.locationAdded",
+  order_removed: "manager.transport.events.type.orderRemoved",
+  order_sent: "manager.transport.events.type.orderSent",
+  batch_sent: "manager.transport.events.type.batchSent",
+  batch_cancelled: "manager.transport.events.type.batchCancelled",
+  logistics_changed: "manager.transport.events.type.logisticsChanged",
+  quantities_changed: "manager.transport.events.type.quantitiesChanged",
+  delivery_confirmed: "manager.transport.events.type.deliveryConfirmed",
+};
+
+/** Human label for one event's `event_type` — a known type resolves through
+ * i18n; anything else (a future/unrecognized type) falls back to the raw
+ * string verbatim rather than disappearing from the history. */
+export function transportEventTypeLabel(t: TFunc, eventType: string): string {
+  const key = EVENT_TYPE_LABEL_KEYS[eventType];
+  return key ? t(key) : eventType;
+}
+
+/** Events sorted newest first (defensive — the backend already returns them
+ * this way, but a null `at` must not crash the sort). */
+export function sortTransportEvents(events: TransportEvent[]): TransportEvent[] {
+  return [...events].sort((a, b) => {
+    const at = a.at ? Date.parse(a.at) : 0;
+    const bt = b.at ? Date.parse(b.at) : 0;
+    return bt - at;
+  });
+}
+
+// ---- v3 Phase 10: print/PDF views ------------------------------------------
+//
+// Two documents built from the SAME TransportBatchDetail, mirroring the
+// driver-text / supplier-email asymmetry above: the driver document carries
+// the per-location breakdown (private, internal use); the Pago (supplier)
+// document carries per-product totals ONLY — no location ever appears in it.
+
+export interface PrintProductLocationQty {
+  location: string;
+  qty: number;
+}
+
+export interface PrintDriverProductLine {
+  productId: string;
+  name: string;
+  unit: string;
+  totalQty: number;
+  perLocation: PrintProductLocationQty[];
+}
+
+export interface TransportDriverPrintDoc {
+  transportId: string;
+  date: string; // "" when unknown
+  driver: string; // "" when unset
+  vehicle: string; // "" when unset
+  supplierName: string;
+  products: PrintDriverProductLine[];
+}
+
+/** Build the printable DRIVER document: logistics header (transport id, date,
+ * driver, vehicle) + per-product totals WITH the per-location breakdown table
+ * — the internal-only "who gets how much" record. Zero-qty lines (nothing to
+ * load) are dropped, mirroring the driver text / email builders above. */
+export function buildTransportDriverPrintDoc(detail: TransportBatchDetail): TransportDriverPrintDoc {
+  return {
+    transportId: detail.transport_id,
+    date: isoDatePart(detail.pickup_date ?? detail.created),
+    driver: detail.driver ?? "",
+    vehicle: detail.vehicle ?? "",
+    supplierName: detail.supplier_name,
+    products: detail.lines
+      .filter((line) => line.total_qty_purchase > 0)
+      .map((line) => ({
+        productId: line.product_id,
+        name: line.product_name_pl,
+        unit: line.purchase_unit,
+        totalQty: line.total_qty_purchase,
+        perLocation: line.per_location
+          .filter((pl) => pl.qty_purchase > 0)
+          .map((pl) => ({ location: pl.location_name, qty: pl.qty_purchase })),
+      })),
+  };
+}
+
+export interface PrintPagoProductLine {
+  productId: string;
+  name: string;
+  unit: string;
+  qty: number;
+}
+
+export interface TransportPagoPrintDoc {
+  transportId: string;
+  supplierName: string;
+  pickupDate: string; // "" when unknown
+  products: PrintPagoProductLine[];
+}
+
+/** Build the printable SUPPLIER (Pago) document: transport id + supplier name
+ * + pickup date, then per-product TOTALS ONLY. Deliberately carries no
+ * location field anywhere in its shape or values — the supplier never sees
+ * which location ordered what (same discipline as buildTransportEmailBody). */
+export function buildTransportPagoPrintDoc(detail: TransportBatchDetail): TransportPagoPrintDoc {
+  return {
+    transportId: detail.transport_id,
+    supplierName: detail.supplier_name,
+    pickupDate: isoDatePart(detail.pickup_date ?? detail.created),
+    products: detail.lines
+      .filter((line) => line.total_qty_purchase > 0)
+      .map((line) => ({
+        productId: line.product_id,
+        name: line.supplier_product_name || line.product_name_pl,
+        unit: line.purchase_unit,
+        qty: line.total_qty_purchase,
+      })),
+  };
 }

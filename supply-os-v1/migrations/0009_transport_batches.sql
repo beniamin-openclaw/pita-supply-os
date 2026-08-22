@@ -39,3 +39,8 @@ CREATE INDEX transport_batches_supplier_status_idx
 
 ALTER TABLE supplier_products
     ADD COLUMN IF NOT EXISTS unit_weight_kg numeric(10,3);
+
+-- RLS deny-all (same rationale as migration 0002): the app connects via the
+-- direct DSN as the table owner and bypasses RLS; enabling it with no policies
+-- closes the anon PostgREST surface.
+ALTER TABLE transport_batches ENABLE ROW LEVEL SECURITY;

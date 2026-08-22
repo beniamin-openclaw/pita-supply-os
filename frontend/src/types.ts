@@ -621,12 +621,18 @@ export interface TransportBatchOrder {
   // location matrix. Empty for a newly-created skeleton order (add-location)
   // with no lines yet.
   lines: ManagerOrderLineDetail[];
+  // Per-order delivery status (v3 Phase 8) — joined from receipts, only when
+  // the batch status is "sent" (a draft batch's members are never dispatched
+  // yet, so both stay 0 there). Mirrors ManagerQueueItem's receipt signal.
+  received_count?: number;
+  received_discrepancy_count?: number;
 }
 
-/** Draft/sent lifecycle status of a Transport batch (v2). A marker group with
- * no `transport_batches` header row is a v1-created legacy batch — always
- * "sent" (read-only, exactly as v1 behaved). */
-export type TransportBatchStatus = "draft" | "sent";
+/** Draft/sent/cancelled lifecycle status of a Transport batch (v2 + v3 cancel
+ * draft). A marker group with no `transport_batches` header row is a
+ * v1-created legacy batch — always "sent" (read-only, exactly as v1
+ * behaved). */
+export type TransportBatchStatus = "draft" | "sent" | "cancelled";
 
 /** One past Transport batch — the set of orders sharing a
  * supplier_order_reference marker that starts with "TRN-". */
@@ -670,6 +676,25 @@ export interface TransportBatchDetail {
   // (surfaced as a "brak wagi dla N pozycji" warning by the FE).
   total_weight_kg: number;
   unknown_weight_count: number;
+  // Event history (v3 Phase 6) — newest first, capped 100. Empty when the
+  // 'transport_events' worksheet/table has no rows yet.
+  events: TransportEvent[];
+}
+
+/** One append-only row of a Transport batch's audit trail (v3 Phase 6) — the
+ * post-send history the operator required. `order_id` is null for a
+ * batch-level event (batch_sent, batch_cancelled, logistics_changed) and set
+ * for an order-level one (order_combined, location_added, order_removed,
+ * order_sent, quantities_changed, delivery_confirmed). `details` is a
+ * human-readable "field: old → new" summary computed server-side. */
+export interface TransportEvent {
+  event_id: string;
+  transport_id: string;
+  order_id?: string | null;
+  event_type: string;
+  actor?: string | null;
+  at?: string | null; // ISO datetime
+  details: string;
 }
 
 /** One order the create endpoint could not combine, with a short
@@ -684,6 +709,10 @@ export interface TransportCreateRequest {
   supplier_id: string;
   order_ids: string[];
   append_to?: string;
+  // v3 Phase 9: accepted for API symmetry with TransportAddLocationRequest,
+  // but NOT implemented server-side for create — prefill only happens via
+  // add-location (create only ever combines EXISTING orders).
+  prefill_products?: boolean;
 }
 
 export interface TransportCreateResponse {
@@ -713,11 +742,36 @@ export interface TransportFinalizeResponse {
 export interface TransportAddLocationRequest {
   transport_id: string;
   location_id: string;
+  // v3 Phase 9 (manager-first grid creation): when true, the skeleton order
+  // is populated with a zero-qty line for every product this location can
+  // order from the batch's supplier — exactly the Captain's orderable set.
+  prefill_products?: boolean;
 }
 
 export interface TransportAddLocationResponse {
   transport_id: string;
   order_id: string; // the newly-created skeleton order
+  prefilled_count: number;
+}
+
+// Manager Transport v3: cancel draft (to-ordering-pago ADDENDUM v3) ---------
+
+/** Payload for POST /api/manager/transport/cancel — cancel a DRAFT batch
+ * outright (409 on a sent batch). */
+export interface TransportCancelRequest {
+  transport_id: string;
+}
+
+/** Result of cancel. Mirrors remove-order's released/cancelled split, applied
+ * to every member order: `released` lists orders returned to
+ * captain_submitted (marker cleared); `cancelled` lists manager-created empty
+ * orders cancelled outright. `skipped` lists members that were not
+ * manager_claimed or hit a guard conflict. */
+export interface TransportCancelResponse {
+  transport_id: string;
+  released: string[];
+  cancelled: string[];
+  skipped: TransportSkippedOrder[];
 }
 
 /** Payload for POST /api/manager/transport/remove-order — drop one member

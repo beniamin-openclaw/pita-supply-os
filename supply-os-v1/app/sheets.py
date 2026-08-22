@@ -47,6 +47,7 @@ from .models import (
     Supplier,
     SupplierProduct,
     TransportBatch,
+    TransportEvent,
 )
 
 log = logging.getLogger(__name__)
@@ -937,3 +938,28 @@ def update_transport_batch(transport_id: str, **kwargs) -> None:
     if updates:
         ws.batch_update(updates, value_input_option="USER_ENTERED")
     invalidate_cache("transport_batches")
+
+
+# ---------- Transport event history read + append API (v3, to-ordering-pago ADDENDUM v3) ----------
+
+def load_transport_events_for(transport_id: str) -> list[TransportEvent]:
+    """Read the (TTL-cached) 'transport_events' worksheet and filter to
+    ``transport_id`` in Python — Sheets has no targeted query (mirrors
+    ``load_order_lines_for_orders`` / ``load_receipts_for_orders``). Raises
+    ``WorksheetNotFound`` when the tab hasn't been created yet; callers
+    degrade to "no history shown" (mirrors ``load_transport_batches``)."""
+    all_events = _read_with_ttl("transport_events", TransportEvent, ORDERS_TTL_SECONDS)
+    return [e for e in all_events if e.transport_id == transport_id]
+
+
+def append_transport_event(event: TransportEvent) -> None:
+    """Append one row to 'transport_events', then invalidate the read cache.
+    Append-only — there is no update/delete for an audit-trail row. Mirrors
+    ``append_receipt``. Callers (``main._log_transport_event``) treat this as
+    best-effort and never let a failure here break the business action that
+    triggered it."""
+    ws = _open_worksheet("transport_events")
+    column_order = _get_column_order(ws)
+    row = _model_to_row(event, column_order)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    invalidate_cache("transport_events")

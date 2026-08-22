@@ -345,19 +345,19 @@ Operator decisions: (1) post-send logistics editing STAYS, but EVERY change is r
 
 ### Phase 6: Event history
 #### Automated
-- [ ] 6.1 Migration 0010 + both backends + event emission tests green
-- [ ] 6.2 Batch detail returns events; FE Historia section; suites green
+- [x] 6.1 Migration 0010 + both backends + event emission tests green
+- [x] 6.2 Batch detail returns events; FE Historia section; suites green
 ### Phase 7: Finalize UX + cancel draft
 #### Automated
-- [ ] 7.1 Cancel endpoint + tests; finalize disabled-state helper tests
+- [x] 7.1 Cancel endpoint + tests; finalize disabled-state helper tests
 ### Phase 8: Delivery-acceptance parity
 #### Automated
-- [ ] 8.1 Receiving path verified/fixed for transport members (tests); per-order delivery status on detail; receipt events
+- [x] 8.1 Receiving path verified/fixed for transport members (tests); per-order delivery status on detail; receipt events
 ### Phase 9: Manager-first grid creation
 #### Automated
-- [ ] 9.1 prefill_products backend + tests; FE location picker + prefilled draft flow
+- [x] 9.1 prefill_products backend + tests; FE location picker + prefilled draft flow
 ### Phase 10: Print/PDF views
 #### Automated
-- [ ] 10.1 Print views render (helper tests); suites green
+- [x] 10.1 Print views render (helper tests); suites green
 #### Manual
-- [ ] 10.2 Full v3 demo pass on the sandbox (history, cancel, receive, grid-create, print) + screenshots
+- [x] 10.2 Full v3 demo pass on the sandbox (history, cancel, receive, grid-create, print) + screenshots

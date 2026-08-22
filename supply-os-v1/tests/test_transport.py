@@ -31,13 +31,16 @@ from app.config import DataBackend
 from app.main import _aggregate_transport_lines, app
 from app.models import (
     Location,
+    LocationProductSetting,
     Order,
     OrderLine,
     OrderStatus,
     Product,
+    Receipt,
     Supplier,
     SupplierProduct,
     TransportBatch,
+    TransportEvent,
 )
 
 TRANSPORT_ID_RE = re.compile(r"^TRN-\d{8}-[A-Z0-9]{1,4}-[0-9a-f]{6}$")
@@ -60,6 +63,7 @@ def _order(
     manager_sent_at: datetime | None = None,
     ordered_by: str | None = "Jan Kowalski",
     supplier_order_reference: str | None = None,
+    captain_user: str | None = None,
 ) -> Order:
     return Order(
         order_id=order_id,
@@ -67,7 +71,7 @@ def _order(
         supplier_id=supplier_id,
         order_date=date(2026, 5, 20),
         status=status,
-        captain_user=location_id,
+        captain_user=captain_user if captain_user is not None else location_id,
         captain_submitted_at=captain_submitted_at
         or datetime(2026, 5, 20, 8, 30, tzinfo=timezone.utc),
         manager_sent_at=manager_sent_at,
@@ -141,6 +145,8 @@ def _enable_sheet_backend(
     locations: list[Location] | None = None,
     location_product_settings: list | None = None,
     transport_batches: list[TransportBatch] | None = None,
+    transport_events: list["TransportEvent"] | None = None,
+    receipts: list | None = None,
 ) -> None:
     """Switch backend selector to sheets and patch the load_* surface (mirrors
     `test_manager_queue.py::_enable_sheet_backend`).
@@ -149,6 +155,11 @@ def _enable_sheet_backend(
     group reads as an implicit legacy ``status="sent"`` batch), NOT a
     ``WorksheetNotFound`` — tests that need the "missing worksheet" path patch
     ``load_transport_batches``/``get_transport_batch`` themselves.
+
+    ``transport_events`` defaults to ``[]`` (no history) and is filtered by
+    ``transport_id`` the same way ``sheets.load_transport_events_for`` does,
+    so a test can pass events for several batches and each detail call still
+    sees only its own. ``receipts`` defaults to ``[]`` (no deliveries yet).
     """
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
@@ -184,6 +195,18 @@ def _enable_sheet_backend(
         sheets, "get_transport_batch", side_effect=_get_transport_batch
     )
 
+    events = transport_events if transport_events is not None else []
+
+    def _load_transport_events_for(transport_id: str):
+        return [e for e in events if e.transport_id == transport_id]
+
+    mocker.patch.object(
+        sheets, "load_transport_events_for", side_effect=_load_transport_events_for
+    )
+    mocker.patch.object(
+        sheets, "load_receipts_for_orders", return_value=receipts or []
+    )
+
 
 def _enable_sheet_backend_for_create(
     mocker,
@@ -192,9 +215,10 @@ def _enable_sheet_backend_for_create(
     transport_batches: list[TransportBatch] | None = None,
 ) -> dict:
     """`_enable_sheet_backend` plus the write-side mocks the create endpoint
-    needs (`invalidate_cache` + `update_order` + `append_transport_batch`).
-    `update_order` defaults to a silent success; tests override
-    `.side_effect` to simulate a guard conflict on a specific call."""
+    needs (`invalidate_cache` + `update_order` + `append_transport_batch` +
+    `append_transport_event`). `update_order` defaults to a silent success;
+    tests override `.side_effect` to simulate a guard conflict on a specific
+    call."""
     _enable_sheet_backend(
         mocker, orders=orders, suppliers=suppliers, transport_batches=transport_batches
     )
@@ -203,7 +227,14 @@ def _enable_sheet_backend_for_create(
     append_batch_mock = mocker.patch.object(
         sheets, "append_transport_batch", return_value=None
     )
-    return {"update_order": update_mock, "append_transport_batch": append_batch_mock}
+    append_event_mock = mocker.patch.object(
+        sheets, "append_transport_event", return_value=None
+    )
+    return {
+        "update_order": update_mock,
+        "append_transport_batch": append_batch_mock,
+        "append_transport_event": append_event_mock,
+    }
 
 
 def _enable_sheet_backend_for_write(
@@ -211,20 +242,26 @@ def _enable_sheet_backend_for_write(
     orders: list[Order],
     **kwargs,
 ) -> dict:
-    """`_enable_sheet_backend` plus every write-side mock the v2 draft-lifecycle
-    endpoints (finalize / add-location / remove-order / patch) need, all
-    defaulting to silent success. Tests override `.side_effect` /
+    """`_enable_sheet_backend` plus every write-side mock the v2/v3 draft-lifecycle
+    endpoints (finalize / add-location / remove-order / patch / cancel) need,
+    all defaulting to silent success. Tests override `.side_effect` /
     `.return_value` on the returned mocks to simulate a specific outcome."""
     _enable_sheet_backend(mocker, orders=orders, **kwargs)
     mocker.patch.object(sheets, "invalidate_cache", return_value=None)
     return {
         "update_order": mocker.patch.object(sheets, "update_order", return_value=None),
         "append_order": mocker.patch.object(sheets, "append_order", return_value=None),
+        "append_order_lines": mocker.patch.object(
+            sheets, "append_order_lines", return_value=None
+        ),
         "append_transport_batch": mocker.patch.object(
             sheets, "append_transport_batch", return_value=None
         ),
         "update_transport_batch": mocker.patch.object(
             sheets, "update_transport_batch", return_value=None
+        ),
+        "append_transport_event": mocker.patch.object(
+            sheets, "append_transport_event", return_value=None
         ),
     }
 
@@ -1887,3 +1924,608 @@ def test_create_skips_order_already_in_another_transport(mocker):
     assert payload["skipped"][0]["reason"] == "already in transport TRN-20260822-PAGO-aaaaaa"
     # No status/marker write happened for the stolen-candidate order.
     patches["update_order"].assert_not_called()
+
+
+# ============================================================
+# v3 ADDENDUM (to-ordering-pago): event history, cancel draft, delivery
+# parity, manager-first grid creation with prefill
+# ============================================================
+
+def _receipt(
+    receipt_id: str,
+    order_id: str,
+    discrepancy_count: int = 0,
+) -> Receipt:
+    return Receipt(
+        receipt_id=receipt_id,
+        order_id=order_id,
+        location_id="WOLA",
+        supplier_id="SUP_PAGO",
+        receipt_date=date(2026, 5, 21),
+        discrepancy_count=discrepancy_count,
+    )
+
+
+def _event(
+    transport_id: str,
+    event_type: str,
+    order_id: str | None = None,
+    at: datetime | None = None,
+    details: str = "",
+) -> TransportEvent:
+    return TransportEvent(
+        event_id=f"TEV-{event_type}-{order_id or 'batch'}",
+        transport_id=transport_id,
+        order_id=order_id,
+        event_type=event_type,
+        actor="manager-default",
+        at=at or datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc),
+        details=details,
+    )
+
+
+# ---------- Phase 6: event emission — create / add-location / remove-order / finalize / patch ----------
+
+def test_create_emits_order_combined_event_per_combined_order(mocker):
+    orders = [_order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED)]
+    patches = _enable_sheet_backend_for_create(mocker, orders=orders)
+
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-A"]},
+    )
+    assert r.status_code == 200, r.text
+    transport_id = r.json()["transport_id"]
+
+    # Two events now: one order_combined per combined order + one batch_created
+    # for the fresh header (review OBS — history starts at birth).
+    events = [c.args[0] for c in patches["append_transport_event"].call_args_list]
+    types = [e.event_type for e in events]
+    assert types.count("order_combined") == 1
+    assert types.count("batch_created") == 1
+    combined_event = next(e for e in events if e.event_type == "order_combined")
+    assert combined_event.transport_id == transport_id
+    assert combined_event.order_id == "ORD-A"
+
+
+def test_create_skipped_order_emits_no_event(mocker):
+    orders: list[Order] = []  # ORD-MISSING doesn't exist -> skipped "not found"
+    patches = _enable_sheet_backend_for_create(mocker, orders=orders)
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-MISSING"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"][0]["reason"] == "not found"
+    # No order_combined for a skipped order — but the fresh (empty) draft header
+    # still logs its batch_created birth event (review OBS).
+    events = [c.args[0] for c in patches["append_transport_event"].call_args_list]
+    assert [e.event_type for e in events] == ["batch_created"]
+
+
+def test_create_event_emission_failure_does_not_break_create(mocker):
+    """Best-effort: a broken 'transport_events' worksheet must not fail an
+    otherwise-successful combine."""
+    orders = [_order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED)]
+    patches = _enable_sheet_backend_for_create(mocker, orders=orders)
+    patches["append_transport_event"].side_effect = sheets.WorksheetNotFound("x")
+
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-A"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["combined"] == ["ORD-A"]
+
+
+def test_add_location_emits_location_added_event(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=[], transport_batches=[header],
+        locations=[_location("BRACKA", "Bracka")],
+    )
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "BRACKA"},
+    )
+    assert r.status_code == 200, r.text
+    order_id = r.json()["order_id"]
+
+    patches["append_transport_event"].assert_called_once()
+    event = patches["append_transport_event"].call_args.args[0]
+    assert event.transport_id == "TRN-X"
+    assert event.event_type == "location_added"
+    assert event.order_id == order_id
+    assert "BRACKA" in event.details
+    assert "prefilled" not in event.details
+
+
+def test_remove_order_emits_order_removed_event_with_action(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A", location_id="WOLA", status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+        )
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1")], transport_batches=[header],
+    )
+    r = client.post(
+        "/api/manager/transport/remove-order",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "order_id": "ORD-A"},
+    )
+    assert r.status_code == 200, r.text
+
+    patches["append_transport_event"].assert_called_once()
+    event = patches["append_transport_event"].call_args.args[0]
+    assert event.transport_id == "TRN-X"
+    assert event.event_type == "order_removed"
+    assert event.order_id == "ORD-A"
+    assert event.details == "released"
+
+
+def test_finalize_emits_order_sent_and_batch_sent_events(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X",
+        ),
+        _order(
+            "ORD-B", location_id="BRACKA", status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+        ),
+    ]
+    patches = _enable_sheet_backend_for_write(mocker, orders=orders, transport_batches=[header])
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 200, r.text
+    assert set(r.json()["sent"]) == {"ORD-A", "ORD-B"}
+
+    events = [c.args[0] for c in patches["append_transport_event"].call_args_list]
+    order_sent_events = [e for e in events if e.event_type == "order_sent"]
+    assert {e.order_id for e in order_sent_events} == {"ORD-A", "ORD-B"}
+    batch_sent = [e for e in events if e.event_type == "batch_sent"]
+    assert len(batch_sent) == 1
+    assert batch_sent[0].order_id is None
+
+
+def test_finalize_all_skipped_emits_no_batch_sent_event(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, supplier_order_reference="TRN-X")]
+    patches = _enable_sheet_backend_for_write(mocker, orders=orders, transport_batches=[header])
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == []
+    patches["append_transport_event"].assert_not_called()
+
+
+def test_batch_patch_emits_logistics_changed_with_diff(mocker):
+    header = TransportBatch(
+        transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft",
+        driver="Old Driver", vehicle="Old Van",
+    )
+    patches = _enable_sheet_backend_for_write(mocker, orders=[], transport_batches=[header])
+
+    r = client.patch(
+        "/api/manager/transport/batch/TRN-X",
+        headers=MANAGER_AUTH,
+        json={"driver": "New Driver", "vehicle": "Old Van"},
+    )
+    assert r.status_code == 200, r.text
+
+    patches["append_transport_event"].assert_called_once()
+    event = patches["append_transport_event"].call_args.args[0]
+    assert event.transport_id == "TRN-X"
+    assert event.event_type == "logistics_changed"
+    assert event.order_id is None
+    assert "driver: Old Driver → New Driver" in event.details
+    assert "vehicle" not in event.details  # unchanged, excluded from the diff
+
+
+def test_batch_patch_no_actual_change_emits_no_event(mocker):
+    header = TransportBatch(
+        transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft", driver="Same",
+    )
+    patches = _enable_sheet_backend_for_write(mocker, orders=[], transport_batches=[header])
+
+    r = client.patch(
+        "/api/manager/transport/batch/TRN-X",
+        headers=MANAGER_AUTH,
+        json={"driver": "Same"},
+    )
+    assert r.status_code == 200, r.text
+    patches["append_transport_event"].assert_not_called()
+
+
+# ---------- Phase 6: batch detail returns events ----------
+
+def test_batch_detail_returns_events_newest_first_capped(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="sent")
+    orders = [_order("ORD-A", status=OrderStatus.MANAGER_SENT, supplier_order_reference="TRN-X")]
+    events = [
+        _event("TRN-X", "order_combined", order_id="ORD-A", at=datetime(2026, 5, 21, 8, tzinfo=timezone.utc)),
+        _event("TRN-X", "batch_sent", at=datetime(2026, 5, 21, 9, tzinfo=timezone.utc)),
+        # A different batch's event must never leak into this batch's detail.
+        _event("TRN-OTHER", "order_combined", order_id="ORD-Z", at=datetime(2026, 5, 21, 12, tzinfo=timezone.utc)),
+    ]
+    _enable_sheet_backend(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1")],
+        transport_batches=[header], transport_events=events,
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    out_events = r.json()["events"]
+    assert [e["event_type"] for e in out_events] == ["batch_sent", "order_combined"]  # newest first
+
+
+def test_batch_detail_missing_events_worksheet_degrades_to_empty(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X")]
+    _enable_sheet_backend(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1")], transport_batches=[header],
+    )
+    mocker.patch.object(
+        sheets, "load_transport_events_for", side_effect=sheets.WorksheetNotFound("x")
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["events"] == []
+
+
+# ---------- Phase 7: POST /api/manager/transport/cancel ----------
+
+def test_cancel_seed_mode_503():
+    r = client.post(
+        "/api/manager/transport/cancel", headers=MANAGER_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 503
+
+
+def test_cancel_batch_not_found_404(mocker):
+    _enable_sheet_backend_for_write(mocker, orders=[], transport_batches=[])
+    r = client.post(
+        "/api/manager/transport/cancel", headers=MANAGER_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 404
+
+
+def test_cancel_batch_not_draft_409(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="sent")
+    _enable_sheet_backend_for_write(mocker, orders=[], transport_batches=[header])
+    r = client.post(
+        "/api/manager/transport/cancel", headers=MANAGER_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 409
+
+
+def test_cancel_happy_path_released_and_cancelled_split(mocker):
+    """A regular (captain-originated) member is released; a manager-created
+    empty skeleton is cancelled — mirrors remove-order's per-member split,
+    applied to the whole batch."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A", location_id="WOLA", status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+        ),
+        _order(
+            "ORD-M", location_id="BRACKA", status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X", captain_user="manager-default",
+        ),
+    ]
+    lines = [_line("ORD-A", "OL-1")]  # ORD-M has no lines -> manager-created-empty
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+
+    r = client.post(
+        "/api/manager/transport/cancel", headers=MANAGER_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["released"] == ["ORD-A"]
+    assert payload["cancelled"] == ["ORD-M"]
+    assert payload["skipped"] == []
+
+    calls = {c.args[0]: c.kwargs for c in patches["update_order"].call_args_list}
+    assert calls["ORD-A"]["status"] == "captain_submitted"
+    assert calls["ORD-A"]["supplier_order_reference"] is None
+    assert calls["ORD-M"]["status"] == "cancelled"
+    assert calls["ORD-M"]["cancel_reason"] == "transport cancelled"
+
+    patches["update_transport_batch"].assert_called_once_with("TRN-X", status="cancelled")
+    patches["append_transport_event"].assert_called_once()
+    event = patches["append_transport_event"].call_args.args[0]
+    assert event.transport_id == "TRN-X"
+    assert event.event_type == "batch_cancelled"
+
+
+def test_cancel_skips_non_claimed_member(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, supplier_order_reference="TRN-X",
+        ),
+    ]
+    patches = _enable_sheet_backend_for_write(mocker, orders=orders, transport_batches=[header])
+    r = client.post(
+        "/api/manager/transport/cancel", headers=MANAGER_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["skipped"][0]["order_id"] == "ORD-A"
+    assert payload["released"] == []
+    assert payload["cancelled"] == []
+    patches["update_order"].assert_not_called()
+
+
+def test_cancel_conflict_skipped(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+    ]
+    patches = _enable_sheet_backend_for_write(mocker, orders=orders, transport_batches=[header])
+    patches["update_order"].side_effect = errors.OrderStatusConflictError("x")
+
+    r = client.post(
+        "/api/manager/transport/cancel", headers=MANAGER_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["released"] == []
+    assert payload["skipped"][0]["order_id"] == "ORD-A"
+    assert payload["skipped"][0]["reason"] == "cancel conflict"
+    # The header still flips to cancelled even though the member failed.
+    patches["update_transport_batch"].assert_called_once_with("TRN-X", status="cancelled")
+
+
+def test_cancel_rejects_captain_token(mocker):
+    _enable_sheet_backend_for_write(mocker, orders=[])
+    r = client.post(
+        "/api/manager/transport/cancel", headers=CAPTAIN_AUTH, json={"transport_id": "TRN-X"}
+    )
+    assert r.status_code == 401
+
+
+def test_batches_list_excludes_cancelled_by_default(mocker):
+    headers = [
+        TransportBatch(transport_id="TRN-DRAFT", supplier_id="SUP_PAGO", status="draft"),
+        TransportBatch(transport_id="TRN-CANCELLED", supplier_id="SUP_PAGO", status="cancelled"),
+    ]
+    _enable_sheet_backend(mocker, orders=[], transport_batches=headers)
+    r = client.get("/api/manager/transport/batches", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    ids = {b["transport_id"] for b in r.json()}
+    assert "TRN-DRAFT" in ids
+    assert "TRN-CANCELLED" not in ids
+
+
+def test_batches_list_include_cancelled_true_shows_it(mocker):
+    headers = [
+        TransportBatch(transport_id="TRN-CANCELLED", supplier_id="SUP_PAGO", status="cancelled"),
+    ]
+    _enable_sheet_backend(mocker, orders=[], transport_batches=headers)
+    r = client.get(
+        "/api/manager/transport/batches?include_cancelled=true", headers=MANAGER_AUTH
+    )
+    assert r.status_code == 200, r.text
+    ids = {b["transport_id"] for b in r.json()}
+    assert "TRN-CANCELLED" in ids
+
+
+# ---------- Phase 8: delivery-acceptance parity ----------
+
+def test_batch_detail_received_counts_populated_when_sent(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="sent")
+    orders = [
+        _order("ORD-A", status=OrderStatus.CLOSED, supplier_order_reference="TRN-X"),
+        _order("ORD-B", location_id="BRACKA", status=OrderStatus.MANAGER_SENT, supplier_order_reference="TRN-X"),
+    ]
+    receipts = [_receipt("RCP-1", "ORD-A", discrepancy_count=2)]
+    _enable_sheet_backend(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1"), _line("ORD-B", "OL-2")],
+        transport_batches=[header], receipts=receipts,
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {o["order_id"]: o for o in r.json()["orders"]}
+    assert by_id["ORD-A"]["received_count"] == 1
+    assert by_id["ORD-A"]["received_discrepancy_count"] == 1
+    assert by_id["ORD-B"]["received_count"] == 0
+    assert by_id["ORD-B"]["received_discrepancy_count"] == 0
+
+
+def test_batch_detail_received_counts_zero_when_draft(mocker):
+    """A draft batch's members are never dispatched yet — the receipt scan is
+    skipped entirely (never even calls load_receipts_for_orders)."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X")]
+    _enable_sheet_backend(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1")], transport_batches=[header],
+    )
+    receipts_mock = mocker.patch.object(sheets, "load_receipts_for_orders", return_value=[])
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["orders"][0]["received_count"] == 0
+    receipts_mock.assert_not_called()
+
+
+def test_batch_detail_received_counts_degrade_on_missing_worksheet(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="sent")
+    orders = [_order("ORD-A", status=OrderStatus.CLOSED, supplier_order_reference="TRN-X")]
+    _enable_sheet_backend(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1")], transport_batches=[header],
+    )
+    mocker.patch.object(
+        sheets, "load_receipts_for_orders", side_effect=sheets.WorksheetNotFound("x")
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["orders"][0]["received_count"] == 0
+
+
+def test_receiving_manager_created_skeleton_uses_manager_final_as_ordered(mocker):
+    """A manager-created transport skeleton (captain_final=0, manager_final>0)
+    must receive against the MANAGER quantity — the same `_effective_ordered_qty`
+    rule every other order follows (v3 Phase 8 verification)."""
+    from app.main import _effective_ordered_qty
+
+    line = OrderLine(
+        order_line_id="OL-1",
+        order_id="ORD-M",
+        product_id="P027",
+        supplier_product_id="SP_PAGO_P027",
+        captain_final_qty_purchase=0,
+        manager_final_qty_purchase=8,
+    )
+    assert _effective_ordered_qty(line) == 8
+
+
+def test_receiving_submit_against_transport_manager_created_order(mocker):
+    """Full endpoint check: captain_receipt_submit against a manager_sent
+    transport member whose only line is a manager-created skeleton
+    (captain_final=0, manager_final=8) receives against 8, and (mirrors
+    existing behavior) the first receipt still closes the order."""
+    order = Order(
+        order_id="ORD-M",
+        location_id="WOLA",
+        supplier_id="SUP_PAGO",
+        order_date=date(2026, 5, 20),
+        status=OrderStatus.MANAGER_SENT,
+        captain_user="manager-default",
+        ordered_by="manager",
+        supplier_order_reference="TRN-X",
+        lines=[
+            OrderLine(
+                order_line_id="OL-1",
+                order_id="ORD-M",
+                product_id="P027",
+                supplier_product_id="SP_PAGO_P027",
+                captain_final_qty_purchase=0,
+                manager_final_qty_purchase=8,
+            )
+        ],
+    )
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(sheets, "get_order", return_value=order)
+    mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    status_update = mocker.patch.object(sheets, "update_order")
+    mocker.patch.object(sheets, "append_transport_event")
+
+    r = client.post(
+        "/api/captain/receipt/submit",
+        headers=CAPTAIN_AUTH,
+        json={
+            "order_id": "ORD-M",
+            "received_by": "Ola",
+            "lines": [{"order_line_id": "OL-1", "received_qty_purchase": 8}],
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["discrepancy_count"] == 0  # received 8 == ordered (manager_final) 8
+
+    status_update.assert_called_once()
+    _, kwargs = status_update.call_args
+    assert kwargs.get("status") == OrderStatus.CLOSED.value
+
+
+# ---------- Phase 9: manager-first grid creation with prefill ----------
+
+def test_add_location_prefill_creates_zero_qty_lines_for_orderable_products(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    settings = [
+        LocationProductSetting(
+            setting_id="S1", location_id="BRACKA", product_id="P027",
+            target_stock_qty_base=10, max_stock_qty_base=20,
+        )
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=[], transport_batches=[header],
+        locations=[_location("BRACKA", "Bracka")],
+        location_product_settings=settings,
+    )
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "BRACKA", "prefill_products": True},
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["prefilled_count"] == 1
+
+    patches["append_order_lines"].assert_called_once()
+    lines_arg = patches["append_order_lines"].call_args.args[0]
+    assert len(lines_arg) == 1
+    line = lines_arg[0]
+    assert line.product_id == "P027"
+    assert line.supplier_product_id == "SP_PAGO_P027"
+    assert line.captain_final_qty_purchase == 0
+    assert line.manager_final_qty_purchase == 0
+    assert line.target_stock_qty_base == 10
+
+    event = patches["append_transport_event"].call_args.args[0]
+    assert event.event_type == "location_added"
+    assert "prefilled 1 products" in event.details
+
+
+def test_add_location_prefill_false_leaves_no_lines(mocker):
+    """Default behavior (prefill_products omitted) is unchanged: no lines,
+    plain 'location_added' event."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    settings = [
+        LocationProductSetting(
+            setting_id="S1", location_id="BRACKA", product_id="P027",
+            target_stock_qty_base=10, max_stock_qty_base=20,
+        )
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=[], transport_batches=[header],
+        locations=[_location("BRACKA", "Bracka")],
+        location_product_settings=settings,
+    )
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "BRACKA"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["prefilled_count"] == 0
+    patches["append_order_lines"].assert_not_called()
+    event = patches["append_transport_event"].call_args.args[0]
+    assert "prefilled" not in event.details
+
+
+def test_add_location_prefill_no_orderable_products_zero_count(mocker):
+    """prefill_products=True with no orderable products at the location is a
+    no-op (no append_order_lines call), never an error."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=[], transport_batches=[header],
+        locations=[_location("BRACKA", "Bracka")],
+        location_product_settings=[],  # nothing configured for BRACKA
+    )
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "BRACKA", "prefill_products": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["prefilled_count"] == 0
+    patches["append_order_lines"].assert_not_called()

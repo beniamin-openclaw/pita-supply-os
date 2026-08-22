@@ -107,3 +107,13 @@ Two Opus subagents (drift + safety) over the v2 working-tree diff, plus an orche
 ## Post-fix verification
 
 Backend: ruff clean; pytest **525 passed** (85 transport tests). Frontend: **116 passed**, build (TS strict) green, lint clean.
+
+---
+
+# v3 review round (2026-08-22, local E2E run) — event history, cancel, receiving parity, grid creation, print
+
+Backend (Opus implementer): migration 0010 (transport_events + status 'cancelled'), event emission at 9 points (incl. per-field logistics diffs and per-line quantity diffs), cancel endpoint, include_cancelled filter, receiving-parity verification, prefill_products. 561 backend tests. Frontend (Opus implementer): Historia section, finalize disabled-while-dirty + "Zapisz i wyślij", Anuluj szkic + cancelled toggle, delivery chips, location multi-select grid creation, print views (driver + Pago, no-location-leak tested). 127 FE tests.
+
+Combined drift+safety review (Opus): **APPROVE** — zero CRITICAL; 1 WARNING fixed (RLS deny-all added to migrations 0009+0010, matching the 0002 convention — closed BEFORE either migration reaches prod); OBS fixed: delivery chip gated to sent batches, batch_created birth event (draft history never empty), _TIMESTAMPTZ_COLS global-name-trap documented. Post-fix verify: backend 561 + ruff clean; FE 127 + build (TS strict) + lint green.
+
+Demo-sandbox E2E (auth ON, isolated Postgres): grid create (2 locations, 18+20 prefilled zero-qty products) → matrix save (quantities_changed "0 → 6" with product names) → logistics PATCH (diff event "driver: — → Janek Testowy; limit_kg: 700.0 → 500.0") → finalize (2 sent, weight 87.6/500 kg) → captain NORBLIN receives with own token (1 discrepancy; order closed; delivery_confirmed event, actor=NORBLIN; per-order chips) → cancel draft (hidden by default, visible via include_cancelled).

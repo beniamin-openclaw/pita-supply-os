@@ -52,6 +52,8 @@ import type {
   TransportBatchPatchRequest,
   TransportBatchPatchResponse,
   TransportBatchSummary,
+  TransportCancelRequest,
+  TransportCancelResponse,
   TransportCreateRequest,
   TransportCreateResponse,
   TransportEligibleOrder,
@@ -447,10 +449,11 @@ export const api = {
       `/api/manager/transport/eligible?supplier_id=${encodeURIComponent(supplier_id)}`,
       "manager",
     ),
-  transportBatches: (supplier_id?: string, limit?: number) => {
+  transportBatches: (supplier_id?: string, limit?: number, include_cancelled?: boolean) => {
     const qs = new URLSearchParams();
     if (supplier_id) qs.set("supplier_id", supplier_id);
     if (limit) qs.set("limit", String(limit));
+    if (include_cancelled) qs.set("include_cancelled", "true");
     const suffix = qs.toString() ? `?${qs}` : "";
     return apiGet<TransportBatchSummary[]>(`/api/manager/transport/batches${suffix}`, "manager");
   },
@@ -469,10 +472,14 @@ export const api = {
       { transport_id },
       "manager",
     ),
-  transportAddLocation: (transport_id: string, location_id: string) =>
+  transportAddLocation: (
+    transport_id: string,
+    location_id: string,
+    prefill_products?: boolean,
+  ) =>
     apiPost<TransportAddLocationResponse>(
       "/api/manager/transport/add-location",
-      { transport_id, location_id } as TransportAddLocationRequest,
+      { transport_id, location_id, prefill_products } as TransportAddLocationRequest,
       "manager",
     ),
   transportRemoveOrder: (transport_id: string, order_id: string) =>
@@ -485,6 +492,13 @@ export const api = {
     apiPatch<TransportBatchPatchResponse>(
       `/api/manager/transport/batch/${encodeURIComponent(transport_id)}`,
       req,
+      "manager",
+    ),
+  // Manager Transport v3 (to-ordering-pago ADDENDUM v3) — cancel a draft batch.
+  transportCancel: (transport_id: string) =>
+    apiPost<TransportCancelResponse>(
+      "/api/manager/transport/cancel",
+      { transport_id } as TransportCancelRequest,
       "manager",
     ),
 };

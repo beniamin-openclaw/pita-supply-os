@@ -47,12 +47,13 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 # FK-safe drop/truncate order (children before parents).
 _ALL_TABLES = [
     "receipt_lines", "receipts", "inventory_count_lines", "inventory_counts",
-    "order_lines", "orders", "transport_batches", "location_product_settings",
-    "supplier_products", "locations", "suppliers", "products", "_meta",
+    "order_lines", "orders", "transport_events", "transport_batches",
+    "location_product_settings", "supplier_products", "locations", "suppliers",
+    "products", "_meta",
 ]
 _TXN_TABLES = [
     "receipt_lines", "receipts", "inventory_count_lines", "inventory_counts",
-    "order_lines", "orders", "transport_batches",
+    "order_lines", "orders", "transport_events", "transport_batches",
 ]
 
 
@@ -99,6 +100,11 @@ def _schema():
     # pre-0009 schema. 0008 belongs to a different lane and is deliberately
     # NOT applied here (lesson: wire every new migration into this fixture).
     transport_batches = (MIGRATIONS_DIR / "0009_transport_batches.sql").read_text()
+    # 0010 adds transport_events (referenced by append_transport_event /
+    # load_transport_events_for) and widens transport_batches.status to allow
+    # 'cancelled' — MUST be applied here or the v3 event-history + cancel-draft
+    # integration coverage would break (lesson: wire every new migration in).
+    transport_events = (MIGRATIONS_DIR / "0010_transport_events.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -110,6 +116,7 @@ def _schema():
         conn.exec_driver_sql(order_note)
         conn.exec_driver_sql(company_fields)
         conn.exec_driver_sql(transport_batches)
+        conn.exec_driver_sql(transport_events)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

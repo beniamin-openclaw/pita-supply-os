@@ -882,6 +882,11 @@ class TransportBatchOrder(BaseModel):
     # render the editable product x location matrix. Empty for a
     # newly-created skeleton order (``add-location``) with no lines yet.
     lines: list["ManagerOrderLineDetail"] = Field(default_factory=list)
+    # Per-order delivery status (v3 Phase 8) — joined from receipts, only when
+    # the batch status is "sent" (a draft batch's members are never dispatched
+    # yet, so both stay 0 there). Mirrors ManagerQueueItem's receipt signal.
+    received_count: int = 0
+    received_discrepancy_count: int = 0
 
 
 class TransportBatchSummary(BaseModel):
@@ -933,6 +938,10 @@ class TransportBatchDetail(BaseModel):
     # supplier_product (surfaced as a "brak wagi dla N pozycji" warning by the FE).
     total_weight_kg: float = 0
     unknown_weight_count: int = 0
+    # Event history (v3 Phase 6) — newest first, capped 100 by the route.
+    # Empty when the 'transport_events' worksheet/table has no rows yet, or
+    # (Sheets) the worksheet hasn't been created.
+    events: list["TransportEvent"] = Field(default_factory=list)
 
 
 class TransportBatch(BaseModel):
@@ -957,6 +966,27 @@ class TransportBatch(BaseModel):
     sent_at: datetime | None = None
 
 
+class TransportEvent(BaseModel):
+    """One append-only row of a Transport batch's audit trail (v3 Phase 6,
+    migration 0010) — the operator-required post-send history. Never updated
+    or deleted; ``details`` is a human-readable "field: old → new" (or
+    equivalent) summary computed server-side at emission time, not
+    reconstructed later. ``order_id`` is None for a batch-level event
+    (``batch_sent``, ``batch_cancelled``, ``logistics_changed``) and set for
+    an order-level one (``order_combined``, ``location_added``,
+    ``order_removed``, ``order_sent``, ``quantities_changed``,
+    ``delivery_confirmed``). ``actor`` is ``"manager-default"`` for every
+    manager-driven action and the location id for a captain-driven one
+    (``delivery_confirmed``)."""
+    event_id: str
+    transport_id: str
+    order_id: str | None = None
+    event_type: str
+    actor: str | None = None
+    at: datetime | None = None
+    details: str = ""
+
+
 # ---------- Manager Transport create (Phase 2 write side / to-ordering-pago) ----------
 
 
@@ -973,6 +1003,11 @@ class TransportCreateRequest(BaseModel):
     supplier_id: str
     order_ids: list[str] = Field(default_factory=list)
     append_to: str | None = None
+    # v3 Phase 9: accepted for API symmetry with TransportAddLocationRequest,
+    # but NOT implemented here -- create only ever combines EXISTING orders,
+    # so there is no manager-created skeleton to prefill. Prefill happens on
+    # add-location instead.
+    prefill_products: bool = False
 
 
 class TransportSkippedOrder(BaseModel):
@@ -1020,14 +1055,24 @@ class TransportAddLocationRequest(BaseModel):
     skeleton (no-lines) order for ``location_id`` and fold it into the draft
     batch ``transport_id``, so a location without a captain submission can
     still join. Products are then added via the existing manager add-line
-    flow."""
+    flow.
+
+    ``prefill_products`` (v3 Phase 9, the manager-first grid flow): when True,
+    the skeleton is populated with a zero-qty line for EVERY product this
+    location can order from the batch's supplier (supplier catalog ∩
+    location_product_settings — exactly the Captain's orderable set), so the
+    Manager types quantities straight into the matrix instead of hunting for
+    each product one add-line at a time. Zero-qty lines drop out of totals /
+    driver list / email until the Manager fills them in."""
     transport_id: str
     location_id: str
+    prefill_products: bool = False
 
 
 class TransportAddLocationResponse(BaseModel):
     transport_id: str
     order_id: str  # the newly-created skeleton order
+    prefilled_count: int = 0
 
 
 class TransportRemoveOrderRequest(BaseModel):
@@ -1068,3 +1113,28 @@ class TransportBatchPatchResponse(BaseModel):
     pickup_time: str | None = None
     limit_kg: float | None = None
     notes: str = ""
+
+
+# ---------- Manager Transport v3: cancel draft (to-ordering-pago ADDENDUM v3) ----------
+
+
+class TransportCancelRequest(BaseModel):
+    """Payload for POST /api/manager/transport/cancel — cancel a DRAFT batch
+    outright. Draft only (409 on a sent batch — cancelling after the supplier
+    already received the order is deliberately out of scope, see plan Open
+    Questions)."""
+    transport_id: str
+
+
+class TransportCancelResponse(BaseModel):
+    """Result of cancel. Mirrors ``remove-order``'s released/cancelled split,
+    applied to every member order: ``released`` lists orders returned to
+    ``captain_submitted`` (marker cleared); ``cancelled`` lists
+    manager-created empty orders cancelled outright via the existing cancel
+    trace. ``skipped`` (reusing ``TransportSkippedOrder``) lists members that
+    were not ``manager_claimed`` or hit a guard conflict — never aborts the
+    rest of the batch."""
+    transport_id: str
+    released: list[str] = Field(default_factory=list)
+    cancelled: list[str] = Field(default_factory=list)
+    skipped: list[TransportSkippedOrder] = Field(default_factory=list)
