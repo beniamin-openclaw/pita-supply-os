@@ -37,3 +37,13 @@ Pushing that branch to main would have made every `location_product_settings` re
 1. Live test with the real Manager token on `/manager/transport`.
 2. Pago email master-data batch (distribution list from the legacy sheet → `suppliers.email`, comma-separated) — until then the Pago email button stays disabled by design; Bukat already works.
 3. **Do NOT push `claude/multi-location-master-data` to main until migration 0008 is applied to prod Supabase** (see above) — that lane also still carries the open Wolska/Blue Service master-data question.
+
+---
+
+# v2+v3 deploy (2026-08-23)
+
+- Migrations 0009+0010 applied to prod Supabase BY THE OPERATOR via SQL Editor (permission classifier blocks Claude's DDL); schema verified by read: transport_batches ✓, transport_events ✓, unit_weight_kg ✓, RLS enabled on both ✓, status CHECK incl. 'cancelled' ✓.
+- main fast-forwarded 814aa98..05457ff (commits a9f774e v2 + 05457ff v3).
+- CI run 32629665977: all three jobs success (integration job exercised migrations 0009/0010 via the wired fixture).
+- Railway live: /health ok; transport/finalize + /cancel → 401 (routes exist), bogus → 404.
+- Vercel live: new bundle index-9FXuw1tH.js carries "Historia zmian", "Zapisz i wyślij", "Anuluj szkic", transport/cancel, prefill_products, "Nowy transport z lokalizacjami".
