@@ -76,11 +76,22 @@ export function TransportPage() {
 
   // Locations master data — for the draft "add location" picker (Manager-only
   // caller; api.locations needs role="manager" or it 401s silently).
+  // Deliberately UNFILTERED by `active` (v5.2 operator request: "wszystkie
+  // lokalizacje z firmy"): a Transport run delivers to locations not yet
+  // onboarded for captains (`active=false` means "no captain flow yet", not
+  // "doesn't take deliveries" — the legacy sheet always spanned the whole
+  // company). Backend add-location has no active gate either; a location with
+  // no supplier settings just prefills 0 products and its empty column is
+  // auto-removed at finalize. Sorted by name for a scannable modal list.
   const [locations, setLocations] = useState<Location[]>([]);
   useEffect(() => {
     api
       .locations("manager")
-      .then((data) => setLocations(data.filter((l) => l.active)))
+      .then((data) =>
+        setLocations(
+          [...data].sort((a, b) => a.location_name.localeCompare(b.location_name, "pl")),
+        ),
+      )
       .catch(() => setLocations([]));
   }, []);
 
