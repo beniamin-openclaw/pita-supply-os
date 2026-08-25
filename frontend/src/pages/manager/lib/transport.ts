@@ -169,8 +169,22 @@ export interface TransportMatrixRow {
   linesByOrderId: Record<string, ManagerOrderLineDetail>;
 }
 
-/** Union of products across every member order's lines, one row per product,
- * sorted by product_name_pl (pl collation) for a stable, scannable table. */
+/** True when a matrix row exists ONLY through manager-added lines (the
+ * add-line route mints `OL-{order}-M-{hex}` ids; captain lines are numeric,
+ * grid-prefill lines are `-P-`). Such a row was hand-added to a draft after
+ * creation, so it renders at the BOTTOM of the matrix in add order instead of
+ * being alphabetized into the base list (operator feedback v5.1: "powinien
+ * dodawać się od dołu"). */
+function isManagerAddedRow(row: TransportMatrixRow): boolean {
+  const lines = Object.values(row.linesByOrderId);
+  return lines.length > 0 && lines.every((l) => l.order_line_id.includes("-M-"));
+}
+
+/** Union of products across every member order's lines, one row per product.
+ * Base rows (captain-submitted / grid-prefilled) sort by product_name_pl
+ * (pl collation) for a stable, scannable table; rows added by the manager
+ * via "+ Dodaj produkt" append BELOW them in first-encounter (i.e. add)
+ * order — see `isManagerAddedRow`. */
 export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMatrixRow[] {
   const byProduct = new Map<string, TransportMatrixRow>();
   for (const order of orders) {
@@ -188,7 +202,11 @@ export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMa
       row.linesByOrderId[order.order_id] = line;
     }
   }
-  return [...byProduct.values()].sort((a, b) => a.product_name_pl.localeCompare(b.product_name_pl, "pl"));
+  const rows = [...byProduct.values()];
+  const base = rows.filter((r) => !isManagerAddedRow(r));
+  const managerAdded = rows.filter(isManagerAddedRow); // keeps Map insertion (= add) order
+  base.sort((a, b) => a.product_name_pl.localeCompare(b.product_name_pl, "pl"));
+  return [...base, ...managerAdded];
 }
 
 /** Union, across every member order, of products orderable-but-not-yet-present
@@ -552,7 +570,11 @@ export function buildTransportDriverPrintDoc(
   const locationIds = [...namesById.keys()].sort((a, b) =>
     (namesById.get(a) ?? a).localeCompare(namesById.get(b) ?? b, "pl"),
   );
-  const locations = locationIds.map((id) => namesById.get(id) ?? id);
+  // Driver-doc columns use the SHORT location form ("Bracka", not
+  // "Pita Bros Bracka") — operator feedback v5.1: the brand prefix is
+  // redundant on an internal doc and eats column width. Display-only:
+  // qtyByLocation below stays index-aligned to `locationIds`.
+  const locations = locationIds.map((id) => shortLocationName(namesById.get(id) ?? id));
 
   const products = detail.lines
     .filter((line) => line.total_qty_purchase > 0)

@@ -315,6 +315,46 @@ describe("buildTransportMatrix", () => {
     const matrix = buildTransportMatrix(orders);
     expect(matrix.map((r) => r.product_name_pl)).toEqual(["Cebula", "Ziemniaki"]);
   });
+
+  it("pins manager-added rows (all lines -M-) to the bottom in add order", () => {
+    // Base rows alphabetize; "Agrest" and "Bób" are manager-added (every line
+    // an OL-...-M-... id) so despite sorting FIRST alphabetically they render
+    // BELOW the base rows, in first-encounter (add) order (v5.1 feedback).
+    const orders: TransportBatchOrder[] = [
+      batchOrder({
+        lines: [
+          orderLine({ order_line_id: "OL-ORD-1-001", product_id: "P1", product_name_pl: "Ziemniaki" }),
+          orderLine({ order_line_id: "OL-ORD-1-002", product_id: "P2", product_name_pl: "Cebula" }),
+          orderLine({ order_line_id: "OL-ORD-1-M-aa11", product_id: "P3", product_name_pl: "Bób" }),
+          orderLine({ order_line_id: "OL-ORD-1-M-bb22", product_id: "P4", product_name_pl: "Agrest" }),
+        ],
+      }),
+    ];
+    const matrix = buildTransportMatrix(orders);
+    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Cebula", "Ziemniaki", "Bób", "Agrest"]);
+  });
+
+  it("keeps a manager-filled cell of a captain-origin product row alphabetized", () => {
+    // P1 exists via a captain line on ORD-1 AND a manager-added line on ORD-2:
+    // the row is NOT manager-only, so it stays in the alphabetical base section.
+    const orders: TransportBatchOrder[] = [
+      batchOrder({
+        order_id: "ORD-1",
+        lines: [orderLine({ order_line_id: "OL-ORD-1-001", product_id: "P1", product_name_pl: "Pomidory" })],
+      }),
+      batchOrder({
+        order_id: "ORD-2",
+        location_id: "BRACKA",
+        location_name: "Pita Bros Bracka",
+        lines: [
+          orderLine({ order_line_id: "OL-ORD-2-M-cc33", product_id: "P1", product_name_pl: "Pomidory" }),
+          orderLine({ order_line_id: "OL-ORD-2-001", product_id: "P2", product_name_pl: "Cebula" }),
+        ],
+      }),
+    ];
+    const matrix = buildTransportMatrix(orders);
+    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Cebula", "Pomidory"]);
+  });
 });
 
 describe("seedTransportDrafts / anyTransportDirty / transportDirtySavePayloads", () => {
@@ -510,8 +550,10 @@ describe("buildTransportDriverPrintDoc", () => {
     expect(doc.vehicle).toBe("Ducato");
     expect(doc.supplierName).toBe("Bukat");
     expect(doc.supplierBarText).toBe("Bukat"); // not Pago -> no " / LINEAGE" suffix
-    expect(doc.locations).toEqual(["Pita Bros Bracka", "Pita Bros Wola"]); // pl-collated
-    expect(doc.locationsLine).toBe("Pita Bros Bracka, Pita Bros Wola");
+    // Short forms — the redundant "Pita Bros " brand prefix is stripped on
+    // the internal driver doc (operator feedback v5.1); still pl-collated.
+    expect(doc.locations).toEqual(["Bracka", "Wola"]);
+    expect(doc.locationsLine).toBe("Bracka, Wola");
     expect(doc.products).toHaveLength(1);
     expect(doc.products[0].name).toBe("Pomidory");
     expect(doc.products[0].totalQty).toBe(12);
