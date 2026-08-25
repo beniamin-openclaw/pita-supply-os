@@ -9,7 +9,7 @@
 // and emits `number | ""` upward via parseDecimal — so callers keep their exact
 // `number | ""` state shape and the logic layer (compute/payload) is untouched.
 
-import { useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent, type KeyboardEvent } from "react";
 
 import { parseDecimal, formatDecimal } from "./number";
 
@@ -27,6 +27,13 @@ interface DecimalInputProps {
   "aria-label"?: string;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean;
+  /** Keyboard passthrough (spread onto the input) — e.g. the Transport matrix
+   * uses Enter to hop focus to the cell one row below. */
+  onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** DOM passthroughs for callers that locate inputs positionally (Transport
+   * matrix Enter-navigation addresses cells by column id + row index). */
+  "data-mx-col"?: string;
+  "data-mx-row"?: number;
 }
 
 export function DecimalInput({

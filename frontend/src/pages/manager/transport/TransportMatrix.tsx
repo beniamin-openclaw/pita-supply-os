@@ -86,7 +86,7 @@ export function TransportMatrix({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row, rowIdx) => (
               <tr key={row.product_id} className="border-t border-gray-100">
                 <td className="px-3 py-2">
                   {row.product_name_pl}
@@ -112,6 +112,30 @@ export function TransportMatrix({
                             product: row.product_name_pl,
                             location: order.location_name,
                           })}
+                          data-mx-col={order.order_id}
+                          data-mx-row={rowIdx}
+                          // Enter = hop to the cell one row BELOW in the same
+                          // column (operator request v5.2: fast keyboard entry
+                          // down a location's column). Skips "–" rows (a column
+                          // without that product renders no input) by probing
+                          // successive row indices; selects the target's text
+                          // so typing overwrites. No-op on the last cell.
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            const root = e.currentTarget.closest("table");
+                            if (!root) return;
+                            for (let next = rowIdx + 1; next < rows.length; next++) {
+                              const target = root.querySelector<HTMLInputElement>(
+                                `input[data-mx-col="${order.order_id}"][data-mx-row="${next}"]`,
+                              );
+                              if (target) {
+                                target.focus();
+                                target.select();
+                                return;
+                              }
+                            }
+                          }}
                           className="w-20 rounded border border-gray-300 px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       ) : (
