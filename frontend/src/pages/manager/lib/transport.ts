@@ -13,9 +13,12 @@
 //     private"). Keep this asymmetry — do not add per-location detail to the
 //     email builder.
 
+import type { Lang } from "../../../i18n";
 import type { StringKey } from "../../../i18n/strings";
 import type {
+  Location,
   ManagerOrderLineDetail,
+  OrderableItem,
   OrderLineManagerFinal,
   Supplier,
   TransportBatchDetail,
@@ -188,6 +191,33 @@ export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMa
   return [...byProduct.values()].sort((a, b) => a.product_name_pl.localeCompare(b.product_name_pl, "pl"));
 }
 
+/** Union, across every member order, of products orderable-but-not-yet-present
+ * on that order — one row per product, sorted by name (pl collation), feeding
+ * the SINGLE matrix-wide "+ Dodaj produkt" picker (feature 4, v4 feedback
+ * round 2) that replaced the old per-location pickers. Each entry is the
+ * FIRST matching order's `OrderableItem` verbatim (so it slots straight into
+ * the shared `AddProductPicker` component); `supplier_product_id` is per
+ * supplier+product and identical across locations, but a caller that actually
+ * adds the product must still resolve it PER ORDER from that order's own
+ * orderable list (see `handleAddProductAll` in TransportPage) — not every
+ * order necessarily carries this exact `OrderableItem` instance. */
+export function buildTransportAddAllOptions(
+  orders: TransportBatchOrder[],
+  orderableByOrderId: Record<string, OrderableItem[]>,
+): OrderableItem[] {
+  const byProduct = new Map<string, OrderableItem>();
+  for (const order of orders) {
+    const present = new Set(order.lines.map((l) => l.product_id));
+    for (const item of orderableByOrderId[order.order_id] ?? []) {
+      if (present.has(item.product_id) || byProduct.has(item.product_id)) continue;
+      byProduct.set(item.product_id, item);
+    }
+  }
+  return [...byProduct.values()].sort((a, b) =>
+    a.product_name_pl.localeCompare(b.product_name_pl, "pl"),
+  );
+}
+
 /** Per-order draft state for a draft batch — one `DraftMap` (order_line_id ->
  * {qty, comment}) per member order, so each order's dirty tracking and
  * managerSave payload stay independent (mirrors one column = one order = one
@@ -293,26 +323,125 @@ export function computeWeightStrip(
 
 // ---- v4 feedback: friendly batch naming ------------------------------------
 
+/** Strip a leading Polish postal code ("01-258 Warszawa" -> "Warszawa") and
+ * apply the tiny English->Polish city alias map real master data contains
+ * ("Warsaw" -> "Warszawa"), case-insensitively. Trims surrounding whitespace. */
+function normalizeCityName(raw: string): string {
+  const stripped = raw.replace(/^\d{2}-\d{3}\s+/, "").trim();
+  const CITY_ALIASES: Record<string, string> = { warsaw: "Warszawa" };
+  const aliased = CITY_ALIASES[stripped.toLowerCase()];
+  return aliased ?? stripped;
+}
+
+/** "Pita Bros Wola" -> "Wola" — the short display form used when a location
+ * has no usable `city` to fall back on. */
+function shortLocationName(name: string): string {
+  return name.replace(/^Pita Bros\s+/, "").trim();
+}
+
+/** Deduped (case-insensitive), first-seen-order, comma-joined city line for
+ * a set of location ids — the "Miasto lub miasta" segment of the auto-label
+ * (feature 1). A location with no usable `city` falls back to its short
+ * location name; a location absent from `locationsById` (master data not
+ * loaded yet) is skipped entirely. */
+export function transportCitiesLine(
+  locationIds: string[],
+  locationsById: Record<string, Location>,
+): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of locationIds) {
+    const loc = locationsById[id];
+    if (!loc) continue;
+    let display: string | null = null;
+    if (loc.city && loc.city.trim() !== "") {
+      display = normalizeCityName(loc.city);
+    } else if (loc.location_name) {
+      display = shortLocationName(loc.location_name);
+    }
+    if (!display) continue;
+    const key = display.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(display);
+  }
+  return out.join(", ");
+}
+
+const WEEKDAY_LOCALE: Record<Lang, string> = { pl: "pl-PL", en: "en-US" };
+
+function capitalizeFirst(s: string): string {
+  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
+}
+
+/** Long weekday name for an ISO date/datetime string in `lang`'s locale,
+ * capitalized (Polish's Intl output is lowercase — "sobota"). "" on an
+ * unparseable date. Uses the UTC calendar fields so a bare date-only ISO
+ * string ("2026-08-23") and a full datetime both resolve deterministically,
+ * independent of the viewer's own timezone. */
+function transportWeekdayLabel(iso: string, lang: Lang): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const weekday = new Intl.DateTimeFormat(WEEKDAY_LOCALE[lang], {
+    weekday: "long",
+    timeZone: "UTC",
+  }).format(d);
+  return capitalizeFirst(weekday);
+}
+
+/** "dd.MM.yy" for an ISO date/datetime string (UTC calendar fields — see
+ * `transportWeekdayLabel`). "" on an unparseable date. */
+function transportShortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${dd}.${mm}.${yy}`;
+}
+
+/** The auto-generated fallback label (feature 1, v4 feedback round 2):
+ * "Transport {Weekday} · {City or cities} · {dd.MM.yy}" — e.g.
+ * "Transport Sobota · Warszawa · 22.08.26". The weekday AND date segment both
+ * come from the SAME source date (`pickup_date` if set, else `created`); a
+ * missing source date or an empty cities line simply drops that segment
+ * rather than leaving a stray "·". Pure — takes `lang` explicitly rather than
+ * reading it from a hook, so it stays testable without a React tree. */
+export function transportAutoLabel(
+  batch: Pick<TransportBatchSummary, "supplier_name" | "created" | "pickup_date" | "location_ids">,
+  t: TFunc,
+  opts: { lang: Lang; locationsById: Record<string, Location> },
+): string {
+  const sourceIso = batch.pickup_date ?? batch.created ?? null;
+  const weekday = sourceIso ? transportWeekdayLabel(sourceIso, opts.lang) : "";
+  const datePart = sourceIso ? transportShortDate(sourceIso) : "";
+  const cities = transportCitiesLine(batch.location_ids, opts.locationsById);
+
+  const prefix = t("manager.transport.displayLabel.fallbackPrefix");
+  const segments = [weekday ? `${prefix} ${weekday}` : prefix];
+  if (cities) segments.push(cities);
+  if (datePart) segments.push(datePart);
+  return segments.join(" · ");
+}
+
 /** Operator-facing display label for a Transport batch (feature 1, v4
  * feedback, operator decision "A+C"): the friendly `name` when the batch has
- * one, else "Transport {supplier} · {created date}". This is the label to use
- * as the PRIMARY title everywhere a batch is shown (list rows, detail header,
- * both print docs) — the raw `TRN-...` id is demoted to small secondary text
- * next to it, never dropped (it stays the durable identifier). `formatDate`
- * lets a caller supply locale-aware formatting; defaults to the bare
- * "YYYY-MM-DD" ISO date part. */
+ * one, else the auto-generated "Transport {weekday} · {city} · {date}" label
+ * (`transportAutoLabel`). This is the label to use as the PRIMARY title
+ * everywhere a batch is shown (list rows, detail header, both print docs) —
+ * the raw `TRN-...` id is demoted to small secondary text next to it, never
+ * dropped (it stays the durable identifier). */
 export function transportDisplayLabel(
-  batch: Pick<TransportBatchSummary, "supplier_name" | "created" | "name">,
+  batch: Pick<
+    TransportBatchSummary,
+    "supplier_name" | "created" | "name" | "pickup_date" | "location_ids"
+  >,
   t: TFunc,
-  formatDate: (iso: string) => string = isoDatePart,
+  opts: { lang: Lang; locationsById: Record<string, Location> },
 ): string {
   const name = batch.name?.trim();
   if (name) return name;
-  const datePart = batch.created ? formatDate(batch.created) : "";
-  return t("manager.transport.displayLabel.fallback", {
-    supplier: batch.supplier_name,
-    date: datePart,
-  });
+  return transportAutoLabel(batch, t, opts);
 }
 
 /** Deduped, sorted non-empty values of one logistics field across past
@@ -394,7 +523,7 @@ export interface PrintDriverProductLine {
 
 export interface TransportDriverPrintDoc {
   transportId: string;
-  displayLabel: string; // transportDisplayLabel(detail, t) — the doc's primary title context
+  displayLabel: string; // caller-computed transportDisplayLabel(...) — the doc's primary title context
   date: string; // "" when unknown
   time: string; // pickup_time, "" when unset
   driver: string; // "" when unset
@@ -416,7 +545,7 @@ export interface TransportDriverPrintDoc {
  * driver text / email builders above. */
 export function buildTransportDriverPrintDoc(
   detail: TransportBatchDetail,
-  t: TFunc,
+  displayLabel: string,
 ): TransportDriverPrintDoc {
   const namesById = new Map<string, string>();
   for (const o of detail.orders) namesById.set(o.location_id, o.location_name);
@@ -443,7 +572,7 @@ export function buildTransportDriverPrintDoc(
 
   return {
     transportId: detail.transport_id,
-    displayLabel: transportDisplayLabel(detail, t),
+    displayLabel,
     date: isoDatePart(detail.pickup_date ?? detail.created),
     time: detail.pickup_time ?? "",
     driver: detail.driver ?? "",
@@ -478,6 +607,7 @@ const PAGO_ENTITY = {
 
 export interface TransportPagoPrintDoc {
   transportId: string;
+  displayLabel: string; // caller-computed transportDisplayLabel(...) — mirrors the driver doc
   titleBarText: string;
   isPago: boolean;
   // Only populated for SUP_PAGO — other suppliers omit the entity box
@@ -499,7 +629,10 @@ export interface TransportPagoPrintDoc {
  * location ordered what (same discipline as buildTransportEmailBody); the
  * batch's locations only ever appear in the document-data box as a summary
  * line, mirrored from the legacy PDF. */
-export function buildTransportPagoPrintDoc(detail: TransportBatchDetail): TransportPagoPrintDoc {
+export function buildTransportPagoPrintDoc(
+  detail: TransportBatchDetail,
+  displayLabel: string,
+): TransportPagoPrintDoc {
   const isPago = detail.supplier_id === "SUP_PAGO";
   const namesById = new Map<string, string>();
   for (const o of detail.orders) namesById.set(o.location_id, o.location_name);
@@ -507,6 +640,7 @@ export function buildTransportPagoPrintDoc(detail: TransportBatchDetail): Transp
 
   return {
     transportId: detail.transport_id,
+    displayLabel,
     titleBarText: isPago
       ? "THE GREEK GOURMET — ZLECENIE ODBIORU WŁASNEGO"
       : `${detail.supplier_name} — ZAMÓWIENIE`,
@@ -530,4 +664,43 @@ export function buildTransportPagoPrintDoc(detail: TransportBatchDetail): Transp
         qty: line.total_qty_purchase,
       })),
   };
+}
+
+// ---- v4 feedback (feature 2): "NOWY" badge on unopened batches -------------
+//
+// A tiny localStorage-backed "seen" set (mirrors auth.ts's try/catch-guarded
+// style — private-mode browsers must not throw). The optional `storage` param
+// makes both functions unit-testable with a stub instead of the real
+// `window.localStorage`.
+
+const SEEN_TRANSPORTS_KEY = "supply_os_transport_seen";
+const SEEN_TRANSPORTS_CAP = 200;
+
+/** Ids of Transport batches the manager has already opened at least once, or
+ * an empty set on first use / private-mode / corrupt storage. */
+export function loadSeenTransports(storage: Storage = window.localStorage): Set<string> {
+  try {
+    const raw = storage.getItem(SEEN_TRANSPORTS_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((v): v is string => typeof v === "string"));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Mark `id` as seen, persisting the updated set capped at the 200 most
+ * recent ids (oldest dropped first). A storage failure (quota, private mode)
+ * is swallowed — the badge simply reappears next load, never a crash. */
+export function markTransportSeen(id: string, storage: Storage = window.localStorage): void {
+  try {
+    const seen = [...loadSeenTransports(storage)];
+    const next = seen.filter((existing) => existing !== id);
+    next.push(id);
+    const capped = next.slice(-SEEN_TRANSPORTS_CAP);
+    storage.setItem(SEEN_TRANSPORTS_KEY, JSON.stringify(capped));
+  } catch {
+    // ignore — private mode browsers may block
+  }
 }

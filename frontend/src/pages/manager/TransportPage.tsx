@@ -7,7 +7,7 @@
 // finally finalize (draft -> sent), which mirrors v1's totals/driver-list/
 // email/copy view exactly, now read-only.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Loader2 } from "lucide-react";
 
@@ -22,6 +22,8 @@ import {
   buildTransportGmailUrl,
   collectLogisticsSuggestions,
   hasValidRecipient,
+  loadSeenTransports,
+  markTransportSeen,
   seedTransportDrafts,
   transportDirtySavePayloads,
   transportDisplayLabel,
@@ -64,7 +66,7 @@ interface CancelResult {
 }
 
 export function TransportPage() {
-  const { t, formatDateTime } = useT();
+  const { t, lang, formatDateTime } = useT();
   const navigate = useNavigate();
 
   // Supplier picker ------------------------------------------------------------
@@ -80,6 +82,28 @@ export function TransportPage() {
       .locations("manager")
       .then((data) => setLocations(data.filter((l) => l.active)))
       .catch(() => setLocations([]));
+  }, []);
+
+  // Feature 1 (v4 feedback round 2): the auto-label's city segment is derived
+  // from location master data (already loaded above) — keyed by id for O(1)
+  // lookup in transportDisplayLabel.
+  const locationsById = useMemo(() => {
+    const byId: Record<string, Location> = {};
+    for (const l of locations) byId[l.location_id] = l;
+    return byId;
+  }, [locations]);
+  const displayLabelOpts = useMemo(() => ({ lang, locationsById }), [lang, locationsById]);
+
+  // Feature 2 (v4 feedback round 2): "NOWY" badge on a batch never opened yet.
+  const [seenTransports, setSeenTransports] = useState<Set<string>>(() => loadSeenTransports());
+
+  // Feature 3 (v4 feedback round 2): scroll the detail panel into view right
+  // after a create flow jumps into the newly created transport.
+  const detailRef = useRef<HTMLDivElement | null>(null);
+  const scrollDetailIntoView = useCallback(() => {
+    window.setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   }, []);
 
   // Eligible orders to combine ---------------------------------------------------
@@ -216,45 +240,6 @@ export function TransportPage() {
       .reduce((sum, o) => sum + (o.total_value_estimate_pln ?? 0), 0);
   }, [eligible, selected]);
 
-  // Create --------------------------------------------------------------------
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [createResult, setCreateResult] = useState<CreateResult | null>(null);
-
-  // `orderIds` may be EMPTY — the empty-draft path: with zero submitted
-  // orders (Pago on day one) the manager still starts a draft and adds
-  // locations inside it, mirroring the legacy sheet's from-nothing flow.
-  const runCreate = useCallback((orderIds: string[]) => {
-    if (!supplierId || creating) return;
-    setCreating(true);
-    setCreateError(null);
-    setCreateResult(null);
-    api
-      .transportCreate({ supplier_id: supplierId, order_ids: orderIds })
-      .then((resp) => {
-        setCreateResult({
-          transportId: resp.transport_id,
-          combinedCount: resp.combined.length,
-          skipped: resp.skipped,
-        });
-        loadEligible(supplierId);
-        loadBatches(supplierId);
-      })
-      .catch((e: ApiError) => {
-        if (e.status !== 401) setCreateError(e.detail);
-      })
-      .finally(() => setCreating(false));
-  }, [supplierId, creating, loadEligible, loadBatches]);
-
-  const handleCreate = useCallback(() => {
-    if (selected.size === 0) return;
-    runCreate(Array.from(selected));
-  }, [selected, runCreate]);
-
-  const handleCreateEmpty = useCallback(() => {
-    runCreate([]);
-  }, [runCreate]);
-
   // Batch detail ----------------------------------------------------------------
   const fetchOrderable = useCallback((batchDetail: TransportBatchDetail) => {
     if (batchDetail.status !== "draft") {
@@ -288,14 +273,60 @@ export function TransportPage() {
           setDetail(d);
           setDrafts(seedTransportDrafts(d.orders));
           fetchOrderable(d);
+          markTransportSeen(transportId);
+          setSeenTransports((prev) => new Set(prev).add(transportId));
+          scrollDetailIntoView();
         })
         .catch((e: ApiError) => {
           if (e.status !== 401) setDetailError(e.detail);
         })
         .finally(() => setDetailLoading(false));
     },
-    [fetchOrderable],
+    [fetchOrderable, scrollDetailIntoView],
   );
+
+  // Create --------------------------------------------------------------------
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createResult, setCreateResult] = useState<CreateResult | null>(null);
+
+  // `orderIds` may be EMPTY — the empty-draft path: with zero submitted
+  // orders (Pago on day one) the manager still starts a draft and adds
+  // locations inside it, mirroring the legacy sheet's from-nothing flow.
+  // Feature 3 (v4 feedback round 2): every successful create — with orders,
+  // or the empty-draft path — jumps straight into the new transport's detail
+  // (selectBatch also marks it seen + scrolls the panel into view).
+  const runCreate = useCallback((orderIds: string[]) => {
+    if (!supplierId || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    setCreateResult(null);
+    api
+      .transportCreate({ supplier_id: supplierId, order_ids: orderIds })
+      .then((resp) => {
+        setCreateResult({
+          transportId: resp.transport_id,
+          combinedCount: resp.combined.length,
+          skipped: resp.skipped,
+        });
+        loadEligible(supplierId);
+        loadBatches(supplierId);
+        selectBatch(resp.transport_id);
+      })
+      .catch((e: ApiError) => {
+        if (e.status !== 401) setCreateError(e.detail);
+      })
+      .finally(() => setCreating(false));
+  }, [supplierId, creating, loadEligible, loadBatches, selectBatch]);
+
+  const handleCreate = useCallback(() => {
+    if (selected.size === 0) return;
+    runCreate(Array.from(selected));
+  }, [selected, runCreate]);
+
+  const handleCreateEmpty = useCallback(() => {
+    runCreate([]);
+  }, [runCreate]);
 
   // List-only refetch: updates the batches rows WITHOUT resetting the
   // selection/detail (loadBatches resets both — correct on supplier switch,
@@ -378,21 +409,58 @@ export function TransportPage() {
       .finally(() => setMatrixSaving(false));
   }, [detail, drafts, refreshDetail, showToast, t]);
 
-  // ---- v2 draft workstation: add product per column --------------------------
+  // ---- Feature 4 (v4 feedback round 2): ONE matrix-wide add-product --------
+  // Adds `productId` to EVERY member order where it's orderable and not
+  // already present (each order's own orderable entry supplies its
+  // supplier_product_id — see buildTransportAddAllOptions). One busy state,
+  // one refreshDetail after every call settles; a partial failure names the
+  // failed locations rather than silently dropping them.
 
-  const handleAddProduct = useCallback(
-    (orderId: string, productId: string, supplierProductId: string) => {
+  const [addAllBusy, setAddAllBusy] = useState(false);
+
+  const handleAddProductAll = useCallback(
+    (productId: string) => {
       if (!detail) return;
-      setBusyOrderId(orderId);
-      api
-        .managerAddLine(orderId, productId, supplierProductId)
-        .then(() => refreshDetail(detail.transport_id))
-        .catch((e: ApiError) => {
-          showToast(t("manager.actionError", { detail: e.detail }), false);
+      const targets = detail.orders
+        .filter((order) => !order.lines.some((l) => l.product_id === productId))
+        .map((order) => {
+          const item = (orderableByOrderId[order.order_id] ?? []).find(
+            (o) => o.product_id === productId,
+          );
+          return item ? { order, item } : null;
         })
-        .finally(() => setBusyOrderId(null));
+        .filter((v): v is { order: TransportBatchOrder; item: OrderableItem } => v !== null);
+      if (targets.length === 0) return;
+
+      setAddAllBusy(true);
+      Promise.allSettled(
+        targets.map(({ order, item }) =>
+          api
+            .managerAddLine(order.order_id, item.product_id, item.supplier_product_id)
+            .then(() => order.location_name)
+            .catch((e: ApiError) => {
+              throw new Error(`${order.location_name}: ${e.detail}`);
+            }),
+        ),
+      )
+        .then((results) => {
+          const failed = results.filter(
+            (r): r is PromiseRejectedResult => r.status === "rejected",
+          );
+          if (failed.length > 0) {
+            const names = failed.map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
+            showToast(
+              t("manager.transport.matrix.addProductAllError", { locations: names.join(", ") }),
+              false,
+            );
+          } else {
+            showToast(t("manager.transport.matrix.addProductAllOk"), true);
+          }
+          refreshDetail(detail.transport_id);
+        })
+        .finally(() => setAddAllBusy(false));
     },
-    [detail, refreshDetail, showToast, t],
+    [detail, orderableByOrderId, refreshDetail, showToast, t],
   );
 
   // ---- v2 draft workstation: add location -------------------------------------
@@ -927,7 +995,7 @@ export function TransportPage() {
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-900">
-                        {transportDisplayLabel(b, t)}
+                        {transportDisplayLabel(b, t, displayLabelOpts)}
                       </span>
                       <span className="text-[10px] text-slate-400">{b.transport_id}</span>
                       <span
@@ -947,6 +1015,11 @@ export function TransportPage() {
                               : "manager.transport.status.sent",
                         )}
                       </span>
+                      {b.status !== "cancelled" && !seenTransports.has(b.transport_id) && (
+                        <span className="inline-flex items-center rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-green-700">
+                          {t("manager.transport.badge.new")}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-slate-600">{b.created && formatDateTime(b.created)}</div>
                     <div className="text-xs text-slate-500">
@@ -963,7 +1036,7 @@ export function TransportPage() {
           )}
 
           {selectedTransportId && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
+            <div ref={detailRef} className="mt-4 border-t border-slate-100 pt-4">
               {detailLoading && (
                 <div className="text-sm text-slate-500">{t("manager.transport.detail.loading")}</div>
               )}
@@ -977,7 +1050,7 @@ export function TransportPage() {
                 <div className="space-y-4">
                   <div className="flex items-baseline gap-2">
                     <h3 className="text-base font-semibold text-slate-900">
-                      {transportDisplayLabel(detail, t)}
+                      {transportDisplayLabel(detail, t, displayLabelOpts)}
                     </h3>
                     <span className="text-xs text-slate-400">{detail.transport_id}</span>
                   </div>
@@ -993,7 +1066,7 @@ export function TransportPage() {
                     onSave={handleSaveLogistics}
                   />
 
-                  <PrintViews detail={detail} />
+                  <PrintViews detail={detail} displayLabel={transportDisplayLabel(detail, t, displayLabelOpts)} />
 
                   <HistorySection events={detail.events} />
 
@@ -1005,7 +1078,8 @@ export function TransportPage() {
                         drafts={drafts}
                         onQtyChange={handleQtyChange}
                         orderableByOrderId={orderableByOrderId}
-                        onAddProduct={handleAddProduct}
+                        onAddProductAll={handleAddProductAll}
+                        addAllBusy={addAllBusy}
                         onRemoveOrder={handleRemoveOrder}
                         busyOrderId={busyOrderId}
                       />

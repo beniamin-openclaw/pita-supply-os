@@ -892,11 +892,12 @@ export const STRINGS = {
   "manager.transport.back": { pl: "Powrót do menedżera", en: "Back to manager" },
   "manager.transport.supplierLabel": { pl: "Dostawca", en: "Supplier" },
   // v4 feedback — friendly batch naming (feature 1): the primary title shown
-  // everywhere a batch never given a `name` is displayed.
-  "manager.transport.displayLabel.fallback": {
-    pl: "Transport {supplier} · {date}",
-    en: "Transport {supplier} · {date}",
-  },
+  // everywhere a batch never given a `name` is displayed. "Transport Sobota ·
+  // Warszawa · 22.08.26" — this key is just the leading word; the weekday /
+  // city / date segments are composed in code (transportAutoLabel).
+  "manager.transport.displayLabel.fallbackPrefix": { pl: "Transport", en: "Transport" },
+  // v4 feedback round 2 (feature 2): "unopened batch" badge on the list row.
+  "manager.transport.badge.new": { pl: "NOWY", en: "NEW" },
   "manager.transport.createEmptyButton": {
     pl: "Utwórz pusty transport",
     en: "Start empty transport",
@@ -1060,6 +1061,16 @@ export const STRINGS = {
     en: "Remove {location} from the transport",
   },
   "manager.transport.matrix.qtyAria": { pl: "{product} — {location}", en: "{product} — {location}" },
+  // v4 feedback round 2 (feature 4): ONE matrix-wide "+ Dodaj produkt" row,
+  // replacing the per-location pickers.
+  "manager.transport.matrix.addProductAllOk": {
+    pl: "Dodano produkt do zamówień.",
+    en: "Product added to the orders.",
+  },
+  "manager.transport.matrix.addProductAllError": {
+    pl: "Nie udało się dodać produktu dla: {locations}",
+    en: "Couldn't add the product for: {locations}",
+  },
 
   "manager.transport.addLocation.button": { pl: "Dodaj lokalizację", en: "Add location" },
   "manager.transport.addLocation.placeholder": {
@@ -1093,15 +1104,15 @@ export const STRINGS = {
     en: "Couldn't remove the order: {detail}",
   },
 
-  "manager.transport.finalize.button": { pl: "Wyślij transport", en: "Send transport" },
+  "manager.transport.finalize.button": { pl: "Zatwierdź transport", en: "Approve transport" },
   "manager.transport.finalize.confirm": {
-    pl: "Wysłać transport {id}? Zamówienia zostaną oznaczone jako wysłane do dostawcy.",
-    en: "Send transport {id}? Member orders will be marked as sent to the supplier.",
+    pl: "Zatwierdzić transport {id}? Zamówienia zostaną oznaczone jako wysłane do dostawcy.",
+    en: "Approve transport {id}? Member orders will be marked as sent to the supplier.",
   },
-  "manager.transport.finalize.busy": { pl: "Wysyłanie…", en: "Sending…" },
+  "manager.transport.finalize.busy": { pl: "Zatwierdzanie…", en: "Approving…" },
   "manager.transport.finalize.error": {
-    pl: "Nie udało się wysłać transportu: {detail}",
-    en: "Couldn't send the transport: {detail}",
+    pl: "Nie udało się zatwierdzić transportu: {detail}",
+    en: "Couldn't approve the transport: {detail}",
   },
   "manager.transport.finalize.result.sent": {
     pl: "Wysłano {count} zamówień.",
@@ -1115,10 +1126,10 @@ export const STRINGS = {
     en: "Save changes first (Save changes)",
   },
   "manager.transport.finalize.saveAndSendButton": {
-    pl: "Zapisz i wyślij",
-    en: "Save and send",
+    pl: "Zapisz i zatwierdź",
+    en: "Save and approve",
   },
-  "manager.transport.finalize.saveAndSendBusy": { pl: "Zapisywanie i wysyłanie…", en: "Saving and sending…" },
+  "manager.transport.finalize.saveAndSendBusy": { pl: "Zapisywanie i zatwierdzanie…", en: "Saving and approving…" },
   "manager.transport.finalize.saveAndSendSaveFailed": {
     pl: "Nie udało się zapisać zmian — transport NIE został wysłany: {detail}",
     en: "Couldn't save changes — the transport was NOT sent: {detail}",
@@ -1200,14 +1211,19 @@ export const STRINGS = {
   "manager.transport.gridCreate.selectAll": { pl: "Zaznacz wszystkie", en: "Select all" },
   "manager.transport.gridCreate.deselectAll": { pl: "Odznacz wszystkie", en: "Deselect all" },
 
-  // ADDENDUM v3 — print/PDF views (Phase 10).
+  // ADDENDUM v3 — print/PDF views (Phase 10). v5 feedback: real .pdf download,
+  // not window.print() — button copy no longer says "Drukuj".
   "manager.transport.print.driverButton": {
-    pl: "Drukuj / PDF — lista kierowcy",
-    en: "Print / PDF — driver list",
+    pl: "PDF — lista kierowcy",
+    en: "PDF — driver list",
   },
   "manager.transport.print.pagoButton": {
-    pl: "Drukuj / PDF — zamówienie",
-    en: "Print / PDF — order",
+    pl: "PDF — zamówienie",
+    en: "PDF — order",
+  },
+  "manager.transport.print.downloadError": {
+    pl: "Nie udało się wygenerować PDF. Spróbuj ponownie.",
+    en: "Failed to generate the PDF. Please try again.",
   },
   "manager.transport.print.driverTitle": { pl: "Lista dla kierowcy", en: "Driver list" },
   "manager.transport.print.pagoTitle": { pl: "Zamówienie zbiorcze", en: "Combined order" },

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { STRINGS, interpolateTemplate, type Lang } from "../../../i18n";
 import type { StringKey } from "../../../i18n/strings";
 import type {
+  Location,
   ManagerOrderLineDetail,
   Supplier,
   TransportBatchDetail,
@@ -22,12 +23,37 @@ import {
   collectLogisticsSuggestions,
   computeWeightStrip,
   hasValidRecipient,
+  loadSeenTransports,
+  markTransportSeen,
   seedTransportDrafts,
   sortTransportEvents,
   splitRecipients,
+  transportAutoLabel,
+  transportCitiesLine,
   transportDirtySavePayloads,
+  transportDisplayLabel,
   transportEventTypeLabel,
 } from "./transport";
+
+/** In-memory Storage stub for loadSeenTransports/markTransportSeen tests —
+ * avoids depending on jsdom's real localStorage between test files. */
+function makeStorageStub(): Storage {
+  const store = new Map<string, string>();
+  return {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      store.set(k, v);
+    },
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
+    clear: () => store.clear(),
+    key: (i: number) => [...store.keys()][i] ?? null,
+    get length() {
+      return store.size;
+    },
+  } as Storage;
+}
 
 /** Minimal `t` fixture driven by the real STRINGS table (mirrors emailBody.test.ts's
  * minimal-factory style) — exercises the actual translations instead of stubbing. */
@@ -475,9 +501,9 @@ describe("sortTransportEvents", () => {
 describe("buildTransportDriverPrintDoc", () => {
   it("carries logistics header + a per-product x per-location MATRIX", () => {
     const b = batch({ driver: "Jan Kowalski", vehicle: "Ducato", pickup_date: "2026-08-23", pickup_time: "07:30" });
-    const doc = buildTransportDriverPrintDoc(b, makeT());
+    const doc = buildTransportDriverPrintDoc(b, "Transport Sobota · Bukat · 22.08.26");
     expect(doc.transportId).toBe("TRN-20260821-BUKA-abc123");
-    expect(doc.displayLabel).toContain("Bukat"); // no `name` set on the fixture -> fallback label
+    expect(doc.displayLabel).toBe("Transport Sobota · Bukat · 22.08.26"); // pass-through, caller-computed
     expect(doc.date).toBe("2026-08-23");
     expect(doc.time).toBe("07:30");
     expect(doc.driver).toBe("Jan Kowalski");
@@ -495,21 +521,16 @@ describe("buildTransportDriverPrintDoc", () => {
 
   it("adds ' / LINEAGE' to the supplier bar text for SUP_PAGO only", () => {
     const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago" });
-    expect(buildTransportDriverPrintDoc(b, makeT()).supplierBarText).toBe("Pago / LINEAGE");
+    expect(buildTransportDriverPrintDoc(b, "Pago").supplierBarText).toBe("Pago / LINEAGE");
   });
 
   it("falls back to created date and empty driver/vehicle when logistics are unset", () => {
     const b = batch({ driver: null, vehicle: null, pickup_date: null, pickup_time: null });
-    const doc = buildTransportDriverPrintDoc(b, makeT());
+    const doc = buildTransportDriverPrintDoc(b, "Bukat");
     expect(doc.date).toBe("2026-08-21");
     expect(doc.driver).toBe("");
     expect(doc.vehicle).toBe("");
     expect(doc.time).toBe("");
-  });
-
-  it("uses the batch's friendly name as the display label when set", () => {
-    const b = batch({ name: "Wtorkowy Pago" });
-    expect(buildTransportDriverPrintDoc(b, makeT()).displayLabel).toBe("Wtorkowy Pago");
   });
 
   it("drops zero-qty product lines; a location with a zero cell still gets its column with 0", () => {
@@ -538,7 +559,7 @@ describe("buildTransportDriverPrintDoc", () => {
         },
       ],
     });
-    const doc = buildTransportDriverPrintDoc(b, makeT());
+    const doc = buildTransportDriverPrintDoc(b, "Bukat");
     expect(doc.products.map((p) => p.productId)).toEqual(["P2"]);
     // doc.locations = [Bracka, Wola] (pl-collated); Bracka's cell is 0, Wola's is 3.
     expect(doc.products[0].qtyByLocation).toEqual([0, 3]);
@@ -548,8 +569,9 @@ describe("buildTransportDriverPrintDoc", () => {
 describe("buildTransportPagoPrintDoc", () => {
   it("carries per-product totals only — the product table structurally never leaks a per-location split", () => {
     const b = batch({ pickup_date: "2026-08-23" });
-    const doc = buildTransportPagoPrintDoc(b);
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
     expect(doc.transportId).toBe("TRN-20260821-BUKA-abc123");
+    expect(doc.displayLabel).toBe("Bukat"); // pass-through, caller-computed
     expect(doc.supplierName).toBe("Bukat");
     expect(doc.pickupDate).toBe("2026-08-23");
     expect(doc.isPago).toBe(false);
@@ -570,7 +592,7 @@ describe("buildTransportPagoPrintDoc", () => {
 
   it("builds the fixed Pago entity block + literal title bar only for SUP_PAGO", () => {
     const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago" });
-    const doc = buildTransportPagoPrintDoc(b);
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
     expect(doc.isPago).toBe(true);
     expect(doc.titleBarText).toBe("THE GREEK GOURMET — ZLECENIE ODBIORU WŁASNEGO");
     expect(doc.entity).toEqual({
@@ -583,7 +605,7 @@ describe("buildTransportPagoPrintDoc", () => {
 
   it("uses a generic title and no entity block for a non-Pago supplier", () => {
     const b = batch({ supplier_id: "SUP_BUKAT", supplier_name: "Bukat" });
-    const doc = buildTransportPagoPrintDoc(b);
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
     expect(doc.isPago).toBe(false);
     expect(doc.titleBarText).toBe("Bukat — ZAMÓWIENIE");
     expect(doc.entity).toBeNull();
@@ -603,7 +625,7 @@ describe("buildTransportPagoPrintDoc", () => {
         },
       ],
     });
-    const doc = buildTransportPagoPrintDoc(b);
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
     expect(doc.products[0].name).toBe("Cebula");
   });
 
@@ -621,6 +643,144 @@ describe("buildTransportPagoPrintDoc", () => {
         },
       ],
     });
-    expect(buildTransportPagoPrintDoc(b).products).toEqual([]);
+    expect(buildTransportPagoPrintDoc(b, "Bukat").products).toEqual([]);
+  });
+});
+
+// ---- v4 feedback round 2 (feature 1): "Transport Sobota · Warszawa · 22.08.26" ----
+
+function loc(overrides: Partial<Location> = {}): Location {
+  return {
+    location_id: "WOLA",
+    location_name: "Pita Bros Wola",
+    active: true,
+    notes: "",
+    ...overrides,
+  };
+}
+
+describe("transportCitiesLine", () => {
+  it("strips a leading Polish postal code from `city`", () => {
+    const byId = { WOLA: loc({ city: "01-258 Warszawa" }) };
+    expect(transportCitiesLine(["WOLA"], byId)).toBe("Warszawa");
+  });
+
+  it("applies the Warsaw alias case-insensitively", () => {
+    const byId = { WOLA: loc({ city: "Warsaw" }) };
+    expect(transportCitiesLine(["WOLA"], byId)).toBe("Warszawa");
+  });
+
+  it("dedupes case-insensitively, preserving first-seen order", () => {
+    const byId = {
+      WOLA: loc({ location_id: "WOLA", city: "Warszawa" }),
+      BRACKA: loc({ location_id: "BRACKA", city: "warszawa" }),
+      KRK: loc({ location_id: "KRK", city: "Kraków" }),
+    };
+    expect(transportCitiesLine(["WOLA", "BRACKA", "KRK"], byId)).toBe("Warszawa, Kraków");
+  });
+
+  it("falls back to the short location name (Pita Bros prefix stripped) when there's no usable city", () => {
+    const byId = { WOLA: loc({ location_name: "Pita Bros Wola", city: undefined }) };
+    expect(transportCitiesLine(["WOLA"], byId)).toBe("Wola");
+  });
+
+  it("omits a location id absent from master data entirely", () => {
+    expect(transportCitiesLine(["GHOST"], {})).toBe("");
+  });
+});
+
+describe("transportDisplayLabel / transportAutoLabel", () => {
+  const locationsById = { WOLA: loc({ location_id: "WOLA", city: "Warszawa" }) };
+
+  it("prefers pickup_date over created for both the weekday and the date segment", () => {
+    const b = batch({
+      supplier_name: "Bukat",
+      created: "2026-08-21T09:15:00+00:00", // Friday
+      pickup_date: "2026-08-22", // Saturday
+      location_ids: ["WOLA"],
+    });
+    const label = transportDisplayLabel(b, makeT(), { lang: "pl", locationsById });
+    expect(label).toBe("Transport Sobota · Warszawa · 22.08.26");
+  });
+
+  it("capitalizes the Polish weekday (Intl returns it lowercase)", () => {
+    const b = batch({ pickup_date: "2026-08-22", location_ids: ["WOLA"] });
+    const label = transportAutoLabel(b, makeT(), { lang: "pl", locationsById });
+    expect(label).toContain("Sobota");
+    expect(label).not.toContain("sobota ·"); // not the raw lowercase Intl output
+  });
+
+  it("a custom batch.name always wins over the auto-label", () => {
+    const b = batch({ name: "Wtorkowy Pago", pickup_date: "2026-08-22", location_ids: ["WOLA"] });
+    expect(transportDisplayLabel(b, makeT(), { lang: "pl", locationsById })).toBe("Wtorkowy Pago");
+  });
+
+  it("falls back to created when pickup_date is unset", () => {
+    const b = batch({ created: "2026-08-21T09:15:00+00:00", pickup_date: undefined, location_ids: ["WOLA"] });
+    const label = transportDisplayLabel(b, makeT(), { lang: "pl", locationsById });
+    expect(label).toBe("Transport Piątek · Warszawa · 21.08.26");
+  });
+
+  it("omits the weekday/date segment gracefully when neither pickup_date nor created is set", () => {
+    const b = batch({ created: undefined, pickup_date: undefined, location_ids: ["WOLA"] });
+    const label = transportDisplayLabel(b, makeT(), { lang: "pl", locationsById });
+    expect(label).toBe("Transport · Warszawa");
+  });
+
+  it("falls back to the short location name when master data has no city for the batch's locations", () => {
+    const b = batch({ pickup_date: "2026-08-22", location_ids: ["WOLA"] });
+    const label = transportDisplayLabel(b, makeT(), {
+      lang: "pl",
+      locationsById: { WOLA: loc({ location_id: "WOLA", location_name: "Pita Bros Wola", city: undefined }) },
+    });
+    expect(label).toBe("Transport Sobota · Wola · 22.08.26");
+  });
+
+  it("is language-aware for the weekday (en)", () => {
+    const b = batch({ pickup_date: "2026-08-22", location_ids: ["WOLA"] });
+    const label = transportDisplayLabel(b, makeT("en"), { lang: "en", locationsById });
+    expect(label).toContain("Saturday");
+  });
+});
+
+// ---- v4 feedback round 2 (feature 2): "NOWY" badge on unopened batches -----
+
+describe("loadSeenTransports / markTransportSeen", () => {
+  it("starts empty on first use", () => {
+    expect(loadSeenTransports(makeStorageStub()).size).toBe(0);
+  });
+
+  it("markTransportSeen persists the id for a later loadSeenTransports call", () => {
+    const storage = makeStorageStub();
+    markTransportSeen("TRN-1", storage);
+    markTransportSeen("TRN-2", storage);
+    const seen = loadSeenTransports(storage);
+    expect(seen.has("TRN-1")).toBe(true);
+    expect(seen.has("TRN-2")).toBe(true);
+    expect(seen.has("TRN-3")).toBe(false);
+  });
+
+  it("caps the stored set at the 200 most recent ids", () => {
+    const storage = makeStorageStub();
+    for (let i = 0; i < 205; i++) markTransportSeen(`TRN-${i}`, storage);
+    const seen = loadSeenTransports(storage);
+    expect(seen.size).toBe(200);
+    expect(seen.has("TRN-0")).toBe(false); // oldest dropped
+    expect(seen.has("TRN-4")).toBe(false);
+    expect(seen.has("TRN-204")).toBe(true); // newest kept
+  });
+
+  it("never throws when storage.setItem fails (private mode)", () => {
+    const broken: Storage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("quota exceeded");
+      },
+      removeItem: () => {},
+      clear: () => {},
+      key: () => null,
+      length: 0,
+    };
+    expect(() => markTransportSeen("TRN-1", broken)).not.toThrow();
   });
 });

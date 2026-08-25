@@ -18,7 +18,7 @@ import { useT } from "../../../i18n";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { AddProductPicker } from "../../../components/ui/AddProductPicker";
 import type { OrderableItem, TransportBatchOrder } from "../../../types";
-import { buildTransportMatrix, draftQtyFor, type TransportDraftMap } from "../lib/transport";
+import { buildTransportAddAllOptions, buildTransportMatrix, draftQtyFor, type TransportDraftMap } from "../lib/transport";
 
 interface TransportMatrixProps {
   orders: TransportBatchOrder[];
@@ -26,7 +26,8 @@ interface TransportMatrixProps {
   drafts: TransportDraftMap;
   onQtyChange: (orderId: string, orderLineId: string, qty: number) => void;
   orderableByOrderId: Record<string, OrderableItem[]>;
-  onAddProduct: (orderId: string, productId: string, supplierProductId: string) => void;
+  onAddProductAll: (productId: string) => void;
+  addAllBusy: boolean;
   onRemoveOrder: (order: TransportBatchOrder) => void;
   busyOrderId: string | null;
 }
@@ -37,12 +38,14 @@ export function TransportMatrix({
   drafts,
   onQtyChange,
   orderableByOrderId,
-  onAddProduct,
+  onAddProductAll,
+  addAllBusy,
   onRemoveOrder,
   busyOrderId,
 }: TransportMatrixProps) {
   const { t } = useT();
   const rows = buildTransportMatrix(orders);
+  const addAllOptions = editable ? buildTransportAddAllOptions(orders, orderableByOrderId) : [];
 
   return (
     <div>
@@ -119,6 +122,17 @@ export function TransportMatrix({
                 })}
               </tr>
             ))}
+            {editable && addAllOptions.length > 0 && (
+              <tr>
+                <td colSpan={orders.length + 1} className="px-3 py-2">
+                  <AddProductPicker
+                    items={addAllOptions}
+                    disabled={addAllBusy}
+                    onSelect={(item) => onAddProductAll(item.product_id)}
+                  />
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -126,24 +140,6 @@ export function TransportMatrix({
       {editable && (
         <>
           <div className="mb-2 text-xs text-slate-500">{t("manager.transport.matrix.zeroHint")}</div>
-          <div className="flex flex-wrap gap-2">
-            {orders.map((order) => {
-              const present = new Set(order.lines.map((l) => l.product_id));
-              const available = (orderableByOrderId[order.order_id] ?? []).filter(
-                (o) => !present.has(o.product_id),
-              );
-              return (
-                <div key={order.order_id} className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-slate-500">{order.location_name}:</span>
-                  <AddProductPicker
-                    items={available}
-                    disabled={busyOrderId === order.order_id}
-                    onSelect={(item) => onAddProduct(order.order_id, item.product_id, item.supplier_product_id)}
-                  />
-                </div>
-              );
-            })}
-          </div>
         </>
       )}
     </div>
