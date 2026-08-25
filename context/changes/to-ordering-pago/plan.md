@@ -361,3 +361,25 @@ Operator decisions: (1) post-send logistics editing STAYS, but EVERY change is r
 - [x] 10.1 Print views render (helper tests); suites green
 #### Manual
 - [x] 10.2 Full v3 demo pass on the sandbox (history, cancel, receive, grid-create, print) + screenshots
+
+---
+
+## ADDENDUM v4+v5 (2026-08-25) — naming, grid polish, PDF downloads
+
+Operator feedback rounds 4 and 5 (both implemented, committed as `4dbfd12` (v4) and `4425435` (v5); v4's migration 0011 applied to the demo DB, **NOT yet applied to prod**).
+
+### v4 (commit 4dbfd12)
+1. **Friendly batch naming (A+C)** — `transport_batches.name` (migration 0011, additive nullable text) through models/backends/PATCH; "Nazwa (opcjonalna)" field in LogisticsPanel; renames logged as `logistics_changed` events.
+2. **Empty-column finalize guard** — an all-empty batch 400s with zero writes; a mixed batch auto-removes empty members at send (cancel/release split, `skipped[]` reason "empty — removed", `order_removed` event).
+3. **All-locations modal default** — LocationMultiSelectModal opens with every location pre-checked + select/deselect-all toggle.
+4. **Print views redesigned** to mirror the operator's legacy PDFs (navy bars, entity boxes, matrix + Razem) — superseded by v5 item 5.
+
+### v5 (commit 4425435, frontend-only)
+1. **Auto-label** `Transport {Dzień} · {Miasto/Miasta} · {dd.MM.rr}` (weekday+date from `pickup_date` else `created`; cities normalized — postal-code strip, Warsaw→Warszawa alias, dedupe, short-location-name fallback). Custom `name` wins; grey TRN- badge unchanged.
+2. **NOWY badge** on batches never opened on this device (`supply_os_transport_seen` localStorage, capped 200) — per-device by design.
+3. **Create → jump**: every create path (selection / empty / grid modal) selects the new draft, marks it seen, and smooth-scrolls the detail into view.
+4. **Single matrix-wide "+ Dodaj produkt"** row under the last product replaces the per-location pickers; adds at qty 0 to every member order where orderable (allSettled, one refresh, failures toast location names); non-configured locations show "–".
+5. **PDF downloads replace printing**: pdfmake (lazy chunk ~360 kB gzip + vfs fonts, built-in Roboto covers Polish diacritics); pure docDefinition builders in `lib/transportPdf.ts` reuse the existing print-doc structures (no-location-leak invariant re-tested); filenames like `Transport-Wtorek-Warszawa-25.08.26-lista-kierowcy.pdf`; window.print machinery deleted; buttons "PDF — lista kierowcy" / "PDF — zamówienie".
+6. **"Wyślij transport" → "Zatwierdź transport"** (+ confirm/busy/error copy) — the button never sent anything to the supplier; approval semantics now honest. Actual supplier email automation stays the deferred Level C.
+
+Verification: backend 568 tests + ruff clean (unchanged); FE 159 tests, build (pdfmake as separate lazy chunk), lint clean; live E2E on the demo sandbox (label, NOWY, jump, add-all with "–" fallback, both PDF downloads exercised).
