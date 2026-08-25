@@ -97,6 +97,7 @@ _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",
     "purchase_unit", "units_per_purchase_unit", "rounding_rule",
     "price_estimate_pln", "active", "notes", "order_note", "unit_weight_kg",
+    "supplier_sku",
 ]
 _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "setting_id", "location_id", "product_id", "min_stock_qty_base",

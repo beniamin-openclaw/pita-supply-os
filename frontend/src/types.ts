@@ -591,6 +591,10 @@ export interface TransportAggregateLine {
   // unit), and vice versa.
   unit_weight_kg?: number | null;
   line_weight_kg?: number | null;
+  // Supplier catalog code (Nr katalogowy), joined from the line's
+  // supplier_product (to-ordering-pago). null when unset — the Pago PDF
+  // builder falls back to the friendly product name.
+  supplier_sku?: string | null;
 }
 
 /** One row on the Transport "orders to combine" picker. */

@@ -353,6 +353,31 @@ def test_aggregate_joins_supplier_product_display():
     assert items[0].purchase_unit == "karton"
 
 
+def test_aggregate_supplier_sku_present_when_set():
+    orders = [_order("ORD-1")]
+    lines = [_line("ORD-1", "OL-1")]
+    sp = _supplier_product()
+    sp = sp.model_copy(update={"supplier_sku": "GYRSW15KG"})
+    sps = {"SP_PAGO_P027": sp}
+    items = _aggregate_transport_lines(orders, lines, {}, sps, {})
+    assert items[0].supplier_sku == "GYRSW15KG"
+
+
+def test_aggregate_supplier_sku_none_when_unset():
+    orders = [_order("ORD-1")]
+    lines = [_line("ORD-1", "OL-1")]
+    sps = {"SP_PAGO_P027": _supplier_product()}
+    items = _aggregate_transport_lines(orders, lines, {}, sps, {})
+    assert items[0].supplier_sku is None
+
+
+def test_aggregate_supplier_sku_none_when_supplier_product_missing():
+    orders = [_order("ORD-1")]
+    lines = [_line("ORD-1", "OL-1")]
+    items = _aggregate_transport_lines(orders, lines, {}, {}, {})
+    assert items[0].supplier_sku is None
+
+
 # ---------- GET /api/manager/transport/eligible ----------
 
 def test_eligible_filters_by_supplier_and_status(mocker):

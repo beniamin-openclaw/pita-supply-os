@@ -105,6 +105,11 @@ class SupplierProduct(BaseModel):
     # (the batch detail's ``unknown_weight_count`` and per-line
     # ``line_weight_kg`` both surface this rather than assuming 0).
     unit_weight_kg: Optional[float] = None
+    # Supplier's own catalog code (e.g. Pago 'GYRSW15KG'), distinct from our
+    # product_name_pl / supplier_product_name. Used only on the Transport
+    # supplier-order PDF's "Nr katalogowy" column (to-ordering-pago); None ⇒
+    # the FE falls back to the friendly name. Nullable — schema ships empty.
+    supplier_sku: Optional[str] = None
 
 
 class LocationProductSetting(BaseModel):
@@ -848,6 +853,10 @@ class TransportAggregateLine(BaseModel):
     # treating them as zero.
     unit_weight_kg: Optional[float] = None
     line_weight_kg: Optional[float] = None
+    # Supplier catalog code (Nr katalogowy), joined from the line's
+    # supplier_product (to-ordering-pago). None when unset — the Pago PDF
+    # builder falls back to the friendly product name.
+    supplier_sku: Optional[str] = None
 
 
 class TransportEligibleOrder(BaseModel):

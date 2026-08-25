@@ -3149,6 +3149,7 @@ def _aggregate_transport_lines(
                     sp.supplier_product_name if sp else line.supplier_product_id
                 ),
                 "purchase_unit": sp.purchase_unit if sp else "",
+                "supplier_sku": sp.supplier_sku if sp else None,
                 "per_location": [],
             }
             groups[line.product_id] = group
@@ -3170,6 +3171,7 @@ def _aggregate_transport_lines(
             supplier_product_id=g["supplier_product_id"],
             supplier_product_name=g["supplier_product_name"],
             purchase_unit=g["purchase_unit"],
+            supplier_sku=g["supplier_sku"],
             total_qty_purchase=round(
                 sum(pl.qty_purchase for pl in g["per_location"]), 3
             ),

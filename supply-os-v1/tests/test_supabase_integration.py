@@ -111,6 +111,11 @@ def _schema():
     transport_batch_name = (
         MIGRATIONS_DIR / "0011_transport_batch_name.sql"
     ).read_text()
+    # 0012 adds supplier_products.supplier_sku (Nr katalogowy, to-ordering-pago);
+    # _SUPPLIER_PRODUCT_COLUMNS references it, so the supplier_products insert
+    # below would error against a pre-0012 schema (lesson: wire every new
+    # migration into this fixture).
+    supplier_sku = (MIGRATIONS_DIR / "0012_supplier_sku.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -124,6 +129,7 @@ def _schema():
         conn.exec_driver_sql(transport_batches)
         conn.exec_driver_sql(transport_events)
         conn.exec_driver_sql(transport_batch_name)
+        conn.exec_driver_sql(supplier_sku)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

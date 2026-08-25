@@ -241,7 +241,7 @@ export function buildPagoPdfDocDefinition(
     const zebra = idx % 2 === 1 ? { fillColor: ZEBRA } : {};
     return [
       { text: String(idx + 1), ...zebra },
-      { text: p.name, ...zebra },
+      { text: p.catalogNo, ...zebra },
       { text: p.unit, ...zebra },
       { text: String(p.qty), ...zebra },
     ];

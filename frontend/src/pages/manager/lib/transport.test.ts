@@ -618,7 +618,9 @@ describe("buildTransportPagoPrintDoc", () => {
     expect(doc.pickupDate).toBe("2026-08-23");
     expect(doc.isPago).toBe(false);
     expect(doc.entity).toBeNull();
-    expect(doc.products).toEqual([{ productId: "P1", name: "Pomidory malinowe", unit: "kg", qty: 12 }]);
+    expect(doc.products).toEqual([
+      { productId: "P1", name: "Pomidory malinowe", catalogNo: "Pomidory malinowe", unit: "kg", qty: 12 },
+    ]);
 
     // The no-location-leak assertion (product table only — the document-data
     // box legitimately carries a `locationsLine` summary): no product line
@@ -686,6 +688,44 @@ describe("buildTransportPagoPrintDoc", () => {
       ],
     });
     expect(buildTransportPagoPrintDoc(b, "Bukat").products).toEqual([]);
+  });
+
+  it("uses supplier_sku as catalogNo when set", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P1",
+          product_name_pl: "Gyros wieprzowy",
+          supplier_product_id: "SP1",
+          supplier_product_name: "Gyros wieprzowy 15kg",
+          purchase_unit: "kg",
+          total_qty_purchase: 15,
+          per_location: [],
+          supplier_sku: "GYRSW15KG",
+        },
+      ],
+    });
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
+    expect(doc.products[0].catalogNo).toBe("GYRSW15KG");
+    expect(doc.products[0].name).toBe("Gyros wieprzowy 15kg");
+  });
+
+  it("falls back catalogNo to the friendly name when supplier_sku is unset", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P1",
+          product_name_pl: "Pomidory",
+          supplier_product_id: "SP1",
+          supplier_product_name: "Pomidory malinowe",
+          purchase_unit: "kg",
+          total_qty_purchase: 3,
+          per_location: [],
+        },
+      ],
+    });
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
+    expect(doc.products[0].catalogNo).toBe("Pomidory malinowe");
   });
 });
 
