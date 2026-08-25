@@ -32,6 +32,7 @@ export function LogisticsPanel({
   onSave,
 }: LogisticsPanelProps) {
   const { t } = useT();
+  const [name, setName] = useState(detail.name ?? "");
   const [driver, setDriver] = useState(detail.driver ?? "");
   const [vehicle, setVehicle] = useState(detail.vehicle ?? "");
   const [pickupDate, setPickupDate] = useState(detail.pickup_date ?? "");
@@ -40,6 +41,7 @@ export function LogisticsPanel({
   const [notes, setNotes] = useState(detail.notes ?? "");
 
   const dirty =
+    name !== (detail.name ?? "") ||
     driver !== (detail.driver ?? "") ||
     vehicle !== (detail.vehicle ?? "") ||
     pickupDate !== (detail.pickup_date ?? "") ||
@@ -50,6 +52,11 @@ export function LogisticsPanel({
   const handleSave = () => {
     const parsedLimit = limitKg.trim() === "" ? null : Number(limitKg.replace(",", "."));
     onSave({
+      // Blank -> omit the field entirely (undefined), not null: a batch
+      // never given a name should keep falling back to
+      // transportDisplayLabel's "Transport {supplier} · {date}" default
+      // rather than being explicitly set to an empty string.
+      name: name.trim() === "" ? undefined : name.trim(),
       driver: driver.trim() === "" ? null : driver.trim(),
       vehicle: vehicle.trim() === "" ? null : vehicle.trim(),
       pickup_date: pickupDate.trim() === "" ? null : pickupDate,
@@ -65,6 +72,19 @@ export function LogisticsPanel({
         {t("manager.transport.logistics.title")}
       </h3>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="sm:col-span-2 lg:col-span-3">
+          <label htmlFor="trn-name" className="block text-xs font-semibold text-slate-600 mb-1">
+            {t("manager.transport.logistics.nameLabel")}
+          </label>
+          <input
+            id="trn-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
         <div>
           <label htmlFor="trn-driver" className="block text-xs font-semibold text-slate-600 mb-1">
             {t("manager.transport.logistics.driverLabel")}

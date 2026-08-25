@@ -4,6 +4,11 @@
 // empty draft + folds each picked location in (prefilled with zero-qty lines)
 // sequentially. No city grouping in v1 (plan Open Questions) — locations are
 // picked directly. Pure checkbox-list modal; no fetch here.
+//
+// v4 feedback ("all locations, one button"): every active location arrives
+// PRE-CHECKED — the operator's common case is "all the cities that exist",
+// not picking one-by-one — plus a "Zaznacz wszystkie / Odznacz wszystkie"
+// toggle for the rare case of narrowing down.
 
 import { useState } from "react";
 
@@ -24,7 +29,9 @@ export function LocationMultiSelectModal({
   onConfirm,
 }: LocationMultiSelectModalProps) {
   const { t } = useT();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(locations.map((loc) => loc.location_id)),
+  );
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -33,6 +40,11 @@ export function LocationMultiSelectModal({
       else next.add(id);
       return next;
     });
+  };
+
+  const allSelected = locations.length > 0 && selected.size === locations.length;
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(locations.map((loc) => loc.location_id)));
   };
 
   return (
@@ -52,6 +64,18 @@ export function LocationMultiSelectModal({
             {t("manager.transport.gridCreate.empty")}
           </div>
         ) : (
+          <>
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="text-xs font-semibold text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              {allSelected
+                ? t("manager.transport.gridCreate.deselectAll")
+                : t("manager.transport.gridCreate.selectAll")}
+            </button>
+          </div>
           <ul className="mb-3 max-h-72 space-y-1 overflow-y-auto">
             {locations.map((loc) => (
               <li key={loc.location_id}>
@@ -66,6 +90,7 @@ export function LocationMultiSelectModal({
               </li>
             ))}
           </ul>
+          </>
         )}
 
         <div className="mb-3 text-xs text-slate-500">

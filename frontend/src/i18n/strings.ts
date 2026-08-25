@@ -891,6 +891,12 @@ export const STRINGS = {
   "manager.transport.title": { pl: "Transport zbiorczy", en: "Combined transport" },
   "manager.transport.back": { pl: "Powrót do menedżera", en: "Back to manager" },
   "manager.transport.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  // v4 feedback — friendly batch naming (feature 1): the primary title shown
+  // everywhere a batch never given a `name` is displayed.
+  "manager.transport.displayLabel.fallback": {
+    pl: "Transport {supplier} · {date}",
+    en: "Transport {supplier} · {date}",
+  },
   "manager.transport.createEmptyButton": {
     pl: "Utwórz pusty transport",
     en: "Start empty transport",
@@ -1005,6 +1011,7 @@ export const STRINGS = {
   "manager.transport.status.sent": { pl: "Wysłany", en: "Sent" },
 
   "manager.transport.logistics.title": { pl: "Logistyka", en: "Logistics" },
+  "manager.transport.logistics.nameLabel": { pl: "Nazwa (opcjonalna)", en: "Name (optional)" },
   "manager.transport.logistics.driverLabel": { pl: "Kierowca", en: "Driver" },
   "manager.transport.logistics.vehicleLabel": { pl: "Samochód", en: "Vehicle" },
   "manager.transport.logistics.pickupDateLabel": { pl: "Data odbioru", en: "Pickup date" },
@@ -1188,6 +1195,10 @@ export const STRINGS = {
     pl: "Wybrano: {count}",
     en: "Selected: {count}",
   },
+  // v4 feedback — "all locations, one button": every active location arrives
+  // pre-checked; this toggle is for the rare narrow-down case.
+  "manager.transport.gridCreate.selectAll": { pl: "Zaznacz wszystkie", en: "Select all" },
+  "manager.transport.gridCreate.deselectAll": { pl: "Odznacz wszystkie", en: "Deselect all" },
 
   // ADDENDUM v3 — print/PDF views (Phase 10).
   "manager.transport.print.driverButton": {
@@ -1207,6 +1218,35 @@ export const STRINGS = {
   "manager.transport.print.productCol": { pl: "Produkt", en: "Product" },
   "manager.transport.print.qtyCol": { pl: "Ilość", en: "Qty" },
   "manager.transport.print.locationCol": { pl: "Lokalizacja", en: "Location" },
+
+  // v4 feedback — print docs redesigned to match the legacy PDFs (feature 3).
+  "manager.transport.print.driverBarTitle": {
+    pl: "PITA BROS — LISTA DLA KIEROWCY",
+    en: "PITA BROS — DRIVER LIST",
+  },
+  "manager.transport.print.locationsRowLabel": { pl: "Miasto/Lokalizacje", en: "City/Locations" },
+  "manager.transport.print.timeLabel": { pl: "Godzina", en: "Time" },
+  "manager.transport.print.docNumberLabel": { pl: "Nr dokumentu", en: "Document no." },
+  "manager.transport.print.lpCol": { pl: "Lp.", en: "No." },
+  "manager.transport.print.unitCol": { pl: "Jm.", en: "Unit" },
+  "manager.transport.print.totalCol": { pl: "Razem", en: "Total" },
+  "manager.transport.print.footerGenerated": { pl: "Wygenerowano: {when}", en: "Generated: {when}" },
+  "manager.transport.print.pagoDoc.entityBoxTitle": { pl: "Dane podmiotu", en: "Entity data" },
+  "manager.transport.print.pagoDoc.docBoxTitle": { pl: "Dane dokumentu", en: "Document data" },
+  "manager.transport.print.pagoDoc.fullNameLabel": { pl: "Pełna nazwa", en: "Full name" },
+  "manager.transport.print.pagoDoc.nipLabel": { pl: "NIP", en: "NIP" },
+  "manager.transport.print.pagoDoc.address1Label": { pl: "Adres 1", en: "Address 1" },
+  "manager.transport.print.pagoDoc.address2Label": { pl: "Adres 2", en: "Address 2" },
+  "manager.transport.print.pagoDoc.pickupDateLabel": { pl: "Data odbioru", en: "Pickup date" },
+  "manager.transport.print.pagoDoc.locationsLabel": { pl: "Lokalizacje", en: "Locations" },
+  "manager.transport.print.pagoDoc.typeLabel": { pl: "Typ", en: "Type" },
+  "manager.transport.print.pagoDoc.typeValue": { pl: "Odbiór własny", en: "Self pickup" },
+  "manager.transport.print.pagoDoc.pickupTimeLabel": { pl: "Godzina odbioru", en: "Pickup time" },
+  "manager.transport.print.pagoDoc.pickupBar": {
+    pl: "Odbiór własny z magazynu The Greek Gourmet",
+    en: "Self pickup from The Greek Gourmet warehouse",
+  },
+  "manager.transport.print.pagoDoc.catalogCol": { pl: "Nr katalogowy", en: "Catalog no." },
 
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.transportChipTooltip": {

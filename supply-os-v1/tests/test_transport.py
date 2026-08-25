@@ -468,6 +468,30 @@ def test_batches_groups_by_trn_marker(mocker):
     assert batch["created"].startswith("2026-05-20T09:00:00")  # min(manager_sent_at)
 
 
+def test_batches_and_detail_expose_friendly_name(mocker):
+    """Feature 1 (v4 feedback): a batch header's ``name`` surfaces on both the
+    list and detail responses; None when never set."""
+    header = TransportBatch(
+        transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft", name="Wtorkowy Pago"
+    )
+    orders = [
+        _order(
+            "ORD-A",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+        )
+    ]
+    _enable_sheet_backend(mocker, orders=orders, transport_batches=[header])
+
+    r = client.get("/api/manager/transport/batches", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["name"] == "Wtorkowy Pago"
+
+    r2 = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["name"] == "Wtorkowy Pago"
+
+
 def test_batches_filters_by_supplier(mocker):
     orders = [
         _order(
@@ -1120,8 +1144,12 @@ def test_finalize_happy_path(mocker):
         _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
         _order("ORD-B", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
     ]
+    lines = [
+        _line("ORD-A", "OL-A-1", captain_qty=5.0),
+        _line("ORD-B", "OL-B-1", captain_qty=3.0),
+    ]
     patches = _enable_sheet_backend_for_write(
-        mocker, orders=orders, transport_batches=[header]
+        mocker, orders=orders, lines=lines, transport_batches=[header]
     )
 
     r = client.post(
@@ -1155,8 +1183,9 @@ def test_finalize_skips_non_claimed_member(mocker):
         _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
         _order("ORD-C", status=OrderStatus.CANCELLED, supplier_order_reference="TRN-X"),
     ]
+    lines = [_line("ORD-A", "OL-A-1", captain_qty=5.0)]
     patches = _enable_sheet_backend_for_write(
-        mocker, orders=orders, transport_batches=[header]
+        mocker, orders=orders, lines=lines, transport_batches=[header]
     )
 
     r = client.post(
@@ -1198,8 +1227,9 @@ def test_finalize_send_conflict_skips(mocker):
     orders = [
         _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
     ]
+    lines = [_line("ORD-A", "OL-A-1", captain_qty=5.0)]
     patches = _enable_sheet_backend_for_write(
-        mocker, orders=orders, transport_batches=[header]
+        mocker, orders=orders, lines=lines, transport_batches=[header]
     )
     patches["update_order"].side_effect = errors.OrderStatusConflictError("boom")
 
@@ -1212,6 +1242,172 @@ def test_finalize_send_conflict_skips(mocker):
     payload = r.json()
     assert payload["sent"] == []
     assert payload["skipped"] == [{"order_id": "ORD-A", "reason": "send conflict"}]
+
+
+# ---------- Finalize: empty-column guard (v4 feedback) ----------
+
+
+def test_finalize_all_empty_400_batch_stays_draft(mocker):
+    """Every manager_claimed member has an all-zero effective total (no
+    lines at all) -> 400, and NOTHING is written: no update_order, no
+    update_transport_batch, batch stays draft."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+        _order("ORD-B", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=[], transport_batches=[header]
+    )
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 400
+    assert "nothing to send" in r.json()["detail"]
+    patches["update_order"].assert_not_called()
+    patches["update_transport_batch"].assert_not_called()
+
+
+def test_finalize_all_zero_qty_lines_400(mocker):
+    """Lines exist but every line's effective qty is 0 (captain + manager
+    both 0) -> same 400 as no lines at all."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+    ]
+    lines = [_line("ORD-A", "OL-A-1", captain_qty=0.0, manager_qty=0.0)]
+    _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 400
+
+
+def test_finalize_removes_empty_manager_created_order_cancelled(mocker):
+    """Mixed batch: ORD-A has a real quantity and is sent; ORD-B is a
+    manager-created (add-location) order that was never filled in — it is
+    auto-removed via cancel, reported skipped, and never sent."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+        _order(
+            "ORD-B",
+            location_id="BRACKA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+            captain_user="manager-default",
+        ),
+    ]
+    lines = [_line("ORD-A", "OL-A-1", captain_qty=5.0)]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["sent"] == ["ORD-A"]
+    assert payload["skipped"] == [{"order_id": "ORD-B", "reason": "empty — removed"}]
+
+    remove_call = next(
+        c for c in patches["update_order"].call_args_list if c.args[0] == "ORD-B"
+    )
+    assert remove_call.kwargs["status"] == "cancelled"
+    assert remove_call.kwargs["cancel_reason"] == "empty — removed at send"
+
+    event_calls = [c.args[0] for c in patches["append_transport_event"].call_args_list]
+    assert any(
+        ev.event_type == "order_removed" and ev.order_id == "ORD-B"
+        for ev in event_calls
+    )
+
+
+def test_finalize_removes_empty_captain_origin_order_released(mocker):
+    """A captain-origin member with an all-zero effective total is released
+    back to captain_submitted (marker cleared), not cancelled."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+        _order(
+            "ORD-B",
+            location_id="BRACKA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+            captain_user="BRACKA",
+        ),
+    ]
+    lines = [
+        _line("ORD-A", "OL-A-1", captain_qty=5.0),
+        _line("ORD-B", "OL-B-1", captain_qty=0.0, manager_qty=0.0),
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["sent"] == ["ORD-A"]
+    assert payload["skipped"] == [{"order_id": "ORD-B", "reason": "empty — removed"}]
+
+    remove_call = next(
+        c for c in patches["update_order"].call_args_list if c.args[0] == "ORD-B"
+    )
+    assert remove_call.kwargs["status"] == "captain_submitted"
+    assert remove_call.kwargs["supplier_order_reference"] is None
+
+
+def test_finalize_remove_conflict_skips(mocker):
+    """A guard conflict on the auto-remove write is reported skipped with
+    its own reason, not silently swallowed nor mixed up with 'send conflict'."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+        _order(
+            "ORD-B",
+            location_id="BRACKA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+            captain_user="manager-default",
+        ),
+    ]
+    lines = [_line("ORD-A", "OL-A-1", captain_qty=5.0)]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+
+    def _update_order(order_id, **kwargs):
+        if order_id == "ORD-B":
+            raise errors.OrderStatusConflictError("boom")
+        return None
+
+    patches["update_order"].side_effect = _update_order
+
+    r = client.post(
+        "/api/manager/transport/finalize",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X"},
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["sent"] == ["ORD-A"]
+    assert payload["skipped"] == [{"order_id": "ORD-B", "reason": "remove conflict"}]
 
 
 def test_finalize_rejects_captain_token(mocker):
@@ -1539,6 +1735,35 @@ def test_batch_patch_updates_only_provided_fields(mocker):
     patches["update_transport_batch"].assert_called_once_with(
         "TRN-X", driver="New Driver"
     )
+
+
+def test_batch_patch_sets_friendly_name(mocker):
+    """Feature 1 (v4 feedback): the friendly ``name`` field is patchable like
+    any other logistics field, and a change is recorded as a logistics_changed
+    event diff (old → new)."""
+    header = TransportBatch(
+        transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft", name=None
+    )
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=[], transport_batches=[header]
+    )
+
+    r = client.patch(
+        "/api/manager/transport/batch/TRN-X",
+        headers=MANAGER_AUTH,
+        json={"name": "Wtorkowy Pago"},
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["name"] == "Wtorkowy Pago"
+
+    patches["update_transport_batch"].assert_called_once_with(
+        "TRN-X", name="Wtorkowy Pago"
+    )
+    event = patches["append_transport_event"].call_args_list[0].args[0]
+    assert event.event_type == "logistics_changed"
+    assert "name" in event.details
+    assert "Wtorkowy Pago" in event.details
 
 
 def test_batch_patch_allowed_when_sent(mocker):
@@ -2081,7 +2306,13 @@ def test_finalize_emits_order_sent_and_batch_sent_events(mocker):
             supplier_order_reference="TRN-X",
         ),
     ]
-    patches = _enable_sheet_backend_for_write(mocker, orders=orders, transport_batches=[header])
+    lines = [
+        _line("ORD-A", "OL-A-1", captain_qty=5.0),
+        _line("ORD-B", "OL-B-1", captain_qty=3.0),
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
 
     r = client.post(
         "/api/manager/transport/finalize",

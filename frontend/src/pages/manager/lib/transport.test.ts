@@ -473,32 +473,46 @@ describe("sortTransportEvents", () => {
 // ---- v3 Phase 10: print/PDF views -------------------------------------------
 
 describe("buildTransportDriverPrintDoc", () => {
-  it("carries logistics header + per-product totals WITH the per-location breakdown", () => {
-    const b = batch({ driver: "Jan Kowalski", vehicle: "Ducato", pickup_date: "2026-08-23" });
-    const doc = buildTransportDriverPrintDoc(b);
+  it("carries logistics header + a per-product x per-location MATRIX", () => {
+    const b = batch({ driver: "Jan Kowalski", vehicle: "Ducato", pickup_date: "2026-08-23", pickup_time: "07:30" });
+    const doc = buildTransportDriverPrintDoc(b, makeT());
     expect(doc.transportId).toBe("TRN-20260821-BUKA-abc123");
+    expect(doc.displayLabel).toContain("Bukat"); // no `name` set on the fixture -> fallback label
     expect(doc.date).toBe("2026-08-23");
+    expect(doc.time).toBe("07:30");
     expect(doc.driver).toBe("Jan Kowalski");
     expect(doc.vehicle).toBe("Ducato");
     expect(doc.supplierName).toBe("Bukat");
+    expect(doc.supplierBarText).toBe("Bukat"); // not Pago -> no " / LINEAGE" suffix
+    expect(doc.locations).toEqual(["Pita Bros Bracka", "Pita Bros Wola"]); // pl-collated
+    expect(doc.locationsLine).toBe("Pita Bros Bracka, Pita Bros Wola");
     expect(doc.products).toHaveLength(1);
     expect(doc.products[0].name).toBe("Pomidory");
     expect(doc.products[0].totalQty).toBe(12);
-    expect(doc.products[0].perLocation).toEqual([
-      { location: "Pita Bros Wola", qty: 5 },
-      { location: "Pita Bros Bracka", qty: 7 },
-    ]);
+    // Column order matches doc.locations: Bracka first, then Wola.
+    expect(doc.products[0].qtyByLocation).toEqual([7, 5]);
+  });
+
+  it("adds ' / LINEAGE' to the supplier bar text for SUP_PAGO only", () => {
+    const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago" });
+    expect(buildTransportDriverPrintDoc(b, makeT()).supplierBarText).toBe("Pago / LINEAGE");
   });
 
   it("falls back to created date and empty driver/vehicle when logistics are unset", () => {
-    const b = batch({ driver: null, vehicle: null, pickup_date: null });
-    const doc = buildTransportDriverPrintDoc(b);
+    const b = batch({ driver: null, vehicle: null, pickup_date: null, pickup_time: null });
+    const doc = buildTransportDriverPrintDoc(b, makeT());
     expect(doc.date).toBe("2026-08-21");
     expect(doc.driver).toBe("");
     expect(doc.vehicle).toBe("");
+    expect(doc.time).toBe("");
   });
 
-  it("drops zero-qty product lines and zero-qty per-location entries", () => {
+  it("uses the batch's friendly name as the display label when set", () => {
+    const b = batch({ name: "Wtorkowy Pago" });
+    expect(buildTransportDriverPrintDoc(b, makeT()).displayLabel).toBe("Wtorkowy Pago");
+  });
+
+  it("drops zero-qty product lines; a location with a zero cell still gets its column with 0", () => {
     const b = batch({
       lines: [
         {
@@ -518,38 +532,61 @@ describe("buildTransportDriverPrintDoc", () => {
           purchase_unit: "karton",
           total_qty_purchase: 3,
           per_location: [
-            { location_id: "WOLA", location_name: "Wola", order_id: "ORD-1", qty_purchase: 3 },
-            { location_id: "BRACKA", location_name: "Bracka", order_id: "ORD-2", qty_purchase: 0 },
+            { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 3 },
+            { location_id: "BRACKA", location_name: "Pita Bros Bracka", order_id: "ORD-2", qty_purchase: 0 },
           ],
         },
       ],
     });
-    const doc = buildTransportDriverPrintDoc(b);
+    const doc = buildTransportDriverPrintDoc(b, makeT());
     expect(doc.products.map((p) => p.productId)).toEqual(["P2"]);
-    expect(doc.products[0].perLocation).toEqual([{ location: "Wola", qty: 3 }]);
+    // doc.locations = [Bracka, Wola] (pl-collated); Bracka's cell is 0, Wola's is 3.
+    expect(doc.products[0].qtyByLocation).toEqual([0, 3]);
   });
 });
 
 describe("buildTransportPagoPrintDoc", () => {
-  it("carries per-product totals only — NO location name anywhere in the doc", () => {
+  it("carries per-product totals only — the product table structurally never leaks a per-location split", () => {
     const b = batch({ pickup_date: "2026-08-23" });
     const doc = buildTransportPagoPrintDoc(b);
     expect(doc.transportId).toBe("TRN-20260821-BUKA-abc123");
     expect(doc.supplierName).toBe("Bukat");
     expect(doc.pickupDate).toBe("2026-08-23");
+    expect(doc.isPago).toBe(false);
+    expect(doc.entity).toBeNull();
     expect(doc.products).toEqual([{ productId: "P1", name: "Pomidory malinowe", unit: "kg", qty: 12 }]);
 
-    // The no-location-leak assertion: serialize the whole doc and confirm no
-    // location name/id from the source batch appears anywhere in it.
-    const serialized = JSON.stringify(doc);
-    expect(serialized).not.toContain("Wola");
-    expect(serialized).not.toContain("Bracka");
-    expect(serialized).not.toContain("WOLA");
-    expect(serialized).not.toContain("BRACKA");
-    // Structurally: no product line carries a `location` key at all.
+    // The no-location-leak assertion (product table only — the document-data
+    // box legitimately carries a `locationsLine` summary): no product line
+    // carries a `location` key or any per-location breakdown at all.
+    const serializedProducts = JSON.stringify(doc.products);
+    expect(serializedProducts).not.toContain("Wola");
+    expect(serializedProducts).not.toContain("Bracka");
     for (const p of doc.products) {
       expect(Object.keys(p)).not.toContain("location");
+      expect(Object.keys(p)).not.toContain("perLocation");
     }
+  });
+
+  it("builds the fixed Pago entity block + literal title bar only for SUP_PAGO", () => {
+    const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago" });
+    const doc = buildTransportPagoPrintDoc(b);
+    expect(doc.isPago).toBe(true);
+    expect(doc.titleBarText).toBe("THE GREEK GOURMET — ZLECENIE ODBIORU WŁASNEGO");
+    expect(doc.entity).toEqual({
+      name: "The Greek Gourmet Małgorzata Kubiak-Vafidis",
+      nip: "5222467646",
+      address1: "W. Laskonogiego 9",
+      address2: "02-496 Warszawa",
+    });
+  });
+
+  it("uses a generic title and no entity block for a non-Pago supplier", () => {
+    const b = batch({ supplier_id: "SUP_BUKAT", supplier_name: "Bukat" });
+    const doc = buildTransportPagoPrintDoc(b);
+    expect(doc.isPago).toBe(false);
+    expect(doc.titleBarText).toBe("Bukat — ZAMÓWIENIE");
+    expect(doc.entity).toBeNull();
   });
 
   it("falls back to product_name_pl when there is no supplier-facing name", () => {

@@ -3360,6 +3360,7 @@ def manager_transport_batches(
                 driver=header.driver if header is not None else None,
                 vehicle=header.vehicle if header is not None else None,
                 pickup_date=header.pickup_date if header is not None else None,
+                name=header.name if header is not None else None,
             )
         )
 
@@ -3542,6 +3543,7 @@ def manager_transport_batch_detail(
         total_weight_kg=round(total_weight_kg, 3),
         unknown_weight_count=unknown_weight_count,
         events=events,
+        name=header.name if header is not None else None,
     )
 
 
@@ -3854,6 +3856,18 @@ def manager_transport_finalize(
     skipped[] contract; a guard conflict or unexpected backend error on the
     per-order send is likewise skipped, not raised, so one order's problem
     never aborts the rest of the batch.
+
+    Empty-column guard (v4 feedback): BEFORE any transition, every
+    ``manager_claimed`` member's effective total (``_effective_ordered_qty``
+    summed over its lines — the same rule the aggregate/driver-list/email use)
+    is computed. A member with zero effective total is never sent — it is
+    auto-REMOVED from the batch exactly like ``remove-order`` (a
+    manager-created order is cancelled with reason "empty — removed at send";
+    a captain-origin order has its marker cleared and is released back to
+    ``captain_submitted``), reported in ``skipped`` with reason
+    "empty — removed", and logged as an ``order_removed`` event. If EVERY
+    ``manager_claimed`` member is empty, nothing is written at all and the
+    request 400s ("nothing to send") — the batch stays ``draft`` untouched.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -3886,6 +3900,30 @@ def manager_transport_finalize(
     orders = backend.load_orders()
     group = [o for o in orders if o.supplier_order_reference == req.transport_id]
 
+    claimed = [o for o in group if o.status == OrderStatus.MANAGER_CLAIMED]
+    order_ids = [o.order_id for o in claimed]
+    lines_by_order: dict[str, list[OrderLine]] = {}
+    for ln in backend.load_order_lines_for_orders(order_ids):
+        lines_by_order.setdefault(ln.order_id, []).append(ln)
+    totals_by_order = {
+        o.order_id: sum(
+            _effective_ordered_qty(ln) for ln in lines_by_order.get(o.order_id, [])
+        )
+        for o in claimed
+    }
+
+    # Empty-column guard: if every manager_claimed member has a zero effective
+    # total, nothing is written — the request 400s and the batch stays draft,
+    # untouched, so the manager can go fill in quantities and retry.
+    if claimed and not any(total > 0 for total in totals_by_order.values()):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Transport batch {req.transport_id} has no positive-quantity "
+                f"lines on any member order — nothing to send"
+            ),
+        )
+
     sent: list[str] = []
     skipped: list[TransportSkippedOrder] = []
     for order in group:
@@ -3897,6 +3935,62 @@ def manager_transport_finalize(
                 )
             )
             continue
+
+        if totals_by_order.get(order.order_id, 0) <= 0:
+            # Empty column — auto-remove instead of sending (mirrors
+            # remove-order's manager-created/captain-origin split).
+            manager_created = order.captain_user == "manager-default"
+            try:
+                if manager_created:
+                    backend.update_order(
+                        order.order_id,
+                        status=OrderStatus.CANCELLED.value,
+                        cancelled_at=datetime.now(timezone.utc).isoformat(),
+                        cancelled_by="manager-default",
+                        cancel_reason="empty — removed at send",
+                        expected_status=OrderStatus.MANAGER_CLAIMED.value,
+                    )
+                else:
+                    backend.update_order(
+                        order.order_id,
+                        supplier_order_reference=None,
+                        status=OrderStatus.CAPTAIN_SUBMITTED.value,
+                        expected_status=OrderStatus.MANAGER_CLAIMED.value,
+                    )
+            except _TRANSPORT_GUARD_EXCEPTIONS:
+                skipped.append(
+                    TransportSkippedOrder(
+                        order_id=order.order_id, reason="remove conflict"
+                    )
+                )
+                continue
+            except Exception:
+                log.exception(
+                    "Transport finalize %s: unexpected error removing empty "
+                    "order %s",
+                    req.transport_id,
+                    order.order_id,
+                )
+                skipped.append(
+                    TransportSkippedOrder(
+                        order_id=order.order_id, reason="backend error"
+                    )
+                )
+                continue
+            skipped.append(
+                TransportSkippedOrder(
+                    order_id=order.order_id, reason="empty — removed"
+                )
+            )
+            _log_transport_event(
+                backend,
+                req.transport_id,
+                "order_removed",
+                "empty — removed at send",
+                order_id=order.order_id,
+            )
+            continue
+
         try:
             backend.update_order(
                 order.order_id,
@@ -4269,6 +4363,7 @@ def manager_transport_batch_patch(
         pickup_time=merged.pickup_time,
         limit_kg=merged.limit_kg,
         notes=merged.notes,
+        name=merged.name,
     )
 
 

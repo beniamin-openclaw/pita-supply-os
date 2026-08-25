@@ -291,6 +291,30 @@ export function computeWeightStrip(
   };
 }
 
+// ---- v4 feedback: friendly batch naming ------------------------------------
+
+/** Operator-facing display label for a Transport batch (feature 1, v4
+ * feedback, operator decision "A+C"): the friendly `name` when the batch has
+ * one, else "Transport {supplier} · {created date}". This is the label to use
+ * as the PRIMARY title everywhere a batch is shown (list rows, detail header,
+ * both print docs) — the raw `TRN-...` id is demoted to small secondary text
+ * next to it, never dropped (it stays the durable identifier). `formatDate`
+ * lets a caller supply locale-aware formatting; defaults to the bare
+ * "YYYY-MM-DD" ISO date part. */
+export function transportDisplayLabel(
+  batch: Pick<TransportBatchSummary, "supplier_name" | "created" | "name">,
+  t: TFunc,
+  formatDate: (iso: string) => string = isoDatePart,
+): string {
+  const name = batch.name?.trim();
+  if (name) return name;
+  const datePart = batch.created ? formatDate(batch.created) : "";
+  return t("manager.transport.displayLabel.fallback", {
+    supplier: batch.supplier_name,
+    date: datePart,
+  });
+}
+
 /** Deduped, sorted non-empty values of one logistics field across past
  * batches — feeds the driver/vehicle `<datalist>` suggestions (v2 design
  * decision 8: free text, no new master-data surface). */
@@ -350,50 +374,86 @@ export function sortTransportEvents(events: TransportEvent[]): TransportEvent[] 
 // the per-location breakdown (private, internal use); the Pago (supplier)
 // document carries per-product totals ONLY — no location ever appears in it.
 
-export interface PrintProductLocationQty {
-  location: string;
-  qty: number;
-}
+// v4 feedback (feature 3): the two print docs are redesigned to replicate the
+// legacy PDFs' structure (navy title/section bars, light-blue header cells, a
+// per-location MATRIX on the driver doc, a two-box header + fixed Pago entity
+// block on the supplier doc) — layout lives in PrintViews.tsx; these builders
+// only shape the data.
 
 export interface PrintDriverProductLine {
   productId: string;
   name: string;
   unit: string;
   totalQty: number;
-  perLocation: PrintProductLocationQty[];
+  // Aligned 1:1 with TransportDriverPrintDoc.locations — one cell per
+  // location column, 0 when this product had nothing for that location (a
+  // full matrix row, not a sparse list, so every product line has the same
+  // column count as the header).
+  qtyByLocation: number[];
 }
 
 export interface TransportDriverPrintDoc {
   transportId: string;
+  displayLabel: string; // transportDisplayLabel(detail, t) — the doc's primary title context
   date: string; // "" when unknown
+  time: string; // pickup_time, "" when unset
   driver: string; // "" when unset
   vehicle: string; // "" when unset
   supplierName: string;
+  // supplierName + " / LINEAGE" for SUP_PAGO, else supplierName verbatim.
+  supplierBarText: string;
+  locationsLine: string; // joined location names, for the header "Miasto/Lokalizacje" row
+  locations: string[]; // location names, one per matrix column — same order as each line's qtyByLocation
   products: PrintDriverProductLine[];
 }
 
-/** Build the printable DRIVER document: logistics header (transport id, date,
- * driver, vehicle) + per-product totals WITH the per-location breakdown table
- * — the internal-only "who gets how much" record. Zero-qty lines (nothing to
- * load) are dropped, mirroring the driver text / email builders above. */
-export function buildTransportDriverPrintDoc(detail: TransportBatchDetail): TransportDriverPrintDoc {
-  return {
-    transportId: detail.transport_id,
-    date: isoDatePart(detail.pickup_date ?? detail.created),
-    driver: detail.driver ?? "",
-    vehicle: detail.vehicle ?? "",
-    supplierName: detail.supplier_name,
-    products: detail.lines
-      .filter((line) => line.total_qty_purchase > 0)
-      .map((line) => ({
+/** Build the printable DRIVER document ("LISTA DLA KIEROWCY"): logistics
+ * header (locations, date/time, driver/vehicle, doc number) + a per-product x
+ * per-location MATRIX — the internal-only "who gets how much" record, never
+ * sent to the supplier. Location columns come from the batch's member orders
+ * (every location in the run gets a column, even one with a zero cell on a
+ * given product); rows with a zero grand total are dropped, mirroring the
+ * driver text / email builders above. */
+export function buildTransportDriverPrintDoc(
+  detail: TransportBatchDetail,
+  t: TFunc,
+): TransportDriverPrintDoc {
+  const namesById = new Map<string, string>();
+  for (const o of detail.orders) namesById.set(o.location_id, o.location_name);
+  const locationIds = [...namesById.keys()].sort((a, b) =>
+    (namesById.get(a) ?? a).localeCompare(namesById.get(b) ?? b, "pl"),
+  );
+  const locations = locationIds.map((id) => namesById.get(id) ?? id);
+
+  const products = detail.lines
+    .filter((line) => line.total_qty_purchase > 0)
+    .map((line) => {
+      const qtyById = new Map<string, number>();
+      for (const pl of line.per_location) {
+        qtyById.set(pl.location_id, (qtyById.get(pl.location_id) ?? 0) + pl.qty_purchase);
+      }
+      return {
         productId: line.product_id,
         name: line.product_name_pl,
         unit: line.purchase_unit,
         totalQty: line.total_qty_purchase,
-        perLocation: line.per_location
-          .filter((pl) => pl.qty_purchase > 0)
-          .map((pl) => ({ location: pl.location_name, qty: pl.qty_purchase })),
-      })),
+        qtyByLocation: locationIds.map((id) => qtyById.get(id) ?? 0),
+      };
+    });
+
+  return {
+    transportId: detail.transport_id,
+    displayLabel: transportDisplayLabel(detail, t),
+    date: isoDatePart(detail.pickup_date ?? detail.created),
+    time: detail.pickup_time ?? "",
+    driver: detail.driver ?? "",
+    vehicle: detail.vehicle ?? "",
+    supplierName: detail.supplier_name,
+    supplierBarText:
+      detail.supplier_id === "SUP_PAGO" ? `${detail.supplier_name} / LINEAGE` : detail.supplier_name,
+    locationsLine: locations.join(", "),
+    locations,
+    products,
   };
 }
 
@@ -404,26 +464,67 @@ export interface PrintPagoProductLine {
   qty: number;
 }
 
+/** Fixed Pago pickup-order entity block (operator-supplied, 2026-08).
+ * TODO(master-data): this is a print-doc-only display constant, not master
+ * data — once the operator's real Pago catalog/entity batch lands (see plan
+ * Open Questions: Pago master data), reconsider sourcing it from there
+ * instead of a hardcoded literal. */
+const PAGO_ENTITY = {
+  name: "The Greek Gourmet Małgorzata Kubiak-Vafidis",
+  nip: "5222467646",
+  address1: "W. Laskonogiego 9",
+  address2: "02-496 Warszawa",
+};
+
 export interface TransportPagoPrintDoc {
   transportId: string;
-  supplierName: string;
+  titleBarText: string;
+  isPago: boolean;
+  // Only populated for SUP_PAGO — other suppliers omit the entity box
+  // entirely (there is no equivalent fixed data to show).
+  entity: typeof PAGO_ENTITY | null;
   pickupDate: string; // "" when unknown
+  pickupTime: string; // "" when unset
+  locationsLine: string;
+  driver: string;
+  vehicle: string;
+  supplierName: string;
   products: PrintPagoProductLine[];
 }
 
-/** Build the printable SUPPLIER (Pago) document: transport id + supplier name
- * + pickup date, then per-product TOTALS ONLY. Deliberately carries no
- * location field anywhere in its shape or values — the supplier never sees
- * which location ordered what (same discipline as buildTransportEmailBody). */
+/** Build the printable SUPPLIER document ("ZLECENIE ODBIORU WŁASNEGO" for
+ * Pago; a generic order doc otherwise): two header boxes (entity data +
+ * document data) then per-product TOTALS ONLY. Deliberately carries no
+ * location field anywhere in `products` — the supplier never sees which
+ * location ordered what (same discipline as buildTransportEmailBody); the
+ * batch's locations only ever appear in the document-data box as a summary
+ * line, mirrored from the legacy PDF. */
 export function buildTransportPagoPrintDoc(detail: TransportBatchDetail): TransportPagoPrintDoc {
+  const isPago = detail.supplier_id === "SUP_PAGO";
+  const namesById = new Map<string, string>();
+  for (const o of detail.orders) namesById.set(o.location_id, o.location_name);
+  const locationsLine = [...namesById.values()].sort((a, b) => a.localeCompare(b, "pl")).join(", ");
+
   return {
     transportId: detail.transport_id,
-    supplierName: detail.supplier_name,
+    titleBarText: isPago
+      ? "THE GREEK GOURMET — ZLECENIE ODBIORU WŁASNEGO"
+      : `${detail.supplier_name} — ZAMÓWIENIE`,
+    isPago,
+    entity: isPago ? PAGO_ENTITY : null,
     pickupDate: isoDatePart(detail.pickup_date ?? detail.created),
+    pickupTime: detail.pickup_time ?? "",
+    locationsLine,
+    driver: detail.driver ?? "",
+    vehicle: detail.vehicle ?? "",
+    supplierName: detail.supplier_name,
     products: detail.lines
       .filter((line) => line.total_qty_purchase > 0)
       .map((line) => ({
         productId: line.product_id,
+        // "Nr katalogowy" — TODO(master-data): real Pago catalog codes are
+        // pending a gated master-data batch; supplier_product_name is the
+        // best available stand-in today.
         name: line.supplier_product_name || line.product_name_pl,
         unit: line.purchase_unit,
         qty: line.total_qty_purchase,

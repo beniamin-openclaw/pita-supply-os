@@ -909,6 +909,11 @@ class TransportBatchSummary(BaseModel):
     driver: str | None = None
     vehicle: str | None = None
     pickup_date: date | None = None
+    # Friendly operator-facing name (v4 feedback, migration 0011). None on a
+    # headerless legacy batch or a batch never given one — the FE falls back
+    # to "Transport {supplier_name} · {created date}" in that case
+    # (transportDisplayLabel).
+    name: str | None = None
 
 
 class TransportBatchDetail(BaseModel):
@@ -942,6 +947,9 @@ class TransportBatchDetail(BaseModel):
     # Empty when the 'transport_events' worksheet/table has no rows yet, or
     # (Sheets) the worksheet hasn't been created.
     events: list["TransportEvent"] = Field(default_factory=list)
+    # Friendly operator-facing name (v4 feedback, migration 0011) — see
+    # TransportBatchSummary.name.
+    name: str | None = None
 
 
 class TransportBatch(BaseModel):
@@ -964,6 +972,9 @@ class TransportBatch(BaseModel):
     created_at: datetime | None = None
     created_by: str | None = None
     sent_at: datetime | None = None
+    # Friendly operator-facing name (v4 feedback, migration 0011) — see
+    # TransportBatchSummary.name.
+    name: str | None = None
 
 
 class TransportEvent(BaseModel):
@@ -1102,6 +1113,12 @@ class TransportBatchPatchRequest(BaseModel):
     pickup_time: str | None = None
     limit_kg: float | None = None
     notes: str | None = None
+    # Friendly operator-facing name (v4 feedback, migration 0011). An empty
+    # string from the FE is sent as ``undefined``/omitted (not "") so a blank
+    # field means "leave unset", not "write an empty string" — the FE owns
+    # that null-vs-empty distinction (transportDisplayLabel falls back on
+    # None, not on "").
+    name: str | None = None
 
 
 class TransportBatchPatchResponse(BaseModel):
@@ -1113,6 +1130,7 @@ class TransportBatchPatchResponse(BaseModel):
     pickup_time: str | None = None
     limit_kg: float | None = None
     notes: str = ""
+    name: str | None = None
 
 
 # ---------- Manager Transport v3: cancel draft (to-ordering-pago ADDENDUM v3) ----------

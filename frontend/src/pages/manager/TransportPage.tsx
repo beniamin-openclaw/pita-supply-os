@@ -24,6 +24,7 @@ import {
   hasValidRecipient,
   seedTransportDrafts,
   transportDirtySavePayloads,
+  transportDisplayLabel,
   type TransportDraftMap,
 } from "./lib/transport";
 import { AddLocationPicker } from "./transport/AddLocationPicker";
@@ -925,7 +926,10 @@ export function TransportPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-900">{b.transport_id}</span>
+                      <span className="font-medium text-slate-900">
+                        {transportDisplayLabel(b, t)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{b.transport_id}</span>
                       <span
                         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                           b.status === "draft"
@@ -971,6 +975,13 @@ export function TransportPage() {
 
               {detail && (
                 <div className="space-y-4">
+                  <div className="flex items-baseline gap-2">
+                    <h3 className="text-base font-semibold text-slate-900">
+                      {transportDisplayLabel(detail, t)}
+                    </h3>
+                    <span className="text-xs text-slate-400">{detail.transport_id}</span>
+                  </div>
+
                   <WeightStrip detail={detail} />
 
                   <LogisticsPanel

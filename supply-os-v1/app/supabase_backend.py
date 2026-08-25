@@ -138,6 +138,7 @@ _RECEIPT_LINE_COLUMNS = [
 _TRANSPORT_BATCH_COLUMNS = [
     "transport_id", "supplier_id", "status", "driver", "vehicle", "pickup_date",
     "pickup_time", "limit_kg", "notes", "created_at", "created_by", "sent_at",
+    "name",
 ]
 _TRANSPORT_EVENT_COLUMNS = [
     "event_id", "transport_id", "order_id", "event_type", "actor", "at", "details",

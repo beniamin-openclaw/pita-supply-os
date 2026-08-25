@@ -647,6 +647,10 @@ export interface TransportBatchSummary {
   driver?: string | null;
   vehicle?: string | null;
   pickup_date?: string | null; // ISO date
+  // Friendly operator-facing name (v4 feedback, migration 0011). null on a
+  // headerless legacy batch or one never given a name — transportDisplayLabel
+  // falls back to "Transport {supplier_name} · {created date}" in that case.
+  name?: string | null;
 }
 
 /** Full Transport batch: the summary fields plus the member orders and the
@@ -679,6 +683,8 @@ export interface TransportBatchDetail {
   // Event history (v3 Phase 6) — newest first, capped 100. Empty when the
   // 'transport_events' worksheet/table has no rows yet.
   events: TransportEvent[];
+  // Friendly operator-facing name (v4 feedback) — see TransportBatchSummary.name.
+  name?: string | null;
 }
 
 /** One append-only row of a Transport batch's audit trail (v3 Phase 6) — the
@@ -797,6 +803,10 @@ export interface TransportBatchPatchRequest {
   pickup_time?: string | null;
   limit_kg?: number | null;
   notes?: string | null;
+  // Friendly operator-facing name (v4 feedback). The FE sends `undefined`
+  // (field omitted) for a blank input — never an empty string — so "leave
+  // unset" and "clear to empty" stay distinct on the wire.
+  name?: string | null;
 }
 
 export interface TransportBatchPatchResponse {
@@ -808,4 +818,5 @@ export interface TransportBatchPatchResponse {
   pickup_time?: string | null;
   limit_kg?: number | null;
   notes: string;
+  name?: string | null;
 }
