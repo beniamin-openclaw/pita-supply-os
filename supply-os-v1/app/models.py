@@ -1165,3 +1165,17 @@ class TransportCancelResponse(BaseModel):
     released: list[str] = Field(default_factory=list)
     cancelled: list[str] = Field(default_factory=list)
     skipped: list[TransportSkippedOrder] = Field(default_factory=list)
+
+
+# ---------- Manager Transport v4: Gmail draft config ("Zrob draft w Gmailu") ----------
+
+
+class TransportDraftConfig(BaseModel):
+    """Response for GET /api/manager/transport/draft-config — the operator-
+    configured recipient list for the DRIVER Gmail draft (the PAGO draft's
+    recipients come from `suppliers.email` instead, already available on the
+    FE). Sourced from the `_meta` key/value table (`transport_driver_recipients`).
+    Defaults to "" when unset / unreadable (missing tab/table, seed mode) —
+    the route degrades rather than 500ing, and the FE treats an empty string
+    as "no driver draft available yet" (disables that button)."""
+    driver_recipients: str = ""

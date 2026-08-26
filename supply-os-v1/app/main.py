@@ -81,6 +81,7 @@ from .models import (
     TransportCancelResponse,
     TransportCreateRequest,
     TransportCreateResponse,
+    TransportDraftConfig,
     TransportEligibleOrder,
     TransportEvent,
     TransportFinalizeRequest,
@@ -4511,3 +4512,36 @@ def manager_transport_cancel(
         cancelled=cancelled,
         skipped=skipped,
     )
+
+
+# ---------- Manager Transport v4: Gmail draft config ("Zrob draft w Gmailu") ----------
+
+
+@app.get(
+    "/api/manager/transport/draft-config", response_model=TransportDraftConfig
+)
+def manager_transport_draft_config(
+    _: None = Depends(require_manager),
+):
+    """Operator-configured recipients for the DRIVER Gmail draft, read from
+    the `_meta` key/value table (`transport_driver_recipients`). The PAGO
+    draft's recipients come from `suppliers.email` instead (already available
+    to the FE via `/api/suppliers`) — this route only covers the driver list,
+    which has no other master-data home.
+
+    Degrades to `driver_recipients=""` on ANY failure — missing `_meta`
+    tab/table, a seed backend with no `load_meta` at all, or any other
+    backend error — never 500s. The FE treats an empty string as "no driver
+    draft available yet" and disables that button.
+    """
+    backend = _choose_backend()
+    try:
+        value = backend.load_meta().get("transport_driver_recipients", "") or ""
+    except Exception:
+        log.warning(
+            "manager_transport_draft_config: load_meta failed — degrading to "
+            "driver_recipients=''",
+            exc_info=True,
+        )
+        value = ""
+    return TransportDraftConfig(driver_recipients=value)

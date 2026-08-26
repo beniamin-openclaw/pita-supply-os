@@ -105,6 +105,28 @@ export function TransportPage() {
   }, [locations]);
   const displayLabelOpts = useMemo(() => ({ lang, locationsById }), [lang, locationsById]);
 
+  // v4: "Zrob draft w Gmailu" — driver-recipients config for the DRIVER Gmail
+  // draft (the PAGO draft's recipients come from the selected supplier's
+  // email instead, already in `suppliers`). Fetched once; a 401 is ignored
+  // (mirrors the suppliers effect above), any other failure degrades to null
+  // (PrintViews then disables the driver-draft button — same as the backend's
+  // own "" degrade contract).
+  const [driverRecipients, setDriverRecipients] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .transportDraftConfig()
+      .then((cfg) => {
+        if (!cancelled) setDriverRecipients(cfg.driver_recipients || null);
+      })
+      .catch(() => {
+        if (!cancelled) setDriverRecipients(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Feature 2 (v4 feedback round 2): "NOWY" badge on a batch never opened yet.
   const [seenTransports, setSeenTransports] = useState<Set<string>>(() => loadSeenTransports());
 
@@ -1077,7 +1099,12 @@ export function TransportPage() {
                     onSave={handleSaveLogistics}
                   />
 
-                  <PrintViews detail={detail} displayLabel={transportDisplayLabel(detail, t, displayLabelOpts)} />
+                  <PrintViews
+                    detail={detail}
+                    displayLabel={transportDisplayLabel(detail, t, displayLabelOpts)}
+                    supplierEmail={suppliers?.find((s) => s.supplier_id === detail.supplier_id)?.email}
+                    driverRecipients={driverRecipients}
+                  />
 
                   <HistorySection events={detail.events} />
 

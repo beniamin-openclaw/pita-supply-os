@@ -2785,3 +2785,58 @@ def test_add_location_prefill_no_orderable_products_zero_count(mocker):
     assert r.status_code == 200, r.text
     assert r.json()["prefilled_count"] == 0
     patches["append_order_lines"].assert_not_called()
+
+
+# ---------- draft-config (v4, Gmail draft) ----------
+
+
+def test_draft_config_returns_value_from_backend(mocker):
+    """Happy path: load_meta returns the configured driver_recipients string."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(
+        sheets,
+        "load_meta",
+        return_value={"transport_driver_recipients": "driver@example.com, biuro@example.com"},
+    )
+    r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "driver_recipients": "driver@example.com, biuro@example.com"
+    }
+
+
+def test_draft_config_degrades_to_empty_on_load_meta_error(mocker):
+    """A missing '_meta' tab/table (or any other load_meta failure) degrades
+    to driver_recipients="" — never a 500."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(
+        sheets, "load_meta", side_effect=sheets.WorksheetNotFound("no _meta tab")
+    )
+    r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"driver_recipients": ""}
+
+
+def test_draft_config_missing_key_returns_empty(mocker):
+    """load_meta succeeds but has no 'transport_driver_recipients' key -> ""."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(sheets, "load_meta", return_value={"other_key": "x"})
+    r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"driver_recipients": ""}
+
+
+def test_draft_config_seed_mode_returns_empty(mocker):
+    """Seed backend has no load_meta at all -> AttributeError -> "" (never 500)."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SEED)
+    r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"driver_recipients": ""}
+
+
+def test_draft_config_requires_manager_auth(mocker):
+    r = client.get("/api/manager/transport/draft-config")
+    assert r.status_code == 401

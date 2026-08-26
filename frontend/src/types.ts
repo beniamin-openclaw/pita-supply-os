@@ -824,3 +824,9 @@ export interface TransportBatchPatchResponse {
   notes: string;
   name?: string | null;
 }
+
+// v4: Gmail draft config ("Zrob draft w Gmailu") -----------------------------
+
+export interface TransportDraftConfig {
+  driver_recipients: string;
+}

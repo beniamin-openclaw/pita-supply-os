@@ -56,6 +56,7 @@ import type {
   TransportCancelResponse,
   TransportCreateRequest,
   TransportCreateResponse,
+  TransportDraftConfig,
   TransportEligibleOrder,
   TransportFinalizeResponse,
   TransportRemoveOrderResponse,
@@ -501,6 +502,11 @@ export const api = {
       { transport_id } as TransportCancelRequest,
       "manager",
     ),
+  // v4: driver-recipients config for the "Zrob draft w Gmailu" driver draft.
+  // Degrades to driver_recipients="" server-side — never a 500 the caller
+  // needs to special-case.
+  transportDraftConfig: () =>
+    apiGet<TransportDraftConfig>("/api/manager/transport/draft-config", "manager"),
 };
 
 export { BASE_URL };

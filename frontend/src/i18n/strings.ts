@@ -1264,6 +1264,63 @@ export const STRINGS = {
   },
   "manager.transport.print.pagoDoc.catalogCol": { pl: "Nr katalogowy", en: "Catalog no." },
 
+  // v4 — "Zrob draft w Gmailu": creates a real Gmail DRAFT (never sends) in
+  // the mailbox of whoever clicks, via Google OAuth (gmail.compose scope).
+  "manager.transport.gmailDraft.orderButton": {
+    pl: "Szkic Gmail — zamówienie",
+    en: "Gmail draft — order",
+  },
+  "manager.transport.gmailDraft.driverButton": {
+    pl: "Szkic Gmail — lista kierowcy",
+    en: "Gmail draft — driver list",
+  },
+  "manager.transport.gmailDraft.error": {
+    pl: "Nie udało się utworzyć szkicu w Gmailu. Spróbuj ponownie.",
+    en: "Failed to create the Gmail draft. Please try again.",
+  },
+  "manager.transport.gmailDraft.success": {
+    pl: "Szkic zapisany w Gmailu.",
+    en: "Draft saved in Gmail.",
+  },
+  "manager.transport.gmailDraft.openDraftsLink": {
+    pl: "Otwórz szkice Gmail",
+    en: "Open Gmail drafts",
+  },
+  "manager.transport.gmailDraft.noSupplierRecipientTooltip": {
+    pl: "Brak adresu e-mail dostawcy",
+    en: "No supplier email address",
+  },
+  "manager.transport.gmailDraft.noDriverRecipientTooltip": {
+    pl: "Brak skonfigurowanych odbiorców listy kierowcy",
+    en: "No driver-list recipients configured",
+  },
+  // Body lines shared by both drafts (order + driver) — short plain text,
+  // no per-location quantities (details live in the PDF attachment only).
+  "manager.transport.gmailDraft.body.transportLine": {
+    pl: "Transport: {label}",
+    en: "Transport: {label}",
+  },
+  "manager.transport.gmailDraft.body.pickupLine": {
+    pl: "Odbiór: {date}",
+    en: "Pickup: {date}",
+  },
+  "manager.transport.gmailDraft.body.pickupLineWithTime": {
+    pl: "Odbiór: {date}, godz. {time}",
+    en: "Pickup: {date}, {time}",
+  },
+  "manager.transport.gmailDraft.body.driverLine": {
+    pl: "Kierowca: {driver}",
+    en: "Driver: {driver}",
+  },
+  "manager.transport.gmailDraft.body.vehicleLine": {
+    pl: "Pojazd: {vehicle}",
+    en: "Vehicle: {vehicle}",
+  },
+  "manager.transport.gmailDraft.body.attachmentLine": {
+    pl: "Szczegóły w załączniku.",
+    en: "Details in the attachment.",
+  },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",

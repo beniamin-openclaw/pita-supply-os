@@ -333,3 +333,35 @@ export async function downloadTransportPdf(
   }
   await pdfMake.createPdf(docDefinition).download(filename);
 }
+
+/** Same lazy pdfmake import path as `downloadTransportPdf`, but resolves to
+ * the PDF's raw base64 content (no data: URI prefix) instead of triggering a
+ * browser download — used by the Gmail-draft flow to attach the PDF to a
+ * MIME message. */
+export async function generateTransportPdfBase64(
+  docDefinition: PdfDocDefinition,
+): Promise<string> {
+  const pdfMakeModule = await import("pdfmake/build/pdfmake");
+  const vfsModule = await import("pdfmake/build/vfs_fonts");
+  const pdfMakeAny = pdfMakeModule as unknown as {
+    default?: {
+      addVirtualFileSystem: (vfs: Record<string, string>) => void;
+      createPdf: (doc: unknown) => { getBase64: (cb: (result: string) => void) => void };
+    };
+    addVirtualFileSystem?: (vfs: Record<string, string>) => void;
+    createPdf?: (doc: unknown) => { getBase64: (cb: (result: string) => void) => void };
+  };
+  const pdfMake = pdfMakeAny.default ?? pdfMakeAny;
+  const vfsAny = vfsModule as unknown as { default?: Record<string, string> } & Record<string, string>;
+  const vfs = vfsAny.default ?? vfsAny;
+
+  if (typeof pdfMake.addVirtualFileSystem === "function") {
+    pdfMake.addVirtualFileSystem(vfs);
+  }
+  if (typeof pdfMake.createPdf !== "function") {
+    throw new Error("pdfmake failed to load (createPdf unavailable)");
+  }
+  return new Promise<string>((resolve) => {
+    pdfMake!.createPdf!(docDefinition).getBase64((result: string) => resolve(result));
+  });
+}
