@@ -343,13 +343,15 @@ export async function generateTransportPdfBase64(
 ): Promise<string> {
   const pdfMakeModule = await import("pdfmake/build/pdfmake");
   const vfsModule = await import("pdfmake/build/vfs_fonts");
+  type GetBase64 = ((cb: (result: string) => void) => void) &
+    (() => Promise<string>);
   const pdfMakeAny = pdfMakeModule as unknown as {
     default?: {
       addVirtualFileSystem: (vfs: Record<string, string>) => void;
-      createPdf: (doc: unknown) => { getBase64: (cb: (result: string) => void) => void };
+      createPdf: (doc: unknown) => { getBase64: GetBase64 };
     };
     addVirtualFileSystem?: (vfs: Record<string, string>) => void;
-    createPdf?: (doc: unknown) => { getBase64: (cb: (result: string) => void) => void };
+    createPdf?: (doc: unknown) => { getBase64: GetBase64 };
   };
   const pdfMake = pdfMakeAny.default ?? pdfMakeAny;
   const vfsAny = vfsModule as unknown as { default?: Record<string, string> } & Record<string, string>;
@@ -361,7 +363,21 @@ export async function generateTransportPdfBase64(
   if (typeof pdfMake.createPdf !== "function") {
     throw new Error("pdfmake failed to load (createPdf unavailable)");
   }
-  return new Promise<string>((resolve) => {
-    pdfMake!.createPdf!(docDefinition).getBase64((result: string) => resolve(result));
+  // pdfmake 0.3 changed getBase64 from callback-style to PROMISE-returning —
+  // the old `.getBase64(cb)` silently ignores the callback there, which hung
+  // the Gmail-draft flow forever with no error (live-diagnosed v5.6.2).
+  // Handle both shapes: prefer the returned promise, keep the callback for a
+  // 0.2-style build, and reject instead of hanging when neither fires.
+  return new Promise<string>((resolve, reject) => {
+    try {
+      const maybePromise = pdfMake!.createPdf!(docDefinition).getBase64(
+        (result: string) => resolve(result),
+      ) as unknown;
+      if (maybePromise && typeof (maybePromise as Promise<string>).then === "function") {
+        (maybePromise as Promise<string>).then(resolve, reject);
+      }
+    } catch (e) {
+      reject(e instanceof Error ? e : new Error(String(e)));
+    }
   });
 }
