@@ -383,3 +383,27 @@ Operator feedback rounds 4 and 5 (both implemented, committed as `4dbfd12` (v4) 
 6. **"Wyślij transport" → "Zatwierdź transport"** (+ confirm/busy/error copy) — the button never sent anything to the supplier; approval semantics now honest. Actual supplier email automation stays the deferred Level C.
 
 Verification: backend 568 tests + ruff clean (unchanged); FE 159 tests, build (pdfmake as separate lazy chunk), lint clean; live E2E on the demo sandbox (label, NOWY, jump, add-all with "–" fallback, both PDF downloads exercised).
+
+---
+
+## ADDENDUM v5.1–v5.6.2 (2026-08-25 → 2026-08-28) — feedback fixes + "Zrób draft w Gmailu"
+
+All shipped to prod (`main` at `b9dd408`); prod data updated alongside.
+
+### Feedback fixes (v5.1–v5.3, v5.5)
+- **v5.1** (`decb7a6`): driver-doc columns use short location names ("Bracka"); manager-added matrix rows pin BELOW the alphabetized base, in add order.
+- **v5.2** (`db8770c`, `2e91a13`): Transport offers ALL company locations (active flag ≠ "takes no deliveries"); Enter hops one matrix row down (same column, skips "–", selects target). Prod data: KULINARNA got 19 Pago settings cloned from KAMIENICA; true cities set (Kraków/Gdańsk/Poznań/Katowice/Warszawa — web-verified).
+- **v5.3** (`8ab98b4`): `supplier_products.supplier_sku` (migration **0012**, additive) → "Nr katalogowy" on the Pago order PDF; 6 codes recovered from the legacy sheet (GYRSW15KG, GYRSW25KG, SUVKUR5kg, SUVSW5kg, PITTA018, BURG-200GR). Weights: 6 SKUs in `unit_weight_kg` (Gyros 15/25, Souvlaki ×2 from codes; Pita 13 kg + Bifteki 4 kg DERIVED from Import PB pallet records). `suppliers.email` for SUP_PAGO = the legacy Lineage Logistics distribution list (Pago = 3PL self-pickup; no Pago mailbox exists).
+- **v5.5** (`dbb90bb`): driver/vehicle dropdowns from `_meta` dictionaries (`transport_drivers`, `transport_vehicles`; seeded 1:1 from the operator's screenshots) merged with historical suggestions + "Inny — wpisz ręcznie…" escape hatch; served by the extended draft-config endpoint.
+
+### "Zrób draft w Gmailu" (v5.4 → v5.6.2) — per-user Gmail drafts with PDF attachments
+Replicates the legacy Apps Script contract: WHOEVER clicks authorizes once with their own **@pitabros.pl** Google account (Internal OAuth app "Pita Supply OS", project `pita-supply-os`, Client ID in `VITE_GOOGLE_CLIENT_ID` on Vercel) and a ready DRAFT (legacy subject templates, plain-text body, order/driver PDF attached, recipients auto-filled) lands in THEIR Drafts. Draft-only — the app never sends.
+
+Three silent failure layers were peeled by live E2E in the operator's browser (each fix exposed the next; see lessons.md "Browser-integration features fail SILENTLY in layers"):
+1. `a40d78c`/`cf65daf` — GIS token-client popup self-closes with neither callback firing → replaced with a classic implicit-grant popup + our public `/oauth/gmail-callback` page.
+2. `5dd5c5b` — accounts.google.com COOP severs `window.opener` → token relayed via **BroadcastChannel** (primary); `popup.closed` poll removed (misreports under severance).
+3. `b9dd408` — pdfmake 0.3 `getBase64()` is promise-returning; the callback-style call hung forever after successful auth → both API shapes handled.
+
+**Deploy proof (2026-08-28, live E2E on prod):** click → account choose (biuro@) → token arrives (verified on both relay channels with a real `ya29.…` token + matching state) → success UI → draft **"Zlecenie odbioru wlasnego - test - 2026-09-01"** with attachment **`test-zamowienie.pdf`** confirmed present in biuro@'s Gmail Drafts, alongside the legacy Apps Script drafts in the identical naming convention.
+
+Verification totals at close: backend **577** tests + ruff clean; frontend **198** tests + build + lint clean.
