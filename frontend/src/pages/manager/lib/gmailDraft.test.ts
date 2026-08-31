@@ -5,8 +5,10 @@ import type { StringKey } from "../../../i18n/strings";
 import type { TransportBatchDetail } from "../../../types";
 import {
   buildDriverDraftEmail,
+  buildGmailAuthUrl,
   buildMimeMessage,
   buildPagoDraftEmail,
+  parseOAuthCallbackHash,
   toBase64Url,
 } from "./gmailDraft";
 
@@ -203,6 +205,72 @@ describe("toBase64Url", () => {
     const padded = standardB64 + "=".repeat((4 - (standardB64.length % 4)) % 4);
     const decoded = Buffer.from(padded, "base64").toString("utf-8");
     expect(decoded).toBe(mime);
+  });
+});
+
+// ---------- buildGmailAuthUrl / parseOAuthCallbackHash ------------------------
+
+describe("buildGmailAuthUrl", () => {
+  it("targets Google's OAuth 2.0 implicit-grant endpoint with response_type=token", () => {
+    const url = buildGmailAuthUrl({
+      clientId: "abc123.apps.googleusercontent.com",
+      redirectUri: "https://pita-supply-os.vercel.app/oauth/gmail-callback",
+      state: "deadbeef",
+    });
+    expect(url.startsWith("https://accounts.google.com/o/oauth2/v2/auth?")).toBe(true);
+    const params = new URL(url).searchParams;
+    expect(params.get("response_type")).toBe("token");
+    expect(params.get("client_id")).toBe("abc123.apps.googleusercontent.com");
+    expect(params.get("redirect_uri")).toBe(
+      "https://pita-supply-os.vercel.app/oauth/gmail-callback",
+    );
+    expect(params.get("scope")).toBe("https://www.googleapis.com/auth/gmail.compose");
+    expect(params.get("include_granted_scopes")).toBe("true");
+    expect(params.get("prompt")).toBe("select_account");
+    expect(params.get("state")).toBe("deadbeef");
+  });
+
+  it("URL-encodes a redirect_uri with special characters", () => {
+    const url = buildGmailAuthUrl({
+      clientId: "abc123",
+      redirectUri: "http://localhost:5173/oauth/gmail-callback",
+      state: "s",
+    });
+    expect(new URL(url).searchParams.get("redirect_uri")).toBe(
+      "http://localhost:5173/oauth/gmail-callback",
+    );
+    expect(url).toContain("redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Foauth%2Fgmail-callback");
+  });
+});
+
+describe("parseOAuthCallbackHash", () => {
+  it("parses a success fragment (access_token + state), with or without a leading #", () => {
+    const withHash = parseOAuthCallbackHash(
+      "#access_token=ya29.abc&token_type=Bearer&expires_in=3599&state=deadbeef",
+    );
+    expect(withHash).toEqual({ accessToken: "ya29.abc", state: "deadbeef" });
+
+    const withoutHash = parseOAuthCallbackHash("access_token=ya29.abc&state=deadbeef");
+    expect(withoutHash).toEqual({ accessToken: "ya29.abc", state: "deadbeef" });
+  });
+
+  it("parses an error fragment, preferring error_description over error", () => {
+    const parsed = parseOAuthCallbackHash(
+      "#error=access_denied&error_description=The+user+denied+access&state=deadbeef",
+    );
+    expect(parsed.error).toBe("The user denied access");
+    expect(parsed.state).toBe("deadbeef");
+    expect(parsed.accessToken).toBeUndefined();
+  });
+
+  it("falls back to the raw error code when error_description is absent", () => {
+    const parsed = parseOAuthCallbackHash("#error=access_denied");
+    expect(parsed.error).toBe("access_denied");
+  });
+
+  it("returns an empty object for a hash with no recognizable params", () => {
+    expect(parseOAuthCallbackHash("")).toEqual({});
+    expect(parseOAuthCallbackHash("#")).toEqual({});
   });
 });
 

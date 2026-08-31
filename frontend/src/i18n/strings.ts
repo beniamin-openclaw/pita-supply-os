@@ -1327,6 +1327,21 @@ export const STRINGS = {
     en: "Details in the attachment.",
   },
 
+  // v5.5 — OAuth Gmail-draft callback page (/oauth/gmail-callback). Public
+  // route: Google redirects the popup here after the account chooser.
+  "oauth.gmailCallback.closeWindow": {
+    pl: "Możesz zamknąć to okno.",
+    en: "You can close this window.",
+  },
+  "oauth.gmailCallback.noOpener": {
+    pl: "Wróć do aplikacji Supply OS.",
+    en: "Return to the Supply OS app.",
+  },
+  "oauth.gmailCallback.errorPrefix": {
+    pl: "Błąd logowania Google: {detail}",
+    en: "Google sign-in error: {detail}",
+  },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",

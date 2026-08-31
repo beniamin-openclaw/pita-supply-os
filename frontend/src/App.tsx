@@ -14,6 +14,7 @@ import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
 import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
 import { TransportPage } from "./pages/manager/TransportPage";
 import { DebugPage } from "./pages/DebugPage";
+import { OAuthGmailCallback } from "./pages/OAuthGmailCallback";
 import { BASE_URL } from "./apiClient";
 import { LangProvider } from "./i18n";
 
@@ -140,6 +141,9 @@ export default function App() {
             }
           />
           <Route path="/debug" element={<DebugPage />} />
+          {/* Public — Google redirects the Gmail-draft OAuth popup here before
+              any app auth exists; carries no app data. See gmailDraft.ts. */}
+          <Route path="/oauth/gmail-callback" element={<OAuthGmailCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </BrowserRouter>

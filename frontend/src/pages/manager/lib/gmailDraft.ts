@@ -200,105 +200,150 @@ function buildDraftBody(
   return out.join("\n");
 }
 
-// ---------- Gmail API + Google Identity Services (browser-only, untested) ----
+// ---------- Gmail API + classic OAuth 2.0 implicit-grant popup (browser-only) ----
+//
+// v5.5 (live-repro fix): Google Identity Services' token-client popup was
+// dying silently in the operator's Chrome — the popup closed itself at the
+// account-chooser stage and neither `callback` nor `error_callback` ever
+// fired (a GIS/FedCM/third-party-cookie relay failure class we cannot fix
+// from here). Replaced with the classic OAuth 2.0 implicit-grant popup: we
+// open Google's own consent URL directly (no GIS script, no relay), Google
+// redirects the popup to OUR SAME-ORIGIN callback page
+// (`/oauth/gmail-callback`, see `OAuthGmailCallback.tsx`), and that page
+// posts the token back to this window via `postMessage` — a same-origin
+// channel that cannot silently drop messages the way the GIS popup did.
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (resp: { access_token?: string; error?: string }) => void;
-            error_callback?: (err: { type?: string; message?: string }) => void;
-          }) => { requestAccessToken: () => void };
-        };
-      };
-    };
-  }
+/** Cryptographically random hex nonce, used as the OAuth `state` param so a
+ * stray `message` event (or a stale popup from a previous click) can never
+ * be mistaken for this request's callback. */
+function generateOAuthState(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-const GIS_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-let gisLoadPromise: Promise<void> | null = null;
+export interface GmailAuthUrlOptions {
+  clientId: string;
+  redirectUri: string;
+  state: string;
+}
 
-/** Inject the Google Identity Services script exactly once (cached load
- * promise — a second call while the first is still loading, or after it
- * finished, reuses the same promise instead of injecting a duplicate
- * `<script>` tag). */
-function loadGisScript(): Promise<void> {
-  if (gisLoadPromise) return gisLoadPromise;
-  gisLoadPromise = new Promise<void>((resolve, reject) => {
-    if (window.google?.accounts?.oauth2) {
-      resolve();
-      return;
-    }
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${GIS_SCRIPT_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("Failed to load Google Identity Services")));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = GIS_SCRIPT_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Identity Services"));
-    document.head.appendChild(script);
+/** Build the Google OAuth 2.0 implicit-grant consent URL
+ * (`response_type=token`) for the `gmail.compose` scope. Pure + unit-tested.
+ * `prompt=select_account` mirrors the GIS flow's account chooser;
+ * `include_granted_scopes=true` lets a returning user skip re-consenting to
+ * scopes already granted elsewhere in the app. */
+export function buildGmailAuthUrl(opts: GmailAuthUrlOptions): string {
+  const params = new URLSearchParams({
+    client_id: opts.clientId,
+    redirect_uri: opts.redirectUri,
+    response_type: "token",
+    scope: "https://www.googleapis.com/auth/gmail.compose",
+    include_granted_scopes: "true",
+    prompt: "select_account",
+    state: opts.state,
   });
-  return gisLoadPromise;
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
+export interface ParsedOAuthCallback {
+  accessToken?: string;
+  state?: string;
+  error?: string;
+}
+
+/** Parse the URL fragment Google redirects the popup back with
+ * (`#access_token=...&state=...` on success, `#error=...&error_description=...`
+ * on failure/denial). Pure + unit-tested — the leading `#` is optional so
+ * callers can pass `window.location.hash` or its already-stripped value. */
+export function parseOAuthCallbackHash(hash: string): ParsedOAuthCallback {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  const params = new URLSearchParams(raw);
+  const out: ParsedOAuthCallback = {};
+  const accessToken = params.get("access_token");
+  if (accessToken) out.accessToken = accessToken;
+  const state = params.get("state");
+  if (state) out.state = state;
+  const error = params.get("error_description") || params.get("error");
+  if (error) out.error = error;
+  return out;
+}
+
+const OAUTH_MESSAGE_TYPE = "supplyos-gmail-token";
+
+interface GmailTokenMessage {
+  type: string;
+  accessToken?: string;
+  state?: string;
+  error?: string;
 }
 
 /**
  * Request a short-lived OAuth access token (scope: gmail.compose) for the
- * CURRENT user via Google Identity Services' token-client flow — this is the
+ * CURRENT user via a classic OAuth 2.0 implicit-grant popup — this is the
  * "sign in with your own @pitabros.pl Google account" step. Resolves with
- * the access token; rejects on a GIS/user error (e.g. the popup was closed).
+ * the access token; rejects on a Google/user error, a blocked popup, or the
+ * popup being closed before completion.
  */
 export async function requestGmailAccessToken(clientId: string): Promise<string> {
-  await loadGisScript();
-  const oauth2 = window.google?.accounts?.oauth2;
-  if (!oauth2) {
-    throw new Error("Google Identity Services failed to initialize");
+  const state = generateOAuthState();
+  const redirectUri = `${window.location.origin}/oauth/gmail-callback`;
+  const url = buildGmailAuthUrl({ clientId, redirectUri, state });
+
+  const popup = window.open(url, "supplyos-gmail-auth", "popup,width=520,height=680");
+  if (!popup) {
+    throw new Error("popup_blocked");
   }
+
   return new Promise<string>((resolve, reject) => {
     let settled = false;
+    const openedAt = Date.now();
+
+    const cleanup = (): void => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(pollId);
+      window.removeEventListener("message", onMessage);
+    };
     const settle = (fn: () => void): void => {
       if (settled) return;
       settled = true;
-      window.clearTimeout(timeoutId);
+      cleanup();
       fn();
     };
-    // Safety net: GIS gives NO signal at all in some paths (e.g. the popup
-    // window killed by an extension) — without a deadline the button would
-    // spin forever. 3 min leaves room for a slow login + consent.
+
+    const onMessage = (event: MessageEvent): void => {
+      // Same-origin only — our own callback page is the sole legitimate
+      // sender (postMessage's 3rd arg pins it to window.location.origin).
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as GmailTokenMessage | null | undefined;
+      if (!data || data.type !== OAUTH_MESSAGE_TYPE) return;
+      // Ignore a message for a different (e.g. stale, previous-click) request.
+      if (data.state !== state) return;
+      if (data.error || !data.accessToken) {
+        settle(() => reject(new Error(data.error || "No access token returned")));
+        return;
+      }
+      const token = data.accessToken;
+      settle(() => resolve(token));
+    };
+    window.addEventListener("message", onMessage);
+
+    // Safety net #1: the popup can be closed (by the user, or by the browser)
+    // without ever posting a message back. Poll for that — with a 1s grace
+    // period after open so we never race a legitimate postMessage that
+    // arrives just as the popup starts closing itself.
+    const pollId = window.setInterval(() => {
+      if (popup.closed && Date.now() - openedAt > 1000) {
+        settle(() => reject(new Error("window_closed")));
+      }
+    }, 500);
+
+    // Safety net #2: no signal at all within the deadline (slow login +
+    // consent, or a silently stuck popup). 3 min leaves room for that.
     const timeoutId = window.setTimeout(
       () => settle(() => reject(new Error("Google sign-in timed out"))),
       180_000,
     );
-    const tokenClient = oauth2.initTokenClient({
-      client_id: clientId,
-      scope: "https://www.googleapis.com/auth/gmail.compose",
-      callback: (resp) => {
-        if (resp.error || !resp.access_token) {
-          settle(() => reject(new Error(resp.error || "No access token returned")));
-          return;
-        }
-        const token = resp.access_token;
-        settle(() => resolve(token));
-      },
-      // v5.4.1 (live-repro fix): WITHOUT this, GIS reports popup-blocked /
-      // window-closed / config errors through a channel we never listened to,
-      // so the promise hung and the button stayed busy forever with zero
-      // feedback — exactly the operator-reported "nic się nie dzieje".
-      error_callback: (err) => {
-        settle(() =>
-          reject(new Error(err.message || err.type || "Google sign-in was cancelled")),
-        );
-      },
-    });
-    tokenClient.requestAccessToken();
   });
 }
 
