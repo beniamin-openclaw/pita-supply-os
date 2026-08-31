@@ -1179,3 +1179,11 @@ class TransportDraftConfig(BaseModel):
     the route degrades rather than 500ing, and the FE treats an empty string
     as "no driver draft available yet" (disables that button)."""
     driver_recipients: str = ""
+    # Operator-configured driver/vehicle dictionaries for the Logistics panel's
+    # dropdowns (driver/vehicle-name select, mirroring the legacy sheet's
+    # pre-filled lists). Comma-separated, sourced from the same `_meta` table
+    # (`transport_drivers` / `transport_vehicles`). Same degrade-to-"" contract
+    # as `driver_recipients` — an empty string means "no configured dictionary
+    # yet", and the FE falls back to free-text entry.
+    drivers: str = ""
+    vehicles: str = ""

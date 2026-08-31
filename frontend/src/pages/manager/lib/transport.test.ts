@@ -19,9 +19,11 @@ import {
   buildTransportEmailSubject,
   buildTransportGmailUrl,
   buildTransportMatrix,
+  buildLogisticsOptions,
   buildTransportPagoPrintDoc,
   collectLogisticsSuggestions,
   computeWeightStrip,
+  parseConfigList,
   hasValidRecipient,
   loadSeenTransports,
   markTransportSeen,
@@ -468,6 +470,56 @@ describe("collectLogisticsSuggestions", () => {
   it("does the same for the vehicle field independently", () => {
     const batches = [summary({ vehicle: "Ducato" }), summary({ vehicle: "Transit" }), summary({ vehicle: "Ducato" })];
     expect(collectLogisticsSuggestions(batches, "vehicle")).toEqual(["Ducato", "Transit"]);
+  });
+});
+
+describe("parseConfigList", () => {
+  it("splits on comma, trims, and drops empties", () => {
+    expect(parseConfigList("Mateusz Miecznikowski, Grzegorz")).toEqual([
+      "Mateusz Miecznikowski",
+      "Grzegorz",
+    ]);
+    expect(parseConfigList("a,,b ,")).toEqual(["a", "b"]);
+  });
+
+  it("splits on semicolon too", () => {
+    expect(parseConfigList("a; b ;c")).toEqual(["a", "b", "c"]);
+  });
+
+  it("dedupes preserving first-seen order", () => {
+    expect(parseConfigList("Grzegorz, Mateusz, Grzegorz")).toEqual(["Grzegorz", "Mateusz"]);
+  });
+
+  it("returns [] for null/undefined/empty", () => {
+    expect(parseConfigList(null)).toEqual([]);
+    expect(parseConfigList(undefined)).toEqual([]);
+    expect(parseConfigList("")).toEqual([]);
+  });
+});
+
+describe("buildLogisticsOptions", () => {
+  it("merges configured + suggestions + current, deduped, configured first", () => {
+    expect(
+      buildLogisticsOptions(
+        ["Grzegorz", "Mateusz Miecznikowski"],
+        ["Jan Kowalski", "Grzegorz"],
+        "Adam Nowak",
+      ),
+    ).toEqual(["Grzegorz", "Mateusz Miecznikowski", "Jan Kowalski", "Adam Nowak"]);
+  });
+
+  it("drops a null/undefined/empty current without adding an empty option", () => {
+    expect(buildLogisticsOptions(["Grzegorz"], [], null)).toEqual(["Grzegorz"]);
+    expect(buildLogisticsOptions(["Grzegorz"], [], undefined)).toEqual(["Grzegorz"]);
+    expect(buildLogisticsOptions(["Grzegorz"], [], "")).toEqual(["Grzegorz"]);
+  });
+
+  it("does not duplicate current when it already appears in configured/suggestions", () => {
+    expect(buildLogisticsOptions(["Grzegorz"], [], "Grzegorz")).toEqual(["Grzegorz"]);
+  });
+
+  it("returns [] when everything is empty", () => {
+    expect(buildLogisticsOptions([], [], null)).toEqual([]);
   });
 });
 

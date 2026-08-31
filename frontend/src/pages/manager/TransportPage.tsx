@@ -24,6 +24,7 @@ import {
   hasValidRecipient,
   loadSeenTransports,
   markTransportSeen,
+  parseConfigList,
   seedTransportDrafts,
   transportDirtySavePayloads,
   transportDisplayLabel,
@@ -44,6 +45,7 @@ import type {
   TransportBatchOrder,
   TransportBatchPatchRequest,
   TransportBatchSummary,
+  TransportDraftConfig,
   TransportEligibleOrder,
   TransportSkippedOrder,
 } from "../../types";
@@ -105,27 +107,38 @@ export function TransportPage() {
   }, [locations]);
   const displayLabelOpts = useMemo(() => ({ lang, locationsById }), [lang, locationsById]);
 
-  // v4: "Zrob draft w Gmailu" — driver-recipients config for the DRIVER Gmail
-  // draft (the PAGO draft's recipients come from the selected supplier's
-  // email instead, already in `suppliers`). Fetched once; a 401 is ignored
-  // (mirrors the suppliers effect above), any other failure degrades to null
-  // (PrintViews then disables the driver-draft button — same as the backend's
-  // own "" degrade contract).
-  const [driverRecipients, setDriverRecipients] = useState<string | null>(null);
+  // v4/v5: "Zrob draft w Gmailu" driver-recipients + operator-configured
+  // driver/vehicle dictionaries (Logistics panel dropdowns) all come off ONE
+  // draft-config fetch — kept as the whole object so downstream consumers
+  // (PrintViews' driverRecipients, LogisticsPanel's driverOptions/
+  // vehicleOptions) each project the field they need. Fetched once; a 401 is
+  // ignored (mirrors the suppliers effect above), any other failure degrades
+  // to null (each consumer then sees its own "" degrade — same contract as
+  // before this refactor).
+  const [draftConfig, setDraftConfig] = useState<TransportDraftConfig | null>(null);
   useEffect(() => {
     let cancelled = false;
     api
       .transportDraftConfig()
       .then((cfg) => {
-        if (!cancelled) setDriverRecipients(cfg.driver_recipients || null);
+        if (!cancelled) setDraftConfig(cfg);
       })
       .catch(() => {
-        if (!cancelled) setDriverRecipients(null);
+        if (!cancelled) setDraftConfig(null);
       });
     return () => {
       cancelled = true;
     };
   }, []);
+  const driverRecipients = draftConfig?.driver_recipients || null;
+  const configuredDrivers = useMemo(
+    () => parseConfigList(draftConfig?.drivers),
+    [draftConfig],
+  );
+  const configuredVehicles = useMemo(
+    () => parseConfigList(draftConfig?.vehicles),
+    [draftConfig],
+  );
 
   // Feature 2 (v4 feedback round 2): "NOWY" badge on a batch never opened yet.
   const [seenTransports, setSeenTransports] = useState<Set<string>>(() => loadSeenTransports());
@@ -1095,6 +1108,8 @@ export function TransportPage() {
                     detail={detail}
                     driverSuggestions={driverSuggestions}
                     vehicleSuggestions={vehicleSuggestions}
+                    driverOptions={configuredDrivers}
+                    vehicleOptions={configuredVehicles}
                     busy={logisticsSaving}
                     onSave={handleSaveLogistics}
                   />

@@ -477,6 +477,54 @@ export function collectLogisticsSuggestions(
   return [...seen].sort((a, b) => a.localeCompare(b, "pl"));
 }
 
+// ---- operator-configured driver/vehicle dropdowns ("Zrob draft w Gmailu"
+// draft-config extension) --------------------------------------------------
+
+/** Parse an operator-configured `_meta` list (`transport_drivers` /
+ * `transport_vehicles`, comma- or semicolon-separated — mirrors
+ * `splitRecipients`'s separator handling) into trimmed, deduped
+ * (first-seen-order preserved), non-empty entries. `null`/`undefined`/""
+ * (unset, or the backend's degrade-to-"" contract) yields []. */
+export function parseConfigList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(/[,;]/)) {
+    const trimmed = part.trim();
+    if (trimmed === "" || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+/** Build the option list for one Logistics-panel dropdown (driver or
+ * vehicle): the operator-configured dictionary, merged with historical
+ * suggestions (`collectLogisticsSuggestions`) and the field's current saved
+ * value — so a past batch naming someone/something not on the configured
+ * list still displays correctly — deduped case-sensitively, first-seen-order
+ * (configured entries first, so the operator's curated list leads).
+ * `current` of null/undefined/"" contributes nothing (an unset field has no
+ * value to preserve). */
+export function buildLogisticsOptions(
+  configured: string[],
+  suggestions: string[],
+  current: string | null | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (v: string) => {
+    const trimmed = v.trim();
+    if (trimmed === "" || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+  configured.forEach(add);
+  suggestions.forEach(add);
+  if (current) add(current);
+  return out;
+}
+
 // ---- v3 Phase 6: event history ---------------------------------------------
 //
 // One i18n key per known event_type ("field: old → new" diffs live in

@@ -10,24 +10,147 @@
 // than an effect that re-seeds on prop change — simpler and avoids a
 // setState-in-effect footgun.
 
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, X } from "lucide-react";
 
 import { useT } from "../../../i18n";
 import type { TransportBatchDetail, TransportBatchPatchRequest } from "../../../types";
+import { buildLogisticsOptions } from "../lib/transport";
 
 interface LogisticsPanelProps {
   detail: TransportBatchDetail;
   driverSuggestions: string[];
   vehicleSuggestions: string[];
+  // Operator-configured driver/vehicle dictionaries (parsed from the
+  // draft-config `_meta` lists — see TransportPage), merged with
+  // driverSuggestions/vehicleSuggestions below to build each dropdown's
+  // option list.
+  driverOptions: string[];
+  vehicleOptions: string[];
   busy: boolean;
   onSave: (patch: TransportBatchPatchRequest) => void;
+}
+
+/** Sentinel select value for the "Inny — wpisz ręcznie…" escape hatch. Never
+ * a real driver/vehicle name (the leading NUL-like marker keeps it from ever
+ * colliding with an operator-entered value). */
+const OTHER_VALUE = "__other__";
+
+type FieldMode = "select" | "manual";
+
+interface LogisticsFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  configured: string[];
+  suggestions: string[];
+  emptyLabel: string;
+  otherLabel: string;
+  backLabel: string;
+}
+
+/** One driver/vehicle field: a real `<select>` seeded from the operator's
+ * configured dictionary + historical suggestions + the field's current saved
+ * value, with a manual free-text escape hatch ("Inny — wpisz ręcznie…") for
+ * a name not on any list. Falls back to a plain text input (today's
+ * pre-dropdown behavior) when there is no configured dictionary AND no
+ * historical suggestion to offer — a select with only "Inny" would be worse
+ * than a text box.
+ */
+function LogisticsField({
+  id,
+  label,
+  value,
+  onChange,
+  configured,
+  suggestions,
+  emptyLabel,
+  otherLabel,
+  backLabel,
+}: LogisticsFieldProps) {
+  const options = useMemo(
+    () => buildLogisticsOptions(configured, suggestions, value || null),
+    // Only recompute from the INITIAL value — the list must not reshuffle as
+    // the operator types in manual mode or picks a different select option.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [configured, suggestions],
+  );
+
+  const hasNoOptions = configured.length === 0 && suggestions.length === 0;
+  const [mode, setMode] = useState<FieldMode>(() =>
+    hasNoOptions || (value !== "" && !options.includes(value)) ? "manual" : "select",
+  );
+
+  const inputClass =
+    "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  if (hasNoOptions || mode === "manual") {
+    return (
+      <div>
+        <label htmlFor={id} className="block text-xs font-semibold text-slate-600 mb-1">
+          {label}
+        </label>
+        <div className="flex items-center gap-1.5">
+          <input
+            id={id}
+            type="text"
+            autoFocus={!hasNoOptions}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={inputClass}
+          />
+          {!hasNoOptions && (
+            <button
+              type="button"
+              onClick={() => setMode("select")}
+              aria-label={backLabel}
+              title={backLabel}
+              className="shrink-0 rounded-lg border border-gray-300 bg-white p-2 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-semibold text-slate-600 mb-1">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => {
+          if (e.target.value === OTHER_VALUE) {
+            setMode("manual");
+            return;
+          }
+          onChange(e.target.value);
+        }}
+        className={inputClass}
+      >
+        <option value="">{emptyLabel}</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+        <option value={OTHER_VALUE}>{otherLabel}</option>
+      </select>
+    </div>
+  );
 }
 
 export function LogisticsPanel({
   detail,
   driverSuggestions,
   vehicleSuggestions,
+  driverOptions,
+  vehicleOptions,
   busy,
   onSave,
 }: LogisticsPanelProps) {
@@ -85,43 +208,29 @@ export function LogisticsPanel({
           />
         </div>
 
-        <div>
-          <label htmlFor="trn-driver" className="block text-xs font-semibold text-slate-600 mb-1">
-            {t("manager.transport.logistics.driverLabel")}
-          </label>
-          <input
-            id="trn-driver"
-            type="text"
-            list="trn-driver-suggestions"
-            value={driver}
-            onChange={(e) => setDriver(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <datalist id="trn-driver-suggestions">
-            {driverSuggestions.map((d) => (
-              <option key={d} value={d} />
-            ))}
-          </datalist>
-        </div>
+        <LogisticsField
+          id="trn-driver"
+          label={t("manager.transport.logistics.driverLabel")}
+          value={driver}
+          onChange={setDriver}
+          configured={driverOptions}
+          suggestions={driverSuggestions}
+          emptyLabel={t("manager.transport.logistics.emptyOption")}
+          otherLabel={t("manager.transport.logistics.otherOption")}
+          backLabel={t("manager.transport.logistics.backToList")}
+        />
 
-        <div>
-          <label htmlFor="trn-vehicle" className="block text-xs font-semibold text-slate-600 mb-1">
-            {t("manager.transport.logistics.vehicleLabel")}
-          </label>
-          <input
-            id="trn-vehicle"
-            type="text"
-            list="trn-vehicle-suggestions"
-            value={vehicle}
-            onChange={(e) => setVehicle(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <datalist id="trn-vehicle-suggestions">
-            {vehicleSuggestions.map((v) => (
-              <option key={v} value={v} />
-            ))}
-          </datalist>
-        </div>
+        <LogisticsField
+          id="trn-vehicle"
+          label={t("manager.transport.logistics.vehicleLabel")}
+          value={vehicle}
+          onChange={setVehicle}
+          configured={vehicleOptions}
+          suggestions={vehicleSuggestions}
+          emptyLabel={t("manager.transport.logistics.emptyOption")}
+          otherLabel={t("manager.transport.logistics.otherOption")}
+          backLabel={t("manager.transport.logistics.backToList")}
+        />
 
         <div>
           <label htmlFor="trn-pickup-date" className="block text-xs font-semibold text-slate-600 mb-1">

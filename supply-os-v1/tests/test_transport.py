@@ -2791,24 +2791,31 @@ def test_add_location_prefill_no_orderable_products_zero_count(mocker):
 
 
 def test_draft_config_returns_value_from_backend(mocker):
-    """Happy path: load_meta returns the configured driver_recipients string."""
+    """Happy path: load_meta returns the configured driver_recipients string,
+    plus the drivers/vehicles dictionaries read in the same call."""
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(
         sheets,
         "load_meta",
-        return_value={"transport_driver_recipients": "driver@example.com, biuro@example.com"},
+        return_value={
+            "transport_driver_recipients": "driver@example.com, biuro@example.com",
+            "transport_drivers": "Mateusz Miecznikowski, Grzegorz",
+            "transport_vehicles": "Iveco WPR9345K",
+        },
     )
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
     assert r.json() == {
-        "driver_recipients": "driver@example.com, biuro@example.com"
+        "driver_recipients": "driver@example.com, biuro@example.com",
+        "drivers": "Mateusz Miecznikowski, Grzegorz",
+        "vehicles": "Iveco WPR9345K",
     }
 
 
 def test_draft_config_degrades_to_empty_on_load_meta_error(mocker):
     """A missing '_meta' tab/table (or any other load_meta failure) degrades
-    to driver_recipients="" — never a 500."""
+    driver_recipients/drivers/vehicles ALL to "" — never a 500."""
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(
@@ -2816,25 +2823,38 @@ def test_draft_config_degrades_to_empty_on_load_meta_error(mocker):
     )
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": ""}
+    assert r.json() == {"driver_recipients": "", "drivers": "", "vehicles": ""}
 
 
 def test_draft_config_missing_key_returns_empty(mocker):
-    """load_meta succeeds but has no 'transport_driver_recipients' key -> ""."""
+    """load_meta succeeds but has none of the three known keys -> all ""."""
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "load_meta", return_value={"other_key": "x"})
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": ""}
+    assert r.json() == {"driver_recipients": "", "drivers": "", "vehicles": ""}
 
 
 def test_draft_config_seed_mode_returns_empty(mocker):
-    """Seed backend has no load_meta at all -> AttributeError -> "" (never 500)."""
+    """Seed backend has no load_meta at all -> AttributeError -> all "" (never 500)."""
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SEED)
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": ""}
+    assert r.json() == {"driver_recipients": "", "drivers": "", "vehicles": ""}
+
+
+def test_draft_config_partial_keys_default_missing_ones_to_empty(mocker):
+    """load_meta has only 'transport_drivers' set — driver_recipients and
+    vehicles independently degrade to "" (not all-or-nothing)."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(
+        sheets, "load_meta", return_value={"transport_drivers": "Grzegorz"}
+    )
+    r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"driver_recipients": "", "drivers": "Grzegorz", "vehicles": ""}
 
 
 def test_draft_config_requires_manager_auth(mocker):

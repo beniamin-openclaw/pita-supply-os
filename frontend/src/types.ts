@@ -829,4 +829,9 @@ export interface TransportBatchPatchResponse {
 
 export interface TransportDraftConfig {
   driver_recipients: string;
+  // Operator-configured comma-separated driver/vehicle name dictionaries
+  // (feeding the Logistics panel's dropdowns). "" = no dictionary configured
+  // — the panel falls back to free-text entry.
+  drivers: string;
+  vehicles: string;
 }

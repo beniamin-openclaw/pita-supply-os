@@ -1022,6 +1022,12 @@ export const STRINGS = {
   "manager.transport.logistics.saveButton": { pl: "Zapisz logistykę", en: "Save logistics" },
   "manager.transport.logistics.saveBusy": { pl: "Zapisywanie…", en: "Saving…" },
   "manager.transport.logistics.saveOk": { pl: "Zapisano logistykę.", en: "Logistics saved." },
+  "manager.transport.logistics.emptyOption": { pl: "— brak —", en: "— none —" },
+  "manager.transport.logistics.otherOption": {
+    pl: "Inny — wpisz ręcznie…",
+    en: "Other — type manually…",
+  },
+  "manager.transport.logistics.backToList": { pl: "Wróć do listy", en: "Back to list" },
   "manager.transport.logistics.saveError": {
     pl: "Nie udało się zapisać logistyki: {detail}",
     en: "Couldn't save logistics: {detail}",

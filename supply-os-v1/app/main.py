@@ -4529,19 +4529,34 @@ def manager_transport_draft_config(
     to the FE via `/api/suppliers`) — this route only covers the driver list,
     which has no other master-data home.
 
-    Degrades to `driver_recipients=""` on ANY failure — missing `_meta`
-    tab/table, a seed backend with no `load_meta` at all, or any other
-    backend error — never 500s. The FE treats an empty string as "no driver
-    draft available yet" and disables that button.
+    Also carries `drivers` / `vehicles` — operator-configured comma-separated
+    driver/vehicle dictionaries (`_meta` keys `transport_drivers` /
+    `transport_vehicles`) that feed the Logistics panel's dropdowns. Read in
+    the SAME `load_meta()` call as `driver_recipients` so a single backend
+    failure degrades all three together.
+
+    Degrades to `driver_recipients=""` (and `drivers=""`, `vehicles=""`) on
+    ANY failure — missing `_meta` tab/table, a seed backend with no
+    `load_meta` at all, or any other backend error — never 500s. The FE
+    treats an empty `driver_recipients` as "no driver draft available yet"
+    (disables that button) and empty `drivers`/`vehicles` as "no configured
+    dictionary" (falls back to free-text entry).
     """
     backend = _choose_backend()
     try:
-        value = backend.load_meta().get("transport_driver_recipients", "") or ""
+        meta = backend.load_meta()
+        driver_recipients = meta.get("transport_driver_recipients", "") or ""
+        drivers = meta.get("transport_drivers", "") or ""
+        vehicles = meta.get("transport_vehicles", "") or ""
     except Exception:
         log.warning(
             "manager_transport_draft_config: load_meta failed — degrading to "
-            "driver_recipients=''",
+            "driver_recipients='', drivers='', vehicles=''",
             exc_info=True,
         )
-        value = ""
-    return TransportDraftConfig(driver_recipients=value)
+        driver_recipients = ""
+        drivers = ""
+        vehicles = ""
+    return TransportDraftConfig(
+        driver_recipients=driver_recipients, drivers=drivers, vehicles=vehicles
+    )
