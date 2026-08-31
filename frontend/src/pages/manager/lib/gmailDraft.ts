@@ -271,7 +271,15 @@ export function parseOAuthCallbackHash(hash: string): ParsedOAuthCallback {
 
 const OAUTH_MESSAGE_TYPE = "supplyos-gmail-token";
 
-interface GmailTokenMessage {
+/** Same-origin broadcast channel the callback page reports back on (v5.6.1).
+ * PRIMARY channel — NOT a fallback: accounts.google.com serves COOP headers
+ * that SEVER the popup's `window.opener` once the popup navigates through
+ * Google's domain (live-diagnosed: the callback page rendered its no-opener
+ * branch on prod), so `opener.postMessage` never arrives. BroadcastChannel
+ * is scoped to our origin and survives the severed opener. */
+export const OAUTH_BROADCAST_CHANNEL = "supplyos-gmail-oauth";
+
+export interface GmailTokenMessage {
   type: string;
   accessToken?: string;
   state?: string;
@@ -297,12 +305,12 @@ export async function requestGmailAccessToken(clientId: string): Promise<string>
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
-    const openedAt = Date.now();
+    const channel = new BroadcastChannel(OAUTH_BROADCAST_CHANNEL);
 
     const cleanup = (): void => {
       window.clearTimeout(timeoutId);
-      window.clearInterval(pollId);
       window.removeEventListener("message", onMessage);
+      channel.close();
     };
     const settle = (fn: () => void): void => {
       if (settled) return;
@@ -311,11 +319,7 @@ export async function requestGmailAccessToken(clientId: string): Promise<string>
       fn();
     };
 
-    const onMessage = (event: MessageEvent): void => {
-      // Same-origin only — our own callback page is the sole legitimate
-      // sender (postMessage's 3rd arg pins it to window.location.origin).
-      if (event.origin !== window.location.origin) return;
-      const data = event.data as GmailTokenMessage | null | undefined;
+    const handlePayload = (data: GmailTokenMessage | null | undefined): void => {
       if (!data || data.type !== OAUTH_MESSAGE_TYPE) return;
       // Ignore a message for a different (e.g. stale, previous-click) request.
       if (data.state !== state) return;
@@ -326,23 +330,33 @@ export async function requestGmailAccessToken(clientId: string): Promise<string>
       const token = data.accessToken;
       settle(() => resolve(token));
     };
+
+    // PRIMARY: BroadcastChannel — same-origin by construction, immune to the
+    // COOP opener-severing described at OAUTH_BROADCAST_CHANNEL.
+    channel.onmessage = (event: MessageEvent): void => {
+      handlePayload(event.data as GmailTokenMessage | null | undefined);
+    };
+
+    // Secondary: opener postMessage, for browsers/paths where the opener
+    // link survives. Same-origin only.
+    const onMessage = (event: MessageEvent): void => {
+      if (event.origin !== window.location.origin) return;
+      handlePayload(event.data as GmailTokenMessage | null | undefined);
+    };
     window.addEventListener("message", onMessage);
 
-    // Safety net #1: the popup can be closed (by the user, or by the browser)
-    // without ever posting a message back. Poll for that — with a 1s grace
-    // period after open so we never race a legitimate postMessage that
-    // arrives just as the popup starts closing itself.
-    const pollId = window.setInterval(() => {
-      if (popup.closed && Date.now() - openedAt > 1000) {
-        settle(() => reject(new Error("window_closed")));
-      }
-    }, 500);
+    // Deliberately NO `popup.closed` poll (v5.6.1): under Google's COOP
+    // severance the WindowProxy misreports `closed === true` while the flow
+    // is still in progress, which made the old poll reject spuriously —
+    // and a late-but-valid BroadcastChannel token would then be discarded.
+    // A user who really closes the popup simply waits out the deadline
+    // below (or clicks the button again).
 
-    // Safety net #2: no signal at all within the deadline (slow login +
-    // consent, or a silently stuck popup). 3 min leaves room for that.
+    // Safety net: no signal at all within the deadline (slow login/consent,
+    // popup closed by the user, or a silently stuck window).
     const timeoutId = window.setTimeout(
       () => settle(() => reject(new Error("Google sign-in timed out"))),
-      180_000,
+      90_000,
     );
   });
 }

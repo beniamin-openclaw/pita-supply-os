@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "../i18n";
-import { parseOAuthCallbackHash } from "./manager/lib/gmailDraft";
+import { OAUTH_BROADCAST_CHANNEL, parseOAuthCallbackHash } from "./manager/lib/gmailDraft";
 
 export function OAuthGmailCallback() {
   const { t } = useT();
@@ -27,21 +27,34 @@ export function OAuthGmailCallback() {
   const [hasOpener] = useState(() => Boolean(window.opener));
 
   useEffect(() => {
+    const payload = {
+      type: "supplyos-gmail-token",
+      accessToken: parsed.accessToken,
+      state: parsed.state,
+      error: parsed.error,
+    };
+    // PRIMARY channel (v5.6.1): BroadcastChannel — accounts.google.com's COOP
+    // headers SEVER window.opener once the popup passes through Google's
+    // domain (live-diagnosed on prod: this page rendered its no-opener branch
+    // in the real flow), so opener.postMessage alone never arrives. The
+    // broadcast is same-origin scoped and immune to that.
+    try {
+      const channel = new BroadcastChannel(OAUTH_BROADCAST_CHANNEL);
+      channel.postMessage(payload);
+      channel.close();
+    } catch {
+      // BroadcastChannel unavailable — the opener path below still tries.
+    }
     const opener = window.opener as Window | null;
-    if (!opener) return;
-    opener.postMessage(
-      {
-        type: "supplyos-gmail-token",
-        accessToken: parsed.accessToken,
-        state: parsed.state,
-        error: parsed.error,
-      },
-      window.location.origin,
-    );
-    // Some browsers refuse to close a window not opened by script the same
-    // tick, or the user has "ask before closing" settings — the rendered
-    // fallback text below covers that case.
-    window.close();
+    if (opener) {
+      opener.postMessage(payload, window.location.origin);
+    }
+    // Only auto-close when this really is a result page (token or error in
+    // the fragment) — never a bare direct visit. Some browsers refuse to
+    // close a window they didn't script-open; the fallback text covers that.
+    if (parsed.accessToken || parsed.error) {
+      window.close();
+    }
   }, [parsed]);
 
   return (
