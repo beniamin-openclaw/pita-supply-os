@@ -126,8 +126,16 @@ export function PrintViews({ detail, displayLabel, supplierEmail, driverRecipien
       });
       await createGmailDraft(accessToken, toBase64Url(mime));
       setDraftSuccess(which);
-    } catch {
-      setError(t("manager.transport.gmailDraft.error"));
+      // Operator expectation ("przenosi na stronę Gmail"): jump straight to
+      // the Drafts folder. window.open this late in an async chain may be
+      // popup-blocked — the success line's link stays as the fallback.
+      window.open("https://mail.google.com/mail/u/0/#drafts", "_blank", "noopener");
+    } catch (e) {
+      // Surface the REAL reason (v5.4.1): the generic copy hid whether it was
+      // a closed popup, a blocked popup, a wrong-domain account, or a Gmail
+      // API rejection — undebuggable from the operator's report.
+      const detail = e instanceof Error && e.message ? e.message : "unknown";
+      setError(t("manager.transport.gmailDraft.error", { detail }));
     } finally {
       setBusy(null);
     }

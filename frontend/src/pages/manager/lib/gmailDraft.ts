@@ -211,6 +211,7 @@ declare global {
             client_id: string;
             scope: string;
             callback: (resp: { access_token?: string; error?: string }) => void;
+            error_callback?: (err: { type?: string; message?: string }) => void;
           }) => { requestAccessToken: () => void };
         };
       };
@@ -262,15 +263,39 @@ export async function requestGmailAccessToken(clientId: string): Promise<string>
     throw new Error("Google Identity Services failed to initialize");
   }
   return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    const settle = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      fn();
+    };
+    // Safety net: GIS gives NO signal at all in some paths (e.g. the popup
+    // window killed by an extension) — without a deadline the button would
+    // spin forever. 3 min leaves room for a slow login + consent.
+    const timeoutId = window.setTimeout(
+      () => settle(() => reject(new Error("Google sign-in timed out"))),
+      180_000,
+    );
     const tokenClient = oauth2.initTokenClient({
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/gmail.compose",
       callback: (resp) => {
         if (resp.error || !resp.access_token) {
-          reject(new Error(resp.error || "No access token returned"));
+          settle(() => reject(new Error(resp.error || "No access token returned")));
           return;
         }
-        resolve(resp.access_token);
+        const token = resp.access_token;
+        settle(() => resolve(token));
+      },
+      // v5.4.1 (live-repro fix): WITHOUT this, GIS reports popup-blocked /
+      // window-closed / config errors through a channel we never listened to,
+      // so the promise hung and the button stayed busy forever with zero
+      // feedback — exactly the operator-reported "nic się nie dzieje".
+      error_callback: (err) => {
+        settle(() =>
+          reject(new Error(err.message || err.type || "Google sign-in was cancelled")),
+        );
       },
     });
     tokenClient.requestAccessToken();

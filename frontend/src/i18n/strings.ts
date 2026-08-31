@@ -1275,12 +1275,12 @@ export const STRINGS = {
     en: "Gmail draft — driver list",
   },
   "manager.transport.gmailDraft.error": {
-    pl: "Nie udało się utworzyć szkicu w Gmailu. Spróbuj ponownie.",
-    en: "Failed to create the Gmail draft. Please try again.",
+    pl: "Nie udało się utworzyć szkicu w Gmailu: {detail}",
+    en: "Failed to create the Gmail draft: {detail}",
   },
   "manager.transport.gmailDraft.success": {
-    pl: "Szkic zapisany w Gmailu.",
-    en: "Draft saved in Gmail.",
+    pl: "Szkic zapisany w Twoich Szkicach Gmaila — otwieram Gmaila w nowej karcie.",
+    en: "Draft saved in your Gmail Drafts — opening Gmail in a new tab.",
   },
   "manager.transport.gmailDraft.openDraftsLink": {
     pl: "Otwórz szkice Gmail",
