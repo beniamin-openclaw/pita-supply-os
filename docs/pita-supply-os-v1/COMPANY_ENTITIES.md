@@ -5,14 +5,19 @@
 rolloutach kolejnych punktów. Świadomie NIE trzymamy tu kont bankowych ani
 danych osobowych — stopka zamówienia ich nie potrzebuje.
 
-## Lokalizacje objęte systemem (Wolska + rollout Bracka/KEN/Norblin)
+## Lokalizacje objęte systemem (Wolska + rollout Bracka/KEN/Norblin/Browary)
 
 | location_id | Lokal (adres dostawy) | Spółka | NIP | Adres firmy | Telefon |
 |---|---|---|---|---|---|
 | WOLA | ul. Wolska 165, 01-258 Warszawa | Pita Bros sp. z o.o. | 9522100633 | ul. W. Laskonogiego 9, 02-496 Warszawa | 662015470 |
 | BRACKA | ul. Bracka 20, 00-028 Warszawa | Pita Bros Centrum Sp. z o.o. | 5223314413 | ul. W. Laskonogiego 9, 02-496 Warszawa | 600722252 |
-| KEN | Al. KEN 21, Warszawa *(kod pocztowy do uzupełnienia)* | Pita Bros KEN sp. z o.o. | 5223241275 | ul. W. Laskonogiego 9, 02-496 Warszawa | 530699266 |
+| KEN | Al. KEN 21, 02-797 Warszawa | Pita Bros KEN sp. z o.o. | 5223241275 | ul. W. Laskonogiego 9, 02-496 Warszawa | 530699266 |
 | NORBLIN | ul. Żelazna 51/53, 00-841 Warszawa | Pita Bros sp. z o.o. | 9522100633 | ul. W. Laskonogiego 9, 02-496 Warszawa | 535300514 |
+| BROWARY | ul. Haberbuscha i Schielego 2, 00-844 Warszawa | Pita Bros sp. z o.o. | 9522100633 | ul. W. Laskonogiego 9, 02-496 Warszawa | — |
+
+Dodatkowe dane rejestrowe **Pita Bros sp. z o.o.** (operator, 2026-08-31):
+REGON 142624638 · KRS 0000370526. Stopka zamówienia ich nie używa — trzymane
+tu na potrzeby dokumentów poza systemem.
 
 ## Pozostałe (na przyszłe rollouty)
 
