@@ -297,8 +297,21 @@ describe("collectCaptainNotes (F1 point 5 — Manager-only surface)", () => {
       { order_id: "ORD-3", location_id: "KEN", location_name: "Pita Bros Ken", status: "manager_claimed" as const, lines: [] },
     ];
     expect(collectCaptainNotes(orders)).toEqual([
-      { locationName: "Pita Bros Wola", note: "proszę pilnie, mamy event" },
+      { orderId: "ORD-1", locationName: "Pita Bros Wola", note: "proszę pilnie, mamy event" },
     ]);
+  });
+
+  it("keys two orders from the SAME location distinctly (post-review R2)", () => {
+    // manager_transport_create has no per-location dedupe, so one batch can
+    // hold two WOLA orders. Keying the rendered list on locationName alone
+    // collided; orderId is what makes each entry unique.
+    const orders = [
+      { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [], captain_note: "pierwsze" },
+      { order_id: "ORD-2", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [], captain_note: "drugie" },
+    ];
+    const notes = collectCaptainNotes(orders);
+    expect(notes.map((n) => n.orderId)).toEqual(["ORD-1", "ORD-2"]);
+    expect(new Set(notes.map((n) => n.orderId)).size).toBe(2);
   });
 
   it("returns [] when no order carries a note", () => {

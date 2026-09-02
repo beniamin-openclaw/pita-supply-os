@@ -88,7 +88,13 @@ const BARE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  *  (see `BARE_DATE_RE`) passes through unchanged. */
 function formatIsoForCsv(iso: string): string {
   if (BARE_DATE_RE.test(iso)) return iso;
-  const parts = WARSAW_TIMESTAMP_PARTS.formatToParts(new Date(iso));
+  // `formatToParts` throws RangeError on an unparseable value, where the old
+  // string-replace implementation silently could not (post-review R4). An
+  // export is a read-only convenience: a malformed timestamp must degrade to
+  // the raw value in one cell, never cost the operator the whole file.
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const parts = WARSAW_TIMESTAMP_PARTS.formatToParts(d);
   const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
 }

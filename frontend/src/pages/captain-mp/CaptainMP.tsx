@@ -289,7 +289,15 @@ export function CaptainMP() {
   useEffect(() => {
     if (!activeSupplierId) return;
     const timeoutId = setTimeout(() => {
-      if (!draftHasValues(lines, extraItemRows, captainNote)) return;
+      if (!draftHasValues(lines, extraItemRows, captainNote)) {
+        // Emptying the screen must ERASE the stored draft, not merely skip the
+        // write. Skipping left the previous draft in localStorage, so deleting
+        // the last ad-hoc row and reloading brought it straight back — on the
+        // exact field the operator reported losing (post-review R3).
+        clearDraft(activeSupplierId);
+        setDraftBanner(null);
+        return;
+      }
       const draftState: DraftState = {
         lines,
         timestamp: Date.now(),

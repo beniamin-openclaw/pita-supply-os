@@ -115,6 +115,8 @@ export function buildExtraItemsSupplierBlock(orders: TransportBatchOrder[], t: T
  * captain_note never appears in any supplier-facing body or PDF, only on the
  * Transport screen (TransportPage.tsx). */
 export interface TransportCaptainNote {
+  /** Unique per member order — the React key. See collectCaptainNotes. */
+  orderId: string;
   locationName: string;
   note: string;
 }
@@ -126,7 +128,12 @@ export function collectCaptainNotes(orders: TransportBatchOrder[]): TransportCap
   const out: TransportCaptainNote[] = [];
   for (const order of orders) {
     const note = (order.captain_note ?? "").trim();
-    if (note) out.push({ locationName: order.location_name, note });
+    // `orderId` rides along purely so the caller has a UNIQUE React key.
+    // `manager_transport_create` has no per-location dedupe (only add-location
+    // does), so one batch can legitimately hold two orders from the same
+    // location — keying the list on locationName alone would collide and make
+    // React's reconciliation of these notes unreliable (post-review R2).
+    if (note) out.push({ orderId: order.order_id, locationName: order.location_name, note });
   }
   return out;
 }

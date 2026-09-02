@@ -1132,7 +1132,7 @@ export function TransportPage() {
                       </div>
                       <ul className="space-y-0.5">
                         {captainNotes.map((n) => (
-                          <li key={n.locationName}>
+                          <li key={n.orderId}>
                             <span className="font-semibold">{n.locationName}:</span>{" "}
                             <span className="whitespace-pre-line">{n.note}</span>
                           </li>
