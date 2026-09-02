@@ -15,6 +15,19 @@ import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 /** The queue lanes (one status group each). */
 export type QueueLane = "submitted" | "claimed" | "sent" | "closed";
 
+/** Day + month + time, NO year, for the queue card's cutoff / submitted stamps.
+ * The Manager scans this lane many times a day and every order in it is from
+ * the current season — the year is four characters of pure noise on a card
+ * whose job is to be skimmed (operator feedback, 2026-09-02). Screens that
+ * show a single order in depth keep the full date via the formatDateTime
+ * default. */
+const QUEUE_STAMP_OPTS: Intl.DateTimeFormatOptions = {
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
 interface QueueGroup {
   key: QueueLane;
   titleKey: StringKey;
@@ -214,10 +227,18 @@ function QueueCard({
 
         <div className="mt-1.5 flex flex-wrap gap-x-3 text-[11px] text-slate-500">
           {item.cutoff_iso && (
-            <span>{t("manager.cutoff", { value: formatDateTime(item.cutoff_iso) })}</span>
+            <span>
+              {t("manager.cutoff", {
+                value: formatDateTime(item.cutoff_iso, QUEUE_STAMP_OPTS),
+              })}
+            </span>
           )}
           {item.captain_submitted_at && (
-            <span>{t("manager.submitted", { value: formatDateTime(item.captain_submitted_at) })}</span>
+            <span>
+              {t("manager.submitted", {
+                value: formatDateTime(item.captain_submitted_at, QUEUE_STAMP_OPTS),
+              })}
+            </span>
           )}
           {item.ordered_by && (
             <span>{t("manager.orderedBy", { value: item.ordered_by })}</span>

@@ -14,6 +14,11 @@
 // OTHER requires a comment (mirrors ReasonPicker.tsx:32-33) — Apply stays
 // disabled until one is typed, so a batch action can never produce an
 // incomplete OTHER reason.
+//
+// COLLAPSED BY DEFAULT (operator feedback, 2026-09-02): this is an occasional
+// shortcut, not part of the normal ordering rhythm, so it sits as a one-line
+// disclosure above the product list and only opens when asked for. Expanded it
+// would push the first product card down the screen on every single order.
 
 import { useState } from "react";
 import type { ReasonCode } from "../types";
@@ -31,6 +36,7 @@ function reasonLabelKey(code: ReasonCode): StringKey {
 
 export function OverruleAllControl({ onApply }: OverruleAllControlProps) {
   const { t } = useT();
+  const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReasonCode | "">("");
   const [comment, setComment] = useState("");
 
@@ -45,19 +51,33 @@ export function OverruleAllControl({ onApply }: OverruleAllControlProps) {
     if (reason === "") return;
     if (reason === "OTHER" && comment.trim().length === 0) return;
     onApply(reason, comment);
-    // Reset so the control never implies a standing selection is still "armed".
+    // Reset AND re-collapse so the control never implies a standing selection
+    // is still "armed", and the product list springs back into view.
     setReason("");
     setComment("");
+    setOpen(false);
   };
 
   return (
     <section
-      className="mb-4 rounded-xl border border-violet-300 bg-violet-50 p-3"
+      className="mb-4 rounded-xl border border-violet-300 bg-violet-50"
       aria-label={t("captain.overruleAllTitle")}
     >
-      <div className="text-violet-900 text-sm font-semibold mb-1">
-        {t("captain.overruleAllTitle")}
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls="overrule-all-body"
+        className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-violet-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+      >
+        <span>{t("captain.overruleAllTitle")}</span>
+        <span aria-hidden="true" className="text-xs text-violet-700">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+
+      {!open ? null : (
+      <div id="overrule-all-body" className="px-3 pb-3">
       <p className="text-xs text-violet-800 mb-2">{t("captain.overruleAllHint")}</p>
 
       <label htmlFor="overrule-all-reason" className="sr-only">
@@ -107,6 +127,8 @@ export function OverruleAllControl({ onApply }: OverruleAllControlProps) {
       >
         {t("captain.overruleAllApply")}
       </button>
+      </div>
+      )}
     </section>
   );
 }

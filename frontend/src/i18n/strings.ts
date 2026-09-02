@@ -64,10 +64,6 @@ export const STRINGS = {
   // (components/ui/MinimumOrderChip.tsx) next to the estimated total on the
   // Manager detail, Manager queue, and Captain detail screens. Purely
   // informational — never gates submit/claim/dispatch.
-  "minOrder.met": {
-    pl: "Próg zamówienia osiągnięty ({minimum} PLN)",
-    en: "Order minimum reached ({minimum} PLN)",
-  },
   "minOrder.below": {
     pl: "Poniżej progu zamówienia (min. {minimum} PLN)",
     en: "Below order minimum (min. {minimum} PLN)",
@@ -765,8 +761,8 @@ export const STRINGS = {
   // reason to every line that requires one and has none yet; never replaces an
   // already-picked reason (fill-empties only, no destructive overwrite mode).
   "captain.overruleAllTitle": {
-    pl: "Zastosuj powód do wszystkich",
-    en: "Apply reason to all",
+    pl: "Powód zbiorczo",
+    en: "Bulk reason",
   },
   "captain.overruleAllHint": {
     pl: "Wybierz powód — zostanie ustawiony na każdej pozycji, która go wymaga i jeszcze go nie ma. Ustawiony wcześniej powód nigdy nie zostanie zastąpiony.",
