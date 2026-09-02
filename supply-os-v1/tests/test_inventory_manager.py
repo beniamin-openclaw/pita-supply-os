@@ -80,7 +80,7 @@ def _count(
 
 def _activate_sheet(mocker, counts: list[InventoryCount]) -> None:
     """Switch the backend selector to `sheets` and stub the inventory + master
-    reads (counts, get-by-id, locations, products)."""
+    reads (counts, get-by-id, locations, products, correction-event history)."""
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "load_inventory_counts", return_value=counts)
@@ -90,6 +90,9 @@ def _activate_sheet(mocker, counts: list[InventoryCount]) -> None:
     mocker.patch.object(
         sheets, "get_inventory_count", side_effect=lambda cid: by_id.get(cid)
     )
+    # Phase 2 (training-feedback-0901): the detail route also loads the
+    # count's correction history; no events by default in these fixtures.
+    mocker.patch.object(sheets, "load_inventory_count_events_for", return_value=[])
 
 
 # ---------- List: /api/manager/inventory/counts ----------

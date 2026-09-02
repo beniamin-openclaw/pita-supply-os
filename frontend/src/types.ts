@@ -97,6 +97,10 @@ export interface CaptainSubmitRequest {
   lines: OrderLineSubmit[];
   ordered_by: string; // required free-text "who orders" (mirrors received_by / count_user)
   notes?: string;
+  // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+  // Phase 1b). Backend default `str = ""` → optional here (lessons.md).
+  extra_items?: string;
+  captain_note?: string;
 }
 
 export interface CaptainSubmitResponse {
@@ -128,8 +132,30 @@ export interface InventoryLatestResponse {
   count_date: string;
   count_submitted_at: string | null;
   count_user?: string | null;
+  // Set once this snapshot has been corrected at least once via PATCH
+  // /api/captain/inventory/count/{count_id} (Phase 2, training-feedback-0901).
+  // Backend Optional[datetime] = None → optional here (lessons.md).
+  last_edited_at?: string | null;
   line_count: number;
   lines: InventoryLatestLine[];
+  // Correction history (Phase 2, training-feedback-0901) — populated only by
+  // the snapshot-detail route (captain_inventory_count_detail, FR-024); the
+  // plain FR-017 "latest" pre-fill path leaves it unset. Backend
+  // Field(default_factory=list) → optional here (lessons.md).
+  events?: InventoryCountEvent[];
+}
+
+// One append-only row of an inventory count's correction audit trail (Phase 2,
+// training-feedback-0901, migration 0014) — mirrors TransportEvent. `details`
+// is a human-readable per-product "Name: old -> new" / "dodano" / "usunięto"
+// diff, computed server-side before the destructive replace write.
+export interface InventoryCountEvent {
+  event_id: string;
+  count_id: string;
+  event_type: string;
+  actor?: string | null;
+  at?: string | null; // ISO datetime
+  details: string;
 }
 
 // Compact picker row (FR-024) — one available snapshot WITHOUT its lines. Lines
@@ -141,6 +167,8 @@ export interface InventoryCountSummary {
   count_date: string;
   count_submitted_at?: string | null;
   count_user?: string | null;
+  // Set once corrected at least once (Phase 2, training-feedback-0901).
+  last_edited_at?: string | null;
   line_count: number;
 }
 
@@ -152,6 +180,8 @@ export interface InventoryCountManagerItem {
   count_date: string;
   count_submitted_at?: string | null;
   count_user?: string | null;
+  // Set once corrected at least once (Phase 2, training-feedback-0901).
+  last_edited_at?: string | null;
   line_count: number;
 }
 
@@ -172,9 +202,14 @@ export interface InventoryCountDetail {
   count_date: string;
   count_submitted_at?: string | null;
   count_user?: string | null;
+  // Set once corrected at least once (Phase 2, training-feedback-0901).
+  last_edited_at?: string | null;
   line_count: number;
   notes: string;
   lines: InventoryCountDetailLine[];
+  // Correction history, newest first, capped 100 by the backend. Backend
+  // Field(default_factory=list) → optional here (lessons.md).
+  events?: InventoryCountEvent[];
 }
 
 // Suggestion learning-loop review (S-03 / FR-012) — match supply-os-v1/app/models.py.
@@ -206,6 +241,24 @@ export interface InventoryCountSubmitRequest {
 }
 
 export interface InventoryCountSubmitResponse {
+  count_id: string;
+  count_date: string; // ISO date "YYYY-MM-DD"
+  line_count: number;
+  warnings: string[];
+}
+
+// Correct a previously submitted snapshot (Phase 2, training-feedback-0901) —
+// PATCH /api/captain/inventory/count/{count_id}. Replace semantics: `lines`
+// is the FULL new authoritative set (mirrors InventoryCountSubmitRequest); a
+// product on the prior snapshot but omitted here is treated as "blanked"
+// (not counted = no line), never as "leave untouched".
+export interface InventoryCountEditRequest {
+  lines: InventoryCountLineSubmit[];
+  edited_by: string;
+  edit_reason?: string;
+}
+
+export interface InventoryCountEditResponse {
   count_id: string;
   count_date: string; // ISO date "YYYY-MM-DD"
   line_count: number;
@@ -244,7 +297,15 @@ export interface CaptainOrderDetail {
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   last_edited_at?: string | null;
   total_value_estimate_pln?: number | null;
+  // Supplier's configured minimum order value (display-only; training-
+  // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
+  minimum_order_value_pln?: number;
   notes: string;
+  // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+  // Phase 1b) — see Order.extra_items / Order.captain_note (backend) for why
+  // captain_note is its own field and never `notes`.
+  extra_items?: string;
+  captain_note?: string;
   editable: boolean;
   lines: ManagerOrderLineDetail[];
 }
@@ -253,6 +314,10 @@ export interface CaptainEditRequest {
   requested_delivery_date?: string;
   lines: OrderLineSubmit[];
   notes?: string;
+  // Same ad-hoc items + comment as CaptainSubmitRequest — the Captain can
+  // revise both when editing (training-feedback-0901 Phase 1b).
+  extra_items?: string;
+  captain_note?: string;
 }
 
 export interface CaptainEditResponse {
@@ -317,6 +382,11 @@ export interface ManagerQueueItem {
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   line_count: number;
   total_value_estimate_pln?: number | null;
+  // Supplier's configured minimum order value (display-only; training-
+  // feedback-0901 Phase 1c) — joined server-side onto the queue item so the
+  // frontend never needs a per-screen supplier fetch (hardening.md G4). No
+  // server-side reader/gate consumes this — see lib/minimumOrder.ts.
+  minimum_order_value_pln?: number;
   deviation_count: number;
   reason_count: number;
   last_edited_at?: string | null;
@@ -420,7 +490,14 @@ export interface ManagerOrderDetail {
   manager_user?: string;
   manager_sent_at?: string;
   total_value_estimate_pln?: number | null;
+  // Supplier's configured minimum order value (display-only; training-
+  // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
+  minimum_order_value_pln?: number;
   notes: string;
+  // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+  // Phase 1b), read-only here — see CaptainOrderDetail for the same fields.
+  extra_items?: string;
+  captain_note?: string;
   lines: ManagerOrderLineDetail[];
   // Goods-receipts against this order (0..N, newest-first), read-only — closes
   // the suggested→captain→manager→RECEIVED loop on the Manager screen.
@@ -595,6 +672,12 @@ export interface TransportAggregateLine {
   // supplier_product (to-ordering-pago). null when unset — the Pago PDF
   // builder falls back to the friendly product name.
   supplier_sku?: string | null;
+  // Whether this product is physically collected on the warehouse run, as
+  // opposed to merely purchased through this supplier (migration 0015).
+  // SUP_PAGO is a purchasing CHANNEL, not a warehouse: one batch mixes frozen
+  // meat with till rolls and napkins. ONLY the self-pickup document filters on
+  // this — the order email and order PDF still cover the whole batch.
+  warehouse_pickup?: boolean;
 }
 
 /** One row on the Transport "orders to combine" picker. */

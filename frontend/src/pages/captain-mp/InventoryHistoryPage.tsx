@@ -6,7 +6,7 @@
 // backend; the order pre-fill contract is untouched.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
@@ -24,6 +24,7 @@ import { getToken } from "../../auth";
 export function InventoryHistoryPage() {
   const { t, tPlural, formatDateTime } = useT();
   const navigate = useNavigate();
+  const location = useLocation();
   const token = getToken("captain") || "";
 
   const [counts, setCounts] = useState<InventoryCountSummary[] | null>(null);
@@ -94,6 +95,19 @@ export function InventoryHistoryPage() {
       });
   }, []);
 
+  // Re-open the snapshot just corrected on InventoryCountEditPage, showing its
+  // freshly re-fetched detail (Phase 2, training-feedback-0901) — the edit
+  // page navigates back here with `state: { openCountId }` after a successful
+  // save. Intentional synchronous kick-off (mirrors CaptainMP's pilot-supplier
+  // auto-select) — no async path exists before this that could avoid it.
+  useEffect(() => {
+    const openCountId = (location.state as { openCountId?: string } | null)?.openCountId;
+    if (openCountId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      selectCount(openCountId);
+    }
+  }, [location.state, selectCount]);
+
   const backToList = useCallback(() => {
     setSelectedId(null);
     setDetail(null);
@@ -154,11 +168,27 @@ export function InventoryHistoryPage() {
           )}
           {detail && (
             <>
-              {selectedSummary?.count_user && (
-                <div className="mb-4 text-sm text-slate-600">
-                  {t("inventory.history.countedBy", { who: selectedSummary.count_user })}
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="min-w-0 text-sm text-slate-600">
+                  {selectedSummary?.count_user && (
+                    <div>{t("inventory.history.countedBy", { who: selectedSummary.count_user })}</div>
+                  )}
+                  {detail.last_edited_at && (
+                    <div className="text-slate-500">
+                      {t("inventory.history.editedLabel", {
+                        time: formatDateTime(detail.last_edited_at),
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/captain-v2/inventory-history/${selectedId}/edit`)}
+                  className="shrink-0 rounded-lg border border-brand px-3 py-1.5 text-sm font-semibold text-brand active:bg-brand/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  {t("inventory.history.editBtn")}
+                </button>
+              </div>
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-slate-600">
@@ -200,6 +230,31 @@ export function InventoryHistoryPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Read-only correction history (Phase 2, training-feedback-0901) —
+                  omitted entirely when this snapshot was never corrected. */}
+              {detail.events && detail.events.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                    {t("inventory.history.eventsTitle")}
+                  </h3>
+                  <ul className="space-y-2">
+                    {detail.events.map((ev) => (
+                      <li
+                        key={ev.event_id}
+                        className="rounded-lg border border-gray-200 bg-white p-2.5"
+                      >
+                        <div className="text-xs text-slate-500">
+                          {ev.at ? formatDateTime(ev.at) : "—"}
+                          {" · "}
+                          {ev.actor?.trim() || "—"}
+                        </div>
+                        <div className="mt-0.5 text-sm text-slate-800">{ev.details}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </main>

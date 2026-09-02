@@ -66,7 +66,9 @@ def _activate_sheet(mocker, counts: list[InventoryCount]) -> None:
 
     Mirrors test_inventory_latest._activate_sheet: `load_inventory_counts`
     returns the summaries; `get_inventory_count` returns the matching count with
-    its lines populated.
+    its lines populated. `load_inventory_count_events_for` (Phase 2,
+    training-feedback-0901) defaults to no history — the detail route now
+    loads it unconditionally.
     """
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
@@ -75,6 +77,7 @@ def _activate_sheet(mocker, counts: list[InventoryCount]) -> None:
     mocker.patch.object(
         sheets, "get_inventory_count", side_effect=lambda cid: by_id.get(cid)
     )
+    mocker.patch.object(sheets, "load_inventory_count_events_for", return_value=[])
 
 
 # ---------- List: /api/captain/inventory/counts ----------

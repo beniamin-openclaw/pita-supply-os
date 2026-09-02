@@ -91,6 +91,7 @@ def _supplier(
     email: str | None = "zamowienia@pago.example",
     delivery_days: str | None = None,
     cutoff_time: str | None = None,
+    minimum_order_value_pln: float | None = None,
 ) -> Supplier:
     return Supplier(
         supplier_id=supplier_id,
@@ -98,6 +99,7 @@ def _supplier(
         email=email,
         delivery_days=delivery_days,
         cutoff_time=cutoff_time,
+        minimum_order_value_pln=minimum_order_value_pln,
     )
 
 
@@ -606,3 +608,91 @@ def test_order_detail_exposes_office_cc(mocker):
 
     mocker.patch.object(app_settings, "order_cc_email", "")
     assert _detail_payload()["cc_email"] is None
+
+
+# ---------- training-feedback-0901 Phase 1c: minimum_order_value_pln (display-only) ----------
+
+
+def test_queue_exposes_minimum_order_value(mocker):
+    """Joined from the supplier already loaded into suppliers_by_id — present
+    when the supplier has one configured, None otherwise. Display-only: nothing
+    server-side gates on this value (hardening.md G4)."""
+    orders = [_order("ORD-A", supplier_id="SUP_PAGO")]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        suppliers=[_supplier(supplier_id="SUP_PAGO", minimum_order_value_pln=400.0)],
+    )
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["minimum_order_value_pln"] == 400.0
+
+
+def test_queue_minimum_order_value_none_when_supplier_has_none(mocker):
+    orders = [_order("ORD-A", supplier_id="SUP_PAGO")]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        suppliers=[_supplier(supplier_id="SUP_PAGO")],  # minimum_order_value_pln unset
+    )
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["minimum_order_value_pln"] is None
+
+
+def test_order_detail_exposes_minimum_order_value(mocker):
+    order_id = "ORD-MIN"
+    order = _order(order_id, supplier_id="SUP_PAGO")
+    _enable_sheet_backend(
+        mocker,
+        orders=[order],
+        get_order_return=order,
+        suppliers=[_supplier(supplier_id="SUP_PAGO", minimum_order_value_pln=400.0)],
+    )
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["minimum_order_value_pln"] == 400.0
+
+
+def test_order_detail_minimum_order_value_none_when_supplier_has_none(mocker):
+    order_id = "ORD-MIN-2"
+    order = _order(order_id, supplier_id="SUP_PAGO")
+    _enable_sheet_backend(
+        mocker,
+        orders=[order],
+        get_order_return=order,
+        suppliers=[_supplier(supplier_id="SUP_PAGO")],  # minimum_order_value_pln unset
+    )
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["minimum_order_value_pln"] is None
+
+
+# ---------- training-feedback-0901 Phase 1b: ad-hoc items + captain note (read-only here) ----------
+
+
+def test_order_detail_exposes_extra_items_and_captain_note(mocker):
+    order_id = "ORD-ADHOC"
+    order = _order(order_id).model_copy(
+        update={
+            "extra_items": "2x cytryny\n1 kg limonek",
+            "captain_note": "proszę o dostawę przed 10:00",
+        }
+    )
+    _enable_sheet_backend(mocker, orders=[order], get_order_return=order)
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["extra_items"] == "2x cytryny\n1 kg limonek"
+    assert payload["captain_note"] == "proszę o dostawę przed 10:00"
+
+
+def test_order_detail_defaults_extra_items_and_captain_note_to_empty_string(mocker):
+    order_id = "ORD-NOADHOC"
+    order = _order(order_id)
+    _enable_sheet_backend(mocker, orders=[order], get_order_return=order)
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["extra_items"] == ""
+    assert payload["captain_note"] == ""

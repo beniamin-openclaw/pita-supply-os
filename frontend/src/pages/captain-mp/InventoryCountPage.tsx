@@ -7,7 +7,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
@@ -15,8 +14,10 @@ import { useT } from "../../i18n";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
-import { DecimalInput } from "../../components/ui/DecimalInput";
+import { InventoryCountGrid } from "./components/InventoryCountGrid";
 import { Toast, type ToastProps } from "./components/Toast";
+import { groupProductsByCategory } from "./lib/inventoryGrouping";
+import { blankInventoryLine as blankLine, type InventoryLineInput } from "./lib/inventoryLines";
 
 import type {
   InventoryProduct,
@@ -35,20 +36,10 @@ function localTodayIso(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** In-memory line — stock stays "" until the user types a number. */
-interface InventoryLineInput {
-  current_stock_qty_base: number | "";
-  count_comment: string;
-}
-
 interface InventoryDraftState {
   lines: Record<string, InventoryLineInput>;
   count_date?: string;
   timestamp: number;
-}
-
-function blankLine(): InventoryLineInput {
-  return { current_stock_qty_base: "", count_comment: "" };
 }
 
 // ---- Confirm dialog (lightweight; Escape + backdrop cancel) ------------------
@@ -180,11 +171,11 @@ export function InventoryCountPage() {
 
         // Categories start COLLAPSED by default so the Captain can scan the
         // whole list fast and open only the sections they need. Seed the
-        // collapsed set with every category name (same derivation as
-        // groupedProducts) once products load.
-        setCollapsedCategories(
-          new Set(items.map((p) => p.product_category || t("inventory.uncategorized"))),
-        );
+        // collapsed set with every RAW category key (same derivation as
+        // groupedProducts / groupProductsByCategory) once products load —
+        // display translation happens later, at render time, via
+        // categoryLabel() inside InventoryCountGrid.
+        setCollapsedCategories(new Set(items.map((p) => p.product_category)));
 
         // Surface a draft banner if a recent count is in progress; don't auto-load.
         const draft = loadDraft<InventoryDraftState>(DRAFT_KEY);
@@ -319,22 +310,11 @@ export function InventoryCountPage() {
 
   const countedCount = countedLines.length;
 
-  // Group products by category (first-seen order) for collapsible sections.
-  const groupedProducts = useMemo<{ category: string; items: InventoryProduct[] }[]>(() => {
-    const order: string[] = [];
-    const byCategory = new Map<string, InventoryProduct[]>();
-    products.forEach((p) => {
-      const cat = p.product_category || t("inventory.uncategorized");
-      let bucket = byCategory.get(cat);
-      if (!bucket) {
-        bucket = [];
-        byCategory.set(cat, bucket);
-        order.push(cat);
-      }
-      bucket.push(p);
-    });
-    return order.map((cat) => ({ category: cat, items: byCategory.get(cat)! }));
-  }, [products, t]);
+  // Group products by category (first-seen order, raw key) for collapsible
+  // sections — shared with InventoryCountEditPage. Display translation
+  // (categoryLabel) happens at render time inside InventoryCountGrid, so
+  // this grouping never depends on the active language.
+  const groupedProducts = useMemo(() => groupProductsByCategory(products), [products]);
 
   const toggleCategory = useCallback((category: string) => {
     setCollapsedCategories((prev) => {
@@ -493,99 +473,14 @@ export function InventoryCountPage() {
         ) : products.length === 0 ? (
           <div className="text-center py-12 text-slate-600">{t("inventory.empty")}</div>
         ) : (
-          <div className="space-y-3">
-            {groupedProducts.map((group) => {
-              const collapsed = collapsedCategories.has(group.category);
-              const countedInGroup = group.items.filter((p) => {
-                const v = lines[p.product_id]?.current_stock_qty_base;
-                return v !== "" && v !== undefined;
-              }).length;
-              return (
-                <section
-                  key={group.category}
-                  className="rounded-xl border border-gray-200 bg-white overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleCategory(group.category)}
-                    aria-expanded={!collapsed}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                      {collapsed ? (
-                        <ChevronRight size={16} aria-hidden="true" />
-                      ) : (
-                        <ChevronDown size={16} aria-hidden="true" />
-                      )}
-                      {group.category}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums">
-                      {t("inventory.categoryCount", {
-                        counted: countedInGroup,
-                        total: group.items.length,
-                      })}
-                    </span>
-                  </button>
-
-                  {!collapsed && (
-                    <ul className="space-y-2 border-t border-gray-100 p-2">
-                      {group.items.map((p) => {
-                        const line = lines[p.product_id] || blankLine();
-                        return (
-                          <li
-                            key={p.product_id}
-                            className="bg-white border border-gray-200 rounded-xl p-3"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-slate-900 truncate">
-                                    {p.product_name_pl}
-                                  </span>
-                                  {p.is_critical && (
-                                    <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
-                                      {t("card.critical")}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-slate-500">{p.inventory_unit}</div>
-                              </div>
-                              <div className="shrink-0">
-                                <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
-                                  {t("inventory.qtyLabel")}
-                                </label>
-                                <DecimalInput
-                                  id={`stock-${p.product_id}`}
-                                  inputMode="decimal"
-                                  value={line.current_stock_qty_base}
-                                  onChange={(v) => handleStockChange(p.product_id, v)}
-                                  className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                              </div>
-                            </div>
-                            <label
-                              htmlFor={`comment-${p.product_id}`}
-                              className="sr-only"
-                            >
-                              {t("inventory.commentPlaceholder")}
-                            </label>
-                            <input
-                              type="text"
-                              id={`comment-${p.product_id}`}
-                              value={line.count_comment}
-                              onChange={(e) => handleCommentChange(p.product_id, e.target.value)}
-                              placeholder={t("inventory.commentPlaceholder")}
-                              className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-              );
-            })}
-          </div>
+          <InventoryCountGrid
+            groupedProducts={groupedProducts}
+            lines={lines}
+            collapsedCategories={collapsedCategories}
+            onToggleCategory={toggleCategory}
+            onStockChange={handleStockChange}
+            onCommentChange={handleCommentChange}
+          />
         )}
       </main>
 

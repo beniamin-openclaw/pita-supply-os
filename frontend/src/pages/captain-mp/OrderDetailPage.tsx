@@ -19,6 +19,7 @@ import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import { effectiveOrderedQtyPurchase } from "../../lib/orderQty";
 import { roundQty } from "../../components/ui/number";
+import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import type {
   CaptainOrderDetail,
   ReceiptDetail,
@@ -166,10 +167,18 @@ export function OrderDetailPage() {
                 </span>
               </div>
               <dl className="text-sm text-slate-800 space-y-1">
-                <div>
-                  {t("orders.detail.total", {
-                    value: order.total_value_estimate_pln?.toFixed(2) ?? "?",
-                  })}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {t("orders.detail.total", {
+                      value: order.total_value_estimate_pln?.toFixed(2) ?? "?",
+                    })}
+                  </span>
+                  {/* Purely informational (training-feedback-0901 Phase 1c) —
+                      never gates submit/edit. */}
+                  <MinimumOrderChip
+                    total={order.total_value_estimate_pln}
+                    minimum={order.minimum_order_value_pln}
+                  />
                 </div>
                 {order.requested_delivery_date && (
                   <div>

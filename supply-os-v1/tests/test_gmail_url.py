@@ -28,6 +28,8 @@ def _make_order(
     delivery_date: date | None = date(2026, 5, 25),
     total: float | None = 668.0,
     lines: list[OrderLine] | None = None,
+    extra_items: str = "",
+    captain_note: str = "",
 ) -> Order:
     return Order(
         order_id=order_id,
@@ -38,6 +40,8 @@ def _make_order(
         status=OrderStatus.CAPTAIN_SUBMITTED,
         total_value_estimate_pln=total,
         lines=lines or [],
+        extra_items=extra_items,
+        captain_note=captain_note,
     )
 
 
@@ -477,3 +481,78 @@ def test_cc_accepts_comma_joined_addresses():
     url, _ = _url_and_body(cc_email="biuro@pitabros.pl,szef@pitabros.pl")
     query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
     assert query["cc"] == ["biuro@pitabros.pl,szef@pitabros.pl"]
+
+
+# ---------- training-feedback-0901 Phase 1b: ad-hoc items + order comment ----------
+
+
+def test_ad_hoc_items_block_included_when_present():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(lines=[line], extra_items="2x cytryny\n1 kg limonek")
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "Pozycje spoza katalogu:" in body
+    assert "2x cytryny" in body
+    assert "1 kg limonek" in body
+
+
+def test_ad_hoc_items_block_omitted_when_empty():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(lines=[line])  # extra_items defaults to ""
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "Pozycje spoza katalogu:" not in body
+
+
+def test_captain_note_block_included_when_present():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(lines=[line], captain_note="proszę o dostawę przed 10:00")
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "Komentarz:" in body
+    assert "proszę o dostawę przed 10:00" in body
+
+
+def test_captain_note_block_omitted_when_empty():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(lines=[line])  # captain_note defaults to ""
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "Komentarz:" not in body
+
+
+def test_ad_hoc_items_and_captain_note_both_present_are_separately_sectioned():
+    """Both blocks can appear together, each under its own header, and neither
+    is confused with the catalogue table above."""
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(
+        lines=[line],
+        extra_items="1 karton serwetek",
+        captain_note="poprawiona ilość",
+    )
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    lines_ = body.split("\n")
+    assert lines_.index("Pozycje spoza katalogu:") < lines_.index("Komentarz:")
+    assert "1 karton serwetek" in body
+    assert "poprawiona ilość" in body

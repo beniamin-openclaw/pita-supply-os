@@ -159,3 +159,65 @@ describe("feedback r7 — empty delivery-date line + standing office CC", () => 
     );
   });
 });
+
+describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comment", () => {
+  it("renders the off-catalogue items block when extra_items is present", () => {
+    const body = buildEmailBody(
+      detail({ extra_items: "Serwetki - 5 opak\nLód - 2 worki" }),
+      noLines,
+    );
+    expect(body).toContain("Pozycje spoza katalogu:\nSerwetki - 5 opak\nLód - 2 worki");
+  });
+
+  it("omits the off-catalogue items block entirely when extra_items is empty", () => {
+    const body = buildEmailBody(detail({ extra_items: "" }), noLines);
+    expect(body).not.toContain("Pozycje spoza katalogu:");
+  });
+
+  it("omits the off-catalogue items block when extra_items is absent (backend default)", () => {
+    const body = buildEmailBody(detail(), noLines);
+    expect(body).not.toContain("Pozycje spoza katalogu:");
+  });
+
+  it("trims whitespace-only extra_items to nothing (block omitted)", () => {
+    const body = buildEmailBody(detail({ extra_items: "   \n  " }), noLines);
+    expect(body).not.toContain("Pozycje spoza katalogu:");
+  });
+
+  it("renders the Komentarz: block when captain_note is present", () => {
+    const body = buildEmailBody(
+      detail({ captain_note: "Proszę dostarczyć przed 10:00" }),
+      noLines,
+    );
+    expect(body).toContain("Komentarz:\nProszę dostarczyć przed 10:00");
+  });
+
+  it("omits the Komentarz: block entirely when captain_note is empty or absent", () => {
+    expect(buildEmailBody(detail({ captain_note: "" }), noLines)).not.toContain("Komentarz:");
+    expect(buildEmailBody(detail(), noLines)).not.toContain("Komentarz:");
+  });
+
+  it("places both blocks after the product table and before the address line, in order", () => {
+    const body = buildEmailBody(
+      detail({
+        extra_items: "Serwetki - 5 opak",
+        captain_note: "Proszę o kontakt przed dostawą",
+        city: "Warszawa",
+      }),
+      noLines,
+    );
+    const lines = body.split("\n");
+    const extraIdx = lines.indexOf("Pozycje spoza katalogu:");
+    const komentarzIdx = lines.indexOf("Komentarz:");
+    const addressIdx = lines.findIndex((l) => l.startsWith("ADRES DOSTAWY:"));
+    expect(extraIdx).toBeGreaterThan(-1);
+    expect(komentarzIdx).toBeGreaterThan(extraIdx);
+    expect(addressIdx).toBeGreaterThan(komentarzIdx);
+  });
+
+  it("neither block appears when both fields are absent", () => {
+    const body = buildEmailBody(detail(), noLines);
+    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("Komentarz:");
+  });
+});

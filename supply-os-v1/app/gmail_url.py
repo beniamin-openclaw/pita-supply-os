@@ -73,6 +73,13 @@ def _build_body(
     body_lines.append("Lp. | Produkt | Ilosc")
 
     # Sort by order_line_id for stable output
+    # NOTE (training-feedback-0901 Phase 4, hardening G7): this order-dispatch
+    # email covers the WHOLE order regardless of supplier_products.warehouse_pickup.
+    # SUP_PAGO is a purchasing channel, not a warehouse — the self-pickup run
+    # is only a SUBSET of what was bought from it. ONLY the frontend pickup
+    # document (buildTransportPagoPrintDoc in transport.ts) filters on
+    # warehouse_pickup; never add that filter to this builder or its TS twin
+    # (emailBody.ts) — that asymmetry is deliberate, not an oversight.
     visible = [ln for ln in lines if _effective_qty(ln) > 0]
     visible.sort(key=lambda ln: ln.order_line_id)
 
@@ -109,6 +116,22 @@ def _build_body(
         body_lines.append(f"{idx}.  | {product_name} | {qty_str} {unit_label}".rstrip())
 
     body_lines.append("")
+    # Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b) — free text
+    # the Captain typed at submit ("+ dodaj produkt": name / qty / unit, one
+    # per line), kept in its own section so it's never confused with the
+    # catalogue table above. Skipped entirely when empty. Mirrors the frontend
+    # twin (frontend/src/pages/manager/lib/emailBody.ts) — keep both in sync.
+    if order.extra_items.strip():
+        body_lines.append("Pozycje spoza katalogu:")
+        body_lines.append(order.extra_items.strip())
+        body_lines.append("")
+    # Order-level Captain comment (same migration), its own block — this is
+    # NOT the manager send-back `notes` field (see Order.captain_note for why
+    # captain_note has its own column). Skipped entirely when empty.
+    if order.captain_note.strip():
+        body_lines.append("Komentarz:")
+        body_lines.append(order.captain_note.strip())
+        body_lines.append("")
     # The estimated total is internal (Manager-panel only) and is deliberately
     # NOT included in the supplier email body (DEMO_FEEDBACK #7). Keep this in
     # sync with the TS twin (frontend/src/pages/manager/lib/emailBody.ts).

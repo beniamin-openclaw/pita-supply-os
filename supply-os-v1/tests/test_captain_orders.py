@@ -84,11 +84,12 @@ def _line(
     )
 
 
-def _supplier() -> Supplier:
+def _supplier(minimum_order_value_pln: float | None = None) -> Supplier:
     return Supplier(
         supplier_id="SUP_PAGO",
         supplier_name="Pago",
         email="zamowienia@pago.example",
+        minimum_order_value_pln=minimum_order_value_pln,
     )
 
 
@@ -506,3 +507,121 @@ def test_edit_rejects_unknown_supplier_product(mocker):
     )
     assert r.status_code == 400
     assert "not orderable" in r.json()["detail"]
+
+
+# ---------- training-feedback-0901 Phase 1b: ad-hoc items + order comment ----------
+
+
+def test_order_detail_exposes_extra_items_and_captain_note(mocker):
+    """Ad-hoc off-catalogue items + the Captain's order-level comment round-trip
+    onto the Captain's own order detail."""
+    order = _order("ORD-A", location_id="WOLA").model_copy(
+        update={
+            "lines": [_line("ORD-A", "OL-1")],
+            "extra_items": "2x cytryny\n1 kg limonek",
+            "captain_note": "proszę o dostawę przed 10:00",
+        }
+    )
+    _enable_sheet(mocker, orders=[order], get_order_return=order)
+
+    r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["extra_items"] == "2x cytryny\n1 kg limonek"
+    assert payload["captain_note"] == "proszę o dostawę przed 10:00"
+
+
+def test_order_detail_defaults_extra_items_and_captain_note_to_empty_string(mocker):
+    """B2 regression guard at the response layer: an order that never had
+    ad-hoc items/comment set reads back as "" — never null/missing."""
+    order = _order("ORD-A", location_id="WOLA")
+    _enable_sheet(mocker, orders=[order], get_order_return=order)
+
+    r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload["extra_items"] == ""
+    assert payload["captain_note"] == ""
+
+
+def test_edit_updates_extra_items_and_captain_note(mocker):
+    """PATCH revises both fields — the Captain can change the ad-hoc items /
+    comment when editing an order."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, total=500.0)
+    patches = _enable_sheet(
+        mocker, orders=[order], get_order_return=order, delete_lines_return=1
+    )
+
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "current_stock_qty_base": 3.0,
+                    "captain_final_qty_purchase": 4.0,
+                }
+            ],
+            "extra_items": "1 karton serwetek",
+            "captain_note": "poprawiona ilość",
+        },
+    )
+    assert r.status_code == 200, r.text
+    update_kwargs = patches["update_order"].call_args.kwargs
+    assert update_kwargs["extra_items"] == "1 karton serwetek"
+    assert update_kwargs["captain_note"] == "poprawiona ilość"
+
+
+def test_edit_defaults_extra_items_and_captain_note_to_empty_string(mocker):
+    """B2 regression guard on the edit path: omitting both fields on a PATCH
+    still 200s and writes "" (never None) for extra_items/captain_note."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, total=500.0)
+    patches = _enable_sheet(
+        mocker, orders=[order], get_order_return=order, delete_lines_return=1
+    )
+
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "current_stock_qty_base": 3.0,
+                    "captain_final_qty_purchase": 4.0,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    update_kwargs = patches["update_order"].call_args.kwargs
+    assert update_kwargs["extra_items"] == ""
+    assert update_kwargs["captain_note"] == ""
+
+
+# ---------- training-feedback-0901 Phase 1c: minimum_order_value_pln (display-only) ----------
+
+
+def test_order_detail_exposes_minimum_order_value(mocker):
+    order = _order("ORD-A", location_id="WOLA", supplier_id="SUP_PAGO")
+    _enable_sheet(mocker, orders=[order], get_order_return=order)
+    mocker.patch.object(
+        sheets, "load_suppliers", return_value=[_supplier(minimum_order_value_pln=400.0)]
+    )
+
+    r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["minimum_order_value_pln"] == 400.0
+
+
+def test_order_detail_minimum_order_value_none_when_supplier_has_none(mocker):
+    order = _order("ORD-A", location_id="WOLA", supplier_id="SUP_PAGO")
+    _enable_sheet(mocker, orders=[order], get_order_return=order)
+    # _enable_sheet's default supplier already has minimum_order_value_pln=None.
+
+    r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["minimum_order_value_pln"] is None

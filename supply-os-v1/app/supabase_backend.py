@@ -46,6 +46,7 @@ from .config import DataBackend, settings
 from .errors import OrderNotFoundError, OrderStatusConflictError
 from .models import (
     InventoryCount,
+    InventoryCountEvent,
     InventoryCountLine,
     Location,
     LocationProductSetting,
@@ -97,7 +98,7 @@ _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",
     "purchase_unit", "units_per_purchase_unit", "rounding_rule",
     "price_estimate_pln", "active", "notes", "order_note", "unit_weight_kg",
-    "supplier_sku",
+    "supplier_sku", "warehouse_pickup",
 ]
 _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "setting_id", "location_id", "product_id", "min_stock_qty_base",
@@ -110,6 +111,7 @@ _ORDER_COLUMNS = [
     "manager_user", "manager_sent_at", "sent_method", "supplier_order_reference",
     "total_value_estimate_pln", "ordered_by", "last_edited_at",
     "cancelled_at", "cancelled_by", "cancel_reason", "notes",
+    "extra_items", "captain_note",
 ]
 _ORDER_LINE_COLUMNS = [
     "order_line_id", "order_id", "product_id", "supplier_product_id",
@@ -120,11 +122,14 @@ _ORDER_LINE_COLUMNS = [
 ]
 _INVENTORY_COUNT_COLUMNS = [
     "count_id", "location_id", "count_date", "count_user", "count_submitted_at",
-    "line_count", "notes",
+    "line_count", "notes", "last_edited_at",
 ]
 _INVENTORY_COUNT_LINE_COLUMNS = [
     "count_line_id", "count_id", "product_id", "current_stock_qty_base",
     "count_comment",
+]
+_INVENTORY_COUNT_EVENT_COLUMNS = [
+    "event_id", "count_id", "event_type", "actor", "at", "details",
 ]
 _RECEIPT_COLUMNS = [
     "receipt_id", "order_id", "location_id", "supplier_id", "receipt_date",
@@ -576,6 +581,61 @@ def get_inventory_count(count_id: str) -> InventoryCount | None:
         {"cid": count_id},
     )
     return counts[0].model_copy(update={"lines": lines})
+
+
+# ---------- Inventory count edit + event history (Phase 2, training-feedback-0901) ----------
+
+def delete_inventory_count_lines(count_id: str) -> int:
+    """Delete every inventory_count_lines row for ``count_id`` in ONE
+    statement; return count (mirrors ``delete_order_lines``)."""
+    with _get_engine().begin() as conn:
+        result = conn.execute(
+            text("DELETE FROM inventory_count_lines WHERE count_id = :cid"),
+            {"cid": count_id},
+        )
+        return result.rowcount or 0
+
+
+def update_inventory_count(count_id: str, **kwargs) -> None:
+    """Update fields on the inventory_counts row matching ``count_id``
+    (mirrors ``update_receipt`` — no status guard; inventory counts have no
+    status transitions). Used by the Captain edit route to persist the
+    recomputed ``line_count`` and ``last_edited_at`` after a correction.
+    Raises OrderNotFoundError if the count is absent. No-op when ``kwargs``
+    is empty."""
+    cols = [c for c in kwargs if c in _INVENTORY_COUNT_COLUMNS and c != "count_id"]
+    if not cols:
+        return
+    set_sql = ", ".join(f"{c} = {_bind(c)}" for c in cols)
+    params = {c: _to_db(kwargs[c]) for c in cols}
+    params["_count_id"] = count_id
+    sql = (
+        f"UPDATE inventory_counts SET {set_sql} "
+        f"WHERE count_id = :_count_id RETURNING count_id"
+    )
+    with _get_engine().begin() as conn:
+        rows = conn.execute(text(sql), params).fetchall()
+    if not rows:
+        raise OrderNotFoundError(
+            f"count_id={count_id!r} not found in 'inventory_counts'"
+        )
+
+
+def load_inventory_count_events_for(count_id: str) -> list[InventoryCountEvent]:
+    """Targeted read for one snapshot's event history — not a full-table scan
+    (mirrors ``load_transport_events_for``)."""
+    return _fetch_all(
+        "SELECT * FROM inventory_count_events WHERE count_id = :cid ORDER BY at DESC",
+        InventoryCountEvent,
+        {"cid": count_id},
+    )
+
+
+def append_inventory_count_event(event: InventoryCountEvent) -> None:
+    """Append-only — there is no update/delete for an audit-trail row.
+    Callers (``main._log_inventory_event``) treat this as best-effort and
+    never let a failure here break the correction that triggered it."""
+    _insert("inventory_count_events", _INVENTORY_COUNT_EVENT_COLUMNS, event)
 
 
 # ---------- Receipts ----------

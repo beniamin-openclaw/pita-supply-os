@@ -26,6 +26,7 @@ from app import errors, supabase_backend
 from app.config import DataBackend, settings
 from app.models import (
     InventoryCount,
+    InventoryCountEvent,
     InventoryCountLine,
     Location,
     LocationProductSetting,
@@ -46,13 +47,15 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 # FK-safe drop/truncate order (children before parents).
 _ALL_TABLES = [
-    "receipt_lines", "receipts", "inventory_count_lines", "inventory_counts",
+    "receipt_lines", "receipts", "inventory_count_lines",
+    "inventory_count_events", "inventory_counts",
     "order_lines", "orders", "transport_events", "transport_batches",
     "location_product_settings", "supplier_products", "locations", "suppliers",
     "products", "_meta",
 ]
 _TXN_TABLES = [
-    "receipt_lines", "receipts", "inventory_count_lines", "inventory_counts",
+    "receipt_lines", "receipts", "inventory_count_lines",
+    "inventory_count_events", "inventory_counts",
     "order_lines", "orders", "transport_events", "transport_batches",
 ]
 
@@ -116,6 +119,24 @@ def _schema():
     # below would error against a pre-0012 schema (lesson: wire every new
     # migration into this fixture).
     supplier_sku = (MIGRATIONS_DIR / "0012_supplier_sku.sql").read_text()
+    # 0013 adds orders.extra_items + orders.captain_note, both NOT NULL DEFAULT ''.
+    # _ORDER_COLUMNS references them, so append_order binds them on every insert and
+    # would error against a pre-0013 schema (lesson: wire every new migration in).
+    extra_items = (
+        MIGRATIONS_DIR / "0013_order_extra_items_and_note.sql"
+    ).read_text()
+    # 0014 adds the inventory_count_events audit table + inventory_counts.last_edited_at,
+    # referenced by append_inventory_count_event / update_inventory_count. Also add the
+    # new table to _ALL_TABLES (children-first) and _TXN_TABLES above.
+    inventory_count_edit = (
+        MIGRATIONS_DIR / "0014_inventory_count_edit.sql"
+    ).read_text()
+    # 0015 adds supplier_products.warehouse_pickup (NOT NULL DEFAULT false);
+    # _SUPPLIER_PRODUCT_COLUMNS references it, so the supplier_products insert below
+    # would error against a pre-0015 schema.
+    warehouse_pickup = (
+        MIGRATIONS_DIR / "0015_supplier_product_warehouse_pickup.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -130,6 +151,9 @@ def _schema():
         conn.exec_driver_sql(transport_events)
         conn.exec_driver_sql(transport_batch_name)
         conn.exec_driver_sql(supplier_sku)
+        conn.exec_driver_sql(extra_items)
+        conn.exec_driver_sql(inventory_count_edit)
+        conn.exec_driver_sql(warehouse_pickup)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -170,13 +194,37 @@ def _clean_txn(_schema):
     yield
 
 
-def _make_order(status: OrderStatus = OrderStatus.CAPTAIN_SUBMITTED, order_id: str = "ORD-IT-1") -> str:
-    """Create one order + one line in ``status`` and return its id."""
+def _make_order(
+    status: OrderStatus = OrderStatus.CAPTAIN_SUBMITTED,
+    order_id: str = "ORD-IT-1",
+    extra_items: str | None = None,
+    captain_note: str | None = None,
+) -> str:
+    """Create one order + one line in ``status`` and return its id.
+
+    ``extra_items`` / ``captain_note`` default to ``None`` here as a SENTINEL
+    meaning "don't pass it at all" (NOT the value to persist) — every existing
+    caller below constructs the ``Order`` WITHOUT these kwargs, so Pydantic
+    applies ``Order``'s own class-level default. This is deliberate: it is
+    what exercises the B2 regression. ``Order.extra_items`` / ``captain_note``
+    must be `str = ""`, never `Optional[str] = None` — the latter would bind a
+    SQL NULL against the NOT NULL DEFAULT '' columns (migration 0013) and
+    raise IntegrityError on every real ``append_order`` call. If this test
+    helper forwarded a hardcoded "" instead of omitting the kwargs, a
+    regression back to `Optional[str] = None` in models.py would go
+    undetected.
+    """
+    kwargs: dict = {}
+    if extra_items is not None:
+        kwargs["extra_items"] = extra_items
+    if captain_note is not None:
+        kwargs["captain_note"] = captain_note
     supabase_backend.append_order(
         Order(
             order_id=order_id, location_id="WOLA", supplier_id="SUP_X",
             order_date=date(2026, 6, 16), status=status, captain_user="WOLA",
             captain_submitted_at=datetime(2026, 6, 16, 12, 0, tzinfo=timezone.utc),
+            **kwargs,
         )
     )
     supabase_backend.append_order_lines(
@@ -200,6 +248,14 @@ def test_master_data_roundtrip():
     assert any(p.product_id == "P1" for p in products)
     sps = supabase_backend.load_supplier_products()
     assert sps[0].units_per_purchase_unit == 1.0
+    # B2 regression guard AT THE REAL NOT NULL BINDING (training-feedback-0901
+    # Phase 4, migration 0015): the _schema fixture's SupplierProduct(...) above
+    # never passes warehouse_pickup, so this proves the model's own Pydantic
+    # default (`bool = False`) binds cleanly against supplier_products.
+    # warehouse_pickup (NOT NULL DEFAULT false). Had the field regressed to
+    # `Optional[bool] = None`, the fixture's _insert would already have raised
+    # IntegrityError before this test ever ran.
+    assert sps[0].warehouse_pickup is False
     # RLS deny-all is enabled on every table (migration 0002); a successful read
     # here proves the connection role (postgres) BYPASSES RLS.
     assert supabase_backend.load_locations()
@@ -215,6 +271,28 @@ def test_order_append_get_roundtrip():
     assert line.captain_final_qty_purchase == 8           # numeric round-trip
     assert line.reason_code is ReasonCode.LOW_STORAGE      # enum round-trip
     assert line.delta_vs_suggestion_pct == 0.0             # numeric(12,6) round-trip
+    # B2 regression guard AT THE REAL NOT NULL BINDING (training-feedback-0901
+    # Phase 1b, migration 0013): _make_order() above never passes extra_items /
+    # captain_note, so this proves Order's own Pydantic default (`str = ""`)
+    # binds cleanly against orders.extra_items / orders.captain_note
+    # (NOT NULL DEFAULT ''). Had either field regressed to
+    # `Optional[str] = None`, append_order (called inside _make_order) would
+    # already have raised IntegrityError before this assertion even ran.
+    assert got.extra_items == ""
+    assert got.captain_note == ""
+
+
+def test_order_extra_items_and_captain_note_roundtrip():
+    """Non-empty values round-trip byte-for-byte through the real column."""
+    oid = _make_order(
+        order_id="ORD-IT-ADHOC",
+        extra_items="2x cytryny\n1 kg limonek",
+        captain_note="proszę o dostawę przed 10:00",
+    )
+    got = supabase_backend.get_order(oid)
+    assert got is not None
+    assert got.extra_items == "2x cytryny\n1 kg limonek"
+    assert got.captain_note == "proszę o dostawę przed 10:00"
 
 
 def test_update_order_lines_and_delete():
@@ -260,6 +338,74 @@ def test_inventory_count_roundtrip():
     got = supabase_backend.get_inventory_count(cid)
     assert got is not None and len(got.lines) == 1
     assert got.lines[0].current_stock_qty_base == 5
+
+
+def test_inventory_count_edit_roundtrip():
+    """Phase 2 (training-feedback-0901): round-trips the PATCH route's
+    replace-semantics correction against REAL Postgres — the only layer that
+    proves the delete+append sequence and the inventory_count_events NOT NULL
+    bindings actually work (mirrors test_update_order_lines_and_delete for
+    order_lines, plus the B2-style NOT NULL DEFAULT '' guard the other
+    roundtrip tests in this file pin for `orders.extra_items`)."""
+    cid = "INV-IT-EDIT"
+    supabase_backend.append_inventory_count(
+        InventoryCount(
+            count_id=cid, location_id="WOLA", count_date=date(2026, 6, 16),
+            count_user="WOLA", line_count=1,
+        )
+    )
+    supabase_backend.append_inventory_count_lines(
+        [
+            InventoryCountLine(
+                count_line_id=f"{cid}-L1", count_id=cid, product_id="P1",
+                current_stock_qty_base=5,
+            )
+        ]
+    )
+
+    # --- correction: replace the line set, mirroring the PATCH route ---
+    deleted = supabase_backend.delete_inventory_count_lines(cid)
+    assert deleted == 1
+    supabase_backend.append_inventory_count_lines(
+        [
+            InventoryCountLine(
+                count_line_id=f"{cid}-L1-E", count_id=cid, product_id="P1",
+                current_stock_qty_base=9,
+            )
+        ]
+    )
+    now = datetime.now(timezone.utc)
+    supabase_backend.update_inventory_count(cid, line_count=1, last_edited_at=now)
+    supabase_backend.append_inventory_count_event(
+        InventoryCountEvent(
+            event_id=f"ICE-{cid}", count_id=cid, event_type="count_edited",
+            actor="Test Captain", at=now, details="Pita: 5 → 9",
+        )
+    )
+
+    got = supabase_backend.get_inventory_count(cid)
+    assert got is not None
+    assert len(got.lines) == 1                # replace, not append — no duplicate line
+    assert got.lines[0].current_stock_qty_base == 9
+    assert got.line_count == 1                 # D1 guard, persisted on the real row
+    assert got.last_edited_at is not None      # G3 guard, persisted on the real row
+
+    events = supabase_backend.load_inventory_count_events_for(cid)
+    assert len(events) == 1
+    assert events[0].details == "Pita: 5 → 9"
+    assert events[0].actor == "Test Captain"
+
+    # `details` is NOT NULL DEFAULT '' (migration 0014) — proves
+    # InventoryCountEvent's own Pydantic default (`str = ""`) binds cleanly
+    # against the real column, the same B2-class guard the order round-trip
+    # tests pin for `orders.extra_items` / `captain_note` above.
+    supabase_backend.append_inventory_count_event(
+        InventoryCountEvent(
+            event_id=f"ICE-{cid}-BLANK", count_id=cid, event_type="count_edited",
+        )
+    )
+    refreshed = {e.event_id: e for e in supabase_backend.load_inventory_count_events_for(cid)}
+    assert refreshed[f"ICE-{cid}-BLANK"].details == ""
 
 
 def test_receipt_roundtrip_and_update():

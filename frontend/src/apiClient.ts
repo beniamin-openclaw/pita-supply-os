@@ -16,6 +16,8 @@ import type {
   CaptainSubmitRequest,
   CaptainSubmitResponse,
   InventoryCountDetail,
+  InventoryCountEditRequest,
+  InventoryCountEditResponse,
   InventoryCountManagerItem,
   InventoryCountSubmitRequest,
   InventoryCountSubmitResponse,
@@ -345,10 +347,18 @@ export const api = {
   inventoryCounts: () =>
     apiGet<InventoryCountSummary[]>("/api/captain/inventory/counts", "captain"),
   // One snapshot with lines, for pre-fill from a chosen count (FR-024). Reuses
-  // the latest-response shape (carries count_user).
+  // the latest-response shape (carries count_user, last_edited_at + events).
   inventoryCount: (count_id: string) =>
     apiGet<InventoryLatestResponse>(
       `/api/captain/inventory/count/${encodeURIComponent(count_id)}`,
+      "captain",
+    ),
+  // Correct a previously submitted snapshot in place (Phase 2, training-
+  // feedback-0901) — replace semantics; see InventoryCountEditRequest.
+  inventoryCountEdit: (count_id: string, req: InventoryCountEditRequest) =>
+    apiPatch<InventoryCountEditResponse>(
+      `/api/captain/inventory/count/${encodeURIComponent(count_id)}`,
+      req,
       "captain",
     ),
   // Captain goods receiving (GR-01)

@@ -26,6 +26,7 @@ from app import errors, seed_loader, sheets, supabase_backend
 from app.config import DataBackend
 from app.main import _choose_backend, _is_persistent, app
 from app.models import (
+    InventoryCountEvent,
     Location,
     LocationProductSetting,
     Order,
@@ -194,6 +195,30 @@ def test_append_order_inserts_only_real_columns(mocker):
     assert "CAST(:order_date AS date)" in sql
 
 
+def test_supplier_product_warehouse_pickup_defaults_false_and_binds(mocker):
+    """B2 binding guard (training-feedback-0901 Phase 4, migration 0015):
+    SupplierProduct.warehouse_pickup must be `bool = False`, never
+    `Optional[bool] = None` — supabase_backend._insert binds every column in
+    _SUPPLIER_PRODUCT_COLUMNS from model_dump(), so an unset Optional would
+    bind SQL NULL against the real NOT NULL DEFAULT false column and raise
+    IntegrityError (the same class of bug 0013/extra_items guards against).
+    Mirrors test_append_order_inserts_only_real_columns; the real-DB round-trip
+    lives in test_supabase_integration.py::test_master_data_roundtrip."""
+    conn = _fake_engine(mocker)
+    sp = SupplierProduct(
+        supplier_product_id="SP1", supplier_id="SUP_X", product_id="P1",
+        supplier_product_name="Pita", purchase_unit="szt", units_per_purchase_unit=1.0,
+    )
+    assert sp.warehouse_pickup is False  # Pydantic default, caller never set it
+    supabase_backend._insert(
+        "supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS, sp
+    )
+    sql, params = _executed(conn)[0]
+    assert sql.startswith("INSERT INTO supplier_products (")
+    assert "warehouse_pickup" in params
+    assert params["warehouse_pickup"] is False  # bound, not skipped or None
+
+
 def test_append_order_lines_rejects_mixed_order_ids(mocker):
     _fake_engine(mocker)
     lines = [
@@ -239,6 +264,80 @@ def test_load_order_lines_for_orders_targeted(mocker):
     args, _ = fetch.call_args
     assert "ANY(:ids)" in args[0]
     assert args[2] == {"ids": ["ORD-A", "ORD-B"]}
+
+
+# ---------- inventory count edit + event history (Phase 2, training-feedback-0901) ----------
+
+def test_delete_inventory_count_lines_single_statement(mocker):
+    conn = _fake_engine(mocker, rowcount=2)
+    n = supabase_backend.delete_inventory_count_lines("INV-1")
+    assert n == 2
+    assert conn.execute.call_count == 1
+    sql, params = _executed(conn)[0]
+    assert sql == "DELETE FROM inventory_count_lines WHERE count_id = :cid"
+    assert params == {"cid": "INV-1"}
+
+
+def test_update_inventory_count_writes_and_casts_last_edited_at(mocker):
+    conn = _fake_engine(mocker, fetchall=[("INV-1",)])
+    supabase_backend.update_inventory_count(
+        "INV-1",
+        line_count=3,
+        last_edited_at=datetime.now(timezone.utc).isoformat(),
+    )
+    sql, params = _executed(conn)[0]
+    assert sql.startswith("UPDATE inventory_counts SET ")
+    assert "CAST(:last_edited_at AS timestamptz)" in sql
+    assert params["line_count"] == 3
+
+
+def test_update_inventory_count_missing_raises(mocker):
+    _fake_engine(mocker, fetchall=[])
+    with pytest.raises(errors.OrderNotFoundError):
+        supabase_backend.update_inventory_count("INV-MISSING", line_count=1)
+
+
+def test_update_inventory_count_ignores_unknown_columns(mocker):
+    conn = _fake_engine(mocker, fetchall=[("INV-1",)])
+    supabase_backend.update_inventory_count("INV-1", line_count=2, bogus_col="nope")
+    _, params = _executed(conn)[0]
+    assert "line_count" in params
+    assert "bogus_col" not in params
+
+
+def test_update_inventory_count_empty_kwargs_noop(mocker):
+    conn = _fake_engine(mocker)
+    supabase_backend.update_inventory_count("INV-1")
+    conn.execute.assert_not_called()
+
+
+def test_append_inventory_count_event_inserts_only_real_columns(mocker):
+    conn = _fake_engine(mocker)
+    event = InventoryCountEvent(
+        event_id="ICE-1",
+        count_id="INV-1",
+        event_type="count_edited",
+        actor="Jan",
+        at=datetime.now(timezone.utc),
+        details="Pita: 5 → 8",
+    )
+    supabase_backend.append_inventory_count_event(event)
+    sql, params = _executed(conn)[0]
+    assert sql.startswith("INSERT INTO inventory_count_events (")
+    assert params["event_id"] == "ICE-1"
+    assert params["count_id"] == "INV-1"
+    assert "CAST(:at AS timestamptz)" in sql
+
+
+def test_load_inventory_count_events_for_targeted_query(mocker):
+    fetch = mocker.patch.object(
+        supabase_backend, "_fetch_all", return_value=["sentinel"]
+    )
+    out = supabase_backend.load_inventory_count_events_for("INV-1")
+    assert out == ["sentinel"]
+    args, _ = fetch.call_args
+    assert "WHERE count_id = :cid" in args[0]
+    assert args[2] == {"cid": "INV-1"}
 
 
 # ---------- reads + get_* assembly ----------

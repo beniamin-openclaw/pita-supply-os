@@ -673,9 +673,9 @@ export interface PrintPagoProductLine {
  * Open Questions: Pago master data), reconsider sourcing it from there
  * instead of a hardcoded literal. */
 const PAGO_ENTITY = {
-  name: "The Greek Gourmet Małgorzata Kubiak-Vafidis",
-  nip: "5222467646",
-  address1: "W. Laskonogiego 9",
+  name: "Pita Bros sp. z o.o.",
+  nip: "9522100633",
+  address1: "ul. W. Laskonogiego 9",
   address2: "02-496 Warszawa",
 };
 
@@ -716,7 +716,7 @@ export function buildTransportPagoPrintDoc(
     transportId: detail.transport_id,
     displayLabel,
     titleBarText: isPago
-      ? "THE GREEK GOURMET — ZLECENIE ODBIORU WŁASNEGO"
+      ? "PITA BROS — ZLECENIE ODBIORU WŁASNEGO"
       : `${detail.supplier_name} — ZAMÓWIENIE`,
     isPago,
     entity: isPago ? PAGO_ENTITY : null,
@@ -726,8 +726,22 @@ export function buildTransportPagoPrintDoc(
     driver: detail.driver ?? "",
     vehicle: detail.vehicle ?? "",
     supplierName: detail.supplier_name,
+    // Two filters, deliberately different from the driver doc's single one:
+    //
+    //   total_qty_purchase > 0  — nothing ordered, nothing to collect.
+    //   warehouse_pickup        — this is the run to the cold-storage
+    //                             warehouse, and SUP_PAGO is a purchasing
+    //                             CHANNEL rather than a warehouse: one real
+    //                             batch mixed frozen meat and chilled dips
+    //                             with till rolls, napkins, trays and paper.
+    //                             Only goods actually collected there belong
+    //                             on this document.
+    //
+    // The order email (buildTransportEmailBody) and the order PDF deliberately
+    // do NOT apply the second filter — the warehouse run is a subset of the
+    // purchase, not the whole of it.
     products: detail.lines
-      .filter((line) => line.total_qty_purchase > 0)
+      .filter((line) => line.total_qty_purchase > 0 && line.warehouse_pickup === true)
       .map((line) => {
         const name = line.supplier_product_name || line.product_name_pl;
         return {

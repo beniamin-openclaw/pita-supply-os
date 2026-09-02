@@ -10,6 +10,7 @@ import { ChevronLeft } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { STRINGS, useT, type StringKey } from "../../i18n";
+import { categoryLabel } from "../../i18n/categoryLabels";
 import type { SuggestionReviewItem } from "../../types";
 
 const SYSTEM_WRONG = "SYSTEM_SUGGESTION_WRONG";
@@ -21,7 +22,7 @@ function deviationClasses(pct: number): string {
 }
 
 export function ManagerSuggestionReviewPage() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const navigate = useNavigate();
 
   const [items, setItems] = useState<SuggestionReviewItem[] | null>(null);
@@ -93,7 +94,7 @@ export function ManagerSuggestionReviewPage() {
                   <div className="min-w-0">
                     <div className="font-medium text-slate-900 truncate">{it.product_name_pl}</div>
                     <div className="text-xs text-slate-500">
-                      {it.product_category}
+                      {it.product_category ? categoryLabel(it.product_category, lang) : it.product_category}
                       {" · "}
                       {t("manager.review.lineOrderCount", {
                         lines: it.line_count,

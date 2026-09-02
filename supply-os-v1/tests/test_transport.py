@@ -378,6 +378,32 @@ def test_aggregate_supplier_sku_none_when_supplier_product_missing():
     assert items[0].supplier_sku is None
 
 
+# ---------- warehouse_pickup join (training-feedback-0901 Phase 4) ----------
+
+def test_aggregate_warehouse_pickup_true_when_set():
+    orders = [_order("ORD-1")]
+    lines = [_line("ORD-1", "OL-1")]
+    sp = _supplier_product().model_copy(update={"warehouse_pickup": True})
+    sps = {"SP_PAGO_P027": sp}
+    items = _aggregate_transport_lines(orders, lines, {}, sps, {})
+    assert items[0].warehouse_pickup is True
+
+
+def test_aggregate_warehouse_pickup_false_when_unset():
+    orders = [_order("ORD-1")]
+    lines = [_line("ORD-1", "OL-1")]
+    sps = {"SP_PAGO_P027": _supplier_product()}
+    items = _aggregate_transport_lines(orders, lines, {}, sps, {})
+    assert items[0].warehouse_pickup is False
+
+
+def test_aggregate_warehouse_pickup_false_when_supplier_product_missing():
+    orders = [_order("ORD-1")]
+    lines = [_line("ORD-1", "OL-1")]
+    items = _aggregate_transport_lines(orders, lines, {}, {}, {})
+    assert items[0].warehouse_pickup is False
+
+
 # ---------- GET /api/manager/transport/eligible ----------
 
 def test_eligible_filters_by_supplier_and_status(mocker):
@@ -658,6 +684,70 @@ def test_batch_detail_aggregate_math(mocker):
     assert line["product_name_pl"] == "Souvlaki Kurczak"
     assert line["total_qty_purchase"] == 9.0  # 3.0 (captain) + 6.0 (manager_final)
     assert len(line["per_location"]) == 2
+
+
+# ---------- batch_supplier_id: header vs group[0] (training-feedback-0901 Phase 4) ----------
+
+def test_batch_detail_supplier_id_from_header_when_present(mocker):
+    """`batch_supplier_id` prefers the transport_batches header's supplier_id
+    over group[0].supplier_id — group[0] has no defined order and the header
+    is the batch's authoritative supplier (set once at create/append-to). The
+    member order below is deliberately given a DIFFERENT supplier_id than the
+    header to prove the header wins; research.md confirms real batches are
+    single-supplier by construction, so this mismatch is synthetic — it only
+    exercises the precedence, not a state that occurs in practice."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A",
+            location_id="WOLA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+            supplier_id="SUP_BUKAT",
+        )
+    ]
+    suppliers = [_supplier("SUP_PAGO", "Pago"), _supplier("SUP_BUKAT", "Bukat")]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        suppliers=suppliers,
+        locations=[_location("WOLA")],
+        transport_batches=[header],
+    )
+
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["supplier_id"] == "SUP_PAGO"
+    assert detail["supplier_name"] == "Pago"
+
+
+def test_batch_detail_supplier_id_from_member_order_when_no_header(mocker):
+    """A headerless (legacy v1) batch has no header supplier_id to prefer, so
+    it falls back to group[0].supplier_id — the only source available."""
+    orders = [
+        _order(
+            "ORD-A",
+            location_id="WOLA",
+            status=OrderStatus.MANAGER_SENT,
+            supplier_order_reference="TRN-LEGACY-SUP",
+            supplier_id="SUP_BUKAT",
+            manager_sent_at=datetime(2026, 5, 20, 9, 0, tzinfo=timezone.utc),
+        )
+    ]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        suppliers=[_supplier("SUP_BUKAT", "Bukat")],
+        locations=[_location("WOLA")],
+        transport_batches=[],
+    )
+
+    r = client.get("/api/manager/transport/batch/TRN-LEGACY-SUP", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["supplier_id"] == "SUP_BUKAT"
+    assert detail["supplier_name"] == "Bukat"
 
 
 def test_batch_detail_rejects_captain_token(mocker):

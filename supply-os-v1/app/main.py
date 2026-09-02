@@ -23,6 +23,9 @@ from .models import (
     InventoryCount,
     InventoryCountDetail,
     InventoryCountDetailLine,
+    InventoryCountEditRequest,
+    InventoryCountEditResponse,
+    InventoryCountEvent,
     InventoryCountLine,
     InventoryCountManagerItem,
     InventoryCountSubmitRequest,
@@ -606,6 +609,8 @@ def captain_submit(
         ordered_by=req.ordered_by,  # required free-text "who orders" (FR/spec)
         total_value_estimate_pln=round(total_value, 2),
         notes=req.notes,
+        extra_items=req.extra_items,
+        captain_note=req.captain_note,
     )
 
     persisted = _persist_order(backend, order, order_lines)
@@ -832,6 +837,9 @@ def manager_queue(
                 ordered_by=order.ordered_by,
                 line_count=len(lines),
                 total_value_estimate_pln=order.total_value_estimate_pln,
+                minimum_order_value_pln=(
+                    supplier.minimum_order_value_pln if supplier else None
+                ),
                 deviation_count=deviation_count,
                 reason_count=reason_count,
                 last_edited_at=order.last_edited_at,
@@ -1035,7 +1043,10 @@ def manager_order_detail(
         manager_user=order.manager_user,
         manager_sent_at=order.manager_sent_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
+        minimum_order_value_pln=supplier.minimum_order_value_pln if supplier else None,
         notes=order.notes,
+        extra_items=order.extra_items,
+        captain_note=order.captain_note,
         lines=enriched_lines,
         receipts=order_receipts,
         supplier_order_reference=order.supplier_order_reference,
@@ -1226,7 +1237,10 @@ def captain_order_detail(
         ordered_by=order.ordered_by,
         last_edited_at=order.last_edited_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
+        minimum_order_value_pln=supplier.minimum_order_value_pln if supplier else None,
         notes=order.notes,
+        extra_items=order.extra_items,
+        captain_note=order.captain_note,
         editable=(order.status == OrderStatus.CAPTAIN_SUBMITTED),
         lines=enriched_lines,
     )
@@ -1364,6 +1378,8 @@ def captain_order_edit(
                     req.requested_delivery_date or existing.requested_delivery_date
                 ),
                 "notes": req.notes,
+                "extra_items": req.extra_items,
+                "captain_note": req.captain_note,
                 "last_edited_at": datetime.now(timezone.utc),
             },
             expected_status=OrderStatus.CAPTAIN_SUBMITTED.value,
@@ -2086,6 +2102,79 @@ def _persist_inventory_count(
     return True
 
 
+def _diff_inventory_lines(
+    old_lines: list[InventoryCountLine],
+    new_lines: list[InventoryCountLine],
+    products_by_id: dict[str, Product],
+) -> list[str]:
+    """Per-product diff between an inventory count's old and new line sets, for
+    the edit audit event (Phase 2, training-feedback-0901). One entry per
+    product whose quantity changed, was newly counted, or was blanked:
+
+        "Name: 3 -> 5"     (quantity changed)
+        "Name: dodano 2"   (newly counted — was not on the old snapshot)
+        "Name: usunięto"   (blanked — no longer counted)
+
+    Product names are resolved from master data; an unknown product_id falls
+    back to its raw id (mirrors the rest of the module's enrichment fallback).
+    Sorted by product name for a stable, readable diff. Pure function (no
+    I/O) so it can be unit-tested directly (mirrors
+    `_aggregate_suggestion_review`); the caller computes it BEFORE the
+    destructive delete+append write.
+    """
+    old_by_pid = {line.product_id: line.current_stock_qty_base for line in old_lines}
+    new_by_pid = {line.product_id: line.current_stock_qty_base for line in new_lines}
+    entries: list[tuple[str, str]] = []
+    for pid in set(old_by_pid) | set(new_by_pid):
+        product = products_by_id.get(pid)
+        name = product.product_name_pl if product else pid
+        old_qty = old_by_pid.get(pid)
+        new_qty = new_by_pid.get(pid)
+        if old_qty is None and new_qty is not None:
+            entries.append((name, f"{name}: dodano {new_qty:g}"))
+        elif old_qty is not None and new_qty is None:
+            entries.append((name, f"{name}: usunięto"))
+        elif old_qty != new_qty:
+            entries.append((name, f"{name}: {old_qty:g} → {new_qty:g}"))
+    entries.sort(key=lambda e: e[0])
+    return [text for _, text in entries]
+
+
+def _log_inventory_event(
+    backend,
+    count_id: str,
+    event_type: str,
+    details: str,
+    actor: Optional[str] = None,
+) -> None:
+    """Emit one inventory-count event-history row (Phase 2,
+    training-feedback-0901) — BEST-EFFORT, never raises, mirroring
+    ``_log_transport_event``. A missing 'inventory_count_events'
+    worksheet/table, or any other backend failure, must not break the
+    correction that triggered it (the count/lines write already succeeded by
+    the time this is called) — only logs a warning and continues. ``event_id``
+    mirrors the ``TEV-<8hex>`` style ids used elsewhere in this module."""
+    try:
+        backend.append_inventory_count_event(
+            InventoryCountEvent(
+                event_id=f"ICE-{secrets.token_hex(4)}",
+                count_id=count_id,
+                event_type=event_type,
+                actor=actor,
+                at=datetime.now(timezone.utc),
+                details=details,
+            )
+        )
+    except Exception:
+        log.warning(
+            "Inventory count event emission failed (count_id=%s, event_type=%s) "
+            "— continuing without recording this event",
+            count_id,
+            event_type,
+            exc_info=True,
+        )
+
+
 @app.get(
     "/api/captain/inventory/products",
     response_model=list[InventoryProduct],
@@ -2134,11 +2223,18 @@ def captain_inventory_submit(
 ):
     """Validate + persist a Captain location-wide inventory snapshot (FR-016).
 
-    Append-only: every submit creates a new `count_id` (no upsert/edit). A line
-    is created only for a product the Captain actually entered — blank = not
-    counted (`0 ≠ unknown`); the frontend omits untouched products from the
-    request. Persistence is sheet-only via `_persist_inventory_count`; seed mode
-    keeps it in-memory and surfaces a warning, mirroring `captain_submit`.
+    Every submit creates a new `count_id` — a full recount starts a fresh
+    snapshot rather than editing a prior one. A line is created only for a
+    product the Captain actually entered — blank = not counted (`0 ≠ unknown`);
+    the frontend omits untouched products from the request. Persistence is
+    sheet-only via `_persist_inventory_count`; seed mode keeps it in-memory and
+    surfaces a warning, mirroring `captain_submit`.
+
+    A previously submitted snapshot CAN be corrected afterward, WITHOUT a new
+    `count_id`, via `PATCH /api/captain/inventory/count/{count_id}`
+    (`captain_inventory_count_edit`, Phase 2, training-feedback-0901) — replace
+    semantics with an audit trail. That is a distinct, later action from this
+    endpoint, not a variant of it.
 
     Validation (deterministic):
       - every line's product_id must exist in master data → 400 otherwise.
@@ -2230,6 +2326,139 @@ def captain_inventory_submit(
     )
 
 
+@app.patch(
+    "/api/captain/inventory/count/{count_id}",
+    response_model=InventoryCountEditResponse,
+)
+def captain_inventory_count_edit(
+    count_id: str,
+    req: InventoryCountEditRequest,
+    location_id: str = Depends(require_captain),
+):
+    """Correct a previously submitted inventory snapshot (Phase 2,
+    training-feedback-0901) — a Captain interrupted halfway no longer has to
+    redo the whole location; the same `count_id` is corrected in place, with
+    an audit trail.
+
+    Replace semantics, mirroring the tested `replace_order_lines_atomic` path:
+    the count's existing lines are deleted and the submitted set is appended,
+    rather than patched incrementally. This resolves the `count_line_id`
+    collision, the absent `(count_id, product_id)` uniqueness, and the
+    "Captain blanks a product" case (blank = not counted = no line) in one
+    move (hardening G1/G2) — `req.lines` is the FULL new authoritative set, so
+    a product on the old snapshot but omitted here is treated as no longer
+    counted.
+
+    Gates:
+      - persistent backend required → 503 in seed mode (mirrors the sibling
+        inventory routes).
+      - the count must exist AND belong to this Captain's location → 404
+        otherwise; we don't differentiate "missing" from "foreign location"
+        (mirrors `captain_order_detail`).
+      - a missing 'inventory_counts'/'inventory_count_lines' worksheet → 503.
+      - every line's product_id must exist in master data → 400 otherwise
+        (same gate as `captain_inventory_submit`).
+      - every line's product must have a `location_product_setting` at this
+        location → 400 otherwise (same gate as `captain_inventory_submit`).
+
+    `count_submitted_at` is UNCHANGED — it stays the original submit moment
+    (the recency key `captain_inventory_latest` sorts on, and the timestamp
+    the FR-017 pre-fill banner names). Only `last_edited_at` is stamped (now,
+    UTC) and the persisted `line_count` is recomputed (the D1 guard — both
+    list endpoints read `line_count` off the row, not `len(lines)`).
+
+    The old-vs-new per-product diff is computed from the count's CURRENT lines
+    BEFORE the destructive delete+append write, then persisted as exactly ONE
+    audit event (`_log_inventory_event`) — best-effort, so a logging failure
+    never fails the correction that already succeeded.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Inventory edit requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    try:
+        existing = backend.get_inventory_count(count_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Inventory worksheets not configured — create the "
+                "'inventory_counts' and 'inventory_count_lines' tabs "
+                "(see Migration Notes)."
+            ),
+        )
+    if existing is None or existing.location_id != location_id:
+        raise HTTPException(
+            status_code=404, detail=f"Inventory count {count_id} not found"
+        )
+
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == location_id
+    }
+
+    new_lines: list[InventoryCountLine] = []
+    for line in req.lines:
+        if line.product_id not in products_by_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown product_id '{line.product_id}'",
+            )
+        if line.product_id not in settings_by_pid:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"product '{line.product_id}' has no location_product_setting "
+                    f"at this location"
+                ),
+            )
+        new_lines.append(
+            InventoryCountLine(
+                count_line_id=f"ICL-{count_id}-E-{secrets.token_hex(3)}",
+                count_id=count_id,
+                product_id=line.product_id,
+                current_stock_qty_base=line.current_stock_qty_base,
+                count_comment=line.count_comment,
+            )
+        )
+
+    # Diff BEFORE the write — `existing.lines` is still the pre-edit set.
+    changes = _diff_inventory_lines(existing.lines, new_lines, products_by_id)
+    details = "; ".join(changes) if changes else "brak zmian ilości"
+    if req.edit_reason.strip():
+        details = f"{details} (powód: {req.edit_reason.strip()})"
+
+    backend.delete_inventory_count_lines(count_id)
+    if new_lines:
+        backend.append_inventory_count_lines(new_lines)
+
+    backend.update_inventory_count(
+        count_id,
+        line_count=len(new_lines),
+        last_edited_at=datetime.now(timezone.utc),
+    )
+
+    _log_inventory_event(
+        backend,
+        count_id,
+        "count_edited",
+        details,
+        actor=req.edited_by,
+    )
+
+    return InventoryCountEditResponse(
+        count_id=count_id,
+        count_date=existing.count_date,
+        line_count=len(new_lines),
+        warnings=[],
+    )
+
+
 @app.get(
     "/api/captain/inventory/latest",
     response_model=Optional[InventoryLatestResponse],
@@ -2282,6 +2511,7 @@ def captain_inventory_latest(
         count_date=latest.count_date,
         count_submitted_at=latest.count_submitted_at,
         count_user=latest.count_user,
+        last_edited_at=latest.last_edited_at,
         line_count=len(lines),
         lines=lines,
     )
@@ -2333,6 +2563,7 @@ def captain_inventory_counts(
             count_date=c.count_date,
             count_submitted_at=c.count_submitted_at,
             count_user=c.count_user,
+            last_edited_at=c.last_edited_at,
             line_count=c.line_count,
         )
         for c in counts[:10]
@@ -2357,6 +2588,11 @@ def captain_inventory_count_detail(
     differentiate, since the Captain has no business knowing whether other
     locations hold a given count id. A missing inventory worksheet surfaces as
     503 (mirrors the submit endpoint), never a raw 500.
+
+    Also carries ``last_edited_at`` and the correction ``events`` history
+    (Phase 2, training-feedback-0901) so the Captain can see whether/when this
+    snapshot was previously edited; a missing event worksheet degrades to an
+    empty history, never a 500.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -2389,13 +2625,27 @@ def captain_inventory_count_detail(
         )
         for line in count.lines
     ]
+
+    # Correction history (Phase 2, training-feedback-0901) — degrades to []
+    # on a missing worksheet, never a 500 (mirrors the receipts/transport-
+    # events scans elsewhere in this module).
+    try:
+        events = backend.load_inventory_count_events_for(count_id)
+    except sheets.WorksheetNotFound:
+        events = []
+    events.sort(
+        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
+    )
+
     return InventoryLatestResponse(
         count_id=count.count_id,
         count_date=count.count_date,
         count_submitted_at=count.count_submitted_at,
         count_user=count.count_user,
+        last_edited_at=count.last_edited_at,
         line_count=len(lines),
         lines=lines,
+        events=events[:100],
     )
 
 
@@ -2406,10 +2656,14 @@ def _enrich_inventory_count_detail(
     count: InventoryCount,
     products_by_id: dict[str, Product],
     location: Optional[Location],
+    events: Optional[list[InventoryCountEvent]] = None,
 ) -> InventoryCountDetail:
     """Join product master-data + location_name onto a snapshot for the
     Manager/owner read view (S-08). Mirrors `manager_order_detail`'s line
-    enrichment; a since-removed product falls back to its id for the name."""
+    enrichment; a since-removed product falls back to its id for the name.
+    `events` (Phase 2, training-feedback-0901) is the count's correction
+    history, loaded by the caller so this stays a pure function; ``None``/[]
+    when there is none yet or the worksheet is missing."""
     enriched: list[InventoryCountDetailLine] = []
     for line in count.lines:
         product = products_by_id.get(line.product_id)
@@ -2431,9 +2685,11 @@ def _enrich_inventory_count_detail(
         count_date=count.count_date,
         count_submitted_at=count.count_submitted_at,
         count_user=count.count_user,
+        last_edited_at=count.last_edited_at,
         line_count=len(enriched),
         notes=count.notes,
         lines=enriched,
+        events=events or [],
     )
 
 
@@ -2486,6 +2742,7 @@ def manager_inventory_counts(
                 count_date=c.count_date,
                 count_submitted_at=c.count_submitted_at,
                 count_user=c.count_user,
+                last_edited_at=c.last_edited_at,
                 line_count=c.line_count,
             )
         )
@@ -2507,6 +2764,10 @@ def manager_inventory_count_detail(
     Sheet-only: seed mode → 503; a missing inventory tab → 503 (stricter than
     the legacy `manager_order_detail`, which can 500 on a missing tab); unknown
     count_id → 404.
+
+    Also returns the correction `events` history and `last_edited_at` (Phase 2,
+    training-feedback-0901); a missing event worksheet degrades to an empty
+    history, never a 500.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -2532,7 +2793,21 @@ def manager_inventory_count_detail(
     products_by_id = {p.product_id: p for p in backend.load_products()}
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     location = locations_by_id.get(count.location_id)
-    return _enrich_inventory_count_detail(count, products_by_id, location)
+
+    # Correction history (Phase 2, training-feedback-0901) — degrades to []
+    # on a missing worksheet, never a 500 (mirrors the receipts/transport-
+    # events scans elsewhere in this module).
+    try:
+        events = backend.load_inventory_count_events_for(count_id)
+    except sheets.WorksheetNotFound:
+        events = []
+    events.sort(
+        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
+    )
+
+    return _enrich_inventory_count_detail(
+        count, products_by_id, location, events[:100]
+    )
 
 
 # ---------- Suggestion learning-loop review (S-03 / FR-012) ----------
@@ -3124,6 +3399,13 @@ def _aggregate_transport_lines(
     the raw id in the display field (mirrors ``_aggregate_suggestion_review``
     / ``manager_queue``), never raises. Output is sorted by
     ``product_name_pl`` for a stable, copyable list.
+
+    ``warehouse_pickup`` (training-feedback-0901 Phase 4) is joined the same
+    way as ``supplier_sku`` — False when the supplier_product is missing. This
+    function does NOT filter on it: only the frontend pickup-document builder
+    (buildTransportPagoPrintDoc) does, so the aggregate stays the single
+    unfiltered source for the driver list, weight totals and the Pago order
+    email/PDF, which cover the whole batch (hardening finding G7).
     """
     orders_by_id = {o.order_id: o for o in orders}
     groups: dict[str, dict] = {}
@@ -3151,6 +3433,7 @@ def _aggregate_transport_lines(
                 ),
                 "purchase_unit": sp.purchase_unit if sp else "",
                 "supplier_sku": sp.supplier_sku if sp else None,
+                "warehouse_pickup": sp.warehouse_pickup if sp else False,
                 "per_location": [],
             }
             groups[line.product_id] = group
@@ -3173,6 +3456,7 @@ def _aggregate_transport_lines(
             supplier_product_name=g["supplier_product_name"],
             purchase_unit=g["purchase_unit"],
             supplier_sku=g["supplier_sku"],
+            warehouse_pickup=g["warehouse_pickup"],
             total_qty_purchase=round(
                 sum(pl.qty_purchase for pl in g["per_location"]), 3
             ),
@@ -3435,8 +3719,15 @@ def manager_transport_batch_detail(
     header = early_header
     batch_status = header.status if header is not None else "sent"
 
+    # Prefer the batch header's supplier_id (authoritative — set once at
+    # create, and validated on every append_to) over group[0], which has no
+    # defined order and would put an arbitrary member order's supplier first.
+    # A headerless legacy v1 batch has no header to prefer, so it falls back
+    # to the prior group[0] behavior (the only supplier source it has).
     batch_supplier_id = (
-        group[0].supplier_id if group else header.supplier_id if header else ""
+        header.supplier_id
+        if header is not None
+        else group[0].supplier_id if group else ""
     )
     supplier = suppliers_by_id.get(batch_supplier_id)
 

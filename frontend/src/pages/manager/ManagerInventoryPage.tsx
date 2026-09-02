@@ -126,6 +126,13 @@ export function ManagerInventoryPage() {
                 {detail.count_user && (
                   <div>{t("manager.inventory.countedBy", { who: detail.count_user })}</div>
                 )}
+                {detail.last_edited_at && (
+                  <div className="text-slate-500">
+                    {t("inventory.history.editedLabel", {
+                      time: formatDateTime(detail.last_edited_at),
+                    })}
+                  </div>
+                )}
               </div>
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                 <table className="w-full text-sm">
@@ -163,6 +170,31 @@ export function ManagerInventoryPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Read-only correction history (Phase 2, training-feedback-0901) —
+                  omitted entirely when this snapshot was never corrected. */}
+              {detail.events && detail.events.length > 0 && (
+                <div className="mt-4">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                    {t("inventory.history.eventsTitle")}
+                  </h3>
+                  <ul className="space-y-2">
+                    {detail.events.map((ev) => (
+                      <li
+                        key={ev.event_id}
+                        className="rounded-lg border border-gray-200 bg-white p-2.5"
+                      >
+                        <div className="text-xs text-slate-500">
+                          {ev.at ? formatDateTime(ev.at) : "—"}
+                          {" · "}
+                          {ev.actor?.trim() || "—"}
+                        </div>
+                        <div className="mt-0.5 text-sm text-slate-800">{ev.details}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </main>

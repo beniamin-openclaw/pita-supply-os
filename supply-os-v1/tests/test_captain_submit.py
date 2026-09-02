@@ -393,6 +393,100 @@ def test_submit_persists_to_sheet_when_backend_is_sheet(mocker):
     assert all("not persisted" not in w for w in r.json()["warnings"])
 
 
+def test_submit_persists_extra_items_and_captain_note(mocker):
+    """extra_items ("+ dodaj produkt" free text) and captain_note (order-level
+    comment) submitted by the Captain land unchanged on the persisted Order
+    (training-feedback-0901 Phase 1b)."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocked_append_order = mocker.patch.object(sheets, "append_order")
+    mocker.patch.object(sheets, "append_order_lines")
+
+    from app import seed_loader
+
+    mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
+    mocker.patch.object(
+        sheets,
+        "load_supplier_products",
+        side_effect=seed_loader.load_supplier_products,
+    )
+    mocker.patch.object(
+        sheets,
+        "load_location_product_settings",
+        side_effect=seed_loader.load_location_product_settings,
+    )
+
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "current_stock_qty_base": 7,
+                "captain_final_qty_purchase": 1,
+            }
+        ],
+        "extra_items": "2x cytryny\n1 kg limonek",
+        "captain_note": "proszę o dostawę przed 10:00",
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    persisted_order = mocked_append_order.call_args[0][0]
+    assert persisted_order.extra_items == "2x cytryny\n1 kg limonek"
+    assert persisted_order.captain_note == "proszę o dostawę przed 10:00"
+
+
+def test_submit_defaults_extra_items_and_captain_note_to_empty_string(mocker):
+    """B2 regression guard: a submit that OMITS extra_items/captain_note must
+    still 200 and persist them as "" — NEVER None. Order.extra_items /
+    Order.captain_note are `str = ""`, not `Optional[str] = None`, because
+    supabase_backend._insert binds every column in _ORDER_COLUMNS and a None
+    against the NOT NULL DEFAULT '' columns would raise IntegrityError on every
+    real captain submit (see hardening.md B2; migration 0013)."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocked_append_order = mocker.patch.object(sheets, "append_order")
+    mocker.patch.object(sheets, "append_order_lines")
+
+    from app import seed_loader
+
+    mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
+    mocker.patch.object(
+        sheets,
+        "load_supplier_products",
+        side_effect=seed_loader.load_supplier_products,
+    )
+    mocker.patch.object(
+        sheets,
+        "load_location_product_settings",
+        side_effect=seed_loader.load_location_product_settings,
+    )
+
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
+        "lines": [
+            {
+                "product_id": "P027",
+                "supplier_product_id": "SP_PAGO_P027",
+                "current_stock_qty_base": 7,
+                "captain_final_qty_purchase": 1,
+            }
+        ],
+        # extra_items / captain_note deliberately omitted from the request.
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    persisted_order = mocked_append_order.call_args[0][0]
+    assert persisted_order.extra_items == ""
+    assert persisted_order.captain_note == ""
+    assert persisted_order.extra_items is not None
+    assert persisted_order.captain_note is not None
+
+
 def test_submit_in_seed_mode_does_not_raise():
     """Seed backend has no writes — submit should still 200 + warn."""
     body = {

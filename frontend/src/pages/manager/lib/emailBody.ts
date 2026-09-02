@@ -74,6 +74,26 @@ export function buildEmailBody(
   });
 
   out.push("");
+  // Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b) — free text
+  // the Captain typed at submit ("+ dodaj produkt": name / qty / unit, one
+  // per line), kept in its own section so it's never confused with the
+  // catalogue table above. Skipped entirely when empty. Mirrors the backend
+  // twin (supply-os-v1/app/gmail_url.py::_build_body) — keep both in sync.
+  const extraItems = (detail.extra_items ?? "").trim();
+  if (extraItems) {
+    out.push("Pozycje spoza katalogu:");
+    out.push(extraItems);
+    out.push("");
+  }
+  // Order-level Captain comment (same migration), its own block — this is
+  // NOT the manager send-back `notes` field (see Order.captain_note on the
+  // backend for why captain_note has its own column). Skipped when empty.
+  const captainNote = (detail.captain_note ?? "").trim();
+  if (captainNote) {
+    out.push("Komentarz:");
+    out.push(captainNote);
+    out.push("");
+  }
   // location_name + delivery_address + city, empty parts skipped (mirrors
   // gmail_url._format_delivery_address so preview == sent draft == re-open URL).
   const addressParts = [detail.location_name, detail.delivery_address, detail.city]

@@ -150,7 +150,7 @@ export function buildDriverPdfDocDefinition(
     { text: t("manager.transport.print.lpCol"), style: "tableHeader" },
     { text: t("manager.transport.print.productCol"), style: "tableHeader" },
     { text: t("manager.transport.print.unitCol"), style: "tableHeader" },
-    ...doc.locations.map((loc) => ({ text: `LOC • ${loc}`, style: "tableHeader" })),
+    ...doc.locations.map((loc) => ({ text: loc, style: "tableHeader" })),
     { text: t("manager.transport.print.totalCol"), style: "tableHeader" },
   ];
 

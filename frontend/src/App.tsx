@@ -4,6 +4,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { CaptainPage } from "./pages/CaptainPage";
 import { CaptainMP } from "./pages/captain-mp/CaptainMP";
 import { InventoryCountPage } from "./pages/captain-mp/InventoryCountPage";
+import { InventoryCountEditPage } from "./pages/captain-mp/InventoryCountEditPage";
 import { InventoryHistoryPage } from "./pages/captain-mp/InventoryHistoryPage";
 import { OrdersListPage } from "./pages/captain-mp/OrdersListPage";
 import { OrderDetailPage } from "./pages/captain-mp/OrderDetailPage";
@@ -73,6 +74,14 @@ export default function App() {
             element={
               <AuthGate role="captain">
                 <InventoryHistoryPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/captain-v2/inventory-history/:count_id/edit"
+            element={
+              <AuthGate role="captain">
+                <InventoryCountEditPage />
               </AuthGate>
             }
           />

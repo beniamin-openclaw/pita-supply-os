@@ -110,6 +110,18 @@ class SupplierProduct(BaseModel):
     # supplier-order PDF's "Nr katalogowy" column (to-ordering-pago); None ⇒
     # the FE falls back to the friendly name. Nullable — schema ships empty.
     supplier_sku: Optional[str] = None
+    # True when this supplier_product is physically collected from the
+    # SUP_PAGO cold-storage self-pickup run (training-feedback-0901 Phase 4,
+    # migration 0015). SUP_PAGO is a purchasing CHANNEL, not a warehouse — one
+    # batch mixes frozen/chilled goods with till rolls, napkins and trays — so
+    # the pickup document needs this flag to list only what is actually
+    # collected there. `bool = False`, NOT Optional[bool] = None: the DDL is
+    # `NOT NULL DEFAULT false`, and supabase_backend._insert binds every
+    # column in _SUPPLIER_PRODUCT_COLUMNS from model_dump(), so an unset
+    # Optional would bind SQL NULL and raise IntegrityError (see 0013/B2).
+    # Only the pickup document (frontend transport.ts) filters on this value —
+    # the Pago order email and order PDF still cover the whole batch.
+    warehouse_pickup: bool = False
 
 
 class LocationProductSetting(BaseModel):
@@ -172,6 +184,22 @@ class Order(BaseModel):
     cancelled_by: Optional[str] = None
     cancel_reason: str = ""
     notes: str = ""
+    # Ad-hoc products the Captain needs that are NOT in master data
+    # (training-feedback-0901 Phase 1b / migration 0013): "+ dodaj produkt"
+    # rows (name / qty / unit, one per line), serialised as free text.
+    # Deliberately NOT order_lines rows — that table's product_id /
+    # supplier_product_id are FK-resolved against master data and an ad-hoc
+    # item has neither. NOT NULL DEFAULT '' in the DB, so this is `str = ""`
+    # and NEVER `Optional[str] = None`: supabase_backend._insert binds every
+    # column in _ORDER_COLUMNS, so a None here would raise IntegrityError on
+    # every captain submit (hardening.md B2). Mirrors cancel_reason above.
+    extra_items: str = ""
+    # Order-level free-text comment from the Captain (same migration). Its OWN
+    # column rather than reusing `notes`: `notes` is overwritten by
+    # manager_release (the send-back reason) and blanked by every
+    # captain_order_edit save, so reusing it would silently destroy the
+    # Captain's text. Same NOT NULL DEFAULT '' contract as extra_items.
+    captain_note: str = ""
     lines: list[OrderLine] = Field(default_factory=list)
 
 
@@ -199,6 +227,12 @@ class CaptainSubmitRequest(BaseModel):
     # min_length=1 → omitting or blanking it is a 422 before the business gate.
     ordered_by: str = Field(min_length=1)
     notes: str = ""
+    # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+    # Phase 1b). Both optional free text; "" means the Captain left them
+    # blank. See Order.extra_items / Order.captain_note for the NOT NULL
+    # rationale (must stay `str = ""`, never `Optional[str] = None`).
+    extra_items: str = ""
+    captain_note: str = ""
 
 
 class CaptainSubmitResponse(BaseModel):
@@ -274,6 +308,12 @@ class ManagerQueueItem(BaseModel):
     ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     line_count: int
     total_value_estimate_pln: Optional[float] = None
+    # Supplier's configured minimum order value (display-only; training-
+    # feedback-0901 Phase 1c) — joined from suppliers.minimum_order_value_pln
+    # via the queue's existing suppliers_by_id map. No server-side reader/gate
+    # consumes this: "engine suggests, never blocks" — the below-minimum
+    # warning/400-fallback is a frontend concern.
+    minimum_order_value_pln: Optional[float] = None
     deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.25
     reason_count: int  # lines z non-null reason_code
     last_edited_at: Optional[datetime] = None  # set if captain edited after submit
@@ -389,7 +429,17 @@ class ManagerOrderDetail(BaseModel):
     manager_user: Optional[str] = None
     manager_sent_at: Optional[datetime] = None
     total_value_estimate_pln: Optional[float] = None
+    # Supplier's configured minimum order value (display-only; training-
+    # feedback-0901 Phase 1c) — joined from suppliers.minimum_order_value_pln
+    # via the route's existing suppliers_by_id map. No server-side reader/gate
+    # consumes this — see ManagerQueueItem.minimum_order_value_pln.
+    minimum_order_value_pln: Optional[float] = None
     notes: str = ""
+    # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+    # Phase 1b), read-only on this screen — see Order.extra_items /
+    # Order.captain_note for what they are and why captain_note isn't `notes`.
+    extra_items: str = ""
+    captain_note: str = ""
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
     # Goods-receipts against this order (0..N, newest-first), read-only — closes
     # the suggested→captain→manager→RECEIVED loop on the Manager screen. Empty
@@ -439,7 +489,14 @@ class CaptainOrderDetail(BaseModel):
     ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     last_edited_at: Optional[datetime] = None
     total_value_estimate_pln: Optional[float] = None
+    # Supplier's configured minimum order value (display-only; training-
+    # feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
+    minimum_order_value_pln: Optional[float] = None
     notes: str = ""
+    # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+    # Phase 1b) — see Order.extra_items / Order.captain_note.
+    extra_items: str = ""
+    captain_note: str = ""
     editable: bool
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
 
@@ -450,6 +507,10 @@ class CaptainEditRequest(BaseModel):
     requested_delivery_date: Optional[date] = None
     lines: list[OrderLineSubmit] = Field(min_length=1)
     notes: str = ""
+    # Same fields as CaptainSubmitRequest — the Captain can revise the ad-hoc
+    # items / comment when editing (see Order.extra_items / Order.captain_note).
+    extra_items: str = ""
+    captain_note: str = ""
 
 
 class CaptainEditResponse(BaseModel):
@@ -545,8 +606,15 @@ class InventoryCountLine(BaseModel):
 
 
 class InventoryCount(BaseModel):
-    """A dated, append-only location-wide stock snapshot (FR-016). Immutable:
-    a re-count produces a new count_id, never an edit."""
+    """A dated location-wide stock snapshot (FR-016). Correctable, with an
+    audit trail (Phase 2, training-feedback-0901): a submitted count can be
+    edited via `PATCH /api/captain/inventory/count/{count_id}`
+    (`InventoryCountEditRequest`), which replaces the line set and appends one
+    `InventoryCountEvent` row — it is no longer append-only/immutable.
+    `count_submitted_at` ALWAYS keeps the original submit moment (the recency
+    key `captain_inventory_latest` sorts on, and the timestamp the FR-017
+    pre-fill banner names); `last_edited_at` is set on each correction and
+    stays None until the first edit."""
     count_id: str
     location_id: str
     count_date: date
@@ -554,6 +622,7 @@ class InventoryCount(BaseModel):
     count_submitted_at: Optional[datetime] = None
     line_count: int = 0
     notes: str = ""
+    last_edited_at: Optional[datetime] = None  # set on edit; None = never corrected
     lines: list[InventoryCountLine] = Field(default_factory=list)
 
 
@@ -585,6 +654,28 @@ class InventoryCountSubmitResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class InventoryCountEditRequest(BaseModel):
+    """Payload for PATCH /api/captain/inventory/count/{count_id} (Phase 2,
+    training-feedback-0901) — corrects a previously submitted snapshot.
+
+    Replace semantics: `lines` is the FULL new authoritative set of counted
+    products (mirrors `InventoryCountSubmitRequest`) — a product omitted here
+    that was on the prior snapshot is treated as "blanked" (not counted = no
+    line), not left untouched. `edited_by` is required free-text attribution
+    (mirrors `count_user`); `edit_reason` is optional free-text context folded
+    into the audit event's `details` (there is no separate reason column)."""
+    lines: list[InventoryCountLineSubmit] = Field(min_length=1)
+    edited_by: str = Field(min_length=1)
+    edit_reason: str = ""
+
+
+class InventoryCountEditResponse(BaseModel):
+    count_id: str
+    count_date: date
+    line_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
 class InventoryLatestLine(BaseModel):
     """One counted product from the latest snapshot, for order pre-fill (FR-017)."""
     product_id: str
@@ -595,13 +686,20 @@ class InventoryLatestLine(BaseModel):
 class InventoryLatestResponse(BaseModel):
     """Latest location inventory snapshot offered as an opt-in order pre-fill
     source (FR-017). The order screen NAMES this `count_submitted_at` / `count_date`
-    in its confirmation so a stale count can't silently enter an order."""
+    in its confirmation so a stale count can't silently enter an order.
+
+    Reused by the snapshot-picker detail route (`captain_inventory_count_detail`,
+    FR-024), which also populates `last_edited_at` and `events` (Phase 2,
+    training-feedback-0901) so the Captain can see whether/when a snapshot was
+    corrected. Both stay unset (None / []) for the plain FR-017 pre-fill path."""
     count_id: str
     count_date: date
     count_submitted_at: Optional[datetime] = None
     count_user: Optional[str] = None  # who counted (FR-022 banner); may be absent on legacy rows
+    last_edited_at: Optional[datetime] = None
     line_count: int = 0
     lines: list[InventoryLatestLine] = Field(default_factory=list)
+    events: list["InventoryCountEvent"] = Field(default_factory=list)
 
 
 class InventoryCountSummary(BaseModel):
@@ -609,12 +707,15 @@ class InventoryCountSummary(BaseModel):
     available inventory snapshot WITHOUT its lines (the picker shows date +
     submitted time + who counted; lines are fetched lazily on select via the
     detail route). `count_submitted_at` / `count_user` may be absent on legacy
-    rows, so both are optional."""
+    rows, so both are optional. `last_edited_at` (Phase 2,
+    training-feedback-0901) is set once the snapshot has been corrected at
+    least once."""
     count_id: str
     location_id: str
     count_date: date
     count_submitted_at: Optional[datetime] = None
     count_user: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
     line_count: int = 0
 
 
@@ -623,13 +724,16 @@ class InventoryCountSummary(BaseModel):
 class InventoryCountManagerItem(BaseModel):
     """One row in the Manager's cross-location inventory list (FR-018). Mirrors
     `InventoryCountSummary` plus the joined `location_name` (the Manager spans
-    locations, so the name must be resolved server-side like `ManagerQueueItem`)."""
+    locations, so the name must be resolved server-side like `ManagerQueueItem`).
+    `last_edited_at` (Phase 2, training-feedback-0901) is set once the snapshot
+    has been corrected at least once."""
     count_id: str
     location_id: str
     location_name: str  # joined from locations
     count_date: date
     count_submitted_at: Optional[datetime] = None
     count_user: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
     line_count: int = 0
 
 
@@ -645,20 +749,40 @@ class InventoryCountDetailLine(BaseModel):
     count_comment: str = ""
 
 
+class InventoryCountEvent(BaseModel):
+    """One append-only row of an inventory count's audit trail (Phase 2,
+    training-feedback-0901, migration 0014) — mirrors `TransportEvent`. Emitted
+    once per correction via `_log_inventory_event`, best-effort (a logging
+    failure must never fail the edit that already succeeded). `details` is a
+    human-readable per-product "Name: old -> new" / "Name: dodano N" /
+    "Name: usunięto" diff (plus the Captain's `edit_reason`, when given),
+    computed server-side before the destructive write."""
+    event_id: str
+    count_id: str
+    event_type: str
+    actor: Optional[str] = None
+    at: Optional[datetime] = None
+    details: str = ""
+
+
 class InventoryCountDetail(BaseModel):
     """A full submitted inventory snapshot for the Manager/owner read view
     (FR-018/FR-019) — location_name + product-enriched lines. Distinct from the
     lean `InventoryLatestResponse` (which the Captain order pre-fill picker
-    consumes by product_id and must not change)."""
+    consumes by product_id and must not change). `last_edited_at` + `events`
+    (Phase 2, training-feedback-0901) expose the correction history so this
+    read view can show it."""
     count_id: str
     location_id: str
     location_name: str  # joined
     count_date: date
     count_submitted_at: Optional[datetime] = None
     count_user: Optional[str] = None
+    last_edited_at: Optional[datetime] = None
     line_count: int = 0
     notes: str = ""
     lines: list[InventoryCountDetailLine] = Field(default_factory=list)
+    events: list[InventoryCountEvent] = Field(default_factory=list)
 
 
 # ---------- Suggestion learning-loop review (S-03 / FR-012) ----------
@@ -857,6 +981,12 @@ class TransportAggregateLine(BaseModel):
     # supplier_product (to-ordering-pago). None when unset — the Pago PDF
     # builder falls back to the friendly product name.
     supplier_sku: Optional[str] = None
+    # Joined from the line's supplier_product (training-feedback-0901 Phase 4,
+    # migration 0015); False when the supplier_product is missing, mirroring
+    # every other fallback above. Consumed ONLY by the frontend pickup-document
+    # filter (buildTransportPagoPrintDoc) — the aggregate itself stays
+    # unfiltered here, same as the driver list / weight totals.
+    warehouse_pickup: bool = False
 
 
 class TransportEligibleOrder(BaseModel):

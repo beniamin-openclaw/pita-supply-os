@@ -25,8 +25,12 @@ import { ProductCard } from "./components/ProductCard";
 import { StickyActionBar } from "./components/StickyActionBar";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
+import { ExtraItemsControl } from "./components/ExtraItemsControl";
+import { OrderCommentField } from "./components/OrderCommentField";
 import { computeRowState } from "./lib/compute";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
+import { parseExtraItems, serializeExtraItems } from "./lib/extraItems";
+import type { ExtraItemRow } from "./lib/extraItems";
 import type { OrderLine } from "./types";
 
 /** Translate an enriched detail line into the shape ProductCard expects. */
@@ -74,6 +78,11 @@ export function OrderEditPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [lines, setLines] = useState<Record<string, OrderLine>>({});
   const [items, setItems] = useState<OrderableItem[]>([]);
+  // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+  // Phase 1b) — pre-filled from the existing order below, not blanked, so an
+  // edit can revise both instead of losing them.
+  const [extraItemRows, setExtraItemRows] = useState<ExtraItemRow[]>([]);
+  const [captainNote, setCaptainNote] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
@@ -107,6 +116,8 @@ export function OrderEditPage() {
         }
         setItems(builtItems);
         setLines(builtLines);
+        setExtraItemRows(parseExtraItems(data.extra_items ?? ""));
+        setCaptainNote(data.captain_note ?? "");
 
         // Feedback r6: swap the order-lines-only card list for the supplier's
         // FULL orderable list (same view as the create screen), keeping the
@@ -194,6 +205,8 @@ export function OrderEditPage() {
         // (stored in notes), resubmitting means the captain has addressed it,
         // so the send-back banner should disappear.
         notes: "",
+        extra_items: serializeExtraItems(extraItemRows),
+        captain_note: captainNote.trim(),
       });
 
       showToast(t("orders.editToast.success"), "success");
@@ -213,7 +226,7 @@ export function OrderEditPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [order, lines, navigate, showToast, t]);
+  }, [order, lines, extraItemRows, captainNote, navigate, showToast, t]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-28">
@@ -285,6 +298,14 @@ export function OrderEditPage() {
           ))
         )}
 
+        {/* Ad-hoc off-catalogue items + order-level comment (Phase 1b) —
+            pre-filled from the order being edited, below the product list. */}
+        {order && (
+          <>
+            <ExtraItemsControl rows={extraItemRows} onChange={setExtraItemRows} />
+            <OrderCommentField value={captainNote} onChange={setCaptainNote} />
+          </>
+        )}
       </main>
 
       {order && items.length > 0 && (

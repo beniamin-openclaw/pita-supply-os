@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiError } from "../../apiClient";
 import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
 import { useT } from "../../i18n";
+import { getNameSuggestions, addNameSuggestion } from "../../lib/nameSuggestions";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
@@ -21,15 +22,21 @@ import { ProductCard } from "./components/ProductCard";
 import { StickyActionBar } from "./components/StickyActionBar";
 import { ConfirmSubmitDialog } from "./components/ConfirmSubmitDialog";
 import { PrefillControl } from "./components/PrefillControl";
+import { OverruleAllControl } from "./components/OverruleAllControl";
 import { ConfirmPrefillDialog } from "./components/ConfirmPrefillDialog";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
+import { ExtraItemsControl } from "./components/ExtraItemsControl";
+import { OrderCommentField } from "./components/OrderCommentField";
 
 import { computeRowState } from "./lib/compute";
+import { overruleAll } from "./lib/overruleAll";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
+import { serializeExtraItems } from "./lib/extraItems";
+import type { ExtraItemRow } from "./lib/extraItems";
 
-import type { Supplier, OrderableItem, OrderLine, DraftState } from "./types";
+import type { Supplier, OrderableItem, OrderLine, DraftState, ReasonCode } from "./types";
 import type { InventoryCountSummary, InventoryLatestResponse } from "../../types";
 
 // Pilot supplier for the Wola×Bukat round-trip (S-01). The order screen defaults
@@ -65,6 +72,18 @@ export function CaptainMP() {
   // countedBy / ReceiveDeliveryPage's receivedBy. Persists across suppliers in
   // one session (the same person orders all suppliers); not cleared on submit.
   const [orderedBy, setOrderedBy] = useState("");
+  // Name-suggestion datalist source (Phase 1a) — previously used "kto zamawia"
+  // names, most-recent first. Lazy initializer: a synchronous localStorage
+  // read, no need for an effect.
+  const [orderedBySuggestions, setOrderedBySuggestions] = useState<string[]>(() =>
+    getNameSuggestions("ordered_by"),
+  );
+  // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+  // Phase 1b). Order-scoped, not persisted in the localStorage draft (unlike
+  // `lines`) and reset whenever the supplier changes or a submit succeeds —
+  // see the supplier-change effect below and handleSubmit.
+  const [extraItemRows, setExtraItemRows] = useState<ExtraItemRow[]>([]);
+  const [captainNote, setCaptainNote] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
   const [draftBanner, setDraftBanner] = useState<{
@@ -188,6 +207,11 @@ export function CaptainMP() {
     setOrderableItems([]);
     setLines({});
     setDraftBanner(null);
+    // Ad-hoc items + comment are per-supplier-order, not carried across a
+    // supplier switch (unlike `orderedBy`, which is the same person for the
+    // whole session).
+    setExtraItemRows([]);
+    setCaptainNote("");
     /* eslint-enable react-hooks/set-state-in-effect */
 
     api
@@ -395,6 +419,25 @@ export function CaptainMP() {
     setPrefillConfirm(null);
   }, [prefillConfirm, overwriteAll, clearAll]);
 
+  // ---- Overrule-all reason control (Phase 1a) --------------------------------
+  // Sets one Captain-picked reason on every line that requires a reason and
+  // doesn't have one yet. Never replaces an already-picked reason (the
+  // selection rule lives entirely in the pure, unit-tested `overruleAll`).
+  // Count is read from the current `lines` snapshot for the toast; the actual
+  // write re-derives from `prev` inside the updater (mirrors fillEmpties/
+  // overwriteAll's defense against a stale closure).
+  const handleOverruleAllApply = useCallback(
+    (reason: ReasonCode, comment: string) => {
+      const patched = overruleAll(orderableItems, lines, reason, comment);
+      const patchedCount = orderableItems.filter(
+        (item) => patched[item.product_id] !== lines[item.product_id],
+      ).length;
+      setLines((prev) => overruleAll(orderableItems, prev, reason, comment));
+      showToast(t("captain.overruleAllAppliedToast", { count: patchedCount }), "success");
+    },
+    [orderableItems, lines, showToast, t],
+  );
+
   const handleSubmit = useCallback(async () => {
     if (!activeSupplierId) return;
     const supplier = suppliers.find((s) => s.supplier_id === activeSupplierId);
@@ -416,15 +459,23 @@ export function CaptainMP() {
         lines: payloadLines,
         ordered_by: orderedBy.trim(),
         notes: "",
+        extra_items: serializeExtraItems(extraItemRows),
+        captain_note: captainNote.trim(),
       });
 
       showToast(t("toast.orderSent"), "success");
       clearDraft(activeSupplierId);
+      // Remember this name for next time (Phase 1a name suggestions) — only on
+      // a successful submit, so a name is never suggested from a failed attempt.
+      addNameSuggestion("ordered_by", orderedBy);
+      setOrderedBySuggestions(getNameSuggestions("ordered_by"));
       // Neutralize the flush snapshot + in-memory lines: without this, the
       // flush-on-switch path would immediately re-save the just-submitted
       // values as a fresh draft.
       draftFlushRef.current = { supplierId: null, lines: {} };
       setLines({});
+      setExtraItemRows([]);
+      setCaptainNote("");
       setSentSuppliers((prev) => new Set(prev).add(activeSupplierId));
 
       // Move to next un-submitted supplier if any.
@@ -441,7 +492,17 @@ export function CaptainMP() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [activeSupplierId, lines, orderedBy, sentSuppliers, suppliers, showToast, t]);
+  }, [
+    activeSupplierId,
+    lines,
+    orderedBy,
+    extraItemRows,
+    captainNote,
+    sentSuppliers,
+    suppliers,
+    showToast,
+    t,
+  ]);
 
   // ---- Pre-submit confirmation gate (F5) -------------------------------------
   // Critical products with nothing ordered (final empty or 0). Non-blocking:
@@ -520,6 +581,17 @@ export function CaptainMP() {
     !isLoadingItems &&
     orderableItems.length > 0;
 
+  // Overrule-all (Phase 1a) is independent of inventory snapshots — available
+  // whenever the order screen has lines loaded, unlike the prefill control.
+  const showOverruleAllControl =
+    !!activeSupplierId && !isLoadingItems && orderableItems.length > 0;
+
+  // Ad-hoc items + order comment (Phase 1b): unlike the two controls above,
+  // deliberately NOT gated on `orderableItems.length > 0` — a supplier with
+  // zero catalogue products at this location can still receive an ad-hoc
+  // order, and the comment is order-level, independent of the line count.
+  const showExtraItemsSection = !!activeSupplierId && !isLoadingItems;
+
   // Named source for the overwrite-confirm body (the FR-017 "name the source"
   // safeguard, carried onto the destructive path).
   const overwriteConfirmTime = selectedSummary
@@ -588,9 +660,15 @@ export function CaptainMP() {
             value={orderedBy}
             onChange={(e) => setOrderedBy(e.target.value)}
             autoComplete="name"
+            list="order-ordered-by-suggestions"
             placeholder={t("captain.orderedByPlaceholder")}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <datalist id="order-ordered-by-suggestions">
+            {orderedBySuggestions.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
           <p className="mt-1 text-[11px] text-slate-500">{t("captain.orderedByRequired")}</p>
         </div>
         {draftBanner && (
@@ -628,6 +706,8 @@ export function CaptainMP() {
           />
         )}
 
+        {showOverruleAllControl && <OverruleAllControl onApply={handleOverruleAllApply} />}
+
         {isLoadingItems ? (
           <>
             <SkeletonCard />
@@ -659,6 +739,15 @@ export function CaptainMP() {
                 onChange={handleLineChange}
               />
             ))}
+          </>
+        )}
+
+        {/* Ad-hoc off-catalogue items + order-level comment (Phase 1b) —
+            below the product list, per spec. */}
+        {showExtraItemsSection && (
+          <>
+            <ExtraItemsControl rows={extraItemRows} onChange={setExtraItemRows} />
+            <OrderCommentField value={captainNote} onChange={setCaptainNote} />
           </>
         )}
       </main>

@@ -94,6 +94,7 @@ function batch(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDet
           { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 5 },
           { location_id: "BRACKA", location_name: "Pita Bros Bracka", order_id: "ORD-2", qty_purchase: 7 },
         ],
+        warehouse_pickup: true,
       },
     ],
     ...overrides,
@@ -690,11 +691,11 @@ describe("buildTransportPagoPrintDoc", () => {
     const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago" });
     const doc = buildTransportPagoPrintDoc(b, "Bukat");
     expect(doc.isPago).toBe(true);
-    expect(doc.titleBarText).toBe("THE GREEK GOURMET — ZLECENIE ODBIORU WŁASNEGO");
+    expect(doc.titleBarText).toBe("PITA BROS — ZLECENIE ODBIORU WŁASNEGO");
     expect(doc.entity).toEqual({
-      name: "The Greek Gourmet Małgorzata Kubiak-Vafidis",
-      nip: "5222467646",
-      address1: "W. Laskonogiego 9",
+      name: "Pita Bros sp. z o.o.",
+      nip: "9522100633",
+      address1: "ul. W. Laskonogiego 9",
       address2: "02-496 Warszawa",
     });
   });
@@ -718,6 +719,7 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 3,
           per_location: [],
+          warehouse_pickup: true,
         },
       ],
     });
@@ -736,6 +738,7 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 0,
           per_location: [],
+          warehouse_pickup: true,
         },
       ],
     });
@@ -753,6 +756,7 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 15,
           per_location: [],
+          warehouse_pickup: true,
           supplier_sku: "GYRSW15KG",
         },
       ],
@@ -773,11 +777,82 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 3,
           per_location: [],
+          warehouse_pickup: true,
         },
       ],
     });
     const doc = buildTransportPagoPrintDoc(b, "Bukat");
     expect(doc.products[0].catalogNo).toBe("Pomidory malinowe");
+  });
+
+  // --- warehouse_pickup filter (training-feedback-0901 Phase 4) ---
+  //
+  // SUP_PAGO is a purchasing CHANNEL, not a warehouse. A real prod batch mixed
+  // frozen meat and chilled dips with till rolls, napkins and trays. Only goods
+  // actually collected on the cold-storage run belong on this document.
+
+  it("drops a line that is not collected on the warehouse run", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P130",
+          product_name_pl: "Rolki do kasy 57 na 30",
+          supplier_product_id: "SP130",
+          supplier_product_name: "Rolki do kasy 57 na 30",
+          purchase_unit: "szt",
+          total_qty_purchase: 110,
+          per_location: [],
+          warehouse_pickup: false,
+        },
+      ],
+    });
+    expect(buildTransportPagoPrintDoc(b, "Pago").products).toEqual([]);
+  });
+
+  it("drops a line whose warehouse_pickup is absent (column defaults false)", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P089",
+          product_name_pl: "Boxy PB",
+          supplier_product_id: "SP089",
+          supplier_product_name: "Boxy PB",
+          purchase_unit: "opak",
+          total_qty_purchase: 2,
+          per_location: [],
+        },
+      ],
+    });
+    expect(buildTransportPagoPrintDoc(b, "Pago").products).toEqual([]);
+  });
+
+  it("keeps warehouse goods and drops the rest of the same batch", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P024",
+          product_name_pl: "Gyros 15 KG",
+          supplier_product_id: "SP024",
+          supplier_product_name: "Gyros 15 KG",
+          purchase_unit: "blok",
+          total_qty_purchase: 2,
+          per_location: [],
+          warehouse_pickup: true,
+        },
+        {
+          product_id: "P130",
+          product_name_pl: "Rolki do kasy 57 na 30",
+          supplier_product_id: "SP130",
+          supplier_product_name: "Rolki do kasy 57 na 30",
+          purchase_unit: "szt",
+          total_qty_purchase: 110,
+          per_location: [],
+          warehouse_pickup: false,
+        },
+      ],
+    });
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.products.map((p) => p.productId)).toEqual(["P024"]);
   });
 });
 

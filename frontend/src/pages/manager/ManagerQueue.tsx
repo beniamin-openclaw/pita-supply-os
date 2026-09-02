@@ -10,6 +10,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
 import type { ManagerQueueItem } from "../../types";
+import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 
 /** The queue lanes (one status group each). */
 export type QueueLane = "submitted" | "claimed" | "sent" | "closed";
@@ -165,6 +166,12 @@ function QueueCard({
           <span>{tPlural("manager", "lines", item.line_count)}</span>
           <span aria-hidden="true">·</span>
           <span>{item.total_value_estimate_pln?.toFixed(2) ?? "?"} PLN</span>
+          {/* Purely informational (training-feedback-0901 Phase 1c) — never
+              gates claim/save/dispatch. */}
+          <MinimumOrderChip
+            total={item.total_value_estimate_pln}
+            minimum={item.minimum_order_value_pln}
+          />
           {item.deviation_count > 0 && (
             <span
               className="rounded bg-orange-100 px-1.5 py-0.5 font-semibold text-orange-900"

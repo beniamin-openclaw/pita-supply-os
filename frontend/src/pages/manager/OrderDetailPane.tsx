@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { useT } from "../../i18n";
 import type { ManagerOrderDetail, OrderableItem, OrderingMethod } from "../../types";
 import { AddProductPicker } from "../../components/ui/AddProductPicker";
+import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
 import { DispatchPanel } from "./DispatchPanel";
@@ -158,6 +159,21 @@ export function OrderDetailPane({
             {detail.notes}
           </div>
         )}
+
+        {/* Ad-hoc off-catalogue items + Captain comment (training-feedback-0901
+            Phase 1b) — read-only here, omitted entirely when empty. */}
+        {detail.extra_items && detail.extra_items.trim() !== "" && (
+          <div className="mt-2 rounded border border-teal-200 bg-teal-50 p-2 text-xs text-teal-900">
+            <div className="font-semibold">{t("manager.detail.extraItemsLabel")}</div>
+            <div className="mt-0.5 whitespace-pre-line">{detail.extra_items}</div>
+          </div>
+        )}
+        {detail.captain_note && detail.captain_note.trim() !== "" && (
+          <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+            <span className="font-semibold">{t("manager.detail.captainNoteLabel")}: </span>
+            <span className="whitespace-pre-line">{detail.captain_note}</span>
+          </div>
+        )}
       </div>
 
       {/* Per-line table */}
@@ -221,10 +237,18 @@ export function OrderDetailPane({
         {/* Estimated value — Manager-only; deliberately NOT in the supplier email
             (it lives here so the supplier never sees our internal estimate). */}
         {detail.total_value_estimate_pln != null && (
-          <div className="mt-3 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-800">
-            {t("manager.detail.totalValue", {
-              value: detail.total_value_estimate_pln.toFixed(2),
-            })}
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 text-sm font-semibold text-slate-800">
+            <span>
+              {t("manager.detail.totalValue", {
+                value: detail.total_value_estimate_pln.toFixed(2),
+              })}
+            </span>
+            {/* Purely informational (training-feedback-0901 Phase 1c) — never
+                gates claim/save/dispatch. */}
+            <MinimumOrderChip
+              total={detail.total_value_estimate_pln}
+              minimum={detail.minimum_order_value_pln}
+            />
           </div>
         )}
 

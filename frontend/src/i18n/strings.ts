@@ -60,6 +60,19 @@ export const STRINGS = {
     en: "Required before sending",
   },
 
+  // Minimum-order indicator (training-feedback-0901 Phase 1c) — shared chip
+  // (components/ui/MinimumOrderChip.tsx) next to the estimated total on the
+  // Manager detail, Manager queue, and Captain detail screens. Purely
+  // informational — never gates submit/claim/dispatch.
+  "minOrder.met": {
+    pl: "Próg zamówienia osiągnięty ({minimum} PLN)",
+    en: "Order minimum reached ({minimum} PLN)",
+  },
+  "minOrder.below": {
+    pl: "Poniżej progu zamówienia (min. {minimum} PLN)",
+    en: "Below order minimum (min. {minimum} PLN)",
+  },
+
   // Toast / global messages -------------------------------------------------
   "toast.close": { pl: "Zamknij powiadomienie", en: "Close notification" },
   "toast.draftSaved": { pl: "Szkic zapisany", en: "Draft saved" },
@@ -417,6 +430,16 @@ export const STRINGS = {
   "manager.detail.delivery": { pl: "Dostawa: {value}", en: "Delivery: {value}" },
   "manager.detail.notesLabel": { pl: "Notatka zamówienia", en: "Order notes" },
   "manager.detail.totalValue": { pl: "Wartość szacunkowa: {value} PLN", en: "Estimated value: {value} PLN" },
+  // Ad-hoc off-catalogue items + Captain comment (training-feedback-0901
+  // Phase 1b) — read-only labels for the two blocks in OrderDetailPane.
+  "manager.detail.extraItemsLabel": {
+    pl: "Pozycje spoza katalogu",
+    en: "Off-catalogue items",
+  },
+  "manager.detail.captainNoteLabel": {
+    pl: "Komentarz kapitana",
+    en: "Captain's comment",
+  },
   // Per-line table column headers (Phase G1)
   "manager.col.product": { pl: "Produkt", en: "Product" },
   "manager.col.unit": { pl: "Jedn.", en: "Unit" },
@@ -737,6 +760,46 @@ export const STRINGS = {
     en: "Every entered stock value will be cleared (blank = not counted). This cannot be undone.",
   },
   "captain.prefillClearConfirm": { pl: "Wyczyść wszystko", en: "Clear all" },
+
+  // Overrule-all reason control (training-feedback-0901 Phase 1a) — applies one
+  // reason to every line that requires one and has none yet; never replaces an
+  // already-picked reason (fill-empties only, no destructive overwrite mode).
+  "captain.overruleAllTitle": {
+    pl: "Zastosuj powód do wszystkich",
+    en: "Apply reason to all",
+  },
+  "captain.overruleAllHint": {
+    pl: "Wybierz powód — zostanie ustawiony na każdej pozycji, która go wymaga i jeszcze go nie ma. Ustawiony wcześniej powód nigdy nie zostanie zastąpiony.",
+    en: "Pick a reason — it is applied to every line that requires one and doesn't have one yet. A reason you already picked is never replaced.",
+  },
+  "captain.overruleAllApply": { pl: "Zastosuj", en: "Apply" },
+  "captain.overruleAllAppliedToast": {
+    pl: "Zastosowano powód do {count} pozycji",
+    en: "Applied reason to {count} lines",
+  },
+
+  // Ad-hoc "+ dodaj produkt" off-catalogue items + order comment
+  // (training-feedback-0901 Phase 1b) — ExtraItemsControl / OrderCommentField,
+  // shared by the create (CaptainMP) and edit (OrderEditPage) screens.
+  "captain.extraItems.title": { pl: "Pozycje spoza katalogu", en: "Off-catalogue items" },
+  "captain.extraItems.hint": {
+    pl: "Potrzebujesz czegoś, czego nie ma w katalogu? Dodaj tutaj — trafi do dostawcy jako osobna pozycja.",
+    en: "Need something that isn't in the catalogue? Add it here — it goes to the supplier as a separate line.",
+  },
+  "captain.extraItems.nameLabel": { pl: "Nazwa", en: "Name" },
+  "captain.extraItems.namePlaceholder": { pl: "np. Serwetki", en: "e.g. Napkins" },
+  "captain.extraItems.qtyLabel": { pl: "Ilość", en: "Qty" },
+  "captain.extraItems.unitLabel": { pl: "Jednostka", en: "Unit" },
+  "captain.extraItems.unitPlaceholder": { pl: "np. opak.", en: "e.g. pack" },
+  "captain.extraItems.addRow": { pl: "+ dodaj produkt", en: "+ add product" },
+  "captain.extraItems.removeRow": { pl: "Usuń pozycję", en: "Remove item" },
+
+  "captain.orderComment.label": { pl: "Komentarz do zamówienia", en: "Order comment" },
+  "captain.orderComment.placeholder": {
+    pl: "Dodatkowe informacje dla menedżera lub dostawcy…",
+    en: "Extra notes for the manager or supplier…",
+  },
+
   // Phase 5 — permanent Captain tab strip (navigation)
   "tabs.ariaLabel": { pl: "Nawigacja Kapitana", en: "Captain navigation" },
   "tabs.orders": { pl: "Zamówienia", en: "Orders" },
@@ -788,6 +851,50 @@ export const STRINGS = {
   "inventory.history.productCol": { pl: "Produkt", en: "Product" },
   "inventory.history.stockCol": { pl: "Stan", en: "Stock" },
   "inventory.history.productRemoved": { pl: "produkt usunięty", en: "removed product" },
+
+  // Phase 2 (training-feedback-0901) — correct a submitted count + read-only
+  // edit history, shared between InventoryHistoryPage (Captain) and
+  // ManagerInventoryPage (Manager, read-only).
+  "inventory.history.editBtn": { pl: "Popraw", en: "Correct" },
+  "inventory.history.editedLabel": { pl: "Poprawiono: {time}", en: "Corrected: {time}" },
+  "inventory.history.eventsTitle": { pl: "Historia poprawek", en: "Correction history" },
+
+  "inventory.edit.title": { pl: "Popraw remanent", en: "Correct inventory count" },
+  "inventory.edit.subtitle": {
+    pl: "Uzupełnij brakujące produkty lub zmień policzone ilości. Zapis zastępuje poprzedni.",
+    en: "Fill in missing products or change counted quantities. Saving replaces the previous record.",
+  },
+  "inventory.edit.originalInfo": {
+    pl: "Oryginalny remanent: {date} · liczył: {who}",
+    en: "Original count: {date} · counted by: {who}",
+  },
+  "inventory.edit.editedByLabel": { pl: "Kto poprawia", en: "Corrected by" },
+  "inventory.edit.editedByRequired": {
+    pl: "Wymagane przed zapisem",
+    en: "Required before saving",
+  },
+  "inventory.edit.back": { pl: "Powrót do historii", en: "Back to history" },
+  "inventory.edit.loading": { pl: "Ładowanie remanentu…", en: "Loading inventory count…" },
+  "inventory.edit.loadError": {
+    pl: "Nie udało się pobrać remanentu: {detail}",
+    en: "Couldn't load the inventory count: {detail}",
+  },
+  "inventory.edit.saveBtn": { pl: "Zapisz poprawki", en: "Save corrections" },
+  "inventory.edit.savingBtn": { pl: "Zapisywanie…", en: "Saving…" },
+  "inventory.edit.fillFirst": {
+    pl: "Wpisz co najmniej jeden stan, aby zapisać poprawki",
+    en: "Enter at least one stock value to save corrections",
+  },
+  "inventory.edit.readyToSave": { pl: "Gotowe do zapisania", en: "Ready to save" },
+  "inventory.edit.successToast": {
+    pl: "Poprawiono remanent ({count} poz.)",
+    en: "Inventory count corrected ({count} items)",
+  },
+  "inventory.edit.errorToast": {
+    pl: "Błąd zapisu poprawek: {detail}",
+    en: "Error saving corrections: {detail}",
+  },
+
   // S-03 — suggestion learning-loop review (FR-012)
   "manager.review.title": { pl: "Sugestie — przegląd", en: "Suggestions review" },
   "manager.review.navLink": { pl: "Sugestie", en: "Suggestions" },
@@ -1265,8 +1372,8 @@ export const STRINGS = {
   "manager.transport.print.pagoDoc.typeValue": { pl: "Odbiór własny", en: "Self pickup" },
   "manager.transport.print.pagoDoc.pickupTimeLabel": { pl: "Godzina odbioru", en: "Pickup time" },
   "manager.transport.print.pagoDoc.pickupBar": {
-    pl: "Odbiór własny z magazynu The Greek Gourmet",
-    en: "Self pickup from The Greek Gourmet warehouse",
+    pl: "Odbiór własny z magazynu Pita Bros",
+    en: "Self pickup from Pita Bros warehouse",
   },
   "manager.transport.print.pagoDoc.catalogCol": { pl: "Nr katalogowy", en: "Catalog no." },
 

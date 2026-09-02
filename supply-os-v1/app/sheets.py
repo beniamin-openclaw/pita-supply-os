@@ -35,6 +35,7 @@ from .errors import (
 )
 from .models import (
     InventoryCount,
+    InventoryCountEvent,
     InventoryCountLine,
     Location,
     LocationProductSetting,
@@ -719,8 +720,13 @@ def load_inventory_count_lines() -> list[InventoryCountLine]:
 def append_inventory_count(count: InventoryCount) -> None:
     """Append one row to 'inventory_counts', then invalidate the read cache.
 
-    Mirrors ``append_order``. Append-only: inventory counts are immutable dated
-    snapshots — there is no update/delete in S-06.
+    Mirrors ``append_order``. This is the INITIAL snapshot append; a later
+    correction goes through ``delete_inventory_count_lines`` +
+    ``append_inventory_count_lines`` + ``update_inventory_count`` instead
+    (replace semantics, Phase 2, training-feedback-0901) — see
+    ``main.captain_inventory_count_edit``. This function itself is still only
+    ever called once per snapshot (a re-count is a new ``count_id``, not an
+    edit of this row).
     """
     ws = _open_worksheet("inventory_counts")
     column_order = _get_column_order(ws)
@@ -765,6 +771,105 @@ def get_inventory_count(count_id: str) -> InventoryCount | None:
         line for line in load_inventory_count_lines() if line.count_id == count_id
     ]
     return match.model_copy(update={"lines": lines})
+
+
+# ---------- Inventory count edit + event history (Phase 2, training-feedback-0901) ----------
+
+def delete_inventory_count_lines(count_id: str) -> int:
+    """Delete every row in 'inventory_count_lines' whose count_id matches.
+
+    Mirrors ``delete_order_lines`` (contiguous-range delete, one Sheets API
+    call per range, deleted in reverse order so earlier ranges keep their
+    indices). Used by the Captain edit (PATCH) to wipe the snapshot's old line
+    set before appending the new one. Returns the number of rows deleted.
+    """
+    ws = _open_worksheet("inventory_count_lines")
+    column_order = _get_column_order(ws)
+    try:
+        count_id_col = column_order.index("count_id") + 1
+    except ValueError:
+        raise ConfigDriftError(
+            "'inventory_count_lines' sheet missing required column: count_id"
+        )
+    count_id_values = ws.col_values(count_id_col)
+    target_rows = sorted(
+        idx for idx, value in enumerate(count_id_values, start=1)
+        if idx > 1 and value == count_id
+    )
+    if not target_rows:
+        invalidate_cache("inventory_count_lines")
+        return 0
+
+    ranges: list[tuple[int, int]] = []
+    range_start = target_rows[0]
+    range_end = target_rows[0]
+    for r in target_rows[1:]:
+        if r == range_end + 1:
+            range_end = r
+        else:
+            ranges.append((range_start, range_end))
+            range_start = r
+            range_end = r
+    ranges.append((range_start, range_end))
+
+    for lo, hi in sorted(ranges, key=lambda rng: rng[0], reverse=True):
+        ws.delete_rows(lo, hi)
+    invalidate_cache("inventory_count_lines")
+    return len(target_rows)
+
+
+def update_inventory_count(count_id: str, **kwargs) -> None:
+    """Update specific fields on the 'inventory_counts' row matching
+    ``count_id`` (mirrors ``update_receipt`` — no status guard; inventory
+    counts have no status transitions). Used by the Captain edit route to
+    persist the recomputed ``line_count`` and ``last_edited_at`` after a
+    correction. Raises OrderNotFoundError if the count is absent. No-op when
+    ``kwargs`` is empty.
+    """
+    if not kwargs:
+        return
+    ws = _open_worksheet("inventory_counts")
+    column_order = _get_column_order(ws)
+    row_idx = _find_row_index(ws, "count_id", count_id)
+    if row_idx is None:
+        raise OrderNotFoundError(
+            f"count_id={count_id!r} not found in 'inventory_counts' sheet"
+        )
+    updates: list[dict] = []
+    for field_name, raw_value in kwargs.items():
+        if field_name not in column_order:
+            continue
+        col_idx = column_order.index(field_name) + 1
+        a1 = rowcol_to_a1(row_idx, col_idx)
+        updates.append({"range": a1, "values": [[_cell_value(raw_value)]]})
+    if updates:
+        ws.batch_update(updates, value_input_option="USER_ENTERED")
+    invalidate_cache("inventory_counts")
+
+
+def load_inventory_count_events_for(count_id: str) -> list[InventoryCountEvent]:
+    """Read the (TTL-cached) 'inventory_count_events' worksheet and filter to
+    ``count_id`` in Python — Sheets has no targeted query (mirrors
+    ``load_transport_events_for``). Raises ``WorksheetNotFound`` when the tab
+    hasn't been created yet; callers degrade to "no history shown" (mirrors
+    ``load_transport_batches``)."""
+    all_events = _read_with_ttl(
+        "inventory_count_events", InventoryCountEvent, ORDERS_TTL_SECONDS
+    )
+    return [e for e in all_events if e.count_id == count_id]
+
+
+def append_inventory_count_event(event: InventoryCountEvent) -> None:
+    """Append one row to 'inventory_count_events', then invalidate the read
+    cache. Append-only — there is no update/delete for an audit-trail row.
+    Mirrors ``append_transport_event``. Callers (``main._log_inventory_event``)
+    treat this as best-effort and never let a failure here break the
+    correction that triggered it."""
+    ws = _open_worksheet("inventory_count_events")
+    column_order = _get_column_order(ws)
+    row = _model_to_row(event, column_order)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    invalidate_cache("inventory_count_events")
 
 
 # ---------- Goods-receipt read + append/update API (GR-01) ----------

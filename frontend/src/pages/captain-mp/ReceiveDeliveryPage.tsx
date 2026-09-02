@@ -11,6 +11,7 @@ import { ChevronLeft, Loader2, PackageCheck } from "lucide-react";
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import { effectiveOrderedQtyPurchase } from "../../lib/orderQty";
+import { getNameSuggestions, addNameSuggestion } from "../../lib/nameSuggestions";
 import type { CaptainOrderDetail, ReceiptLineSubmit } from "../../types";
 
 import { PhotoUploadControl } from "./components/PhotoUploadControl";
@@ -34,6 +35,12 @@ export function ReceiveDeliveryPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [delivered, setDelivered] = useState<Record<string, number | "">>({});
   const [receivedBy, setReceivedBy] = useState("");
+  // Name-suggestion datalist source (Phase 1a) — previously used "kto odebrał"
+  // names, most-recent first. Lazy initializer: a synchronous localStorage
+  // read, no need for an effect.
+  const [receivedBySuggestions, setReceivedBySuggestions] = useState<string[]>(() =>
+    getNameSuggestions("received_by"),
+  );
   const [photos, setPhotos] = useState<File[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,6 +131,11 @@ export function ReceiveDeliveryPage() {
         });
         receiptId = resp.receipt_id;
         setCreatedReceiptId(receiptId);
+        // Remember this name for next time (Phase 1a name suggestions) — only
+        // once the receipt itself is saved, so a name is never suggested from
+        // a failed attempt. A later photo-upload failure doesn't undo this.
+        addNameSuggestion("received_by", receivedBy);
+        setReceivedBySuggestions(getNameSuggestions("received_by"));
       }
       if (photos.length > 0) {
         await api.receiptUploadPhotos(receiptId, photos);
@@ -231,10 +243,17 @@ export function ReceiveDeliveryPage() {
                 onChange={(e) => setReceivedBy(e.target.value)}
                 placeholder={t("delivery.receivedByPlaceholder")}
                 readOnly={receiptSaved}
+                autoComplete="name"
+                list="delivery-received-by-suggestions"
                 className={`mt-1 w-full rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   receiptSaved ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
                 }`}
               />
+              <datalist id="delivery-received-by-suggestions">
+                {receivedBySuggestions.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
             </label>
 
             <div className="mb-4">

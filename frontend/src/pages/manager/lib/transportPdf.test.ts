@@ -47,6 +47,7 @@ function batch(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDet
           { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 5 },
           { location_id: "BRACKA", location_name: "Pita Bros Bracka", order_id: "ORD-2", qty_purchase: 7 },
         ],
+        warehouse_pickup: true,
       },
     ],
     ...overrides,
@@ -193,8 +194,8 @@ describe("buildPagoPdfDocDefinition", () => {
     const doc = buildTransportPagoPrintDoc(batch({ supplier_id: "SUP_PAGO" }), "Pago");
     const pdfDoc = buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT);
     const text = flattenText(pdfDoc.content);
-    expect(text).toContain("The Greek Gourmet Małgorzata Kubiak-Vafidis");
-    expect(text).toContain("5222467646");
+    expect(text).toContain("Pita Bros sp. z o.o.");
+    expect(text).toContain("9522100633");
   });
 
   it("uses navy fillColor on the title bar style", () => {
@@ -220,6 +221,7 @@ describe("buildPagoPdfDocDefinition", () => {
           purchase_unit: "kg",
           total_qty_purchase: 15,
           per_location: [],
+          warehouse_pickup: true,
           supplier_sku: "GYRSW15KG",
         },
       ],
