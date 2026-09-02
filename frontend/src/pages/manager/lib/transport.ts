@@ -689,7 +689,6 @@ export interface TransportPagoPrintDoc {
   entity: typeof PAGO_ENTITY | null;
   pickupDate: string; // "" when unknown
   pickupTime: string; // "" when unset
-  locationsLine: string;
   driver: string;
   vehicle: string;
   supplierName: string;
@@ -698,19 +697,17 @@ export interface TransportPagoPrintDoc {
 
 /** Build the printable SUPPLIER document ("ZLECENIE ODBIORU WŁASNEGO" for
  * Pago; a generic order doc otherwise): two header boxes (entity data +
- * document data) then per-product TOTALS ONLY. Deliberately carries no
- * location field anywhere in `products` — the supplier never sees which
- * location ordered what (same discipline as buildTransportEmailBody); the
- * batch's locations only ever appear in the document-data box as a summary
- * line, mirrored from the legacy PDF. */
+ * document data) then per-product TOTALS ONLY. Carries NO location data at
+ * all — not in `products`, and (since 2026-09-02) not as a summary line in the
+ * document-data box either: the supplier has no business knowing which of our
+ * locations ordered what, or even how many there are. Same discipline as
+ * buildTransportEmailBody. The DRIVER document is the opposite case and keeps
+ * its per-location columns — that one is ours, not the supplier's. */
 export function buildTransportPagoPrintDoc(
   detail: TransportBatchDetail,
   displayLabel: string,
 ): TransportPagoPrintDoc {
   const isPago = detail.supplier_id === "SUP_PAGO";
-  const namesById = new Map<string, string>();
-  for (const o of detail.orders) namesById.set(o.location_id, o.location_name);
-  const locationsLine = [...namesById.values()].sort((a, b) => a.localeCompare(b, "pl")).join(", ");
 
   return {
     transportId: detail.transport_id,
@@ -722,7 +719,6 @@ export function buildTransportPagoPrintDoc(
     entity: isPago ? PAGO_ENTITY : null,
     pickupDate: isoDatePart(detail.pickup_date ?? detail.created),
     pickupTime: detail.pickup_time ?? "",
-    locationsLine,
     driver: detail.driver ?? "",
     vehicle: detail.vehicle ?? "",
     supplierName: detail.supplier_name,

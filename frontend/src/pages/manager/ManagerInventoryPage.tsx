@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
@@ -13,6 +13,7 @@ import type {
   InventoryCountDetail,
   InventoryCountManagerItem,
 } from "../../types";
+import { buildInventoryCsv, inventoryCsvFilename } from "./lib/inventoryCsv";
 
 export function ManagerInventoryPage() {
   const { t, tPlural, formatDateTime } = useT();
@@ -88,6 +89,23 @@ export function ManagerInventoryPage() {
     setDetailError(null);
   }, []);
 
+  // CSV export of the currently-open snapshot (manager-only; operator request
+  // 2026-09-02). buildInventoryCsv is pure/DOM-free — this callback owns the
+  // actual browser download (Blob + object URL + click + revoke).
+  const downloadCsv = useCallback(() => {
+    if (!detail) return;
+    const csv = buildInventoryCsv(detail, t);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = inventoryCsvFilename(detail);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [detail, t]);
+
   // ---- Detail panel ----------------------------------------------------------
   if (selectedId) {
     return (
@@ -134,6 +152,21 @@ export function ManagerInventoryPage() {
                   </div>
                 )}
               </div>
+
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={downloadCsv}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                >
+                  <Download size={16} aria-hidden="true" />
+                  {t("manager.inventory.csvButton")}
+                </button>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {t("manager.inventory.csvPriceNote")}
+                </p>
+              </div>
+
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-slate-600">

@@ -522,7 +522,14 @@ export function TransportPage() {
       if (!detail) return;
       setAddLocationBusy(true);
       api
-        .transportAddLocation(detail.transport_id, location.location_id)
+        // prefill_products=true, same as the grid-create flow. Without it the
+        // new location's order lands with ZERO lines, so every product already
+        // in the matrix renders as an un-fillable dash for that column and the
+        // Manager has to re-add each product by hand (operator, 2026-09-02).
+        // Prefilling gives the location a zero-qty line for every product it
+        // can order from this supplier; a zero drops out of the totals, the
+        // driver list and the email, so an untouched column costs nothing.
+        .transportAddLocation(detail.transport_id, location.location_id, true)
         .then(() => {
           showToast(t("manager.transport.addLocation.ok"), true);
           refreshDetail(detail.transport_id);

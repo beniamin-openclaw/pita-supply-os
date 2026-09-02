@@ -825,6 +825,28 @@ export const STRINGS = {
   "manager.inventory.lineCount.many.items": { pl: "{n} pozycji", en: "{n} items" },
   "manager.inventory.productCol": { pl: "Produkt", en: "Product" },
   "manager.inventory.stockCol": { pl: "Stan", en: "Stock" },
+  // CSV export of one inventory count (manager-only; training-feedback-0901
+  // follow-up, operator request 2026-09-02).
+  "manager.inventory.csvButton": { pl: "Pobierz CSV", en: "Download CSV" },
+  "manager.inventory.csvPriceNote": {
+    pl: "Ceny i wartość magazynowa nie są jeszcze dostępne w tym widoku — kolumny „Cena” i „Wartość” w pliku CSV zostaną puste, dopóki dane menedżera nie będą zawierać cen.",
+    en: "Prices and stock value aren't available in this view yet — the “Price” and “Value” columns in the CSV will stay empty until pricing data is exposed here.",
+  },
+  "manager.inventory.csv.metaLocation": { pl: "Lokalizacja", en: "Location" },
+  "manager.inventory.csv.metaDate": { pl: "Data", en: "Date" },
+  "manager.inventory.csv.metaCountedBy": { pl: "Liczył", en: "Counted by" },
+  "manager.inventory.csv.metaCorrected": { pl: "Korygowano", en: "Corrected" },
+  "manager.inventory.csv.yes": { pl: "Tak", en: "Yes" },
+  "manager.inventory.csv.no": { pl: "Nie", en: "No" },
+  "manager.inventory.csv.colProduct": { pl: "Produkt", en: "Product" },
+  "manager.inventory.csv.colCategory": { pl: "Kategoria", en: "Category" },
+  "manager.inventory.csv.colUnit": { pl: "Jednostka", en: "Unit" },
+  "manager.inventory.csv.colQty": { pl: "Ilość", en: "Quantity" },
+  "manager.inventory.csv.colCritical": { pl: "Krytyczny", en: "Critical" },
+  "manager.inventory.csv.colPrice": { pl: "Cena jedn. (PLN)", en: "Unit price (PLN)" },
+  "manager.inventory.csv.colValue": { pl: "Wartość (PLN)", en: "Value (PLN)" },
+  "manager.inventory.csv.colComment": { pl: "Komentarz", en: "Comment" },
+  "manager.inventory.csv.totalLabel": { pl: "RAZEM", en: "TOTAL" },
   // S-08 — Captain inventory history (FR-019)
   "inventory.history.title": { pl: "Historia remanentów", en: "Inventory history" },
   "inventory.history.navLink": { pl: "Historia remanentów", en: "Inventory history" },

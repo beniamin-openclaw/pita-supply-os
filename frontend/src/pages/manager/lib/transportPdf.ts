@@ -203,7 +203,6 @@ export function buildPagoPdfDocDefinition(
   const docBoxRows: { label: string; value: string }[][] = [
     [{ label: t("manager.transport.print.docNumberLabel"), value: `${doc.displayLabel} (${doc.transportId})` }],
     [{ label: t("manager.transport.print.pagoDoc.pickupDateLabel"), value: doc.pickupDate }],
-    [{ label: t("manager.transport.print.pagoDoc.locationsLabel"), value: doc.locationsLine }],
     [{ label: t("manager.transport.print.pagoDoc.typeLabel"), value: t("manager.transport.print.pagoDoc.typeValue") }],
     [{ label: t("manager.transport.print.driverLabel"), value: doc.driver }],
   ];

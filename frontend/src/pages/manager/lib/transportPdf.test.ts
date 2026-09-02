@@ -180,13 +180,18 @@ describe("buildPagoPdfDocDefinition", () => {
     expect(productTableText).not.toContain("Pita Bros Bracka");
   });
 
-  it("does not include a per-location column anywhere in the full document either", () => {
+  it("leaks NO location anywhere in the document — not per product, not as a summary", () => {
     const doc = buildTransportPagoPrintDoc(batch(), "Bukat");
     const pdfDoc = buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT);
-    // The batch's locations line (a summary, not a per-line breakdown) is
-    // allowed to appear once in the document-data box — but never per product.
     const text = flattenText(pdfDoc.content);
-    expect(text).toContain("Pita Bros Bracka, Pita Bros Wola");
+    // Until 2026-09-02 the document-data box carried a locations summary line.
+    // The operator removed it: the supplier has no business knowing which of
+    // our locations ordered, or even how many there are. The DRIVER document
+    // is the opposite case and keeps its per-location columns.
+    expect(text).not.toContain("Pita Bros Bracka");
+    expect(text).not.toContain("Pita Bros Wola");
+    expect(text).not.toContain("Bracka");
+    expect(text).not.toContain("Wola");
   });
 
   it("includes the Pago entity box for SUP_PAGO", () => {
