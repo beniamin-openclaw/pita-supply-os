@@ -865,6 +865,14 @@ export const STRINGS = {
     en: "Original count: {date} · counted by: {who}",
   },
   "inventory.edit.editedByLabel": { pl: "Kto poprawia", en: "Corrected by" },
+  "inventory.edit.reasonLabel": {
+    pl: "Powód poprawki (opcjonalnie)",
+    en: "Reason for the correction (optional)",
+  },
+  "inventory.edit.reasonPlaceholder": {
+    pl: "np. dokończenie po przerwie",
+    en: "e.g. finished after a break",
+  },
   "inventory.edit.editedByRequired": {
     pl: "Wymagane przed zapisem",
     en: "Required before saving",

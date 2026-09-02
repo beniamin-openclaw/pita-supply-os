@@ -621,6 +621,87 @@ def update_inventory_count(count_id: str, **kwargs) -> None:
         )
 
 
+def replace_inventory_count_lines_atomic(
+    count_id: str,
+    new_lines: list[InventoryCountLine],
+    *,
+    count_updates: Optional[dict] = None,
+) -> None:
+    """Atomically replace a snapshot's full line set AND apply ``count_updates``
+    in ONE Postgres transaction (mirrors ``replace_order_lines_atomic``).
+
+    Sequence inside the single transaction:
+      1. ``UPDATE inventory_counts SET <count_updates> WHERE count_id RETURNING``
+         — 0 matched rows raises ``OrderNotFoundError`` INSIDE the ``begin()``
+         block, so the whole transaction rolls back and the line set is never
+         touched for a count that does not exist.
+      2. ``DELETE FROM inventory_count_lines WHERE count_id``.
+      3. Batch-``INSERT`` ``new_lines`` (skipped when empty).
+
+    Why this exists rather than three separate calls: a crash or pool timeout
+    between the delete and the insert would otherwise leave a real snapshot with
+    ZERO lines while ``line_count`` still advertised the old number, and
+    ``captain_inventory_latest`` would then offer that empty snapshot for order
+    pre-fill. There is no in-app recovery from that state, so the correction
+    path must be all-or-nothing.
+
+    ``new_lines`` must all share ``count_id`` (mirrors ``append_inventory_count_lines``).
+    Unknown ``count_updates`` keys are ignored (mirrors ``update_inventory_count``).
+    """
+    count_updates = count_updates or {}
+    if new_lines:
+        ids = {line.count_id for line in new_lines}
+        if ids != {count_id}:
+            raise ValueError(
+                f"replace_inventory_count_lines_atomic: all new_lines must share "
+                f"count_id={count_id!r}; got {sorted(ids)}"
+            )
+
+    set_cols = [
+        c for c in count_updates if c in _INVENTORY_COUNT_COLUMNS and c != "count_id"
+    ]
+    params = {c: _to_db(count_updates[c]) for c in set_cols}
+    params["_count_id"] = count_id
+    if set_cols:
+        set_sql = ", ".join(f"{c} = {_bind(c)}" for c in set_cols)
+        count_sql = (
+            f"UPDATE inventory_counts SET {set_sql} "
+            f"WHERE count_id = :_count_id RETURNING count_id"
+        )
+    else:
+        # Existence check without mutating (mirrors the guard-only order branch).
+        count_sql = (
+            "UPDATE inventory_counts SET count_id = count_id "
+            "WHERE count_id = :_count_id RETURNING count_id"
+        )
+
+    line_payload = [
+        {c: _to_db(line.model_dump().get(c)) for c in _INVENTORY_COUNT_LINE_COLUMNS}
+        for line in new_lines
+    ]
+
+    with _get_engine().begin() as conn:
+        rows = conn.execute(text(count_sql), params).fetchall()
+        if not rows:
+            raise OrderNotFoundError(
+                f"count_id={count_id!r} not found in 'inventory_counts'"
+            )
+        conn.execute(
+            text("DELETE FROM inventory_count_lines WHERE count_id = :cid"),
+            {"cid": count_id},
+        )
+        if line_payload:
+            cols_sql = ", ".join(_INVENTORY_COUNT_LINE_COLUMNS)
+            vals_sql = ", ".join(_bind(c) for c in _INVENTORY_COUNT_LINE_COLUMNS)
+            conn.execute(
+                text(
+                    f"INSERT INTO inventory_count_lines ({cols_sql}) "
+                    f"VALUES ({vals_sql})"
+                ),
+                line_payload,
+            )
+
+
 def load_inventory_count_events_for(count_id: str) -> list[InventoryCountEvent]:
     """Targeted read for one snapshot's event history — not a full-table scan
     (mirrors ``load_transport_events_for``)."""

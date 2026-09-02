@@ -38,3 +38,27 @@ logins.
 Blocked on operator input: real per-supplier minimum order values (Trello card
 https://trello.com/c/PG9I61nu, due 2026-09-04), the unified tape list, the bottle-crate
 pairing rules (pending Bartek), and the Telegram alert specification.
+
+## Handover flags
+
+**One string changed meaning, not just wording.** The Pago pickup document's
+section bar (`manager.transport.print.pagoDoc.pickupBar`) read "Odbiór własny z
+magazynu **The Greek Gourmet**" and now reads "…z magazynu **Pita Bros**". Every
+other site in that swap names the *buying entity*, which the operator confirmed.
+This one names the **warehouse the goods are collected from** — a different
+thing. It was changed on the operator's blanket instruction ("nie ma już towaru
+DeGourmet, wszędzie pisz PitaBros"), but if the physical pickup point is a
+third-party cold store (Lineage), the line may now be factually wrong on a
+document a driver hands over. Worth one look before the pilot leans on it.
+
+**Two Transport read paths derive the batch supplier differently.** The detail
+endpoint now prefers the `transport_batches` header row; the batches LIST
+endpoint still reads `group[0].supplier_id`. The plan only named the detail site,
+and prod data shows no batch has ever held two suppliers, so list and detail
+cannot disagree today — but they would if one ever did.
+
+**The seam parity test is one-directional.** `test_supabase_backend.py`'s
+`test_seam_parity_supabase_is_superset_of_sheets` computes `sheets - supabase`,
+so a function added to Supabase and forgotten in Sheets passes silently. Both
+backends were checked by hand for this change; the next one should not rely on
+that test alone.

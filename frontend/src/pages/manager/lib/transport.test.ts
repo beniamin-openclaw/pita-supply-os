@@ -94,7 +94,6 @@ function batch(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDet
           { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 5 },
           { location_id: "BRACKA", location_name: "Pita Bros Bracka", order_id: "ORD-2", qty_purchase: 7 },
         ],
-        warehouse_pickup: true,
       },
     ],
     ...overrides,
@@ -706,6 +705,9 @@ describe("buildTransportPagoPrintDoc", () => {
     expect(doc.isPago).toBe(false);
     expect(doc.titleBarText).toBe("Bukat — ZAMÓWIENIE");
     expect(doc.entity).toBeNull();
+    // Not incidental: this test passed unchanged while the warehouse_pickup
+    // filter was silently emptying every non-Pago order document.
+    expect(doc.products.length).toBeGreaterThan(0);
   });
 
   it("falls back to product_name_pl when there is no supplier-facing name", () => {
@@ -719,7 +721,6 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 3,
           per_location: [],
-          warehouse_pickup: true,
         },
       ],
     });
@@ -738,7 +739,6 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 0,
           per_location: [],
-          warehouse_pickup: true,
         },
       ],
     });
@@ -756,7 +756,6 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 15,
           per_location: [],
-          warehouse_pickup: true,
           supplier_sku: "GYRSW15KG",
         },
       ],
@@ -777,7 +776,6 @@ describe("buildTransportPagoPrintDoc", () => {
           purchase_unit: "kg",
           total_qty_purchase: 3,
           per_location: [],
-          warehouse_pickup: true,
         },
       ],
     });
@@ -787,73 +785,65 @@ describe("buildTransportPagoPrintDoc", () => {
 
   // --- warehouse_pickup filter (training-feedback-0901 Phase 4) ---
   //
-  // SUP_PAGO is a purchasing CHANNEL, not a warehouse. A real prod batch mixed
-  // frozen meat and chilled dips with till rolls, napkins and trays. Only goods
-  // actually collected on the cold-storage run belong on this document.
+  // The filter is PAGO-ONLY. This same builder also produces the generic
+  // supplier order document for every other supplier, where the column is
+  // false on every row — filtering there would empty a real supplier order.
 
-  it("drops a line that is not collected on the warehouse run", () => {
-    const b = batch({
-      lines: [
-        {
-          product_id: "P130",
-          product_name_pl: "Rolki do kasy 57 na 30",
-          supplier_product_id: "SP130",
-          supplier_product_name: "Rolki do kasy 57 na 30",
-          purchase_unit: "szt",
-          total_qty_purchase: 110,
-          per_location: [],
-          warehouse_pickup: false,
-        },
-      ],
-    });
+  const pagoBatch = (lines: TransportBatchDetail["lines"]) =>
+    batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago", lines });
+
+  const aggLine = (
+    id: string,
+    name: string,
+    qty: number,
+    warehouse_pickup?: boolean,
+  ) => ({
+    product_id: id,
+    product_name_pl: name,
+    supplier_product_id: `SP_${id}`,
+    supplier_product_name: name,
+    purchase_unit: "szt",
+    total_qty_purchase: qty,
+    per_location: [],
+    ...(warehouse_pickup === undefined ? {} : { warehouse_pickup }),
+  });
+
+  it("Pago: drops a line that is not collected on the warehouse run", () => {
+    const b = pagoBatch([aggLine("P130", "Rolki do kasy", 110, false)]);
     expect(buildTransportPagoPrintDoc(b, "Pago").products).toEqual([]);
   });
 
-  it("drops a line whose warehouse_pickup is absent (column defaults false)", () => {
-    const b = batch({
-      lines: [
-        {
-          product_id: "P089",
-          product_name_pl: "Boxy PB",
-          supplier_product_id: "SP089",
-          supplier_product_name: "Boxy PB",
-          purchase_unit: "opak",
-          total_qty_purchase: 2,
-          per_location: [],
-        },
-      ],
-    });
+  it("Pago: drops a line whose warehouse_pickup is absent (column defaults false)", () => {
+    const b = pagoBatch([aggLine("P089", "Boxy PB", 2)]);
     expect(buildTransportPagoPrintDoc(b, "Pago").products).toEqual([]);
   });
 
-  it("keeps warehouse goods and drops the rest of the same batch", () => {
-    const b = batch({
-      lines: [
-        {
-          product_id: "P024",
-          product_name_pl: "Gyros 15 KG",
-          supplier_product_id: "SP024",
-          supplier_product_name: "Gyros 15 KG",
-          purchase_unit: "blok",
-          total_qty_purchase: 2,
-          per_location: [],
-          warehouse_pickup: true,
-        },
-        {
-          product_id: "P130",
-          product_name_pl: "Rolki do kasy 57 na 30",
-          supplier_product_id: "SP130",
-          supplier_product_name: "Rolki do kasy 57 na 30",
-          purchase_unit: "szt",
-          total_qty_purchase: 110,
-          per_location: [],
-          warehouse_pickup: false,
-        },
-      ],
-    });
+  it("Pago: keeps warehouse goods and drops the rest of the same batch", () => {
+    const b = pagoBatch([
+      aggLine("P024", "Gyros 15 KG", 2, true),
+      aggLine("P130", "Rolki do kasy", 110, false),
+    ]);
     const doc = buildTransportPagoPrintDoc(b, "Pago");
     expect(doc.products.map((p) => p.productId)).toEqual(["P024"]);
   });
+
+  // The regression guard for the bug this filter first shipped with: an
+  // unconditional filter emptied the ORDER document for every non-Pago
+  // supplier, because migration 0015 flags only SP_PAGO_* rows.
+  it("non-Pago: keeps every ordered line even though warehouse_pickup is false", () => {
+    const b = batch({
+      supplier_id: "SUP_BUKAT",
+      supplier_name: "Bukat",
+      lines: [
+        aggLine("P1", "Pomidory", 12, false),
+        aggLine("P2", "Cebula", 3),
+      ],
+    });
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
+    expect(doc.isPago).toBe(false);
+    expect(doc.products.map((p) => p.productId)).toEqual(["P1", "P2"]);
+  });
+
 });
 
 // ---- v4 feedback round 2 (feature 1): "Transport Sobota · Warszawa · 22.08.26" ----

@@ -2140,6 +2140,35 @@ def _diff_inventory_lines(
     return [text for _, text in entries]
 
 
+def _load_inventory_events_safe(backend, count_id: str) -> list[InventoryCountEvent]:
+    """Read one snapshot's correction history, newest first — NEVER raising.
+
+    The history is supplementary: it annotates a snapshot the caller has already
+    successfully loaded, so no failure reading it should cost the reader the
+    snapshot itself. Catching only ``WorksheetNotFound`` was a Sheets-shaped
+    assumption (impl-review D3) — on Supabase an absent ``inventory_count_events``
+    table raises a SQLAlchemy ``ProgrammingError`` instead, which turned both
+    detail endpoints into a 500 whenever the code ran ahead of migration 0014.
+    That is exactly the deploy-ordering window the migration is most likely to be
+    read in, so this degrades on ANY failure, mirroring ``_log_inventory_event``'s
+    best-effort contract on the write side.
+    """
+    try:
+        events = backend.load_inventory_count_events_for(count_id)
+    except Exception:
+        log.warning(
+            "Inventory event history unavailable for count_id=%s — "
+            "returning [] (the snapshot itself is unaffected)",
+            count_id,
+            exc_info=True,
+        )
+        return []
+    events.sort(
+        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
+    )
+    return events
+
+
 def _log_inventory_event(
     backend,
     count_id: str,
@@ -2433,14 +2462,25 @@ def captain_inventory_count_edit(
     if req.edit_reason.strip():
         details = f"{details} (powód: {req.edit_reason.strip()})"
 
-    backend.delete_inventory_count_lines(count_id)
-    if new_lines:
-        backend.append_inventory_count_lines(new_lines)
-
-    backend.update_inventory_count(
+    # The correction is ONE atomic unit. On Supabase, `replace_inventory_count_lines_atomic`
+    # wraps the guarded `UPDATE inventory_counts ... RETURNING` + `DELETE
+    # inventory_count_lines` + `INSERT new_lines` in a single transaction: a crash or
+    # pool timeout mid-way rolls the whole thing back, so a real snapshot can never be
+    # left with ZERO lines while `line_count` still advertises the old number (which
+    # `captain_inventory_latest` would then offer for order pre-fill, with no in-app
+    # way back). Sheets keeps the prior non-transactional sequence — it has no
+    # cross-call transaction — exactly as the captain order edit already diverges.
+    #
+    # `count_submitted_at` is deliberately NOT in `count_updates`: it is the ORIGINAL
+    # submit moment, the recency key `captain_inventory_latest` sorts on and the
+    # timestamp the pre-fill banner names. Only `last_edited_at` moves.
+    backend.replace_inventory_count_lines_atomic(
         count_id,
-        line_count=len(new_lines),
-        last_edited_at=datetime.now(timezone.utc),
+        new_lines,
+        count_updates={
+            "line_count": len(new_lines),
+            "last_edited_at": datetime.now(timezone.utc),
+        },
     )
 
     _log_inventory_event(
@@ -2629,13 +2669,7 @@ def captain_inventory_count_detail(
     # Correction history (Phase 2, training-feedback-0901) — degrades to []
     # on a missing worksheet, never a 500 (mirrors the receipts/transport-
     # events scans elsewhere in this module).
-    try:
-        events = backend.load_inventory_count_events_for(count_id)
-    except sheets.WorksheetNotFound:
-        events = []
-    events.sort(
-        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
-    )
+    events = _load_inventory_events_safe(backend, count_id)
 
     return InventoryLatestResponse(
         count_id=count.count_id,
@@ -2797,13 +2831,7 @@ def manager_inventory_count_detail(
     # Correction history (Phase 2, training-feedback-0901) — degrades to []
     # on a missing worksheet, never a 500 (mirrors the receipts/transport-
     # events scans elsewhere in this module).
-    try:
-        events = backend.load_inventory_count_events_for(count_id)
-    except sheets.WorksheetNotFound:
-        events = []
-    events.sort(
-        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
-    )
+    events = _load_inventory_events_safe(backend, count_id)
 
     return _enrich_inventory_count_detail(
         count, products_by_id, location, events[:100]

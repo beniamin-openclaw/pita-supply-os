@@ -726,22 +726,31 @@ export function buildTransportPagoPrintDoc(
     driver: detail.driver ?? "",
     vehicle: detail.vehicle ?? "",
     supplierName: detail.supplier_name,
-    // Two filters, deliberately different from the driver doc's single one:
+    // Two filters, and the second one is PAGO-ONLY:
     //
-    //   total_qty_purchase > 0  — nothing ordered, nothing to collect.
-    //   warehouse_pickup        — this is the run to the cold-storage
-    //                             warehouse, and SUP_PAGO is a purchasing
-    //                             CHANNEL rather than a warehouse: one real
-    //                             batch mixed frozen meat and chilled dips
-    //                             with till rolls, napkins, trays and paper.
-    //                             Only goods actually collected there belong
-    //                             on this document.
+    //   total_qty_purchase > 0  — nothing ordered, nothing to print.
+    //   warehouse_pickup        — applied ONLY when isPago. The Pago document
+    //                             is the run to the cold-storage warehouse, and
+    //                             SUP_PAGO is a purchasing CHANNEL rather than a
+    //                             warehouse: one real batch mixed frozen meat
+    //                             and chilled dips with till rolls, napkins,
+    //                             trays and paper. Only goods actually collected
+    //                             there belong on that document.
     //
-    // The order email (buildTransportEmailBody) and the order PDF deliberately
-    // do NOT apply the second filter — the warehouse run is a subset of the
-    // purchase, not the whole of it.
+    // The `!isPago` escape is load-bearing, not defensive. This same builder
+    // also produces the GENERIC supplier order document ("{supplier} —
+    // ZAMÓWIENIE") for every other supplier, and migration 0015 defaults
+    // warehouse_pickup to false on every row — only SP_PAGO_* rows are ever
+    // flagged true. An unconditional filter therefore emptied the order PDF and
+    // the Gmail order draft for Bukat, Coca-Cola and everyone else, silently.
+    //
+    // The driver doc, the order email and the driver text export never filter
+    // on this at all — the warehouse run is a subset of the purchase.
     products: detail.lines
-      .filter((line) => line.total_qty_purchase > 0 && line.warehouse_pickup === true)
+      .filter(
+        (line) =>
+          line.total_qty_purchase > 0 && (!isPago || line.warehouse_pickup === true),
+      )
       .map((line) => {
         const name = line.supplier_product_name || line.product_name_pl;
         return {

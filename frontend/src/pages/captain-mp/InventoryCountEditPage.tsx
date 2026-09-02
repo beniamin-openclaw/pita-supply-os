@@ -33,6 +33,11 @@ export function InventoryCountEditPage() {
   const [products, setProducts] = useState<InventoryProduct[]>([]);
   const [lines, setLines] = useState<Record<string, InventoryLineInput>>({});
   const [editedBy, setEditedBy] = useState<string>("");
+  // Optional free-text "why". The backend already appends it to the audit
+  // event's details ("… (powód: …)") — without this input that API surface had
+  // no producer at all (impl-review drift 3), and the correction history read
+  // as a bare list of number changes with no explanation.
+  const [editReason, setEditReason] = useState<string>("");
   const [originalDate, setOriginalDate] = useState<string | null>(null);
   const [originalWho, setOriginalWho] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -145,6 +150,7 @@ export function InventoryCountEditPage() {
       const resp = await api.inventoryCountEdit(count_id, {
         lines: countedLines,
         edited_by: editedBy.trim(),
+        edit_reason: editReason.trim(),
       });
       addNameSuggestion("count_user", editedBy.trim());
       showToast(t("inventory.edit.successToast", { count: resp.line_count }), "success");
@@ -162,7 +168,7 @@ export function InventoryCountEditPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [count_id, countedLines, editedBy, navigate, showToast, t]);
+  }, [count_id, countedLines, editedBy, editReason, navigate, showToast, t]);
 
   const saveDisabled = countedCount === 0 || isSubmitting || editedBy.trim().length === 0;
 
@@ -231,6 +237,21 @@ export function InventoryCountEditPage() {
             ))}
           </datalist>
           <p className="mt-1 text-[11px] text-slate-500">{t("inventory.edit.editedByRequired")}</p>
+
+          <label
+            htmlFor="inv-edit-reason"
+            className="mt-3 block text-sm font-medium text-slate-700"
+          >
+            {t("inventory.edit.reasonLabel")}
+          </label>
+          <input
+            id="inv-edit-reason"
+            type="text"
+            value={editReason}
+            onChange={(e) => setEditReason(e.target.value)}
+            placeholder={t("inventory.edit.reasonPlaceholder")}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
         {isLoading ? (

@@ -18,6 +18,7 @@ import { InventoryCountGrid } from "./components/InventoryCountGrid";
 import { Toast, type ToastProps } from "./components/Toast";
 import { groupProductsByCategory } from "./lib/inventoryGrouping";
 import { blankInventoryLine as blankLine, type InventoryLineInput } from "./lib/inventoryLines";
+import { addNameSuggestion, getNameSuggestions } from "../../lib/nameSuggestions";
 
 import type {
   InventoryProduct,
@@ -284,6 +285,11 @@ export function InventoryCountPage() {
     setCountDate(raw);
   }, []);
 
+  // Read once on mount. This screen is the PRIMARY writer of the count_user
+  // store: without the append below the list stays empty forever and the edit
+  // screen's own datalist has nothing to offer (impl-review D4).
+  const nameSuggestions = useMemo((): string[] => getNameSuggestions("count_user"), []);
+
   const lastCountTime = useMemo((): string | null => {
     if (!latestSnapshot) return null;
     if (latestSnapshot.count_submitted_at) {
@@ -336,6 +342,7 @@ export function InventoryCountPage() {
         notes: "",
       });
       clearDraft(DRAFT_KEY);
+      addNameSuggestion("count_user", countedBy.trim());
       setCountedBy("");
       // Reset to a fresh blank pass (append-only — a re-count is a new snapshot).
       setLines((prev) => {
@@ -420,11 +427,17 @@ export function InventoryCountPage() {
             <input
               id="inv-counted-by"
               type="text"
+              list="inv-counted-by-suggestions"
               value={countedBy}
               onChange={(e) => setCountedBy(e.target.value)}
               autoComplete="name"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <datalist id="inv-counted-by-suggestions">
+              {nameSuggestions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
             <p className="mt-1 text-[11px] text-slate-500">{t("inventory.countedByRequired")}</p>
           </div>
         </div>

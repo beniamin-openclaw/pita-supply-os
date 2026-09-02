@@ -847,6 +847,33 @@ def update_inventory_count(count_id: str, **kwargs) -> None:
     invalidate_cache("inventory_counts")
 
 
+def replace_inventory_count_lines_atomic(
+    count_id: str,
+    new_lines: list[InventoryCountLine],
+    *,
+    count_updates: dict | None = None,
+) -> None:
+    """Sheets counterpart of the Supabase atomic snapshot correction.
+
+    Sheets has no cross-call transaction, so this runs the same
+    ``delete_inventory_count_lines`` -> ``append_inventory_count_lines`` ->
+    ``update_inventory_count`` sequence non-transactionally. The two backends
+    deliberately diverge here exactly as they already do for the captain order
+    edit (``replace_order_lines_atomic``): Supabase is all-or-nothing, Sheets is
+    best-effort, and the brief 0-lines window between delete and append remains
+    an accepted Sheets-only v0 trade-off.
+
+    The order matters: lines first, then the count row, so a crash mid-way
+    leaves ``line_count`` describing the OLD set rather than claiming a
+    correction that did not land.
+    """
+    delete_inventory_count_lines(count_id)
+    if new_lines:
+        append_inventory_count_lines(new_lines)
+    if count_updates:
+        update_inventory_count(count_id, **count_updates)
+
+
 def load_inventory_count_events_for(count_id: str) -> list[InventoryCountEvent]:
     """Read the (TTL-cached) 'inventory_count_events' worksheet and filter to
     ``count_id`` in Python — Sheets has no targeted query (mirrors

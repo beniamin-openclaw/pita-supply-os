@@ -340,6 +340,90 @@ def test_inventory_count_roundtrip():
     assert got.lines[0].current_stock_qty_base == 5
 
 
+def test_inventory_count_edit_atomic_rolls_back_on_insert_failure():
+    """The correction must be ALL-OR-NOTHING on Postgres.
+
+    Impl-review D2: three separate calls (delete, append, update) left a window
+    where a crash between them stripped every line from a real snapshot while
+    `line_count` still advertised the old number — and
+    `captain_inventory_latest` would then offer that empty snapshot for order
+    pre-fill, with no in-app way back.
+
+    Here the INSERT is made to fail (two lines sharing a primary key) AFTER the
+    DELETE has already run inside the same transaction. The original line and
+    the original `line_count` must both survive untouched.
+    """
+    cid = "INV-IT-ATOMIC"
+    supabase_backend.append_inventory_count(
+        InventoryCount(
+            count_id=cid, location_id="WOLA", count_date=date(2026, 6, 16),
+            count_user="WOLA", line_count=1,
+        )
+    )
+    supabase_backend.append_inventory_count_lines(
+        [
+            InventoryCountLine(
+                count_line_id=f"{cid}-L1", count_id=cid, product_id="P1",
+                current_stock_qty_base=5,
+            )
+        ]
+    )
+
+    dup = InventoryCountLine(
+        count_line_id=f"{cid}-DUP", count_id=cid, product_id="P1",
+        current_stock_qty_base=9,
+    )
+    with pytest.raises(Exception):
+        supabase_backend.replace_inventory_count_lines_atomic(
+            cid,
+            [dup, dup],  # same PK twice -> INSERT violates the primary key
+            count_updates={"line_count": 2},
+        )
+
+    survived = supabase_backend.get_inventory_count(cid)
+    assert survived is not None
+    assert [ln.count_line_id for ln in survived.lines] == [f"{cid}-L1"]
+    assert survived.lines[0].current_stock_qty_base == 5
+    assert survived.line_count == 1, "line_count must not report the failed edit"
+
+
+def test_inventory_count_edit_atomic_applies_lines_and_count_together():
+    """The happy path through the same atomic seam the route now uses."""
+    cid = "INV-IT-ATOMIC-OK"
+    supabase_backend.append_inventory_count(
+        InventoryCount(
+            count_id=cid, location_id="WOLA", count_date=date(2026, 6, 16),
+            count_user="WOLA", line_count=1,
+        )
+    )
+    supabase_backend.append_inventory_count_lines(
+        [
+            InventoryCountLine(
+                count_line_id=f"{cid}-L1", count_id=cid, product_id="P1",
+                current_stock_qty_base=5,
+            )
+        ]
+    )
+    supabase_backend.replace_inventory_count_lines_atomic(
+        cid,
+        [
+            InventoryCountLine(
+                count_line_id=f"{cid}-E1", count_id=cid, product_id="P1",
+                current_stock_qty_base=9,
+            ),
+            InventoryCountLine(
+                count_line_id=f"{cid}-E2", count_id=cid, product_id="P1",
+                current_stock_qty_base=3,
+            ),
+        ],
+        count_updates={"line_count": 2},
+    )
+    out = supabase_backend.get_inventory_count(cid)
+    assert out is not None
+    assert sorted(ln.count_line_id for ln in out.lines) == [f"{cid}-E1", f"{cid}-E2"]
+    assert out.line_count == 2
+
+
 def test_inventory_count_edit_roundtrip():
     """Phase 2 (training-feedback-0901): round-trips the PATCH route's
     replace-semantics correction against REAL Postgres — the only layer that
