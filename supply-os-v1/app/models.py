@@ -1026,6 +1026,21 @@ class TransportBatchOrder(BaseModel):
     # yet, so both stay 0 there). Mirrors ManagerQueueItem's receipt signal.
     received_count: int = 0
     received_discrepancy_count: int = 0
+    # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
+    # F1) — mirrors Order.extra_items / Order.captain_note (see Order for the
+    # NOT NULL DEFAULT '' rationale: must stay `str = ""`, never
+    # `Optional[str] = None`). The member `Order` this batch aggregates already
+    # carries both; the route reads them straight off it, no extra fetch.
+    #
+    # `extra_items` DOES reach the supplier: the Transport email/PDF builders
+    # append a "Pozycje spoza katalogu" block built from every member order's
+    # items (frontend, a later step of this change).
+    #
+    # `captain_note` is per-location operational context for the MANAGER ONLY,
+    # shown on this batch detail screen, and must NEVER be routed into a
+    # supplier-facing document — unlike extra_items, no builder may read it.
+    extra_items: str = ""
+    captain_note: str = ""
 
 
 class TransportBatchSummary(BaseModel):

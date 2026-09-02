@@ -57,7 +57,9 @@ describe("buildInventoryCsv", () => {
   it("leads with the location/date/counted-by metadata, blank line, then the header", () => {
     const rows = rowsOf(buildInventoryCsv(detail(), makeT()));
     expect(rows[0]).toBe("Lokalizacja;Pita Bros Wola");
-    expect(rows[1]).toBe("Data;2026-09-01 10:15:00+00:00");
+    // 2026-09-01T10:15 UTC is within Polish summer time (CEST, UTC+2) -> 12:15
+    // Warsaw, same calendar day.
+    expect(rows[1]).toBe("Data;2026-09-01 12:15");
     expect(rows[2]).toBe("Liczył;Jan Kowalski");
     expect(rows[3]).toBe("Korygowano;Nie");
     expect(rows[4]).toBe("");
@@ -66,7 +68,9 @@ describe("buildInventoryCsv", () => {
     );
   });
 
-  it("falls back to count_date when count_submitted_at is absent", () => {
+  it("falls back to count_date when count_submitted_at is absent, staying date-only", () => {
+    // count_date is a bare "YYYY-MM-DD" — it must pass through unchanged, not
+    // get parsed as UTC midnight and shifted into a spurious Warsaw time.
     const rows = rowsOf(buildInventoryCsv(detail({ count_submitted_at: null }), makeT()));
     expect(rows[1]).toBe("Data;2026-09-01");
   });
@@ -75,10 +79,31 @@ describe("buildInventoryCsv", () => {
     const correctedRows = rowsOf(
       buildInventoryCsv(detail({ last_edited_at: "2026-09-02T08:30:00+00:00" }), makeT()),
     );
-    expect(correctedRows[3]).toBe("Korygowano;Tak (2026-09-02 08:30:00+00:00)");
+    // 08:30 UTC + Warsaw summer-time offset (+2h) = 10:30, same calendar day.
+    expect(correctedRows[3]).toBe("Korygowano;Tak (2026-09-02 10:30)");
 
     const uncorrectedRows = rowsOf(buildInventoryCsv(detail({ last_edited_at: null }), makeT()));
     expect(uncorrectedRows[3]).toBe("Korygowano;Nie");
+  });
+
+  it("renders a UTC timestamp that crosses midnight into Warsaw's next day (the whole bug)", () => {
+    // 2026-09-01T22:15 UTC is 2026-09-02T00:15 in Warsaw (CEST, UTC+2) — the
+    // exact scenario from the bug report: a count submitted late on the 1st
+    // UTC must show as the 2nd, matching what the screen already rendered via
+    // formatDateTime, not the previous day the raw UTC string implied.
+    const rows = rowsOf(
+      buildInventoryCsv(detail({ count_submitted_at: "2026-09-01T22:15:00+00:00" }), makeT()),
+    );
+    expect(rows[1]).toBe("Data;2026-09-02 00:15");
+  });
+
+  it("renders exact Warsaw midnight as 00:00, never 24:00", () => {
+    // hourCycle "h23" (not hour12:false) is the guard here — some runtimes
+    // render hour12:false as "24:00" for midnight instead of "00:00".
+    const rows = rowsOf(
+      buildInventoryCsv(detail({ count_submitted_at: "2026-09-01T22:00:00+00:00" }), makeT()),
+    );
+    expect(rows[1]).toBe("Data;2026-09-02 00:00");
   });
 
   it("is language-aware for the header row (en)", () => {

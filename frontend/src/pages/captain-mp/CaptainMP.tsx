@@ -45,16 +45,28 @@ import type { InventoryCountSummary, InventoryLatestResponse } from "../../types
 // one-line edit; no env var needed (same value in dev and prod).
 const PILOT_SUPPLIER_ID = "SUP_BUKAT";
 
-/** True when any line carries a value worth persisting as a draft. Freshly
- * initialized (all-blank) line sets must not overwrite or create drafts. */
-function draftHasValues(lines: Record<string, OrderLine>): boolean {
-  return Object.values(lines).some(
+/** True when the screen carries anything worth persisting as a draft. Freshly
+ * initialized (all-blank) states must not overwrite or create drafts.
+ *
+ * Ad-hoc rows and the order comment count too (impl-review F4). This function
+ * gates every write site AND the restore banner, so leaving them out meant a
+ * draft consisting only of ad-hoc items was never saved in the first place —
+ * not merely dropped on restore. */
+function draftHasValues(
+  lines: Record<string, OrderLine>,
+  extraItems: ExtraItemRow[] = [],
+  captainNote: string = "",
+): boolean {
+  const lineHasValue = Object.values(lines).some(
     (ln) =>
       ln.current_stock_qty_base !== "" ||
       ln.captain_final_qty_purchase !== "" ||
       (ln.captain_comment ?? "") !== "" ||
       (ln.reason_code ?? "") !== "",
   );
+  if (lineHasValue) return true;
+  if (captainNote.trim() !== "") return true;
+  return serializeExtraItems(extraItems) !== "";
 }
 
 export function CaptainMP() {
@@ -243,7 +255,14 @@ export function CaptainMP() {
               };
         });
         setLines(initialLines);
-        if (draft && draftHasValues(initialLines)) {
+        // Restore the ad-hoc rows and the comment too. A legacy draft has
+        // neither field — fall back to empty rather than crashing on the old
+        // shape (F4).
+        const draftExtra = draft?.state?.extraItems ?? [];
+        const draftNote = draft?.state?.captainNote ?? "";
+        if (draftExtra.length > 0) setExtraItemRows(draftExtra);
+        if (draftNote !== "") setCaptainNote(draftNote);
+        if (draft && draftHasValues(initialLines, draftExtra, draftNote)) {
           setDraftBanner({
             supplierId: activeSupplierId,
             timestamp: draft.state.timestamp,
@@ -268,14 +287,21 @@ export function CaptainMP() {
   // All-blank line sets are never saved: they'd overwrite a real draft (e.g.
   // right after the supplier-switch wipe) or litter storage with empty drafts.
   useEffect(() => {
-    if (!activeSupplierId || Object.keys(lines).length === 0) return;
+    if (!activeSupplierId) return;
     const timeoutId = setTimeout(() => {
-      if (!draftHasValues(lines)) return;
-      const draftState: DraftState = { lines, timestamp: Date.now() };
+      if (!draftHasValues(lines, extraItemRows, captainNote)) return;
+      const draftState: DraftState = {
+        lines,
+        timestamp: Date.now(),
+        extraItems: extraItemRows,
+        captainNote,
+      };
       saveDraft(activeSupplierId, draftState);
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [lines, activeSupplierId]);
+    // The `Object.keys(lines).length === 0` guard was dropped: a catalogue-less
+    // supplier has no lines, and an ad-hoc-only draft must still be saved.
+  }, [lines, extraItemRows, captainNote, activeSupplierId]);
 
   // ---- Draft flush on supplier switch / unmount ------------------------------
   // The debounce above loses the last ≤500ms of edits when the supplier changes
@@ -283,18 +309,35 @@ export function CaptainMP() {
   // that was the reported "numbers gone after switching supplier" bug. A ref
   // carries the latest snapshot; the cleanup below runs BEFORE the new
   // supplier's effects and on unmount, and writes it synchronously.
-  const draftFlushRef = useRef<{ supplierId: string | null; lines: Record<string, OrderLine> }>({
+  const draftFlushRef = useRef<{
+    supplierId: string | null;
+    lines: Record<string, OrderLine>;
+    extraItems: ExtraItemRow[];
+    captainNote: string;
+  }>({
     supplierId: null,
     lines: {},
+    extraItems: [],
+    captainNote: "",
   });
   useEffect(() => {
-    draftFlushRef.current = { supplierId: activeSupplierId, lines };
+    draftFlushRef.current = {
+      supplierId: activeSupplierId,
+      lines,
+      extraItems: extraItemRows,
+      captainNote,
+    };
   });
   useEffect(() => {
     return () => {
       const snap = draftFlushRef.current;
-      if (snap.supplierId && draftHasValues(snap.lines)) {
-        saveDraft(snap.supplierId, { lines: snap.lines, timestamp: Date.now() });
+      if (snap.supplierId && draftHasValues(snap.lines, snap.extraItems, snap.captainNote)) {
+        saveDraft(snap.supplierId, {
+          lines: snap.lines,
+          timestamp: Date.now(),
+          extraItems: snap.extraItems,
+          captainNote: snap.captainNote,
+        });
       }
     };
   }, [activeSupplierId]);
@@ -322,10 +365,14 @@ export function CaptainMP() {
   const discardDraft = useCallback(() => {
     if (!draftBanner) return;
     clearDraft(draftBanner.supplierId);
+    // Discarding must clear the ad-hoc rows and the comment as well, or the
+    // banner disappears while the entries it covered stay on screen (F4).
+    setExtraItemRows([]);
+    setCaptainNote("");
     setDraftBanner(null);
     // The values on screen came from the cleared draft — reset them to blanks
     // and neutralize the flush snapshot so nothing re-saves what was cleared.
-    draftFlushRef.current = { supplierId: null, lines: {} };
+    draftFlushRef.current = { supplierId: null, lines: {}, extraItems: [], captainNote: "" };
     setLines(() => {
       const blank: Record<string, OrderLine> = {};
       orderableItems.forEach((item) => {
@@ -342,9 +389,14 @@ export function CaptainMP() {
 
   const handleSaveDraft = useCallback(() => {
     if (!activeSupplierId) return;
-    saveDraft(activeSupplierId, { lines, timestamp: Date.now() });
+    saveDraft(activeSupplierId, {
+      lines,
+      timestamp: Date.now(),
+      extraItems: extraItemRows,
+      captainNote,
+    });
     showToast(t("toast.draftSaved"), "success");
-  }, [activeSupplierId, lines, showToast, t]);
+  }, [activeSupplierId, lines, extraItemRows, captainNote, showToast, t]);
 
   // ---- Pre-fill actions (FR-023/024) -----------------------------------------
   // All three pull from the SELECTED snapshot (lazily-loaded lines). Matching is
@@ -472,7 +524,7 @@ export function CaptainMP() {
       // Neutralize the flush snapshot + in-memory lines: without this, the
       // flush-on-switch path would immediately re-save the just-submitted
       // values as a fresh draft.
-      draftFlushRef.current = { supplierId: null, lines: {} };
+      draftFlushRef.current = { supplierId: null, lines: {}, extraItems: [], captainNote: "" };
       setLines({});
       setExtraItemRows([]);
       setCaptainNote("");
@@ -590,7 +642,22 @@ export function CaptainMP() {
   // deliberately NOT gated on `orderableItems.length > 0` — a supplier with
   // zero catalogue products at this location can still receive an ad-hoc
   // order, and the comment is order-level, independent of the line count.
-  const showExtraItemsSection = !!activeSupplierId && !isLoadingItems;
+  // The ad-hoc section requires a NON-EMPTY catalogue at this location, and that
+  // is not cosmetic gating (impl-review F3). An order with no catalogue lines
+  // cannot be submitted at all: the action bar is hidden, the payload check
+  // rejects zero lines, and the backend requires `min_length=1`. Worse, four
+  // downstream gates reject that shape anyway — `manager_dispatch`'s
+  // `manager_finals`, `gmail_url.build_draft_url`, the receipt gate, and
+  // `manager_transport_finalize`, which SILENTLY REMOVES a zero-quantity member
+  // from its batch. Showing the form for a catalogue-less supplier (Allegro and
+  // Selgros, activated with no `location_product_settings`) therefore let a
+  // Captain fill it in and find no Wyślij button anywhere.
+  //
+  // Ad-hoc items as an ADDITION to a real order — what the operator actually
+  // described — keep working. A standalone ad-hoc order is a separate change,
+  // not a patch; the real remedy for those two suppliers is master data.
+  const showExtraItemsSection =
+    !!activeSupplierId && !isLoadingItems && orderableItems.length > 0;
 
   // Named source for the overwrite-confirm body (the FR-017 "name the source"
   // safeguard, carried onto the destructive path).
@@ -715,7 +782,10 @@ export function CaptainMP() {
             <SkeletonCard />
           </>
         ) : orderableItems.length === 0 ? (
-          <div className="text-center py-12 text-slate-600">{t("captain.itemsEmpty")}</div>
+          <div className="text-center py-12 text-slate-600">
+            <div>{t("captain.itemsEmpty")}</div>
+            <div className="mt-2 text-sm text-slate-500">{t("captain.itemsEmptyNoAdHoc")}</div>
+          </div>
         ) : (
           <>
             {stats.allZero && stats.anyTouched && (

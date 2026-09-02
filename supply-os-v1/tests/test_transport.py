@@ -64,6 +64,8 @@ def _order(
     ordered_by: str | None = "Jan Kowalski",
     supplier_order_reference: str | None = None,
     captain_user: str | None = None,
+    extra_items: str = "",
+    captain_note: str = "",
 ) -> Order:
     return Order(
         order_id=order_id,
@@ -78,6 +80,8 @@ def _order(
         ordered_by=ordered_by,
         total_value_estimate_pln=total,
         supplier_order_reference=supplier_order_reference,
+        extra_items=extra_items,
+        captain_note=captain_note,
     )
 
 
@@ -2062,6 +2066,48 @@ def test_batch_detail_includes_full_enriched_lines_per_order(mocker):
     assert order_out["lines"][0]["captain_final_qty_purchase"] == 5.0
 
 
+def test_batch_detail_surfaces_extra_items_and_captain_note(mocker):
+    """F1 (backend half, plan-r2): a member order's ad-hoc off-catalogue items
+    and Captain note must reach the Manager on ``TransportBatchOrder`` — today
+    they stop at the order and never surface on the Transport batch detail, so
+    the frontend builders have no data to append a "Pozycje spoza katalogu"
+    block from. An order that has neither must report "" (NOT NULL DEFAULT ''
+    contract), never null/None.
+    """
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A",
+            location_id="WOLA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+            extra_items="Feta - 5 kg",
+            captain_note="Impreza w piątek, proszę o priorytet",
+        ),
+        _order(
+            "ORD-B",
+            location_id="BRACKA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+        ),
+    ]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        lines=[_line("ORD-A", "OL-1"), _line("ORD-B", "OL-2")],
+        locations=[_location("WOLA"), _location("BRACKA", "Pita Bros Bracka")],
+        transport_batches=[header],
+    )
+
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {o["order_id"]: o for o in r.json()["orders"]}
+    assert by_id["ORD-A"]["extra_items"] == "Feta - 5 kg"
+    assert by_id["ORD-A"]["captain_note"] == "Impreza w piątek, proszę o priorytet"
+    assert by_id["ORD-B"]["extra_items"] == ""
+    assert by_id["ORD-B"]["captain_note"] == ""
+
+
 def test_batch_detail_draft_includes_all_zero_orders(mocker):
     """A draft batch's member order with an all-zero line still shows up in
     ``orders`` (only the aggregate zero-drops)."""
@@ -2527,6 +2573,32 @@ def test_batch_detail_missing_events_worksheet_degrades_to_empty(mocker):
     )
     mocker.patch.object(
         sheets, "load_transport_events_for", side_effect=sheets.WorksheetNotFound("x")
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["events"] == []
+
+
+def test_batch_detail_events_backend_error_degrades_to_empty(mocker):
+    """F6: on Supabase a missing 'transport_events' table raises something
+    other than ``sheets.WorksheetNotFound`` (a SQLAlchemy ``ProgrammingError``
+    in practice) — catching only ``WorksheetNotFound`` let that propagate and
+    turn the whole batch detail route into a 500. ``_load_transport_events_safe``
+    must degrade to [] on ANY failure, mirroring ``_load_inventory_events_safe``.
+    A generic exception stands in here for the Supabase-specific one — the
+    backend-agnostic route must not care which exception type it was.
+    """
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X")
+    ]
+    _enable_sheet_backend(
+        mocker, orders=orders, lines=[_line("ORD-A", "OL-1")], transport_batches=[header],
+    )
+    mocker.patch.object(
+        sheets,
+        "load_transport_events_for",
+        side_effect=RuntimeError("relation \"transport_events\" does not exist"),
     )
     r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text

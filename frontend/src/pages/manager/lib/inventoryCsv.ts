@@ -60,11 +60,37 @@ function formatCsvNumber(n: number): string {
   return String(n).replace(".", ",");
 }
 
+/** Renders an ISO instant in Europe/Warsaw as "YYYY-MM-DD HH:MM" (no UTC
+ *  offset suffix), via `formatToParts` so the exact separators are ours, not
+ *  locale-dependent. `hourCycle: "h23"` rather than `hour12: false` — some
+ *  runtimes render `hour12: false` as "24:00" for midnight instead of
+ *  "00:00". Every screen renders timestamps in Warsaw local time
+ *  (`formatDateTime`, i18n/index.ts) — the CSV must agree with what the user
+ *  already saw on screen, not print the raw UTC instant the backend sent. */
+const WARSAW_TIMESTAMP_PARTS = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Warsaw",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** A bare "YYYY-MM-DD" date (no time component — e.g. the `count_date`
+ *  fallback) has nothing to convert. Reformatting it through `new Date(...)`
+ *  would parse it as UTC midnight and — once shifted into Warsaw local time —
+ *  print a spurious "02:00" (or "01:00" in winter) that was never in the data. */
+const BARE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 /** ISO date ("YYYY-MM-DD") or datetime ("YYYY-MM-DDTHH:MM:SS+00:00") -> the
- *  same value with the "T" separator swapped for a space, so it reads as a
- *  plain timestamp in a spreadsheet cell. A bare date (no "T") is unchanged. */
+ *  same instant rendered in Europe/Warsaw as "YYYY-MM-DD HH:MM". A bare date
+ *  (see `BARE_DATE_RE`) passes through unchanged. */
 function formatIsoForCsv(iso: string): string {
-  return iso.replace("T", " ");
+  if (BARE_DATE_RE.test(iso)) return iso;
+  const parts = WARSAW_TIMESTAMP_PARTS.formatToParts(new Date(iso));
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
 }
 
 /**

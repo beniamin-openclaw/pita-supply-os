@@ -30,6 +30,10 @@ export const STRINGS = {
 
   // Captain page-level ------------------------------------------------------
   "captain.suppliersLoading": { pl: "Ładowanie dostawców…", en: "Loading suppliers…" },
+  "captain.itemsEmptyNoAdHoc": {
+    pl: "Ten dostawca nie ma jeszcze produktów przypisanych do tego lokalu, więc nie da się tu złożyć zamówienia — również z palca. Zgłoś to menedżerowi.",
+    en: "This supplier has no products configured for this location yet, so no order can be placed here — including an off-catalogue one. Tell your manager.",
+  },
   "captain.itemsEmpty": {
     pl: "Brak produktów do zamówienia dla tego dostawcy.",
     en: "No products to order from this supplier.",
@@ -278,9 +282,9 @@ export const STRINGS = {
   "dates.cutoff.none": { pl: "Brak ustalonego cutoff", en: "No cutoff set" },
   "dates.delivery.unsetText": { pl: "dostawa wg ustaleń", en: "delivery as agreed" },
   "dates.delivery.weekdayPrefix": { pl: "dostawa: {days}", en: "delivery: {days}" },
-  "dates.delivery.days.one": { pl: "dostawa: {n} dzień", en: "delivery: {n} day" },
-  "dates.delivery.days.few": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
-  "dates.delivery.days.many": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
+  "dates.delivery.one.days": { pl: "dostawa: {n} dzień", en: "delivery: {n} day" },
+  "dates.delivery.few.days": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
+  "dates.delivery.many.days": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
 
   // AuthGate ---------------------------------------------------------------
   "auth.captainLabel": { pl: "Wpisz kod miejsca", en: "Enter location code" },
@@ -340,12 +344,12 @@ export const STRINGS = {
     en: "No orders in the queue. Captains submit from their phones — orders will show up here after they hit Submit.",
   },
   "manager.loading": { pl: "Ładowanie…", en: "Loading…" },
-  "manager.lines.one": { pl: "{n} linia", en: "{n} line" },
-  "manager.lines.few": { pl: "{n} linie", en: "{n} lines" },
-  "manager.lines.many": { pl: "{n} linii", en: "{n} lines" },
-  "manager.deviations.one": { pl: "{n} odchylenie", en: "{n} deviation" },
-  "manager.deviations.few": { pl: "{n} odchylenia", en: "{n} deviations" },
-  "manager.deviations.many": { pl: "{n} odchyleń", en: "{n} deviations" },
+  "manager.one.lines": { pl: "{n} linia", en: "{n} line" },
+  "manager.few.lines": { pl: "{n} linie", en: "{n} lines" },
+  "manager.many.lines": { pl: "{n} linii", en: "{n} lines" },
+  "manager.one.deviations": { pl: "{n} odchylenie", en: "{n} deviation" },
+  "manager.few.deviations": { pl: "{n} odchylenia", en: "{n} deviations" },
+  "manager.many.deviations": { pl: "{n} odchyleń", en: "{n} deviations" },
   "manager.reasonsCovered": {
     pl: "{reasonCount}/{deviationCount} z powodem",
     en: "{reasonCount}/{deviationCount} with reason",
@@ -1114,6 +1118,12 @@ export const STRINGS = {
     en: "Draft too long — copy the list instead.",
   },
   "manager.transport.detail.ordersTitle": { pl: "Zamówienia źródłowe", en: "Source orders" },
+  // Captain's order-level comment (captain_note), surfaced per member order on
+  // the Transport batch screen — Manager-ONLY (training-feedback-0901 F1
+  // point 5): unlike extra_items, this NEVER appears in a supplier-facing
+  // body or PDF. Mirrors manager.detail.captainNoteLabel (the single-order
+  // detail pane's equivalent block), pluralized for a batch of locations.
+  "manager.transport.captainNotes.title": { pl: "Komentarze kapitanów", en: "Captain notes" },
   "manager.transport.driverText.header": {
     pl: "Transport {id} — {date}",
     en: "Transport {id} — {date}",
@@ -1121,6 +1131,13 @@ export const STRINGS = {
   "manager.transport.driverText.supplierLine": {
     pl: "Dostawca: {supplier}",
     en: "Supplier: {supplier}",
+  },
+  // Ad-hoc off-catalogue items on the Transport path (training-feedback-0901
+  // F1) — driver-facing (WITH location attribution): driverText clipboard
+  // export + the driver PDF's own section title.
+  "manager.transport.driverText.extraItemsHeader": {
+    pl: "Pozycje spoza katalogu:",
+    en: "Off-catalogue items:",
   },
   "manager.transport.email.subject": {
     pl: "Zamówienie zbiorcze {supplier} — {date}",
@@ -1137,6 +1154,14 @@ export const STRINGS = {
   },
   "manager.transport.email.closing": { pl: "Pozdrawiam,", en: "Best regards," },
   "manager.transport.email.signature": { pl: "Pita Bros", en: "Pita Bros" },
+  // Ad-hoc off-catalogue items on the Transport path (training-feedback-0901
+  // F1) — supplier-facing (NO location attribution): shared by
+  // buildTransportEmailBody and gmailDraft.ts's buildDraftBody (the Gmail
+  // draft body that actually reaches the supplier/driver).
+  "manager.transport.email.extraItemsHeader": {
+    pl: "Pozycje spoza katalogu:",
+    en: "Off-catalogue items:",
+  },
 
   // Manager Transport v2 (to-ordering-pago ADDENDUM v2) — draft → sent
   // lifecycle workstation: editable status, logistics, weight preview, the
@@ -1171,6 +1196,23 @@ export const STRINGS = {
   "manager.transport.weight.noLimit": { pl: "brak limitu", en: "no limit" },
   "manager.transport.weight.remainingLabel": { pl: "Do limitu", en: "Remaining" },
   "manager.transport.weight.overLabel": { pl: "Ponad limit", en: "Over limit" },
+  // Excluded Pago lines notice (training-feedback-0901 F0/F7) — the
+  // self-pickup document silently drops any positive-qty line whose
+  // warehouse_pickup isn't true; this names them instead of a count (a count
+  // would fire on nearly every mixed Pago batch and get tuned out). See
+  // lib/transport.ts's computePagoWarehouseExclusion.
+  "manager.transport.pagoExclusion.excluded": {
+    pl: "Nie ujęto w zleceniu odbioru: {products}",
+    en: "Not included in the pickup order: {products}",
+  },
+  // Distinct from "excluded" — every positive line's warehouse_pickup is
+  // undefined (a frontend deployed ahead of the backend, or the column
+  // genuinely has no data yet for this batch). Must never read as "everything
+  // was excluded".
+  "manager.transport.pagoExclusion.dataMissing": {
+    pl: "Brak danych o odbiorze magazynowym dla pozycji w tym transporcie.",
+    en: "No warehouse-pickup data available yet for the items in this transport.",
+  },
   "manager.transport.weight.unknownWarning": {
     pl: "Brak wagi dla {count} pozycji",
     en: "Missing weight for {count} items",
@@ -1385,6 +1427,14 @@ export const STRINGS = {
   "manager.transport.print.lpCol": { pl: "Lp.", en: "No." },
   "manager.transport.print.unitCol": { pl: "Jm.", en: "Unit" },
   "manager.transport.print.totalCol": { pl: "Razem", en: "Total" },
+  // Ad-hoc off-catalogue items section on the driver PDF (training-feedback-
+  // 0901 F1) — see manager.transport.driverText.extraItemsHeader for the
+  // matching clipboard-text label (this one is a bare section-bar title, no
+  // trailing colon, matching this file's other section-bar titles).
+  "manager.transport.print.extraItemsSectionTitle": {
+    pl: "Pozycje spoza katalogu",
+    en: "Off-catalogue items",
+  },
   "manager.transport.print.footerGenerated": { pl: "Wygenerowano: {when}", en: "Generated: {when}" },
   "manager.transport.print.pagoDoc.entityBoxTitle": { pl: "Dane podmiotu", en: "Entity data" },
   "manager.transport.print.pagoDoc.docBoxTitle": { pl: "Dane dokumentu", en: "Document data" },

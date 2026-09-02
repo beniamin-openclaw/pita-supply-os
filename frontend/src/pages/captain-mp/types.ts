@@ -4,6 +4,7 @@
 // the user types a number).
 
 import type { ReasonCode } from "../../types";
+import type { ExtraItemRow } from "./lib/extraItems";
 
 export type { OrderableItem, Supplier, Location, ReasonCode } from "../../types";
 
@@ -21,10 +22,18 @@ export interface OrderLine {
   captain_comment?: string;
 }
 
-/** Draft persistence shape (localStorage). */
+/** Draft persistence shape (localStorage).
+ *
+ * `extraItems` / `captainNote` are OPTIONAL on purpose: a draft written before
+ * they existed has neither, and reading one must never crash or wipe the lines
+ * it does carry. Both were missing entirely until impl-review F4 — the restore
+ * banner asserted "liczby są zapamiętane" while the ad-hoc rows and the comment
+ * silently did not survive a reload or a supplier switch. */
 export interface DraftState {
   lines: Record<string, OrderLine>;
   timestamp: number;
+  extraItems?: ExtraItemRow[];
+  captainNote?: string;
 }
 
 export const REASON_CODES: readonly ReasonCode[] = [

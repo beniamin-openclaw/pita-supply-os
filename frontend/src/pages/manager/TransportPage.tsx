@@ -20,7 +20,9 @@ import {
   anyTransportDirty,
   buildTransportDriverText,
   buildTransportGmailUrl,
+  collectCaptainNotes,
   collectLogisticsSuggestions,
+  computePagoWarehouseExclusion,
   hasValidRecipient,
   loadSeenTransports,
   markTransportSeen,
@@ -34,6 +36,7 @@ import { AddLocationPicker } from "./transport/AddLocationPicker";
 import { HistorySection } from "./transport/HistorySection";
 import { LocationMultiSelectModal } from "./transport/LocationMultiSelectModal";
 import { LogisticsPanel } from "./transport/LogisticsPanel";
+import { PagoExclusionNotice } from "./transport/PagoExclusionNotice";
 import { PrintViews } from "./transport/PrintViews";
 import { TransportMatrix } from "./transport/TransportMatrix";
 import { WeightStrip } from "./transport/WeightStrip";
@@ -772,6 +775,18 @@ export function TransportPage() {
     return null;
   }, [supplier, gmail, t]);
 
+  // Captain's per-order comment, Manager-only (training-feedback-0901 F1
+  // point 5) — never reaches a supplier-facing body or PDF, only this screen.
+  const captainNotes = useMemo(() => (detail ? collectCaptainNotes(detail.orders) : []), [detail]);
+
+  // Excluded-Pago-lines notice (F0/F7) — computed independent of the
+  // print/draft click handlers (which build their own doc lazily) so it can
+  // render eagerly alongside the print/draft buttons.
+  const pagoExclusion = useMemo(
+    () => (detail ? computePagoWarehouseExclusion(detail) : null),
+    [detail],
+  );
+
   const driverSuggestions = useMemo(
     () => collectLogisticsSuggestions(batches ?? [], "driver"),
     [batches],
@@ -1110,6 +1125,22 @@ export function TransportPage() {
 
                   <WeightStrip detail={detail} />
 
+                  {captainNotes.length > 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                      <div className="mb-1 font-semibold">
+                        {t("manager.transport.captainNotes.title")}
+                      </div>
+                      <ul className="space-y-0.5">
+                        {captainNotes.map((n) => (
+                          <li key={n.locationName}>
+                            <span className="font-semibold">{n.locationName}:</span>{" "}
+                            <span className="whitespace-pre-line">{n.note}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <LogisticsPanel
                     key={detail.transport_id}
                     detail={detail}
@@ -1120,6 +1151,8 @@ export function TransportPage() {
                     busy={logisticsSaving}
                     onSave={handleSaveLogistics}
                   />
+
+                  {pagoExclusion && <PagoExclusionNotice exclusion={pagoExclusion} />}
 
                   <PrintViews
                     detail={detail}

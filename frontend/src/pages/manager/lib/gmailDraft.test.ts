@@ -339,3 +339,53 @@ describe("buildDriverDraftEmail", () => {
     expect(bodyText).toContain("08:30");
   });
 });
+
+// ---- training-feedback-0901 F1: ad-hoc off-catalogue items on the actual
+// Gmail draft body (buildDraftBody, shared by both buildPagoDraftEmail and
+// buildDriverDraftEmail) — this is the path that actually reaches Pago; the
+// bug was that only the single-order emailBody.ts/gmail_url.py pair carried
+// extra_items, not this one. ----------------------------------------------
+
+describe("buildDraftBody ad-hoc items (F1)", () => {
+  it("lists every order's ad-hoc items verbatim, never de-duplicated", () => {
+    const b = batch({
+      pickup_date: "2026-08-22",
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
+        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
+      ],
+    });
+    const { bodyText } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
+    expect(bodyText.split("Feta - 5 kg").length - 1).toBe(2);
+  });
+
+  it("omits the block entirely when no member order has an ad-hoc item", () => {
+    const { bodyText } = buildPagoDraftEmail(batch({ pickup_date: "2026-08-22" }), "Transport Sobota", makeT());
+    expect(bodyText).not.toContain("Pozycje spoza katalogu");
+  });
+
+  it("still honours the no-location-leak invariant when ad-hoc items are present", () => {
+    const b = batch({
+      pickup_date: "2026-08-22",
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
+        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [] },
+      ],
+    });
+    const { bodyText } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
+    expect(bodyText).toContain("Feta - 5 kg");
+    expect(bodyText).not.toContain("Wola");
+    expect(bodyText).not.toContain("Bracka");
+  });
+
+  it("also appears in the driver draft email body (buildDraftBody is shared)", () => {
+    const b = batch({
+      pickup_date: "2026-08-22",
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
+      ],
+    });
+    const { bodyText } = buildDriverDraftEmail(b, "Transport Sobota", makeT());
+    expect(bodyText).toContain("Feta - 5 kg");
+  });
+});

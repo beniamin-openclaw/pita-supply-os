@@ -243,3 +243,32 @@ describe("buildPagoPdfDocDefinition", () => {
     expect(text).toContain("Pomidory malinowe");
   });
 });
+
+// ---- training-feedback-0901 F1: ad-hoc off-catalogue items, WITH location
+// attribution, on the driver PDF -------------------------------------------
+
+describe("buildDriverPdfDocDefinition — ad-hoc items with location attribution (F1)", () => {
+  it("includes each item's location name AND text when present", () => {
+    const doc = buildTransportDriverPrintDoc(
+      batch({
+        orders: [
+          { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
+          { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
+        ],
+      }),
+      "Bukat",
+    );
+    const pdfDoc = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);
+    const text = flattenText(pdfDoc.content);
+    expect(text).toContain("Pita Bros Wola");
+    expect(text).toContain("Pita Bros Bracka");
+    // Never de-duplicated — the same text appears once PER location.
+    expect(text.match(/Feta - 5 kg/g)?.length).toBe(2);
+  });
+
+  it("omits the section entirely when no member order has an ad-hoc item", () => {
+    const doc = buildTransportDriverPrintDoc(batch(), "Bukat");
+    const pdfDoc = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);
+    expect(flattenText(pdfDoc.content)).not.toContain("Pozycje spoza katalogu");
+  });
+});

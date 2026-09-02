@@ -3683,6 +3683,40 @@ def manager_transport_batches(
     return summaries[:limit]
 
 
+def _load_transport_events_safe(backend, transport_id: str) -> list[TransportEvent]:
+    """Read one batch's event history, newest first, capped at 100 — NEVER
+    raising.
+
+    Mirrors ``_load_inventory_events_safe`` (F6, same precedent): the history
+    is supplementary, annotating a batch the caller has already successfully
+    loaded (or is assembling), so no failure reading it should cost the reader
+    the batch itself. Catching only ``sheets.WorksheetNotFound`` — as the
+    original inline code at this call site did — was a Sheets-shaped
+    assumption: on Supabase an absent ``transport_events`` table raises a
+    SQLAlchemy ``ProgrammingError`` instead, which propagated straight through
+    and turned the entire ``manager_transport_batch_detail`` route into a 500
+    (the batch became unopenable over a supplementary history read) whenever
+    the code ran ahead of migration 0010 — exactly the deploy-ordering window
+    the migration is most likely to be read in. So this degrades on ANY
+    failure, mirroring ``_log_transport_event``'s best-effort contract on the
+    write side.
+    """
+    try:
+        events = backend.load_transport_events_for(transport_id)
+    except Exception:
+        log.warning(
+            "Transport event history unavailable for transport_id=%s — "
+            "returning [] (the batch itself is unaffected)",
+            transport_id,
+            exc_info=True,
+        )
+        return []
+    events.sort(
+        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
+    )
+    return events[:100]
+
+
 @app.get(
     "/api/manager/transport/batch/{transport_id}", response_model=TransportBatchDetail
 )
@@ -3800,6 +3834,11 @@ def manager_transport_batch_detail(
                 received_discrepancy_count=received_discrepancy_by_order.get(
                     order.order_id, 0
                 ),
+                # F1: the member order already carries both (no extra fetch) —
+                # see TransportBatchOrder for why extra_items reaches the
+                # supplier while captain_note stays Manager-only.
+                extra_items=order.extra_items,
+                captain_note=order.captain_note,
             )
         )
 
@@ -3834,17 +3873,10 @@ def manager_transport_batch_detail(
         timestamps = [o.manager_sent_at for o in group if o.manager_sent_at is not None]
         created = min(timestamps) if timestamps else None
 
-    # Event history (v3 Phase 6) — newest first, capped 100. Degrades to []
-    # on a missing 'transport_events' worksheet (mirrors the receipts scan
-    # above), never raises — history is supplementary, not load-bearing.
-    try:
-        events = backend.load_transport_events_for(transport_id)
-    except sheets.WorksheetNotFound:
-        events = []
-    events.sort(
-        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
-    )
-    events = events[:100]
+    # Event history (v3 Phase 6) — newest first, capped 100, NEVER raising
+    # (F6): see _load_transport_events_safe — history is supplementary, not
+    # load-bearing, and must never cost the reader the batch itself.
+    events = _load_transport_events_safe(backend, transport_id)
 
     return TransportBatchDetail(
         transport_id=transport_id,

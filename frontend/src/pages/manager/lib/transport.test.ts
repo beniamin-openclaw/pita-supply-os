@@ -13,6 +13,7 @@ import type {
 } from "../../../types";
 import {
   anyTransportDirty,
+  buildExtraItemsSupplierBlock,
   buildTransportDriverPrintDoc,
   buildTransportDriverText,
   buildTransportEmailBody,
@@ -21,7 +22,10 @@ import {
   buildTransportMatrix,
   buildLogisticsOptions,
   buildTransportPagoPrintDoc,
+  collectCaptainNotes,
+  collectExtraItemsByLocation,
   collectLogisticsSuggestions,
+  computePagoWarehouseExclusion,
   computeWeightStrip,
   parseConfigList,
   hasValidRecipient,
@@ -177,6 +181,131 @@ describe("buildTransportEmailSubject / buildTransportEmailBody", () => {
     });
     const body = buildTransportEmailBody(b, makeT());
     expect(body).toContain("Cebula");
+  });
+});
+
+// ---- training-feedback-0901 F1: ad-hoc off-catalogue items on the Transport
+// path -------------------------------------------------------------------
+
+describe("collectExtraItemsByLocation / buildExtraItemsSupplierBlock", () => {
+  it("collects every non-blank extra_items LINE across orders, attributed to location, never deduped", () => {
+    const orders = [
+      { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [], extra_items: "Feta - 5 kg\nCebula - 2 kg" },
+      { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_claimed" as const, lines: [], extra_items: "Feta - 5 kg" },
+    ];
+    expect(collectExtraItemsByLocation(orders)).toEqual([
+      { locationName: "Pita Bros Wola", text: "Feta - 5 kg" },
+      { locationName: "Pita Bros Wola", text: "Cebula - 2 kg" },
+      { locationName: "Pita Bros Bracka", text: "Feta - 5 kg" },
+    ]);
+  });
+
+  it("treats an absent extra_items field as no items rather than throwing (FE-ahead-of-BE safety)", () => {
+    const orders = [
+      { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [] },
+    ];
+    expect(() => collectExtraItemsByLocation(orders)).not.toThrow();
+    expect(collectExtraItemsByLocation(orders)).toEqual([]);
+  });
+
+  it("ignores a blank/whitespace-only extra_items value", () => {
+    const orders = [
+      { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [], extra_items: "   " },
+    ];
+    expect(collectExtraItemsByLocation(orders)).toEqual([]);
+  });
+
+  it("buildExtraItemsSupplierBlock prefixes a header only when at least one item exists", () => {
+    const withItems = buildExtraItemsSupplierBlock(
+      [{ order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [], extra_items: "Feta - 5 kg" }],
+      makeT(),
+    );
+    expect(withItems[0]).toBe("Pozycje spoza katalogu:");
+    expect(withItems).toContain("Feta - 5 kg");
+
+    const withoutItems = buildExtraItemsSupplierBlock(
+      [{ order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [] }],
+      makeT(),
+    );
+    expect(withoutItems).toEqual([]);
+  });
+});
+
+describe("buildTransportEmailBody / buildTransportDriverText — ad-hoc items (F1)", () => {
+  function batchWithExtraItems(items: [string | undefined, string | undefined]): TransportBatchDetail {
+    return batch({
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [], extra_items: items[0] },
+        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_claimed", lines: [], extra_items: items[1] },
+      ],
+    });
+  }
+
+  it("buildTransportEmailBody lists the SAME item from two locations TWICE — never de-duplicated (10kg, not 5)", () => {
+    const body = buildTransportEmailBody(batchWithExtraItems(["Feta - 5 kg", "Feta - 5 kg"]), makeT());
+    const occurrences = body.split("Feta - 5 kg").length - 1;
+    expect(occurrences).toBe(2);
+  });
+
+  it("buildTransportEmailBody skips the block entirely when no order has an ad-hoc item", () => {
+    const body = buildTransportEmailBody(batchWithExtraItems([undefined, undefined]), makeT());
+    expect(body).not.toContain("Pozycje spoza katalogu");
+  });
+
+  it("buildTransportEmailBody carries NO location attribution for ad-hoc items", () => {
+    const body = buildTransportEmailBody(batchWithExtraItems(["Feta - 5 kg", undefined]), makeT());
+    expect(body).toContain("Feta - 5 kg");
+    expect(body).not.toContain("Wola");
+    expect(body).not.toContain("Bracka");
+  });
+
+  it("buildTransportDriverText lists the same ad-hoc item WITH location attribution for each location", () => {
+    const text = buildTransportDriverText(batchWithExtraItems(["Feta - 5 kg", "Feta - 5 kg"]), makeT());
+    expect(text).toContain("Pita Bros Wola: Feta - 5 kg");
+    expect(text).toContain("Pita Bros Bracka: Feta - 5 kg");
+  });
+
+  it("buildTransportDriverText omits the section when no order has an ad-hoc item", () => {
+    const text = buildTransportDriverText(batchWithExtraItems([undefined, undefined]), makeT());
+    expect(text).not.toContain("Pozycje spoza katalogu");
+  });
+
+  it("buildTransportDriverPrintDoc carries the same per-location ad-hoc entries as buildTransportDriverText", () => {
+    const b = batch({
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [], extra_items: "Feta - 5 kg\nCebula - 2 kg" },
+      ],
+    });
+    const doc = buildTransportDriverPrintDoc(b, "Bukat");
+    expect(doc.extraItems).toEqual([
+      { locationName: "Pita Bros Wola", text: "Feta - 5 kg" },
+      { locationName: "Pita Bros Wola", text: "Cebula - 2 kg" },
+    ]);
+  });
+
+  it("buildTransportDriverPrintDoc.extraItems is [] when no order carries one", () => {
+    const doc = buildTransportDriverPrintDoc(batch(), "Bukat");
+    expect(doc.extraItems).toEqual([]);
+  });
+});
+
+describe("collectCaptainNotes (F1 point 5 — Manager-only surface)", () => {
+  it("collects a note per location, skipping blank/whitespace-only/absent notes", () => {
+    const orders = [
+      { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [], captain_note: "proszę pilnie, mamy event" },
+      { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_claimed" as const, lines: [], captain_note: "   " },
+      { order_id: "ORD-3", location_id: "KEN", location_name: "Pita Bros Ken", status: "manager_claimed" as const, lines: [] },
+    ];
+    expect(collectCaptainNotes(orders)).toEqual([
+      { locationName: "Pita Bros Wola", note: "proszę pilnie, mamy event" },
+    ]);
+  });
+
+  it("returns [] when no order carries a note", () => {
+    const orders = [
+      { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed" as const, lines: [] },
+    ];
+    expect(collectCaptainNotes(orders)).toEqual([]);
   });
 });
 
@@ -844,6 +973,90 @@ describe("buildTransportPagoPrintDoc", () => {
     expect(doc.products.map((p) => p.productId)).toEqual(["P1", "P2"]);
   });
 
+  // --- excludedProducts / warehousePickupDataMissing (training-feedback-0901 F7) ---
+
+  it("collects the NAMES of every excluded line for a Pago batch", () => {
+    const b = pagoBatch([
+      aggLine("P024", "Gyros 15 KG", 2, true),
+      aggLine("P130", "Rolki do kasy", 110, false),
+      aggLine("P089", "Serwetki PB", 5, false),
+    ]);
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.excludedProducts).toEqual(["Rolki do kasy", "Serwetki PB"]);
+    expect(doc.warehousePickupDataMissing).toBe(false);
+  });
+
+  it("is empty for a non-Pago batch even though nothing is flagged true", () => {
+    const b = batch({
+      supplier_id: "SUP_BUKAT",
+      supplier_name: "Bukat",
+      lines: [aggLine("P1", "Pomidory", 12, false), aggLine("P2", "Cebula", 3)],
+    });
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
+    expect(doc.excludedProducts).toEqual([]);
+    expect(doc.warehousePickupDataMissing).toBe(false);
+  });
+
+  it("flags warehousePickupDataMissing — NOT 'everything excluded' — when every positive line's field is undefined", () => {
+    const b = pagoBatch([aggLine("P089", "Boxy PB", 2), aggLine("P090", "Tacki bez logo", 1)]);
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.warehousePickupDataMissing).toBe(true);
+    expect(doc.excludedProducts).toEqual([]);
+  });
+
+  it("does NOT flag missing data once at least one line carries a real boolean", () => {
+    const b = pagoBatch([
+      aggLine("P024", "Gyros 15 KG", 2, true),
+      aggLine("P089", "Boxy PB", 2), // undefined, but not EVERY positive line
+    ]);
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.warehousePickupDataMissing).toBe(false);
+    expect(doc.excludedProducts).toEqual(["Boxy PB"]);
+  });
+
+  it("ignores zero-qty lines for the missing-data determination", () => {
+    const b = pagoBatch([aggLine("P1", "Zero qty item", 0)]);
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.warehousePickupDataMissing).toBe(false);
+    expect(doc.excludedProducts).toEqual([]);
+  });
+});
+
+describe("computePagoWarehouseExclusion", () => {
+  it("agrees with buildTransportPagoPrintDoc's excludedProducts/warehousePickupDataMissing", () => {
+    const b = batch({
+      supplier_id: "SUP_PAGO",
+      supplier_name: "Pago",
+      lines: [
+        {
+          product_id: "P130",
+          product_name_pl: "Rolki do kasy",
+          supplier_product_id: "SP_P130",
+          supplier_product_name: "Rolki do kasy",
+          purchase_unit: "szt",
+          total_qty_purchase: 110,
+          per_location: [],
+          warehouse_pickup: false,
+        },
+      ],
+    });
+    const exclusion = computePagoWarehouseExclusion(b);
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(exclusion).toEqual({
+      isPago: true,
+      excludedProducts: doc.excludedProducts,
+      warehousePickupDataMissing: doc.warehousePickupDataMissing,
+    });
+    expect(exclusion.excludedProducts).toEqual(["Rolki do kasy"]);
+  });
+
+  it("is inert ({isPago:false, excludedProducts:[], warehousePickupDataMissing:false}) for a non-Pago batch", () => {
+    expect(computePagoWarehouseExclusion(batch())).toEqual({
+      isPago: false,
+      excludedProducts: [],
+      warehousePickupDataMissing: false,
+    });
+  });
 });
 
 // ---- v4 feedback round 2 (feature 1): "Transport Sobota · Warszawa · 22.08.26" ----

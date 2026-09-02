@@ -713,6 +713,17 @@ export interface TransportBatchOrder {
   // yet, so both stay 0 there). Mirrors ManagerQueueItem's receipt signal.
   received_count?: number;
   received_discrepancy_count?: number;
+  // Ad-hoc off-catalogue items + order-level Captain comment
+  // (training-feedback-0901 F1) — same fields as CaptainOrderDetail /
+  // ManagerOrderDetail, now also read on each member order of a Transport
+  // batch. Backend default `str = ""` -> optional here (lessons.md). EVERY
+  // reader must use `?? ""` rather than assume presence: a frontend deployed
+  // ahead of this backend field would otherwise get `undefined`, and e.g.
+  // `undefined.trim()` inside TransportPage's `gmail` useMemo (which calls
+  // into buildTransportEmailBody -> this field) would crash the whole
+  // Transport page via the ErrorBoundary.
+  extra_items?: string;
+  captain_note?: string;
 }
 
 /** Draft/sent/cancelled lifecycle status of a Transport batch (v2 + v3 cancel

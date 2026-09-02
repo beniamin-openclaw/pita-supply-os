@@ -21,14 +21,23 @@
 
 import type { StringKey } from "../../../i18n/strings";
 import type { TransportBatchDetail } from "../../../types";
+// Deliberate exception to this module's usual zero-coupling-with-transport.ts
+// stance (see `isoDatePart` below): the ad-hoc off-catalogue items block MUST
+// be the SAME function both here and in transport.ts's buildTransportEmailBody
+// call, not two independently-maintained copies — that exact "both builders"
+// drift (migration 0013 patched one and not the other) is the bug this fixes
+// (training-feedback-0901 F1).
+import { buildExtraItemsSupplierBlock } from "./transport";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
 // ---------- date helper ------------------------------------------------------
 
 /** ISO datetime/date -> the date part only ("YYYY-MM-DD"). "" when absent.
- * Mirrors the private `isoDatePart` in lib/transport.ts (kept local here so
- * this module has no non-type dependency on transport.ts). */
+ * Mirrors the private `isoDatePart` in lib/transport.ts — kept as an
+ * independent one-line copy rather than imported, unlike
+ * `buildExtraItemsSupplierBlock` above (see that import's comment for why
+ * THAT one specifically must be shared, not duplicated). */
 function isoDatePart(iso?: string | null): string {
   if (!iso) return "";
   return iso.slice(0, 10);
@@ -191,6 +200,16 @@ function buildDraftBody(
   }
   if (detail.vehicle) {
     out.push(t("manager.transport.gmailDraft.body.vehicleLine", { vehicle: detail.vehicle }));
+  }
+  // Ad-hoc off-catalogue items (training-feedback-0901 F1) — this is the body
+  // of the Gmail draft that actually reaches the supplier/driver, so it uses
+  // the SAME buildExtraItemsSupplierBlock as transport.ts's
+  // buildTransportEmailBody (verbatim, never de-duplicated, no location
+  // attribution) rather than a second, driftable copy.
+  const extraItemsBlock = buildExtraItemsSupplierBlock(detail.orders, t);
+  if (extraItemsBlock.length > 0) {
+    out.push("");
+    out.push(...extraItemsBlock);
   }
   out.push("");
   out.push(t("manager.transport.gmailDraft.body.attachmentLine"));

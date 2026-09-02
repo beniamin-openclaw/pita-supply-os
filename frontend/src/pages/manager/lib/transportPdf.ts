@@ -165,6 +165,23 @@ export function buildDriverPdfDocDefinition(
     ];
   });
 
+  // Ad-hoc off-catalogue items (training-feedback-0901 F1), WITH location
+  // attribution — this is an internal document, and the driver needs to know
+  // who gets the extra feta. Omitted entirely when no member order carries one.
+  const extraItemsSection: unknown[] =
+    doc.extraItems.length > 0
+      ? [
+          sectionBar(t("manager.transport.print.extraItemsSectionTitle")),
+          {
+            table: {
+              widths: ["*", "*"],
+              body: doc.extraItems.map((item) => [{ text: item.locationName }, { text: item.text }]),
+            },
+            layout: TABLE_BORDER_LAYOUT,
+          },
+        ]
+      : [];
+
   return {
     pageSize: "A4",
     pageOrientation: "portrait",
@@ -183,6 +200,7 @@ export function buildDriverPdfDocDefinition(
         },
         layout: TABLE_BORDER_LAYOUT,
       },
+      ...extraItemsSection,
       footerLine(t, generatedAt, doc.transportId),
     ],
   };

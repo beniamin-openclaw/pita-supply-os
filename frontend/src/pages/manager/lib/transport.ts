@@ -45,6 +45,92 @@ function isoDatePart(iso?: string | null): string {
   return iso.slice(0, 10);
 }
 
+// ---- training-feedback-0901 F1: ad-hoc off-catalogue items on the Transport
+// path -------------------------------------------------------------------
+//
+// The Captain's "+ dodaj produkt" free-text add (extra_items, one item per
+// line — see captain-mp/lib/extraItems.ts) reaches the supplier on the
+// single-order path via emailBody.ts + the backend's gmail_url.py. Neither
+// Transport builder carried it before this change, so anything ordered
+// through a combined Transport batch (how Pago actually ships) silently
+// never reached the supplier at all. Two shapes, deliberately asymmetric —
+// mirrors this file's header comment on the driver/supplier split:
+//
+//   - SUPPLIER-facing (buildExtraItemsSupplierBlock): flat, VERBATIM, never
+//     de-duplicated (two locations both asking "Feta - 5 kg" are 10kg total,
+//     not 5 — collapsing them would under-order), and carries NO location
+//     attribution (the supplier document never learns which of our
+//     restaurants ordered what).
+//   - DRIVER-facing (collectExtraItemsByLocation): the same items, but WITH
+//     per-location attribution — the driver is the one who has to know who
+//     gets the extra feta.
+//
+// Both buildTransportEmailBody and gmailDraft.ts's buildDraftBody call the
+// SAME buildExtraItemsSupplierBlock (rather than each re-deriving the block)
+// so the two cannot silently drift apart the way emailBody.ts / gmail_url.py
+// once did — the exact gap this change fixes.
+
+/** One ad-hoc off-catalogue item line, attributed to the location whose
+ * Captain added it — the driver-facing shape (see the section header above). */
+export interface TransportExtraItem {
+  locationName: string;
+  text: string; // one already-serialized "{name} - {qty} {unit}" line, verbatim
+}
+
+/** Every non-blank `extra_items` LINE across a batch's member orders, each
+ * attributed to its order's location. Preserves order-then-line order; NEVER
+ * deduplicates. `order.extra_items` is read via `?? ""` — an order from a
+ * backend that doesn't carry the field yet contributes nothing rather than
+ * throwing. Shared by buildTransportDriverText and
+ * buildTransportDriverPrintDoc so the two driver documents cannot drift. */
+export function collectExtraItemsByLocation(orders: TransportBatchOrder[]): TransportExtraItem[] {
+  const out: TransportExtraItem[] = [];
+  for (const order of orders) {
+    const raw = (order.extra_items ?? "").trim();
+    if (!raw) continue;
+    for (const rawLine of raw.split("\n")) {
+      const text = rawLine.trim();
+      if (text) out.push({ locationName: order.location_name, text });
+    }
+  }
+  return out;
+}
+
+/**
+ * Supplier-facing "Pozycje spoza katalogu" block lines — [] when no member
+ * order carries any ad-hoc item (callers then skip the block entirely).
+ * Verbatim, never de-duplicated, no location attribution — see the section
+ * header above. This is the ONE function both buildTransportEmailBody and
+ * gmailDraft.ts's buildDraftBody call, so a future edit to one cannot forget
+ * the other.
+ */
+export function buildExtraItemsSupplierBlock(orders: TransportBatchOrder[], t: TFunc): string[] {
+  const items = collectExtraItemsByLocation(orders).map((item) => item.text);
+  if (items.length === 0) return [];
+  return [t("manager.transport.email.extraItemsHeader"), ...items];
+}
+
+/** A member order's non-blank Captain comment (`captain_note`), attributed to
+ * its location — the Manager-ONLY surface (F1 point 5): unlike extra_items,
+ * captain_note never appears in any supplier-facing body or PDF, only on the
+ * Transport screen (TransportPage.tsx). */
+export interface TransportCaptainNote {
+  locationName: string;
+  note: string;
+}
+
+/** Every member order's non-blank captain_note, in order, skipping blank/
+ * whitespace-only or absent notes. `order.captain_note` is read via `?? ""`
+ * (see TransportBatchOrder's field comment). */
+export function collectCaptainNotes(orders: TransportBatchOrder[]): TransportCaptainNote[] {
+  const out: TransportCaptainNote[] = [];
+  for (const order of orders) {
+    const note = (order.captain_note ?? "").trim();
+    if (note) out.push({ locationName: order.location_name, note });
+  }
+  return out;
+}
+
 /**
  * The PRIVATE driver list: transport id + date, then one block per product —
  * "<produkt> — <total> <jm>." followed by an indented "  <lokal>: <qty> <jm>."
@@ -64,6 +150,17 @@ export function buildTransportDriverText(detail: TransportBatchDetail, t: TFunc)
     });
     out.push("");
   });
+
+  // Ad-hoc off-catalogue items (F1) — WITH location attribution (this is an
+  // internal document; the driver needs to know who gets the extra feta).
+  // Shares collectExtraItemsByLocation with buildTransportDriverPrintDoc so
+  // the two driver documents never drift apart.
+  const extraItems = collectExtraItemsByLocation(detail.orders);
+  if (extraItems.length > 0) {
+    out.push(t("manager.transport.driverText.extraItemsHeader"));
+    extraItems.forEach((item) => out.push(`  ${item.locationName}: ${item.text}`));
+    out.push("");
+  }
 
   // Trim the trailing blank line the loop above always leaves.
   while (out.length > 0 && out[out.length - 1] === "") out.pop();
@@ -96,6 +193,16 @@ export function buildTransportEmailBody(detail: TransportBatchDetail, t: TFunc):
     const name = line.supplier_product_name || line.product_name_pl;
     out.push(`${idx + 1}. | ${name} | ${formatQty(line.total_qty_purchase)} ${line.purchase_unit}`);
   });
+
+  // Ad-hoc off-catalogue items (F1) — verbatim, never de-duplicated, no
+  // location attribution. Shared with gmailDraft.ts's buildDraftBody via
+  // buildExtraItemsSupplierBlock so the two supplier-facing builders cannot
+  // silently drift apart again (the exact gap this change fixes).
+  const extraItemsBlock = buildExtraItemsSupplierBlock(detail.orders, t);
+  if (extraItemsBlock.length > 0) {
+    out.push("");
+    out.push(...extraItemsBlock);
+  }
 
   out.push("");
   out.push(t("manager.transport.email.closing"));
@@ -600,6 +707,10 @@ export interface TransportDriverPrintDoc {
   locationsLine: string; // joined location names, for the header "Miasto/Lokalizacje" row
   locations: string[]; // location names, one per matrix column — same order as each line's qtyByLocation
   products: PrintDriverProductLine[];
+  // Ad-hoc off-catalogue items (F1), WITH location attribution — see
+  // collectExtraItemsByLocation. [] when no member order carries one; the PDF
+  // builder then omits the section entirely.
+  extraItems: TransportExtraItem[];
 }
 
 /** Build the printable DRIVER document ("LISTA DLA KIEROWCY"): logistics
@@ -653,7 +764,61 @@ export function buildTransportDriverPrintDoc(
     locationsLine: locations.join(", "),
     locations,
     products,
+    extraItems: collectExtraItemsByLocation(detail.orders),
   };
+}
+
+// ---- training-feedback-0901 F7: make the excluded Pago lines visible -------
+//
+// buildTransportPagoPrintDoc's `warehouse_pickup` filter (below) means the
+// self-pickup document for SUP_PAGO silently drops everything that isn't
+// physically collected on the warehouse run — real for a mixed batch (till
+// rolls, napkins, trays purchased through Pago but never picked up there),
+// but invisible to the manager without this. A COUNT would fire on nearly
+// every Pago batch (warehouse_pickup=false is the NORMAL state for most
+// lines) and get tuned out — so this surfaces NAMES instead.
+
+export interface PagoWarehouseExclusion {
+  isPago: boolean;
+  // Names (product_name_pl) of positive-qty lines the warehouse_pickup filter
+  // excluded from the self-pickup document. Always [] for a non-Pago batch —
+  // only the Pago document filters on this column at all.
+  excludedProducts: string[];
+  // True when EVERY positive-qty line's warehouse_pickup is undefined — a
+  // frontend deployed ahead of the backend, or the column genuinely has no
+  // data yet. This is a DISTINCT state from "these lines were excluded": it
+  // must never render as "everything excluded". Always false for a non-Pago
+  // batch (the column is meaningless there).
+  warehousePickupDataMissing: boolean;
+}
+
+/**
+ * Which of a Pago batch's positive-qty lines the warehouse_pickup filter
+ * drops from the self-pickup document, by name — the pure computation behind
+ * both buildTransportPagoPrintDoc's `excludedProducts`/
+ * `warehousePickupDataMissing` fields and TransportPage's on-screen notice
+ * (computed once here so the two can never disagree).
+ */
+export function computePagoWarehouseExclusion(detail: TransportBatchDetail): PagoWarehouseExclusion {
+  const isPago = detail.supplier_id === "SUP_PAGO";
+  if (!isPago) return { isPago, excludedProducts: [], warehousePickupDataMissing: false };
+
+  const positiveLines = detail.lines.filter((line) => line.total_qty_purchase > 0);
+  // "No data at all" holds ONLY when every positive line's field is
+  // undefined. A mix of true/false/undefined is treated as normal (undefined
+  // reads as excluded, same as migration 0015's `false` default) — it is
+  // specifically the ALL-undefined case that signals "this column hasn't
+  // been populated for this batch yet" rather than "genuinely excluded".
+  const warehousePickupDataMissing =
+    positiveLines.length > 0 && positiveLines.every((line) => line.warehouse_pickup === undefined);
+
+  const excludedProducts = warehousePickupDataMissing
+    ? []
+    : positiveLines
+        .filter((line) => line.warehouse_pickup !== true)
+        .map((line) => line.product_name_pl);
+
+  return { isPago, excludedProducts, warehousePickupDataMissing };
 }
 
 export interface PrintPagoProductLine {
@@ -693,6 +858,9 @@ export interface TransportPagoPrintDoc {
   vehicle: string;
   supplierName: string;
   products: PrintPagoProductLine[];
+  // F7 — see the section header above and PagoWarehouseExclusion.
+  excludedProducts: string[];
+  warehousePickupDataMissing: boolean;
 }
 
 /** Build the printable SUPPLIER document ("ZLECENIE ODBIORU WŁASNEGO" for
@@ -707,7 +875,8 @@ export function buildTransportPagoPrintDoc(
   detail: TransportBatchDetail,
   displayLabel: string,
 ): TransportPagoPrintDoc {
-  const isPago = detail.supplier_id === "SUP_PAGO";
+  const { isPago, excludedProducts, warehousePickupDataMissing } =
+    computePagoWarehouseExclusion(detail);
 
   return {
     transportId: detail.transport_id,
@@ -760,6 +929,8 @@ export function buildTransportPagoPrintDoc(
           qty: line.total_qty_purchase,
         };
       }),
+    excludedProducts,
+    warehousePickupDataMissing,
   };
 }
 
