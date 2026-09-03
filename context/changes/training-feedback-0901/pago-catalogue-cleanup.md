@@ -68,12 +68,31 @@ awaiting their supplier.
 
 Every re-pointed product verified still orderable, now via Mory.
 
-## Open
+## Second pass — office supplies also go to Mory (2026-09-03)
 
-- **Eight `Biurowe` items** — rolki do kasy ×4, koperty, markery, długopisy,
-  zszywki — still sit under Pago. The operator will name their supplier. No
-  supplier in the system carries category `Biurowe` at all today, so they cannot
-  simply be re-pointed.
+The operator: there is no vendor for them. "Kupują w różnych miejscach", and the
+stock sits at Mory. So the eight `Biurowe` items — rolki do kasy ×4, koperty,
+markery, długopisy, zszywki — were re-pointed to `SUP_MORY` exactly like the
+packaging: new `SP_MORY_*` rows, Pago rows retired.
+
+`SUP_PAGO` is now **six active rows — the catalogue and nothing else**. `SUP_MORY`
+carries 15.
+
+## Side effect of the code fix, worth a decision
+
+Enacting `active` hides two products that were retired on `SUP_INTERMLECZ` but
+still carry a threshold at KEN: **Jogurt naturalny** (target 2) and **Ser Gouda**
+(target 3). Both have **zero order lines in the entire history**, so nothing in
+practice is lost — but if KEN genuinely wants them, the fix is one statement:
+
+```sql
+UPDATE supplier_products SET active = true
+ WHERE supplier_id = 'SUP_INTERMLECZ' AND product_id IN ('P162','P172');
+```
+
+Otherwise their KEN thresholds are the stale half and should be dropped.
+
+## Open
 - **PAGO-007 (CIASTO FILLO KANAKI 20X450G) and PAGO-008 (ARMENONVILLE)** do not
   exist as products. The pickup document is two lines short until they are created.
 - `warehouse_pickup` is deliberately left `false` on the Mory rows: the column is
