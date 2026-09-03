@@ -203,7 +203,25 @@ def _build_orderable_items(
     ``backend`` (so sheet/supabase serve live master data), filters
     ``supplier_products`` to this supplier AND only products that have a
     ``location_product_setting`` at this location, then enriches each via
-    ``_build_orderable_item``."""
+    ``_build_orderable_item``.
+
+    Three filters, and the ``active`` ones were MISSING until 2026-09-03:
+
+    - ``sp.supplier_id`` — this supplier's catalogue.
+    - ``sp.product_id in settings_by_pid`` — configured for this location.
+    - ``sp.active`` — the supplier still sells it. **This was ignored**, so a
+      supplier_product retired by setting ``active = false`` kept appearing on
+      the Captain's order screen. It was not theoretical: prod had Feta blok,
+      Tirokafteri and Tzatzyki deactivated on SUP_PAGO (they come from Bukat)
+      and all three were still orderable from Pago, 7 order lines each in 60
+      days. ~30 further retired rows across Intermlecz, Kuchnie Świata,
+      Coca-Cola, Eurofood and Blue Service were likewise still on offer.
+    - ``product.active`` — the SKU itself is not discontinued. Same class of
+      bug; ``captain_inventory_products`` already filters on it, this path did
+      not, so a discontinued product stayed orderable.
+
+    A product hidden here is never lost: it keeps its ``order_lines`` history
+    (there is an FK), and it reappears the moment the row is re-activated."""
     products_by_id = {p.product_id: p for p in backend.load_products()}
     settings_by_pid = {
         s.product_id: s
@@ -213,7 +231,10 @@ def _build_orderable_items(
     sps = [
         sp
         for sp in backend.load_supplier_products()
-        if sp.supplier_id == supplier_id and sp.product_id in settings_by_pid
+        if sp.supplier_id == supplier_id
+        and sp.active
+        and sp.product_id in settings_by_pid
+        and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
     return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
 
