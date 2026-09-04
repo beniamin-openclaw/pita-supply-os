@@ -304,7 +304,7 @@ prod. Nothing in this change has been applied to production.
 
 ### Phase 0: Prod hygiene
 - [x] `prod-sql-phase0.sql` written (RLS on nine backup tables, DROP offered as alternative)
-- [ ] applied to prod — **operator**
+- [ ] applied to prod — **STILL OPEN**: nine backup tables still have RLS disabled (re-checked 2026-09-03)
 
 ### Phase 1a: Captain UX, zero backend
 - [x] `OverruleAllControl` + pure `overruleAll()` helper, fill-empties only
@@ -319,7 +319,7 @@ prod. Nothing in this change has been applied to production.
 - [x] Both email builders — backend `gmail_url.py` and the authoritative frontend
       `emailBody.ts` (the B3 fix)
 - [x] Frontend controls on create + edit screens; Manager detail renders both
-- [ ] `0013` applied to prod — **operator, before the code is pushed**
+- [x] `0013` applied to prod — 2026-09-02, verified on the live schema
 
 ### Phase 1c: Minimum-order indicator
 - [x] `minimum_order_value_pln` joined onto queue + both detail models, no server-side reader
@@ -335,11 +335,11 @@ prod. Nothing in this change has been applied to production.
 - [x] Frontend edit screen + read-only correction history
 - [x] Category labels translate under EN; product names never do
 - [x] Three immutability docstrings corrected
-- [ ] `0014` applied to prod — **operator**
+- [x] `0014` applied to prod — 2026-09-02, verified on the live schema
 
 ### Phase 3: Master-data batch
 - [x] `prod-sql-phase3.sql` written for every unblocked item, dry-run clean on demo
-- [ ] applied to prod — **operator** (after reviewing the flagged threshold split)
+- [ ] applied to prod — **STILL OPEN**: Bombilla is still active and Corfu Pilsner still `szt`, so `prod-sql-phase3.sql` has not been run (re-checked 2026-09-03). Note the Pago/Mory cleanup landed separately and supersedes this file's Pago rows.
 - [ ] Marek-blocked rows: rolls, tapes, crates, minimums
 
 ### Phase 4: Transport documents
@@ -349,8 +349,8 @@ prod. Nothing in this change has been applied to production.
 - [x] Batch supplier derived from the header rather than `group[0]`
 - [x] `LOC • ` prefix dropped from driver-list column headers
 - [x] `prod-sql-phase4-datapass.sql` written, dry-run clean on demo
-- [ ] `0015` + data pass applied to prod, **in that order, before the code is pushed**
-- [ ] Live browser PDF check on prod — **operator**
+- [x] `0015` + data pass applied to prod in that order — 2026-09-02/03; six SUP_PAGO rows flagged, verified
+- [ ] Live browser PDF check on prod — **STILL OPEN**, operator
 
 ## Verification record (demo, 2026-09-02)
 

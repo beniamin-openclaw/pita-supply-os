@@ -103,3 +103,33 @@ site against `STRINGS`. 290 green tests did not catch findings 2.
 
 Rollback note: `5706f0c` must not be reverted alone — it carries the `!isPago`
 escape, without which every non-Pago order document empties silently.
+
+## Closing note (2026-09-03)
+
+Archived with four items deliberately open, all of them operator actions rather
+than engineering work:
+
+1. **Phase 0 RLS** — `prod-sql-phase0.sql` written but never run; nine backup
+   tables still readable with the anon key. Re-verified open on 2026-09-03.
+2. **Phase 3 master data** — `prod-sql-phase3.sql` written and dry-run clean on
+   the demo DB, but never run on prod: Bombilla is still active, Corfu Pilsner
+   still `szt`. The gyros split, gas-cylinder split and cooked chickpeas are all
+   still pending in it. The Pago/Mory cleanup landed separately and supersedes
+   only that file's Pago rows.
+3. **Marek's inputs** — roll pack sizes, tapes, crates, bottle-crate rules and
+   the supplier minimums. Two Trello cards, both due 2026-09-04.
+4. **Live PDF check on prod** — the operator has not confirmed the two Transport
+   documents by eye. `lessons.md` is explicit that this class of feature fails
+   silently past green tests, so it stays open rather than being assumed.
+
+Everything engineering-side shipped and is live: four rounds of code across
+`656bbea…c93dd57`, three migrations, two independent reviews plus one adversarial
+plan hardening, and a second review round whose four risks were also fixed.
+
+Follow-on work identified but deliberately NOT taken here:
+- **"Cofnij wysyłkę"** — there is no path back from `manager_sent`; analysed and
+  scoped, needs its own change.
+- **Telegram notifications and the delivery schedule** — the operator's own
+  "later stage" from the training feedback.
+- **A standalone ad-hoc order** for a supplier with no catalogue — hardening
+  rejected the shortcut; the real remedy is giving Allegro and Selgros catalogues.
