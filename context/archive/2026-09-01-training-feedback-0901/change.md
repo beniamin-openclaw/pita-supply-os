@@ -1,10 +1,10 @@
 ---
 change_id: training-feedback-0901
 title: Training-session feedback — ordering UX, master data, transport documents
-status: implemented
+status: archived
 created: 2026-09-01
-updated: 2026-09-02
-archived_at: null
+updated: 2026-09-04
+archived_at: 2026-09-04T16:06:34Z
 ---
 
 ## Notes
