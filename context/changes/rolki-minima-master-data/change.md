@@ -26,7 +26,8 @@ Domknięcie dwóch inputów Marka/Sławka, na które czekała zmiana
 - Minima: z arkusza Marka.
 
 **Czego NIE ma w źródłach (otwarte):**
-- **Taśmy** — ani w mailu, ani w arkuszu. Wciąż zablokowane na inpucie Marka.
+- ~~Taśmy~~ — operator (2026-09-05): „taśmy to inaczej rolki”; to ten sam temat,
+  zamknięty tą zmianą. Żadnej osobnej listy taśm nie będzie.
 - **Pack size rolek** (opak 10 / 6) — nie podane; `purchase_unit` zostaje `szt`.
 - Minima dla Pago, Eurofood, Filber, Kamino, Allegro, Selgros — nie w arkuszu.
 - **GoGastro — minimum 600 PLN (arkusz Marka)**, ale dostawca nie istnieje w
@@ -60,8 +61,8 @@ Idempotence proven with poisoned probe values (99/999/'probe'): counts unchanged
 
 ### Open follow-ups
 
-1. **Taśmy** — still no source (Marek). 2. **Pack size rolek** (opak 10/6) — Marek.
-3. **GoGastro 600 PLN** — enter when the supplier is onboarded. 4. Minima outside Warsaw
+1. ~~Taśmy~~ — resolved: operator confirmed „taśmy” = rolls (same thing). 2. **Pack size
+rolek** (opak 10/6) — Marek. 3. **GoGastro 600 PLN** — enter when the supplier is onboarded. 4. Minima outside Warsaw
 unknown. 5. Operator eye-check on prod: Bracka inventory shows 3 rolls; Manager chip
 for Intermlecz reads against 650. 6. ESTIM thresholds on the 4 new active rows
 (BRACKA__P183/P184, BROWARY__P184, NORBLIN__P183) to be verified after the first order
