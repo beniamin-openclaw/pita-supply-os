@@ -1,10 +1,10 @@
 ---
 change_id: rolki-minima-master-data
 title: Rolki per lokal (tabela Sławka) + minima dostawców (arkusz Marka) w prod master data
-status: impl_reviewed
+status: archived
 created: 2026-09-05
 updated: 2026-09-05
-archived_at: null
+archived_at: 2026-09-05T16:50:33Z
 ---
 
 ## Notes
