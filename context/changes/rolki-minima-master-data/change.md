@@ -1,7 +1,7 @@
 ---
 change_id: rolki-minima-master-data
 title: Rolki per lokal (tabela Sławka) + minima dostawców (arkusz Marka) w prod master data
-status: implemented
+status: impl_reviewed
 created: 2026-09-05
 updated: 2026-09-05
 archived_at: null
@@ -56,6 +56,8 @@ zero rows. Orderable-Mory simulation (same join as `_build_orderable_items`) per
 location returns exactly Sławek's sizes: WOLA 57/20·57/30·80/80, KEN 57/20·80/80,
 BROWARY 57/20·57/80·80/80, BRACKA 80/20·80/80·57/80, NORBLIN 80/20·80/80.
 Idempotence proven with poisoned probe values (99/999/'probe'): counts unchanged, 0 leaks.
+In-flight check (audit f): zero draft/captain_submitted/manager_claimed orders carry a
+line on any deleted size — the DELETE cannot break a Captain edit.
 
 **No deploy involved** — data only; prod reads Supabase.
 

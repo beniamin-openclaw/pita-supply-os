@@ -106,7 +106,8 @@ nic nie blokuje submitu ani dispatchu.
 
 ## What We're NOT Doing
 
-- **Nie dotykamy taśm** — brak źródła (ani mail, ani arkusz). Otwarte na Marka.
+- ~~Nie dotykamy taśm~~ — operator (2026-09-05): „taśmy to inaczej rolki”; ten sam
+  temat, domknięty tą zmianą (impl-review F3).
 - **Nie zmieniamy `purchase_unit` rolek na `opak`** — pack size wciąż nie podany.
 - **Nie wpisujemy minimów** dla Pago, Eurofood, Filber, Kamino, Allegro, Selgros,
   Spec Food, Mory, Internal — nie ma ich w arkuszu; zostają NULL (chip = fallback 400).
@@ -215,12 +216,15 @@ zapisana w `change.md` do czasu onboardingu dostawcy.
 - `supplier_products` = BEFORE + 2; każdy z P183/P184 ma dokładnie 1 wiersz.
 - `location_product_settings` = BEFORE + 8 − 6; zero wierszy z `target ≠ max`
   lub `min > max`; zero wierszy P128/P130 w BRACKA, P130 w KEN, P142/P128/P130 w NORBLIN.
+- Zero zamówień w toku (draft / captain_submitted / manager_claimed) z liniami na
+  usuniętych rozmiarach (audyt f, impl-review F1) — sprawdzone: 0 wierszy.
 - `suppliers`: dokładnie 5 wierszy z `minimum_order_value_pln` NOT NULL; liczba
   dostawców bez zmian (14).
 - Ponowne uruchomienie skryptu nie zmienia liczników (idempotencja: `ON CONFLICT DO
   NOTHING`, DELETE/UPDATE bez efektu przy drugim przebiegu).
-- `GET /api/captain/orderable?supplier_id=SUP_MORY`: **wśród pozycji „Rolki do
-  kasy…”** (Mory serwuje też opakowania, więc lista jest dłuższa niż 3) BRACKA ma
+- Zestaw rolek per lokal, który zwróciłby `GET /api/captain/orderable?supplier_id=SUP_MORY`
+  (zweryfikowane symulacją SQL tego samego joinu co `_build_orderable_items`, bez
+  tokenów kapitanów pod ręką — impl-review F2): **wśród pozycji „Rolki do kasy…”** (Mory serwuje też opakowania, więc lista jest dłuższa niż 3) BRACKA ma
   tylko 80/20, 80/80, 57/80; NORBLIN 80/20, 80/80; KEN 57/20, 80/80; BROWARY 57/20,
   80/80, 57/80; WOLA bez zmian.
 
@@ -264,6 +268,13 @@ FK — potwierdzone na prodzie, że `order_lines`, `inventory_count_lines` i
 stanu; (5) GoGastro poza bazą (nullability kolumn była OK, ale zaślepka bez katalogu
 nie ma wartości); (6) kryterium API doprecyzowane do pozycji „Rolki do kasy”;
 (7) audyt per lokal zawężony do lokali w zmianie. Odrzucone: nic.
+
+## Implementation review (2026-09-05)
+
+`reviews/impl-review.md` — APPROVED, 0 critical, 1 warning (F1: brak asercji o
+zamówieniach w toku w audycie; dodana jako (f), wynik 0 wierszy), 2 obserwacje (F2:
+weryfikacja orderable symulacją SQL zamiast wywołania API; F3: nieaktualna linia o
+taśmach) — wszystkie trzy naniesione w dokumentach.
 
 ## Progress
 

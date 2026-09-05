@@ -186,6 +186,18 @@ COMMIT;
 -- SELECT supplier_id, minimum_order_value_pln FROM suppliers
 --  WHERE minimum_order_value_pln IS NOT NULL ORDER BY 1;
 --
+-- -- f) no IN-FLIGHT order references a size its location just lost (impl-review F1).
+-- --    captain_order_edit re-validates lines against location_product_settings, so
+-- --    a captain_submitted order on a deleted row would 400 on edit. Ran 2026-09-05
+-- --    after APPLY: 0 rows. Keep this assertion in every future master-data DELETE.
+-- SELECT o.order_id, o.location_id, o.status, ol.product_id
+--   FROM orders o JOIN order_lines ol USING (order_id)
+--  WHERE o.status IN ('draft','captain_submitted','manager_claimed')
+--    AND ((o.location_id='KEN' AND ol.product_id='P130')
+--      OR (o.location_id='BRACKA' AND ol.product_id IN ('P128','P130'))
+--      OR (o.location_id='NORBLIN' AND ol.product_id IN ('P128','P130','P142'))
+--      OR ol.product_id='P142');
+--
 -- -- e) API (captain tokens): GET /api/captain/orderable?supplier_id=SUP_MORY —
 -- --    among items whose name starts with 'Rolki do kasy', BRACKA returns only
 -- --    80 na 20 / 80 na 80 / 57 na 80; NORBLIN 80 na 20 / 80 na 80;
