@@ -65,7 +65,6 @@ line on any deleted size — the DELETE cannot break a Captain edit.
 
 1. ~~Taśmy~~ — resolved: operator confirmed „taśmy” = rolls (same thing). 2. **Pack size
 rolek** (opak 10/6) — Marek. 3. **GoGastro 600 PLN** — enter when the supplier is onboarded. 4. Minima outside Warsaw
-unknown. 5. Operator eye-check on prod: Bracka inventory shows 3 rolls; Manager chip
-for Intermlecz reads against 650. 6. ESTIM thresholds on the 4 new active rows
+unknown. 5. ~~Operator eye-check on prod~~ — confirmed 2026-09-05. 6. ESTIM thresholds on the 4 new active rows
 (BRACKA__P183/P184, BROWARY__P184, NORBLIN__P183) to be verified after the first order
 cycle. 7. Tell Sławek/Marek: KEN lost 57/30 (ordered 80 szt on 2026-09-01, cancelled).

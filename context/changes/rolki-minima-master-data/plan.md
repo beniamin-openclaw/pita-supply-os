@@ -292,5 +292,5 @@ taśmach) — wszystkie trzy naniesione w dokumentach.
 - [x] 1.5 Orderable Mory (symulacja SQL joinu `_build_orderable_items`) dla WOLA/KEN/BROWARY/BRACKA/NORBLIN zgodne z tabelą
 
 ### Manual
-- [ ] 2.1 Operator widzi rolki na Bracce i chip 650 dla Intermlecz
+- [x] 2.1 Operator widzi rolki na Bracce i chip 650 dla Intermlecz — potwierdzone 2026-09-05 („jest ok”)
 - [x] 2.2 Wpis wykonania w `change.md`, status → implemented
