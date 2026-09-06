@@ -1,10 +1,10 @@
 ---
 change_id: pack-units-display-mobile-wrap
 title: Pack-unit equivalents on the order screens, mobile text wrapping, P179 rename
-status: implemented
+status: archived
 created: 2026-09-06
 updated: 2026-09-06
-archived_at: null
+archived_at: 2026-09-06T19:23:51Z
 ---
 
 ## Notes
