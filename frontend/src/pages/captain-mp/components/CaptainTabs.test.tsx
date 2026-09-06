@@ -29,9 +29,18 @@ describe("CaptainTabs", () => {
   });
 
   it("marks the inventory tab active across the whole inventory subtree", () => {
-    // The history sub-page must keep the Remanent tab active (broadened match).
+    // The history sub-page is now part of the Historia tab, NOT Remanent —
+    // it is reachable from there via the Zamówienia/Remanenty segment.
     renderAt("/captain-v2/inventory-history");
+    expect(screen.getByText("Historia").closest("a")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Remanent").closest("a")).not.toHaveAttribute("aria-current");
+    expect(screen.getByText("Zamówienia").closest("a")).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks the Remanent tab active on the count-entry screen", () => {
+    renderAt("/captain-v2/inventory-count");
     expect(screen.getByText("Remanent").closest("a")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Historia").closest("a")).not.toHaveAttribute("aria-current");
     expect(screen.getByText("Zamówienia").closest("a")).not.toHaveAttribute("aria-current");
   });
 });

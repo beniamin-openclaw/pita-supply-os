@@ -679,10 +679,6 @@ export const STRINGS = {
     pl: "Szkic inwentaryzacji zapisany",
     en: "Inventory draft saved",
   },
-  "inventory.successToast": {
-    pl: "Inwentaryzacja zapisana ({count} poz.)",
-    en: "Inventory saved ({count} items)",
-  },
   "inventory.submitError": {
     pl: "Błąd zapisu inwentaryzacji: {detail}",
     en: "Inventory save error: {detail}",
@@ -707,6 +703,9 @@ export const STRINGS = {
     pl: "Puste = nie policzone · 0 = brak na stanie",
     en: "Blank = not counted · 0 = zero on hand",
   },
+  "inventory.submitted.title": { pl: "Remanent zapisany", en: "Inventory saved" },
+  "inventory.submitted.viewHistory": { pl: "Zobacz w historii", en: "View in history" },
+  "inventory.submitted.newCount": { pl: "Nowy remanent", en: "New count" },
   "captain.prefillApplied": {
     pl: "Wypełniono stan z inwentaryzacji ({count} poz.)",
     en: "Stock pre-filled from inventory ({count} items)",
@@ -807,6 +806,11 @@ export const STRINGS = {
   // so it's one tap from every captain screen, not buried in the hamburger.
   "tabs.history": { pl: "Historia", en: "History" },
   "tabs.inventory": { pl: "Remanent", en: "Inventory" },
+
+  // Historia tab — Zamówienia / Remanenty segment
+  "history.segment.orders": { pl: "Zamówienia", en: "Orders" },
+  "history.segment.inventory": { pl: "Remanenty", en: "Inventory counts" },
+  "history.segment.ariaLabel": { pl: "Rodzaj historii", en: "History type" },
   // S-08 — Manager inventory view (FR-018)
   "manager.inventory.title": { pl: "Remanenty", en: "Inventory counts" },
   "manager.inventory.navLink": { pl: "Remanenty", en: "Inventory" },
@@ -854,7 +858,6 @@ export const STRINGS = {
   // S-08 — Captain inventory history (FR-019)
   "inventory.history.title": { pl: "Historia remanentów", en: "Inventory history" },
   "inventory.history.navLink": { pl: "Historia remanentów", en: "Inventory history" },
-  "inventory.history.back": { pl: "Powrót do remanentu", en: "Back to count" },
   "inventory.history.detailBack": { pl: "Powrót do listy", en: "Back to list" },
   "inventory.history.detailTitle": { pl: "Remanent {date}", en: "Count {date}" },
   "inventory.history.empty": {

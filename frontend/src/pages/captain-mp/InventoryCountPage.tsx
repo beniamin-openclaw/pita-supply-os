@@ -15,6 +15,7 @@ import { useT } from "../../i18n";
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
 import { InventoryCountGrid } from "./components/InventoryCountGrid";
+import { InventorySubmittedCard } from "./components/InventorySubmittedCard";
 import { Toast, type ToastProps } from "./components/Toast";
 import { groupProductsByCategory } from "./lib/inventoryGrouping";
 import { blankInventoryLine as blankLine, type InventoryLineInput } from "./lib/inventoryLines";
@@ -145,6 +146,12 @@ export function InventoryCountPage() {
   const [toast, setToast] = useState<ToastProps | null>(null);
   const [draftBanner, setDraftBanner] = useState<{ timestamp: number } | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [submitted, setSubmitted] = useState<{
+    countId: string;
+    submittedAt: number;
+    who: string;
+    lineCount: number;
+  } | null>(null);
 
   const token = getToken("captain") || "";
   const todayIso = localTodayIso();
@@ -331,6 +338,21 @@ export function InventoryCountPage() {
     });
   }, []);
 
+  // Reset to a fresh blank pass (append-only — a re-count is a new snapshot).
+  // Shared by the not-persisted (seed-mode) fallback and the "new count" button
+  // on the confirmation card.
+  const resetForm = useCallback(() => {
+    setLines((prev) => {
+      const reset: Record<string, InventoryLineInput> = {};
+      Object.keys(prev).forEach((pid) => {
+        reset[pid] = blankLine();
+      });
+      return reset;
+    });
+    setCountedBy("");
+    setCountDate(localTodayIso());
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     setConfirmOpen(false);
     setIsSubmitting(true);
@@ -343,25 +365,23 @@ export function InventoryCountPage() {
       });
       clearDraft(DRAFT_KEY);
       addNameSuggestion("count_user", countedBy.trim());
-      setCountedBy("");
-      // Reset to a fresh blank pass (append-only — a re-count is a new snapshot).
-      setLines((prev) => {
-        const reset: Record<string, InventoryLineInput> = {};
-        Object.keys(prev).forEach((pid) => {
-          reset[pid] = blankLine();
+      const notPersisted = resp.warnings.some((w) => w.includes("not persisted"));
+      if (notPersisted) {
+        // Seed mode — nothing was actually saved, so a confirmation card would
+        // be misleading. Keep the pre-existing behaviour exactly: reset the
+        // form and show the error-styled toast, no card.
+        resetForm();
+        showToast(t("inventory.notPersistedWarning"), "error");
+      } else {
+        setSubmitted({
+          countId: resp.count_id,
+          submittedAt: Date.now(),
+          who: countedBy.trim(),
+          lineCount: resp.line_count,
         });
-        return reset;
-      });
-      setCountDate(localTodayIso());
+      }
       const snap = await api.inventoryLatest();
       setLatestSnapshot(snap);
-      const notPersisted = resp.warnings.some((w) => w.includes("not persisted"));
-      showToast(
-        notPersisted
-          ? t("inventory.notPersistedWarning")
-          : t("inventory.successToast", { count: resp.line_count }),
-        notPersisted ? "error" : "success",
-      );
     } catch (err) {
       const detail =
         err instanceof ApiError ? err.detail : err instanceof Error ? err.message : "?";
@@ -369,7 +389,7 @@ export function InventoryCountPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [countDate, countedBy, countedLines, showToast, t]);
+  }, [countDate, countedBy, countedLines, resetForm, showToast, t]);
 
   // ---- Render ---------------------------------------------------------------
   const submitDisabled =
@@ -389,115 +409,130 @@ export function InventoryCountPage() {
       <CaptainTabs />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
-        <div className="mb-4">
-          <h2 className="text-lg font-bold text-slate-900">{t("inventory.title")}</h2>
-          <p className="text-sm text-slate-600">{t("inventory.subtitle")}</p>
-          <button
-            type="button"
-            onClick={() => navigate("/captain-v2/inventory-history")}
-            className="mt-2 text-sm font-semibold text-brand hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
-          >
-            {t("inventory.history.navLink")} →
-          </button>
-        </div>
-
-        {/* Variant C — stacked metadata; blank-vs-0 hint lives in the sticky bar */}
-        <div className="mb-4 space-y-3">
-          <div>
-            <label htmlFor="inv-count-date" className="block text-xs font-semibold text-slate-700 mb-1">
-              {t("inventory.countDateLabel")}
-            </label>
-            <input
-              id="inv-count-date"
-              type="date"
-              value={countDate}
-              max={todayIso}
-              onChange={(e) => handleCountDateChange(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="inv-counted-by" className="block text-xs font-semibold text-slate-700 mb-1">
-              {t("inventory.countedByLabel")}
-              <span className="text-red-600" aria-hidden="true">
-                {" "}
-                *
-              </span>
-            </label>
-            <input
-              id="inv-counted-by"
-              type="text"
-              list="inv-counted-by-suggestions"
-              value={countedBy}
-              onChange={(e) => setCountedBy(e.target.value)}
-              autoComplete="name"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <datalist id="inv-counted-by-suggestions">
-              {nameSuggestions.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-            <p className="mt-1 text-[11px] text-slate-500">{t("inventory.countedByRequired")}</p>
-          </div>
-        </div>
-
-        {latestSnapshot && lastCountTime && (
-          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
-            {t("inventory.lastCountBanner", {
-              who: latestSnapshot.count_user?.trim() || "—",
-              time: lastCountTime,
-            })}
-          </div>
-        )}
-
-        {draftBanner && (
-          <div
-            role="dialog"
-            aria-label={t("inventory.draftBannerAriaLabel")}
-            className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm"
-          >
-            <div className="text-amber-900">
-              {t("inventory.draftBannerTitle", {
-                time: formatDateTime(draftBanner.timestamp, { timeStyle: "short" }),
-              })}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={acceptDraft}
-                className="px-3 py-2 rounded-md bg-amber-700 text-white text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
-              >
-                {t("inventory.draftBannerAccept")}
-              </button>
-              <button
-                type="button"
-                onClick={discardDraft}
-                className="px-3 py-2 rounded-md bg-white text-amber-900 border border-amber-300 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
-              >
-                {t("inventory.draftBannerDiscard")}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="text-center py-12 text-slate-600">{t("inventory.loading")}</div>
-        ) : products.length === 0 ? (
-          <div className="text-center py-12 text-slate-600">{t("inventory.empty")}</div>
-        ) : (
-          <InventoryCountGrid
-            groupedProducts={groupedProducts}
-            lines={lines}
-            collapsedCategories={collapsedCategories}
-            onToggleCategory={toggleCategory}
-            onStockChange={handleStockChange}
-            onCommentChange={handleCommentChange}
+        {submitted ? (
+          <InventorySubmittedCard
+            submittedAt={submitted.submittedAt}
+            who={submitted.who}
+            lineCount={submitted.lineCount}
+            onViewHistory={() => navigate("/captain-v2/inventory-history")}
+            onNewCount={() => {
+              resetForm();
+              setSubmitted(null);
+            }}
           />
+        ) : (
+          <>
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-slate-900">{t("inventory.title")}</h2>
+              <p className="text-sm text-slate-600">{t("inventory.subtitle")}</p>
+              <button
+                type="button"
+                onClick={() => navigate("/captain-v2/inventory-history")}
+                className="mt-2 text-sm font-semibold text-brand hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+              >
+                {t("inventory.history.navLink")} →
+              </button>
+            </div>
+
+            {/* Variant C — stacked metadata; blank-vs-0 hint lives in the sticky bar */}
+            <div className="mb-4 space-y-3">
+              <div>
+                <label htmlFor="inv-count-date" className="block text-xs font-semibold text-slate-700 mb-1">
+                  {t("inventory.countDateLabel")}
+                </label>
+                <input
+                  id="inv-count-date"
+                  type="date"
+                  value={countDate}
+                  max={todayIso}
+                  onChange={(e) => handleCountDateChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="inv-counted-by" className="block text-xs font-semibold text-slate-700 mb-1">
+                  {t("inventory.countedByLabel")}
+                  <span className="text-red-600" aria-hidden="true">
+                    {" "}
+                    *
+                  </span>
+                </label>
+                <input
+                  id="inv-counted-by"
+                  type="text"
+                  list="inv-counted-by-suggestions"
+                  value={countedBy}
+                  onChange={(e) => setCountedBy(e.target.value)}
+                  autoComplete="name"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <datalist id="inv-counted-by-suggestions">
+                  {nameSuggestions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                <p className="mt-1 text-[11px] text-slate-500">{t("inventory.countedByRequired")}</p>
+              </div>
+            </div>
+
+            {latestSnapshot && lastCountTime && (
+              <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-900">
+                {t("inventory.lastCountBanner", {
+                  who: latestSnapshot.count_user?.trim() || "—",
+                  time: lastCountTime,
+                })}
+              </div>
+            )}
+
+            {draftBanner && (
+              <div
+                role="dialog"
+                aria-label={t("inventory.draftBannerAriaLabel")}
+                className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm"
+              >
+                <div className="text-amber-900">
+                  {t("inventory.draftBannerTitle", {
+                    time: formatDateTime(draftBanner.timestamp, { timeStyle: "short" }),
+                  })}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={acceptDraft}
+                    className="px-3 py-2 rounded-md bg-amber-700 text-white text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+                  >
+                    {t("inventory.draftBannerAccept")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={discardDraft}
+                    className="px-3 py-2 rounded-md bg-white text-amber-900 border border-amber-300 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+                  >
+                    {t("inventory.draftBannerDiscard")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isLoading ? (
+              <div className="text-center py-12 text-slate-600">{t("inventory.loading")}</div>
+            ) : products.length === 0 ? (
+              <div className="text-center py-12 text-slate-600">{t("inventory.empty")}</div>
+            ) : (
+              <InventoryCountGrid
+                groupedProducts={groupedProducts}
+                lines={lines}
+                collapsedCategories={collapsedCategories}
+                onToggleCategory={toggleCategory}
+                onStockChange={handleStockChange}
+                onCommentChange={handleCommentChange}
+              />
+            )}
+          </>
         )}
       </main>
 
-      {!isLoading && products.length > 0 && (
+      {!submitted && !isLoading && products.length > 0 && (
         <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
           <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
             <div className="flex-1 min-w-0">
@@ -547,14 +582,16 @@ export function InventoryCountPage() {
         </div>
       )}
 
-      <ConfirmApproveDialog
-        open={confirmOpen}
-        counted={countedCount}
-        total={products.length}
-        onConfirm={handleSubmit}
-        onCancel={() => setConfirmOpen(false)}
-        isSubmitting={isSubmitting}
-      />
+      {!submitted && (
+        <ConfirmApproveDialog
+          open={confirmOpen}
+          counted={countedCount}
+          total={products.length}
+          onConfirm={handleSubmit}
+          onCancel={() => setConfirmOpen(false)}
+          isSubmitting={isSubmitting}
+        />
+      )}
     </div>
   );
 }

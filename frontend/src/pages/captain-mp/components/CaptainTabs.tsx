@@ -16,12 +16,17 @@ export function CaptainTabs() {
   const { t } = useT();
   const { pathname } = useLocation();
 
-  // The inventory tab owns the whole inventory subtree (`-count` AND the
-  // `-history` sub-page); the Historia tab owns the orders list/detail/edit/
-  // receive subtree (`/captain-v2/orders…`); the Zamówienia tab owns the bare
-  // order-submission screen (everything else under captain-v2).
-  const inventoryActive = pathname.startsWith("/captain-v2/inventory");
-  const historyActive = pathname.startsWith("/captain-v2/orders");
+  // The Historia tab now owns BOTH histories: the orders list/detail/edit/
+  // receive subtree (`/captain-v2/orders…`) AND the inventory history
+  // sub-page (`/captain-v2/inventory-history…`, reachable there via the
+  // Zamówienia/Remanenty segment — see HistorySegment). The Remanent tab
+  // narrows to just the count-entry screen (`/captain-v2/inventory-count`);
+  // the Zamówienia tab owns the bare order-submission screen (everything
+  // else under captain-v2).
+  const historyActive =
+    pathname.startsWith("/captain-v2/orders") ||
+    pathname.startsWith("/captain-v2/inventory-history");
+  const inventoryActive = pathname.startsWith("/captain-v2/inventory-count");
   const ordersActive = !inventoryActive && !historyActive;
 
   const base =

@@ -19,6 +19,7 @@ import type {
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
+import { HistorySegment } from "./components/HistorySegment";
 import { getToken } from "../../auth";
 
 export function InventoryHistoryPage() {
@@ -275,17 +276,7 @@ export function InventoryHistoryPage() {
       <CaptainTabs />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
-        <div className="mb-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate("/captain-v2/inventory-count")}
-            aria-label={t("inventory.history.back")}
-            className="p-1.5 -ml-1.5 rounded-md text-slate-600 active:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          >
-            <ChevronLeft size={20} aria-hidden="true" />
-          </button>
-          <h2 className="text-lg font-bold text-slate-900">{t("inventory.history.title")}</h2>
-        </div>
+        <HistorySegment />
 
         {error && (
           <div className="rounded border-2 border-red-400 bg-red-50 p-4 text-sm text-red-900" role="alert">

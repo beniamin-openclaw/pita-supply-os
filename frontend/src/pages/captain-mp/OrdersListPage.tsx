@@ -9,6 +9,7 @@ import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import type { CaptainOrderListItem } from "../../types";
 import { CaptainTabs } from "./components/CaptainTabs";
+import { HistorySegment } from "./components/HistorySegment";
 import { statusVisual } from "./lib/orderStatus";
 
 export function OrdersListPage() {
@@ -52,6 +53,8 @@ export function OrdersListPage() {
       <CaptainTabs />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
+        <HistorySegment />
+
         {error && (
           <div className="mb-4 rounded border-2 border-red-400 bg-red-50 p-4 text-sm text-red-900" role="alert">
             <div className="font-semibold">{t("manager.error")}</div>
