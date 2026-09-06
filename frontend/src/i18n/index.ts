@@ -47,7 +47,7 @@ function persistLang(l: Lang): void {
 
 /** Polish: 1 / 2-4 (except 12-14) / else.
  *  English: 1 / else. */
-function pluralKey(n: number, lang: Lang): "one" | "few" | "many" {
+export function pluralForm(n: number, lang: Lang): "one" | "few" | "many" {
   if (lang === "en") return n === 1 ? "one" : "many";
   if (n === 1) return "one";
   const mod10 = Math.abs(n) % 10;
@@ -118,7 +118,7 @@ export function LangProvider({ children }: LangProviderProps) {
 
   const tPlural = useCallback(
     (prefix: string, noun: string, n: number, extraVars?: Record<string, string | number>) => {
-      const form = pluralKey(n, lang);
+      const form = pluralForm(n, lang);
       const key = `${prefix}.${form}.${noun}` as StringKey;
       // Fallback: if .few doesn't exist for English (some entries skip it), try .many.
       const fallback = `${prefix}.many.${noun}` as StringKey;

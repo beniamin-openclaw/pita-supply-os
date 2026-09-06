@@ -26,6 +26,7 @@ import {
   lineVisualStateWithQty,
 } from "./lib/managerLine";
 import { DecimalInput } from "../../components/ui/DecimalInput";
+import { baseToPacks, formatPacks, isPackBased } from "../../lib/packUnits";
 
 function reasonLabelKey(code: ReasonCode): StringKey {
   return `reason.codes.${code}` as StringKey;
@@ -60,7 +61,7 @@ export function OrderLineTable({
   onQtyChange,
   onCommentChange,
 }: OrderLineTableProps) {
-  const { t } = useT();
+  const { t, lang } = useT();
 
   const headers: StringKey[] = [
     "manager.col.product",
@@ -146,14 +147,22 @@ export function OrderLineTable({
                   {line.purchase_unit}
                 </td>
 
-                {/* Stan (base / inventory unit) */}
+                {/* Stan (base / inventory unit), with a pack-unit hint when the
+                    purchase unit packs multiple inventory units (e.g. a
+                    zgrzewka of 24 szt). Read-only. */}
                 <td className="px-3 py-2 whitespace-nowrap tabular-nums text-slate-700">
                   {line.current_stock_qty_base} {line.inventory_unit}
+                  {isPackBased(line.units_per_purchase_unit) && (
+                    <span className="ml-1 text-xs text-slate-500">{`(${formatPacks(baseToPacks(line.current_stock_qty_base, line.units_per_purchase_unit), line.purchase_unit, lang)})`}</span>
+                  )}
                 </td>
 
-                {/* Cel */}
+                {/* Cel — same pack-unit hint as Stan. Read-only. */}
                 <td className="px-3 py-2 whitespace-nowrap tabular-nums text-slate-700">
                   {line.target_stock_qty_base}
+                  {isPackBased(line.units_per_purchase_unit) && (
+                    <span className="ml-1 text-xs text-slate-500">{`(${formatPacks(baseToPacks(line.target_stock_qty_base, line.units_per_purchase_unit), line.purchase_unit, lang)})`}</span>
+                  )}
                 </td>
 
                 {/* Sugestia (algorithm) */}

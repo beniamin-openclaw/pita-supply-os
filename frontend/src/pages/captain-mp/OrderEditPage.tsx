@@ -243,10 +243,10 @@ export function OrderEditPage() {
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
           <div className="min-w-0">
-            <h1 className="font-semibold text-base tracking-tight truncate">
+            <h1 className="font-semibold text-base tracking-tight break-words leading-tight">
               {t("orders.detail.editBtn")} · {order?.supplier_name ?? "…"}
             </h1>
-            <div className="text-xs opacity-90 truncate">
+            <div className="text-xs opacity-90 break-words leading-tight">
               {order?.captain_submitted_at
                 ? t("orders.detail.submittedAt", {
                     value: formatDateTime(order.captain_submitted_at),

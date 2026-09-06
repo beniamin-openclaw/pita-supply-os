@@ -189,17 +189,17 @@ export function ReceiveDeliveryPage() {
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
           <div className="min-w-0">
-            <h1 className="font-semibold text-lg tracking-tight truncate leading-tight">
+            <h1 className="font-semibold text-lg tracking-tight break-words leading-tight">
               {t("delivery.pageTitle")}
               {order ? ` · ${order.supplier_name}` : ""}
             </h1>
             {order && (
-              <p className="text-xs text-white/70 font-mono truncate leading-tight">
+              <p className="text-xs text-white/70 font-mono break-all leading-tight">
                 {order.order_id} · {order.order_date}
               </p>
             )}
             {order?.ordered_by && (
-              <p className="text-xs text-white/80 truncate leading-tight">
+              <p className="text-xs text-white/80 break-words leading-tight">
                 {t("orders.detail.orderedBy", { value: order.ordered_by })}
               </p>
             )}

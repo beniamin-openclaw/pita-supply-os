@@ -157,7 +157,7 @@ function QueueCard({
         }`}
       >
         <div className="flex items-center gap-2">
-          <span className="min-w-0 truncate text-sm font-medium text-slate-900">
+          <span className="min-w-0 break-words text-sm font-medium text-slate-900">
             {item.location_name} → {item.supplier_name}
           </span>
           {item.last_edited_at && (

@@ -143,6 +143,41 @@ export const STRINGS = {
     en: "Below minimum: {min} {unit}",
   },
 
+  // ProductCard — pack-unit variants (units_per_purchase_unit > 1) ----------
+  // Rendered as three no-wrap segments joined by " · " so a phone breaks the
+  // line only between them, never inside "(5 zgrzewek)".
+  "card.targetPart": {
+    pl: "Cel: {target} {inventoryUnit} ({packs})",
+    en: "Target: {target} {inventoryUnit} ({packs})",
+  },
+  "card.maxPart": {
+    pl: "Max: {max} {inventoryUnit} ({packs})",
+    en: "Max: {max} {inventoryUnit} ({packs})",
+  },
+  "card.ratioPart": {
+    pl: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
+    en: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
+  },
+  "card.stockPacks": {
+    pl: "{base} {inventoryUnit} = {packs}",
+    en: "{base} {inventoryUnit} = {packs}",
+  },
+  "card.packsToStock": {
+    pl: "{packs} = {base} {inventoryUnit}",
+    en: "{packs} = {base} {inventoryUnit}",
+  },
+  "card.packInputToggle": {
+    pl: "wpisz w {unitLoc}",
+    en: "enter in {unitLoc}",
+  },
+  // Suggestion tile, pack variant: "brakuje 80 szt" / "= 3,3 zgrzewki" /
+  // "→ 4 zgrzewki" as three no-wrap segments (the "=" / "→" parts are symbols
+  // + a formatted pack label, composed in ProductCard).
+  "card.suggestionNeed": {
+    pl: "brakuje {base} {inventoryUnit}",
+    en: "need {base} {inventoryUnit}",
+  },
+
   // Row state messages (compute.ts) -----------------------------------------
   "state.empty": { pl: "Wpisz zamówienie", en: "Enter order qty" },
   "state.devNoReason": {

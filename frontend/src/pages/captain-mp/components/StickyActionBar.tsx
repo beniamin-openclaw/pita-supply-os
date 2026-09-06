@@ -43,8 +43,14 @@ export function StickyActionBar({
     <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
       <div className="flex items-center justify-between gap-4 max-w-3xl mx-auto">
         <div className="flex-1 min-w-0">
-          <div className="text-xs text-slate-700 font-medium mb-1 truncate" aria-label={summary}>
-            {summary}
+          {/* Three no-wrap segments: a phone breaks only at the separators,
+              never inside "0 powodów" (mobile-wrap review). */}
+          <div className="text-xs text-slate-700 font-medium mb-1 leading-snug" aria-label={summary}>
+            <span className="inline-block whitespace-nowrap">{linesText}</span>
+            {" · "}
+            <span className="inline-block whitespace-nowrap">{devsText}</span>
+            {" · "}
+            <span className="inline-block whitespace-nowrap">{reasonsText}</span>
           </div>
           {hasRedCards ? (
             <button

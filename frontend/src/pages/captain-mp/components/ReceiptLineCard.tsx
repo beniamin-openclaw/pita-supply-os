@@ -35,7 +35,7 @@ export function ReceiptLineCard({
         {line.is_critical && (
           <AlertOctagon size={14} className="shrink-0 text-red-600" aria-hidden="true" />
         )}
-        <span className="truncate">{line.product_name_pl}</span>
+        <span className="break-words">{line.product_name_pl}</span>
       </div>
       <div className="mt-2 flex items-end justify-between gap-3">
         <div className="text-sm text-slate-600">

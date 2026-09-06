@@ -86,7 +86,7 @@ export function OrdersListPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <span className="font-medium text-slate-900 truncate">{o.supplier_name}</span>
+                      <span className="font-medium text-slate-900 break-words">{o.supplier_name}</span>
                       <span className="shrink-0 flex items-center gap-1.5">
                         {o.last_edited_at && (
                           <span className="text-[9px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
@@ -101,7 +101,7 @@ export function OrdersListPage() {
                         </span>
                       </span>
                     </div>
-                    <div className="text-xs text-slate-600 truncate">
+                    <div className="text-xs text-slate-600 break-words">
                       {o.line_count} {t("orders.linesShort")} · {o.total_value_estimate_pln?.toFixed(2) ?? "?"} PLN ·{" "}
                       {o.captain_submitted_at ? formatDateTime(o.captain_submitted_at) : "—"}
                       {o.editable && (

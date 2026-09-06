@@ -119,7 +119,7 @@ export function OrderDetailPage() {
           >
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
-          <h1 className="font-semibold text-lg tracking-tight truncate">
+          <h1 className="font-semibold text-lg tracking-tight break-words leading-tight">
             {order ? order.supplier_name : t("orders.loading")}
           </h1>
         </div>
@@ -224,7 +224,7 @@ export function OrderDetailPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1 font-medium text-slate-900 truncate">
+                      <div className="flex items-start gap-1 font-medium text-slate-900 break-words">
                         {line.is_critical && (
                           <AlertOctagon
                             size={14}
@@ -232,7 +232,7 @@ export function OrderDetailPage() {
                             aria-hidden="true"
                           />
                         )}
-                        <span className="truncate">{line.product_name_pl}</span>
+                        <span className="break-words">{line.product_name_pl}</span>
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
                         stan: {line.current_stock_qty_base} {line.inventory_unit} ·
