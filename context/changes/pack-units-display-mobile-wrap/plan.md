@@ -191,4 +191,4 @@ MCP in one transaction, audit = 1 row new name.
 - [x] C prod SQL applied + audited (2026-09-06, 1 row)
 - [x] D1 verification suites green (front 25 files / 362 tests, build, lint; backend 643, ruff)
 - [x] D2 visual check at 375 px (seed backend, Coca-Cola ×24 + Bukat ×1, toggle round-trip, both sticky bars)
-- [ ] D3 post-implementation review + fixes, commit, push, deploy verified
+- [x] D3 post-implementation review + fixes (R1–R5), commit 9ff1518 on main, Vercel serves assets/index-tA833QAT.js = local build
