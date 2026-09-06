@@ -72,6 +72,16 @@ Nic ponad zakres.
   jedynym zabezpieczeniem do wtorku. Kandydat na osobną zmianę: walidacja „stan > 3×max
   → ostrzeżenie o jednostce” na ekranie remanentu.
 
+## Deploy (2026-09-06 22:32, zweryfikowane na prod)
+
+- Commit `637270f` na `main`, push → Vercel + Railway auto-deploy.
+- Frontend: bundle `assets/index-tA833QAT.js` → `assets/index-uJQaNe5Z.js`; zawiera
+  `STOCK_UNTIL_NEXT_DELIVERY` i etykietę „Zapas do następnej dostawy”.
+- Backend: `https://pita-supply-os-production.up.railway.app/openapi.json` zawiera nowy kod
+  w enumie `ReasonCode`; `/health` ok. Migracja 0016 była na prod wcześniej (22:2x), więc
+  okno „nowy kod bez CHECK” nie wystąpiło.
+- Komunikat D (plan §5) można wysyłać.
+
 ## Otwarte po tej zmianie
 - C-1 waga kartonu bifteki → `prod-sql.sql` sekcja PENDING (upp + powrót targetu w kg).
 - C-3 Coca-Cola KEN (faktury + minimum 500) → ewentualna korekta 72/96 → 48/72.
