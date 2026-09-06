@@ -250,6 +250,10 @@ export const STRINGS = {
     pl: "Weekend / Duży ruch",
     en: "Weekend / High traffic",
   },
+  "reason.codes.STOCK_UNTIL_NEXT_DELIVERY": {
+    pl: "Zapas do następnej dostawy",
+    en: "Stock until next delivery",
+  },
   "reason.codes.LOW_STORAGE": {
     pl: "Brak miejsca w magazynie",
     en: "Not enough storage space",

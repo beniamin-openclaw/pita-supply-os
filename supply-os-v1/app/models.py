@@ -27,6 +27,11 @@ class OrderStatus(str, Enum):
 class ReasonCode(str, Enum):
     EVENT_HIGH_TRAFFIC = "EVENT_HIGH_TRAFFIC"
     WEEKEND_HIGH_TRAFFIC = "WEEKEND_HIGH_TRAFFIC"
+    # Ordering for the whole week ahead of a fixed delivery day (Pago /
+    # Coca-Cola on Tuesday). Added by week1-feedback-targets (migration 0016):
+    # without it Captains picked EVENT_HIGH_TRAFFIC, which poisoned the FR-012
+    # deviation statistics. Keep in sync with the order_lines CHECK constraint.
+    STOCK_UNTIL_NEXT_DELIVERY = "STOCK_UNTIL_NEXT_DELIVERY"
     LOW_STORAGE = "LOW_STORAGE"
     PACKAGING_LIMITATION = "PACKAGING_LIMITATION"
     SUPPLIER_UNDERDELIVERS = "SUPPLIER_UNDERDELIVERS"

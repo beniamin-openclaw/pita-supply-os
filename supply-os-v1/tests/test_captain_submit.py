@@ -660,3 +660,26 @@ def test_submit_location_derived_from_auth_not_request():
     assert r_ken.status_code == 400  # no settings at KEN
     r_wola = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
     assert r_wola.status_code == 200, r_wola.text
+
+
+def test_submit_deviation_with_stock_until_next_delivery_reason():
+    """week1-feedback-targets: STOCK_UNTIL_NEXT_DELIVERY is a valid reason code
+    (ReasonCode enum + migration 0016 CHECK). A >25% deviation carrying it is
+    accepted like any other code and surfaces as a warning, not a 400/422."""
+    body = {
+        "supplier_id": "SUP_PAGO",
+        "ordered_by": "Jan Kowalski",
+        "lines": [
+            {
+                "product_id": "P019",
+                "supplier_product_id": "SP_PAGO_P019",
+                "current_stock_qty_base": 0,
+                "captain_final_qty_purchase": 2,
+                "reason_code": "STOCK_UNTIL_NEXT_DELIVERY",
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert any("STOCK_UNTIL_NEXT_DELIVERY" in w for w in out["warnings"])

@@ -189,6 +189,7 @@ on a critical product, or order exceeds `max_stock × 1.2`.
 | ----------------------------- | ---------------------------------------------------- |
 | `EVENT_HIGH_TRAFFIC`          | Known event raising demand                           |
 | `WEEKEND_HIGH_TRAFFIC`        | Weekend uplift expected                              |
+| `STOCK_UNTIL_NEXT_DELIVERY`   | Ordering for the whole cycle ahead of a fixed delivery day (migration 0016) |
 | `LOW_STORAGE`                 | Cannot accept full suggested qty                     |
 | `PACKAGING_LIMITATION`        | Forced overage due to carton/pack size               |
 | `SUPPLIER_UNDERDELIVERS`      | Buffer because this supplier short-delivers          |

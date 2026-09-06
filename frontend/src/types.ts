@@ -12,6 +12,7 @@ export type OrderStatus =
 export type ReasonCode =
   | "EVENT_HIGH_TRAFFIC"
   | "WEEKEND_HIGH_TRAFFIC"
+  | "STOCK_UNTIL_NEXT_DELIVERY"
   | "LOW_STORAGE"
   | "PACKAGING_LIMITATION"
   | "SUPPLIER_UNDERDELIVERS"
