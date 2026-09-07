@@ -168,6 +168,6 @@ unit price displayed, no status); GoStock; Finance role/token (Manager token for
 ### Phase 5
 - [x] 5.1 ManagerFinancePage + compare pane + i18n + apiClient + nav; `npm run build && lint` green
 ### Phase 6
-- [ ] 6.1 merged to main, Railway/Vercel deployed, openapi has finance routes
+- [x] 6.1 merged to main, Railway/Vercel deployed, openapi has finance routes
 - [x] 6.2 prod seeded from local sync; overview shows KEN receipts vs invoices
-- [ ] 6.3 post-implementation review + docs + archive note
+- [x] 6.3 post-implementation review + docs + archive note
