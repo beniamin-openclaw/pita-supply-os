@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import date, datetime
 from enum import Enum
 from typing import Optional, Type, TypeVar
 
@@ -45,6 +46,10 @@ from sqlalchemy import create_engine, text
 from .config import DataBackend, settings
 from .errors import OrderNotFoundError, OrderStatusConflictError
 from .models import (
+    FinanceDocument,
+    FinanceDocumentLine,
+    FinanceLineAlias,
+    FinanceReceiptReview,
     InventoryCount,
     InventoryCountEvent,
     InventoryCountLine,
@@ -68,6 +73,9 @@ T = TypeVar("T", bound=BaseModel)
 # Capability flag (see ``main._is_persistent``): this backend persists writes, so
 # persistence-gated routes proceed instead of degrading like the seed loader.
 SUPPORTS_PERSISTENCE = True
+# Finance reconciliation (eBiuro mirror) lives only here — routes gate on this
+# flag (`main._supports_finance`) and 503 on the seed/sheets backends.
+SUPPORTS_FINANCE = True
 
 # Lazy singleton SQLAlchemy Engine (built on first data access, not at import —
 # so seed/sheet modes never construct a pool or import psycopg2). Reset by tests.
@@ -157,7 +165,7 @@ _TRANSPORT_EVENT_COLUMNS = [
 _DATE_COLS = frozenset(
     {
         "order_date", "requested_delivery_date", "count_date", "receipt_date",
-        "pickup_date",
+        "pickup_date", "issue_date", "sell_date", "payment_deadline",
     }
 )
 # NOTE: these casting sets are GLOBAL across tables, keyed by bare column name
@@ -168,6 +176,7 @@ _TIMESTAMPTZ_COLS = frozenset(
     {
         "captain_submitted_at", "manager_sent_at", "last_edited_at", "cancelled_at",
         "count_submitted_at", "received_submitted_at", "created_at", "sent_at", "at",
+        "last_seen_at", "synced_at", "reviewed_at",
     }
 )
 
@@ -856,3 +865,191 @@ def append_transport_event(event: TransportEvent) -> None:
     Callers (``main._log_transport_event``) treat this as best-effort and
     never let a failure here break the business action that triggered it."""
     _insert("transport_events", _TRANSPORT_EVENT_COLUMNS, event)
+
+
+# ---------- Finance: eBiuro document mirror, reviews, aliases (migration 0017) ----------
+
+_FINANCE_DOC_COLUMNS = [
+    "doc_id", "company_id", "company_nip", "contractor_nip", "contractor_name", "doc_type",
+    "invoice_number", "ksef_number", "issue_date", "sell_date", "payment_deadline",
+    "netto", "brutto", "vat", "pdf_url", "state", "listing_fp", "last_seen_at", "synced_at",
+]
+_FINANCE_LINE_COLUMNS = [
+    "doc_id", "ordinal", "name", "quantity", "unit", "netto", "brutto",
+    "unit_price_netto", "vat_rate",
+]
+_FINANCE_REVIEW_COLUMNS = ["receipt_id", "doc_id", "status", "note", "actor", "reviewed_at"]
+_FINANCE_ALIAS_COLUMNS = [
+    "contractor_nip", "invoice_name_norm", "product_id", "invoice_name", "actor", "created_at",
+]
+
+
+def load_finance_documents(since: date, company_ids: Optional[list[int]] = None) -> list[FinanceDocument]:
+    """Purchase documents issued on/after ``since`` (lines NOT populated — use
+    ``load_finance_document_lines``). Optional company scope."""
+    # COALESCE so a document whose OCR missed DataWystawienia is not silently lost
+    # (impl-review F4) — it still surfaces in "faktury bez dostawy".
+    sql = ("SELECT * FROM finance_documents "
+           "WHERE COALESCE(issue_date, sell_date, CAST(synced_at AS date)) >= :since")
+    params: dict = {"since": since}
+    if company_ids:
+        sql += " AND company_id = ANY(:cids)"
+        params["cids"] = list(company_ids)
+    sql += " ORDER BY issue_date DESC, doc_id DESC"
+    return _fetch_all(sql, FinanceDocument, params)
+
+
+def load_finance_document_lines(doc_ids: list[int]) -> list[FinanceDocumentLine]:
+    if not doc_ids:
+        return []
+    return _fetch_all(
+        "SELECT * FROM finance_document_lines WHERE doc_id = ANY(:ids) ORDER BY doc_id, ordinal",
+        FinanceDocumentLine,
+        {"ids": list(doc_ids)},
+    )
+
+
+def get_finance_document(doc_id: int) -> FinanceDocument | None:
+    docs = _fetch_all(
+        "SELECT * FROM finance_documents WHERE doc_id = :d", FinanceDocument, {"d": doc_id}
+    )
+    if not docs:
+        return None
+    return docs[0].model_copy(update={"lines": load_finance_document_lines([doc_id])})
+
+
+def load_finance_fingerprints(company_id: int) -> dict[int, str]:
+    """doc_id -> stored listing fingerprint, so the sync fetches one-xt only for
+    new/changed documents."""
+    with _get_engine().connect() as conn:
+        rows = conn.execute(
+            text("SELECT doc_id, listing_fp FROM finance_documents WHERE company_id = :c"),
+            {"c": company_id},
+        ).all()
+    return {int(r[0]): (r[1] or "") for r in rows}
+
+
+def upsert_finance_documents(docs: list[FinanceDocument]) -> int:
+    """INSERT … ON CONFLICT (doc_id) DO UPDATE for each document and replace its
+    lines — all inside ONE transaction (mirrors ``replace_order_lines_atomic``:
+    a crash mid-way leaves the previous state, never a document without lines)."""
+    if not docs:
+        return 0
+    set_cols = [c for c in _FINANCE_DOC_COLUMNS if c != "doc_id"]
+    doc_sql = text(
+        f"INSERT INTO finance_documents ({', '.join(_FINANCE_DOC_COLUMNS)}) "
+        f"VALUES ({', '.join(_bind(c) for c in _FINANCE_DOC_COLUMNS)}) "
+        f"ON CONFLICT (doc_id) DO UPDATE SET "
+        + ", ".join(f"{c} = EXCLUDED.{c}" for c in set_cols)
+    )
+    line_sql = text(
+        f"INSERT INTO finance_document_lines ({', '.join(_FINANCE_LINE_COLUMNS)}) "
+        f"VALUES ({', '.join(_bind(c) for c in _FINANCE_LINE_COLUMNS)})"
+    )
+    with _get_engine().begin() as conn:
+        for doc in docs:
+            data = doc.model_dump()
+            conn.execute(doc_sql, {c: _to_db(data.get(c)) for c in _FINANCE_DOC_COLUMNS})
+            conn.execute(
+                text("DELETE FROM finance_document_lines WHERE doc_id = :d"), {"d": doc.doc_id}
+            )
+            if doc.lines:
+                conn.execute(
+                    line_sql,
+                    [{c: _to_db(ln.model_dump().get(c)) for c in _FINANCE_LINE_COLUMNS}
+                     for ln in doc.lines],
+                )
+    return len(docs)
+
+
+def touch_finance_documents_seen(doc_ids: list[int], seen_at: datetime) -> None:
+    """Stamp ``last_seen_at`` for documents present in the latest eBiuro listing
+    (so a document later removed/re-typed in eBiuro can be told from a live one)."""
+    if not doc_ids:
+        return
+    with _get_engine().begin() as conn:
+        conn.execute(
+            text("UPDATE finance_documents SET last_seen_at = CAST(:t AS timestamptz) "
+                 "WHERE doc_id = ANY(:ids)"),
+            {"t": seen_at, "ids": list(doc_ids)},
+        )
+
+
+def load_finance_reviews(receipt_ids: list[str]) -> list[FinanceReceiptReview]:
+    if not receipt_ids:
+        return []
+    return _fetch_all(
+        "SELECT * FROM finance_receipt_reviews WHERE receipt_id = ANY(:ids)",
+        FinanceReceiptReview,
+        {"ids": list(receipt_ids)},
+    )
+
+
+def upsert_finance_review(review: FinanceReceiptReview) -> None:
+    """One verdict per receipt (PK). Raises ``OrderStatusConflictError`` when the
+    chosen document is already CONFIRMED against another receipt (partial unique
+    index, migration 0017) — the route turns it into a 409."""
+    from sqlalchemy.exc import IntegrityError
+
+    cols = _FINANCE_REVIEW_COLUMNS
+    sql = text(
+        f"INSERT INTO finance_receipt_reviews ({', '.join(cols)}) "
+        f"VALUES ({', '.join(_bind(c) for c in cols)}) "
+        "ON CONFLICT (receipt_id) DO UPDATE SET doc_id = EXCLUDED.doc_id, "
+        "status = EXCLUDED.status, note = EXCLUDED.note, actor = EXCLUDED.actor, "
+        "reviewed_at = EXCLUDED.reviewed_at"
+    )
+    data = review.model_dump()
+    try:
+        with _get_engine().begin() as conn:
+            conn.execute(sql, {c: _to_db(data.get(c)) for c in cols})
+    except IntegrityError as exc:
+        raise OrderStatusConflictError(
+            f"document {review.doc_id} is already confirmed against another receipt"
+        ) from exc
+
+
+def load_finance_aliases(contractor_nips: list[str]) -> list[FinanceLineAlias]:
+    if not contractor_nips:
+        return []
+    return _fetch_all(
+        "SELECT * FROM finance_line_aliases WHERE contractor_nip = ANY(:nips)",
+        FinanceLineAlias,
+        {"nips": list(contractor_nips)},
+    )
+
+
+def upsert_finance_alias(alias: FinanceLineAlias) -> None:
+    cols = _FINANCE_ALIAS_COLUMNS
+    sql = text(
+        f"INSERT INTO finance_line_aliases ({', '.join(cols)}) "
+        f"VALUES ({', '.join(_bind(c) for c in cols)}) "
+        "ON CONFLICT (contractor_nip, invoice_name_norm) DO UPDATE SET "
+        "product_id = EXCLUDED.product_id, invoice_name = EXCLUDED.invoice_name, "
+        "actor = EXCLUDED.actor, created_at = EXCLUDED.created_at"
+    )
+    data = alias.model_dump()
+    with _get_engine().begin() as conn:
+        conn.execute(sql, {c: _to_db(data.get(c)) for c in cols})
+
+
+def load_receipts_since(since: date, location_id: Optional[str] = None) -> list[Receipt]:
+    """Receipts with ``receipt_date >= since`` (optionally one location), newest
+    first, lines NOT populated (use ``load_receipt_lines_for_receipts``)."""
+    sql = "SELECT * FROM receipts WHERE receipt_date >= :since"
+    params: dict = {"since": since}
+    if location_id:
+        sql += " AND location_id = :loc"
+        params["loc"] = location_id
+    sql += " ORDER BY receipt_date DESC, received_submitted_at DESC NULLS LAST"
+    return _fetch_all(sql, Receipt, params)
+
+
+def load_receipt_lines_for_receipts(receipt_ids: list[str]) -> list[ReceiptLine]:
+    if not receipt_ids:
+        return []
+    return _fetch_all(
+        "SELECT * FROM receipt_lines WHERE receipt_id = ANY(:ids) ORDER BY receipt_line_id",
+        ReceiptLine,
+        {"ids": list(receipt_ids)},
+    )

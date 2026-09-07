@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Daily trigger for the Supply OS finance sync (eBiuro -> finance_documents).
+     Runs on the Mac mini (user `agent`) at 08:10 Europe/Warsaw, AFTER the
+     accountant's morning uploads and the JARVIS eBiuro sync at 07:30.
+     NOT INSTALLED until Railway carries SUPPLY_OS_EBIURO_EMAIL / _APIKEY /
+     _COMPANY_IDS — without them the endpoint answers 503 and this is a no-op.
+     Install: see README.md next to this file. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.pitabros.supplyos-finance-sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>. "$HOME/.config/supplyos/env" &amp;&amp; /usr/bin/curl -sS -m 300 -X POST "$SUPPLY_OS_API/api/manager/finance/sync" -H "Authorization: Bearer $SUPPLY_OS_MANAGER_TOKEN" -o "$HOME/Library/Logs/supplyos-finance-sync.last.json" -w "%{http_code}\n" &gt;&gt; "$HOME/Library/Logs/supplyos-finance-sync.log" 2&gt;&amp;1</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>10</integer></dict>
+  <key>StandardErrorPath</key><string>/Users/agent/Library/Logs/supplyos-finance-sync.err</string>
+</dict>
+</plist>

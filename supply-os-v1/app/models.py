@@ -69,6 +69,9 @@ class Supplier(BaseModel):
     minimum_order_value_pln: Optional[float] = None
     active: bool = True
     notes: str = ""
+    # Tax id as printed on the supplier's invoices (digits only), migration 0017 —
+    # the key that pairs an eBiuro purchase document with our supplier.
+    nip: Optional[str] = None
 
 
 class Location(BaseModel):
@@ -1337,3 +1340,212 @@ class TransportDraftConfig(BaseModel):
     # yet", and the FE falls back to free-text entry.
     drivers: str = ""
     vehicles: str = ""
+
+
+# ---------- Finance: eBiuro purchase documents vs goods receipts (finance-invoice-reconciliation MVP) ----------
+
+
+class FinanceDocument(BaseModel):
+    """One purchase document mirrored from Symfonia eBiuro (`finance_documents`,
+    migration 0017). Read-only copy of the accountant's verified data — the app
+    never writes back to eBiuro. ``contractor_nip`` / ``company_nip`` are stored
+    digits-only (the API sometimes prefixes "PL"). ``doc_type`` is eBiuro's
+    ``type_dict`` label ("Faktura zakupu", "Korekta zakupu", …)."""
+    doc_id: int
+    company_id: int
+    company_nip: Optional[str] = None
+    contractor_nip: Optional[str] = None
+    contractor_name: Optional[str] = None
+    doc_type: Optional[str] = None
+    invoice_number: Optional[str] = None
+    ksef_number: Optional[str] = None
+    issue_date: Optional[date] = None
+    sell_date: Optional[date] = None
+    payment_deadline: Optional[date] = None
+    netto: Optional[float] = None
+    brutto: Optional[float] = None
+    vat: Optional[float] = None
+    pdf_url: Optional[str] = None
+    state: Optional[int] = None
+    # Verbatim listing fingerprint (state|brutto|issue_date|invoice_number) so the
+    # daily sync re-fetches one-xt only when the accountant changed something.
+    listing_fp: Optional[str] = None
+    last_seen_at: Optional[datetime] = None  # present in the newest eBiuro listing at…
+    synced_at: Optional[datetime] = None
+    lines: list["FinanceDocumentLine"] = Field(default_factory=list)
+
+
+class FinanceDocumentLine(BaseModel):
+    """One invoice position (`finance_document_lines`). ``unit`` is the
+    supplier's own unit label ("CS", "kg", "szt."), not our purchase unit."""
+    doc_id: int
+    ordinal: int
+    name: str = ""
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    netto: Optional[float] = None
+    brutto: Optional[float] = None
+    unit_price_netto: Optional[float] = None
+    vat_rate: Optional[float] = None
+
+
+class FinanceLineAlias(BaseModel):
+    """Learned mapping: how a supplier names OUR product on its invoice
+    (`finance_line_aliases`). Keyed by supplier NIP + normalized invoice name so
+    one confirmation ("Avocado (sztuka) Kraj poch: RPA" = Awokado) sticks for
+    every future Bukat invoice at every location."""
+    contractor_nip: str
+    invoice_name_norm: str
+    product_id: str
+    invoice_name: str = ""
+    actor: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class FinanceReceiptReview(BaseModel):
+    """Manager's verdict on one receipt vs the chosen document
+    (`finance_receipt_reviews`). ``status`` = confirmed | mismatch."""
+    receipt_id: str
+    doc_id: Optional[int] = None
+    status: str
+    note: str = ""
+    actor: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+
+
+class FinanceLineCompare(BaseModel):
+    """One compared row: our received line vs the matched invoice position.
+    ``status``: ok | qty_diff | not_on_invoice. ``unit_note`` is set when the
+    quantities only agree after converting purchase units to base units (e.g. 2
+    wiadra × 3 kg = 6 kg on the invoice)."""
+    order_line_id: str
+    product_id: str
+    product_name_pl: str
+    purchase_unit: str
+    received_qty_purchase: float
+    invoice_ordinal: Optional[int] = None
+    invoice_name: Optional[str] = None
+    invoice_qty: Optional[float] = None
+    invoice_unit: Optional[str] = None
+    invoice_unit_price_netto: Optional[float] = None
+    invoice_netto: Optional[float] = None
+    delta_qty: Optional[float] = None
+    status: str
+    via_alias: bool = False
+    unit_note: Optional[str] = None
+    match_score: float = 0.0
+
+
+class FinanceExtraLine(BaseModel):
+    """An invoice position with no counterpart on the receipt (status
+    extra_on_invoice) — the Manager can link it to a received product, which
+    stores an alias and re-runs the comparison."""
+    invoice_ordinal: int
+    invoice_name: str
+    invoice_qty: Optional[float] = None
+    invoice_unit: Optional[str] = None
+    invoice_netto: Optional[float] = None
+
+
+class FinanceCandidate(BaseModel):
+    """A document that could belong to a receipt (same supplier NIP, date window)."""
+    doc_id: int
+    doc_type: Optional[str] = None
+    invoice_number: Optional[str] = None
+    ksef_number: Optional[str] = None
+    issue_date: Optional[date] = None
+    sell_date: Optional[date] = None
+    netto: Optional[float] = None
+    brutto: Optional[float] = None
+    is_correction: bool = False
+    score: float = 0.0  # = matched_ratio (kept for display; ranking is the tuple below)
+    matched_ratio: float = 0.0
+    days_off: int = 0
+    amount_gap: Optional[float] = None  # |netto − Σ received × price_estimate|, None w/o estimate
+    ok_lines: int = 0
+    ok_converted_lines: int = 0
+    diff_lines: int = 0
+    missing_lines: int = 0
+    extra_lines: int = 0
+
+
+class FinanceReceiptItem(BaseModel):
+    """One row of the finance overview list (a receipt + its best document)."""
+    receipt_id: str
+    order_id: str
+    location_id: str
+    supplier_id: str
+    supplier_name: str
+    supplier_nip: Optional[str] = None
+    receipt_date: date
+    received_by: Optional[str] = None
+    line_count: int = 0
+    discrepancy_count: int = 0
+    wz_photo_count: int = 0
+    estimate_netto_pln: Optional[float] = None  # None = "brak wyceny" (a price is missing)
+    # no_invoice | unsure | possible_collective | ok | diff | confirmed | mismatch
+    status: str
+    best: Optional[FinanceCandidate] = None
+    candidate_count: int = 0
+    review: Optional[FinanceReceiptReview] = None
+    duplicate_receipt: bool = False  # another receipt exists for the same order
+
+
+class FinanceDocumentItem(BaseModel):
+    """A purchase document from a known supplier that matched no receipt."""
+    doc_id: int
+    contractor_nip: Optional[str] = None
+    contractor_name: Optional[str] = None
+    supplier_id: Optional[str] = None
+    supplier_name: Optional[str] = None
+    doc_type: Optional[str] = None
+    invoice_number: Optional[str] = None
+    issue_date: Optional[date] = None
+    sell_date: Optional[date] = None
+    netto: Optional[float] = None
+    brutto: Optional[float] = None
+    is_correction: bool = False
+
+
+class FinanceOverview(BaseModel):
+    location_id: Optional[str] = None
+    days: int
+    synced_at: Optional[datetime] = None
+    sync_configured: bool = False
+    receipts: list[FinanceReceiptItem] = Field(default_factory=list)
+    unmatched_documents: list[FinanceDocumentItem] = Field(default_factory=list)
+    corrections: list[FinanceDocumentItem] = Field(default_factory=list)
+
+
+class FinanceReceiptDetail(BaseModel):
+    receipt: FinanceReceiptItem
+    document: Optional[FinanceDocument] = None
+    candidates: list[FinanceCandidate] = Field(default_factory=list)
+    lines: list[FinanceLineCompare] = Field(default_factory=list)
+    extra_lines: list[FinanceExtraLine] = Field(default_factory=list)
+    photos: list[ReceiptPhotoItem] = Field(default_factory=list)
+    notes: str = ""
+
+
+class FinanceReviewRequest(BaseModel):
+    doc_id: Optional[int] = None
+    status: str = Field(pattern="^(confirmed|mismatch)$")
+    note: str = Field(default="", max_length=1000)
+    actor: str = Field(default="manager", max_length=80)
+
+
+class FinanceAliasRequest(BaseModel):
+    """Link an invoice position (by its ordinal on ``doc_id``) to one of the
+    receipt's products; persists a supplier-level alias."""
+    doc_id: int
+    invoice_ordinal: int
+    product_id: str = Field(min_length=1)
+    actor: str = Field(default="manager", max_length=80)
+
+
+class FinanceSyncResponse(BaseModel):
+    companies: int
+    fetched: int
+    unchanged: int
+    skipped: int
+    upserted: int

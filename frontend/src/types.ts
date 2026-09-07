@@ -930,3 +930,190 @@ export interface TransportDraftConfig {
   drivers: string;
   vehicles: string;
 }
+
+// Finance reconciliation ("Faktury vs dostawy", pilot KEN) -------------------
+// Mirrors supply-os-v1/app/models.py Finance* models exactly (field names are
+// snake_case as on the wire). Keep in sync when the backend schema changes.
+
+export type FinanceReceiptStatus =
+  | "no_invoice"
+  | "unsure"
+  | "possible_collective"
+  | "ok"
+  | "diff"
+  | "confirmed"
+  | "mismatch";
+
+export type FinanceLineStatus = "ok" | "ok_converted" | "qty_diff" | "not_on_invoice";
+
+export interface FinanceDocumentLine {
+  doc_id: number;
+  ordinal: number;
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  netto?: number | null;
+  brutto?: number | null;
+  unit_price_netto?: number | null;
+  vat_rate?: number | null;
+}
+
+export interface FinanceDocument {
+  doc_id: number;
+  company_id: number;
+  company_nip?: string | null;
+  contractor_nip?: string | null;
+  contractor_name?: string | null;
+  doc_type?: string | null;
+  invoice_number?: string | null;
+  ksef_number?: string | null;
+  issue_date?: string | null; // ISO date
+  sell_date?: string | null;
+  payment_deadline?: string | null;
+  netto?: number | null;
+  brutto?: number | null;
+  vat?: number | null;
+  pdf_url?: string | null;
+  state?: number | null;
+  listing_fp?: string | null;
+  synced_at?: string | null; // ISO datetime
+  lines: FinanceDocumentLine[];
+}
+
+export interface FinanceReceiptReview {
+  receipt_id: string;
+  doc_id?: number | null;
+  status: string; // "confirmed" | "mismatch"
+  note: string;
+  actor?: string | null;
+  reviewed_at?: string | null;
+}
+
+export interface FinanceLineCompare {
+  order_line_id: string;
+  product_id: string;
+  product_name_pl: string;
+  purchase_unit: string;
+  received_qty_purchase: number;
+  invoice_ordinal?: number | null;
+  invoice_name?: string | null;
+  invoice_qty?: number | null;
+  invoice_unit?: string | null;
+  invoice_unit_price_netto?: number | null;
+  invoice_netto?: number | null;
+  delta_qty?: number | null;
+  status: FinanceLineStatus;
+  via_alias: boolean;
+  unit_note?: string | null;
+  match_score: number;
+}
+
+export interface FinanceExtraLine {
+  invoice_ordinal: number;
+  invoice_name: string;
+  invoice_qty?: number | null;
+  invoice_unit?: string | null;
+  invoice_netto?: number | null;
+}
+
+export interface FinanceCandidate {
+  doc_id: number;
+  doc_type?: string | null;
+  invoice_number?: string | null;
+  ksef_number?: string | null;
+  issue_date?: string | null;
+  sell_date?: string | null;
+  netto?: number | null;
+  brutto?: number | null;
+  is_correction: boolean;
+  score: number;
+  matched_ratio: number;
+  days_off: number;
+  amount_gap?: number | null;
+  ok_lines: number;
+  ok_converted_lines: number;
+  diff_lines: number;
+  missing_lines: number;
+  extra_lines: number;
+}
+
+export interface FinanceReceiptItem {
+  receipt_id: string;
+  order_id: string;
+  location_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  supplier_nip?: string | null;
+  receipt_date: string; // ISO date
+  received_by?: string | null;
+  line_count: number;
+  discrepancy_count: number;
+  wz_photo_count: number;
+  estimate_netto_pln?: number | null; // null = "brak wyceny" (a price is missing)
+  status: FinanceReceiptStatus;
+  best?: FinanceCandidate | null;
+  candidate_count: number;
+  review?: FinanceReceiptReview | null;
+  duplicate_receipt: boolean; // another receipt exists for the same order
+}
+
+export interface FinanceDocumentItem {
+  doc_id: number;
+  contractor_nip?: string | null;
+  contractor_name?: string | null;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
+  doc_type?: string | null;
+  invoice_number?: string | null;
+  issue_date?: string | null;
+  sell_date?: string | null;
+  netto?: number | null;
+  brutto?: number | null;
+  is_correction: boolean;
+}
+
+export interface FinanceOverview {
+  location_id?: string | null;
+  days: number;
+  synced_at?: string | null;
+  sync_configured: boolean;
+  receipts: FinanceReceiptItem[];
+  unmatched_documents: FinanceDocumentItem[];
+  // NOTE: not present on the current backend FinanceOverview model (checked
+  // supply-os-v1/app/models.py) — kept optional so the UI degrades cleanly
+  // ("Korekty" section stays hidden) if the field is absent, and picks it up
+  // for free if the backend adds it later without a frontend change.
+  corrections?: FinanceDocumentItem[];
+}
+
+export interface FinanceReceiptDetail {
+  receipt: FinanceReceiptItem;
+  document?: FinanceDocument | null;
+  candidates: FinanceCandidate[];
+  lines: FinanceLineCompare[];
+  extra_lines: FinanceExtraLine[];
+  photos: ReceiptPhotoItem[];
+  notes: string;
+}
+
+export interface FinanceReviewRequest {
+  doc_id?: number;
+  status: "confirmed" | "mismatch";
+  note?: string;
+  actor?: string;
+}
+
+export interface FinanceAliasRequest {
+  doc_id: number;
+  invoice_ordinal: number;
+  product_id: string;
+  actor?: string;
+}
+
+export interface FinanceSyncResponse {
+  companies: number;
+  fetched: number;
+  unchanged: number;
+  skipped: number;
+  upserted: number;
+}

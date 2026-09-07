@@ -483,6 +483,12 @@ export function ManagerPage() {
             >
               {t("manager.transport.navLink")}
             </Link>
+            <Link
+              to="/manager/finance"
+              className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              {t("manager.finance.navLink")}
+            </Link>
             <button
               type="button"
               onClick={loadQueue}

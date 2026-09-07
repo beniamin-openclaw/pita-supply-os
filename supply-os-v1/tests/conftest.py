@@ -40,3 +40,8 @@ os.environ.setdefault("SUPPLY_OS_SUPABASE_WZ_BUCKET", "wz-photos")
 # backend look configured in unit tests (it degrades off when empty, mirroring
 # the Storage creds above).
 os.environ.setdefault("SUPPLY_OS_DATABASE_URL", "")
+# Blank the Symfonia eBiuro creds so a real .env can never let the suite touch the
+# accountant's live (read-only) connector key — finance routes must 503 in tests.
+os.environ.setdefault("SUPPLY_OS_EBIURO_EMAIL", "")
+os.environ.setdefault("SUPPLY_OS_EBIURO_APIKEY", "")
+os.environ.setdefault("SUPPLY_OS_EBIURO_COMPANY_IDS", "")

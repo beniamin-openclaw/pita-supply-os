@@ -47,6 +47,8 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 # FK-safe drop/truncate order (children before parents).
 _ALL_TABLES = [
+    "finance_line_aliases", "finance_receipt_reviews", "finance_document_lines",
+    "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
     "order_lines", "orders", "transport_events", "transport_batches",
@@ -54,6 +56,8 @@ _ALL_TABLES = [
     "products", "_meta",
 ]
 _TXN_TABLES = [
+    "finance_line_aliases", "finance_receipt_reviews", "finance_document_lines",
+    "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
     "order_lines", "orders", "transport_events", "transport_batches",
@@ -137,6 +141,12 @@ def _schema():
     warehouse_pickup = (
         MIGRATIONS_DIR / "0015_supplier_product_warehouse_pickup.sql"
     ).read_text()
+    # 0017 adds suppliers.nip + the finance mirror tables (finance_documents,
+    # finance_document_lines, finance_receipt_reviews, finance_line_aliases) read
+    # and written by the finance functions exercised below.
+    finance_documents = (
+        MIGRATIONS_DIR / "0017_finance_documents.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -154,6 +164,7 @@ def _schema():
         conn.exec_driver_sql(extra_items)
         conn.exec_driver_sql(inventory_count_edit)
         conn.exec_driver_sql(warehouse_pickup)
+        conn.exec_driver_sql(finance_documents)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -674,3 +685,84 @@ def test_concurrent_double_claim_exactly_one_409():
 
     assert sorted(results) == ["conflict", "ok"], results
     assert supabase_backend.get_order(oid).status is OrderStatus.MANAGER_CLAIMED
+
+
+def test_finance_documents_upsert_review_alias_roundtrip():
+    """Migration 0017 + the finance backend functions against real Postgres:
+    ON CONFLICT upsert with line replacement in one transaction, date/timestamptz
+    binds, `= ANY(bigint[])`, and the partial unique index (one invoice confirmed
+    against ONE receipt) surfacing as the shared OrderStatusConflictError."""
+    from app.models import (
+        FinanceDocument,
+        FinanceDocumentLine,
+        FinanceLineAlias,
+        FinanceReceiptReview,
+    )
+
+    now = datetime(2026, 9, 7, 8, 0, tzinfo=timezone.utc)
+    doc = FinanceDocument(
+        doc_id=990001, company_id=7189181, company_nip="5223241275",
+        contractor_nip="5242106963", contractor_name="Coca-Cola HBC Polska",
+        doc_type="Faktura zakupu", invoice_number="INT-1", ksef_number="K-1",
+        issue_date=date(2026, 9, 4), sell_date=date(2026, 9, 3),
+        payment_deadline=date(2026, 9, 18), netto=100.0, brutto=123.0, vat=23.0,
+        pdf_url="https://apps.symfonia.pl/x", state=2, listing_fp="fp1",
+        last_seen_at=now, synced_at=now,
+        lines=[FinanceDocumentLine(doc_id=990001, ordinal=1, name="COLA", quantity=2, unit="CS",
+                                   netto=100.0, brutto=123.0, unit_price_netto=50.0, vat_rate=23)],
+    )
+    assert supabase_backend.upsert_finance_documents([doc]) == 1
+    # second upsert: header changes, lines replaced (2 lines now), no duplicate rows
+    doc2 = doc.model_copy(update={"netto": 200.0, "listing_fp": "fp2", "lines": [
+        FinanceDocumentLine(doc_id=990001, ordinal=1, name="COLA", quantity=2, unit="CS"),
+        FinanceDocumentLine(doc_id=990001, ordinal=2, name="ZERO", quantity=3, unit="CS"),
+    ]})
+    supabase_backend.upsert_finance_documents([doc2])
+    got = supabase_backend.get_finance_document(990001)
+    assert got is not None and got.netto == 200.0 and got.listing_fp == "fp2"
+    assert [ln.name for ln in got.lines] == ["COLA", "ZERO"]
+    assert supabase_backend.load_finance_fingerprints(7189181) == {990001: "fp2"}
+    listed = supabase_backend.load_finance_documents(date(2026, 9, 1))
+    assert [d.doc_id for d in listed] == [990001]
+    assert supabase_backend.load_finance_documents(date(2026, 9, 5)) == []
+    supabase_backend.touch_finance_documents_seen([990001], datetime(2026, 9, 8, tzinfo=timezone.utc))
+    assert supabase_backend.get_finance_document(990001).last_seen_at.day == 8
+
+    # reviews need receipts rows (FK) — reuse the harness receipt helper if present,
+    # else insert two minimal receipts directly.
+    rec_ids = ["RCP-INT-A", "RCP-INT-B"]
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO orders (order_id, location_id, supplier_id, order_date, status) "
+            "VALUES ('ORD-INT-F', 'WOLA', 'SUP_X', '2026-09-04', 'closed') "
+            "ON CONFLICT DO NOTHING"
+        )
+        for rid in rec_ids:
+            conn.exec_driver_sql(
+                "INSERT INTO receipts (receipt_id, order_id, location_id, supplier_id, receipt_date) "
+                f"VALUES ('{rid}', 'ORD-INT-F', 'WOLA', 'SUP_X', '2026-09-04')"
+            )
+    supabase_backend.upsert_finance_review(FinanceReceiptReview(
+        receipt_id="RCP-INT-A", doc_id=990001, status="confirmed", note="ok", actor="t", reviewed_at=now))
+    # same receipt again → upsert, not a conflict
+    supabase_backend.upsert_finance_review(FinanceReceiptReview(
+        receipt_id="RCP-INT-A", doc_id=990001, status="confirmed", note="ok2", actor="t", reviewed_at=now))
+    assert supabase_backend.load_finance_reviews(rec_ids)[0].note == "ok2"
+    # a second receipt confirming the SAME document → partial unique index → shared error
+    with pytest.raises(errors.OrderStatusConflictError):
+        supabase_backend.upsert_finance_review(FinanceReceiptReview(
+            receipt_id="RCP-INT-B", doc_id=990001, status="confirmed", reviewed_at=now))
+    # mismatch on the same doc is allowed
+    supabase_backend.upsert_finance_review(FinanceReceiptReview(
+        receipt_id="RCP-INT-B", doc_id=990001, status="mismatch", reviewed_at=now))
+
+    supabase_backend.upsert_finance_alias(FinanceLineAlias(
+        contractor_nip="5242106963", invoice_name_norm="kaucja skrzynka", product_id="P1",
+        invoice_name="KAUCJA SKRZYNKA", actor="t", created_at=now))
+    supabase_backend.upsert_finance_alias(FinanceLineAlias(
+        contractor_nip="5242106963", invoice_name_norm="kaucja skrzynka", product_id="P1",
+        invoice_name="KAUCJA SKRZYNKA", actor="t", created_at=now))
+    aliases = supabase_backend.load_finance_aliases(["5242106963"])
+    assert [(a.invoice_name_norm, a.product_id) for a in aliases] == [("kaucja skrzynka", "P1")]
+    assert supabase_backend.load_receipts_since(date(2026, 9, 4), "WOLA")[0].receipt_id in rec_ids
+    assert supabase_backend.load_receipt_lines_for_receipts(rec_ids) == []

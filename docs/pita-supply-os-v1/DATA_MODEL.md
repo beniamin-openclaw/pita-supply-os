@@ -198,6 +198,25 @@ on a critical product, or order exceeds `max_stock × 1.2`.
 
 ---
 
+## 7a. `finance_documents`, `finance_document_lines`, `finance_receipt_reviews`, `finance_line_aliases` (migration 0017, finance-invoice-reconciliation)
+
+READ-ONLY mirror of the accountant's verified purchase invoices from Symfonia eBiuro plus the
+Manager's reconciliation verdicts. Supabase-only (`SUPPORTS_FINANCE`); the app never writes back
+to eBiuro. Also adds `suppliers.nip` (digits only) — the key pairing an eBiuro document with our supplier.
+
+| Table | Key | Purpose |
+|---|---|---|
+| `finance_documents` | `doc_id` (eBiuro id, global across companies) | header: `company_id`/`company_nip` (buyer spółka), `contractor_nip`/`contractor_name` (seller), `doc_type` ("Faktura zakupu" / "Korekta zakupu"), `invoice_number`, `ksef_number`, `issue_date`, `sell_date`, `payment_deadline`, `netto`/`brutto`/`vat`, `pdf_url` (never sent to the SPA), `listing_fp` (change detector), `last_seen_at` (stale-doc guard), `synced_at` |
+| `finance_document_lines` | `(doc_id, ordinal)` | invoice positions: `name` (supplier wording), `quantity`, `unit` (supplier label, e.g. "CS"), `netto`, `brutto`, `unit_price_netto`, `vat_rate` |
+| `finance_receipt_reviews` | `receipt_id` | Manager verdict: `doc_id`, `status` `confirmed` \| `mismatch`, `note`, `actor`, `reviewed_at`. Partial UNIQUE on `doc_id WHERE status='confirmed'`: one invoice confirmed against ONE receipt |
+| `finance_line_aliases` | `(contractor_nip, invoice_name_norm)` | learned "how supplier X names our product": `product_id`, `invoice_name`, `actor`, `created_at` |
+
+Matching is computed at read time (`app/finance_match.py`), never persisted: candidates by seller
+NIP + buyer NIP + date window, lines by name coverage / aliases, quantities in purchase units
+(a base-unit conversion is only tried when the invoice unit family differs and yields
+`ok_converted`, never `ok`). Advisory statuses: `no_invoice` / `unsure` / `possible_collective` /
+`ok` / `diff`; a review overrides with `confirmed` / `mismatch`.
+
 ## Derived calculations (read-only, computed at write time)
 
 ```
