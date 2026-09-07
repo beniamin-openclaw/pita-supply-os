@@ -6,15 +6,35 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import errors, gmail_url, seed_loader, sheets, supabase_backend, supabase_storage
+from . import (
+    ebiuro,
+    errors,
+    finance_match,
+    gmail_url,
+    seed_loader,
+    sheets,
+    supabase_backend,
+    supabase_storage,
+)
 from .auth import require_any_auth, require_captain, require_manager
 from .config import DataBackend, settings
 from .models import (
     CaptainEditRequest,
+    FinanceAliasRequest,
+    FinanceCandidate,
+    FinanceDocument,
+    FinanceDocumentItem,
+    FinanceLineAlias,
+    FinanceOverview,
+    FinanceReceiptDetail,
+    FinanceReceiptItem,
+    FinanceReceiptReview,
+    FinanceReviewRequest,
+    FinanceSyncResponse,
     CaptainEditResponse,
     CaptainOrderDetail,
     CaptainOrderListItem,
@@ -4932,3 +4952,490 @@ def manager_transport_draft_config(
     return TransportDraftConfig(
         driver_recipients=driver_recipients, drivers=drivers, vehicles=vehicles
     )
+
+
+# ---------- Finance: invoice (eBiuro) vs delivery check (finance-invoice-reconciliation MVP) ----------
+
+
+def _supports_finance(backend) -> bool:
+    """True when ``backend`` carries the eBiuro mirror tables (Supabase only) —
+    capability flag, mirrors ``_is_persistent``."""
+    return getattr(backend, "SUPPORTS_FINANCE", False) is True
+
+
+def _finance_503(backend) -> None:
+    if not _supports_finance(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Finance check requires the Supabase backend (SUPPLY_OS_DATA_BACKEND=supabase)",
+        )
+
+
+class _FinanceContext:
+    """Everything the matcher needs for a set of receipts, loaded once."""
+
+    __slots__ = (
+        "products_by_id", "sps_by_id", "suppliers_by_id", "locations_by_id",
+        "docs", "docs_by_id", "aliases_by_nip",
+    )
+
+    def __init__(self, backend, since: date, supplier_nips: Optional[set[str]] = None) -> None:
+        self.products_by_id = {p.product_id: p for p in backend.load_products()}
+        self.sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
+        self.suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+        self.locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+        # Invoices may be issued a few days before the receipt (sell_date window −4,
+        # issue window −1) — widen the read a bit beyond the receipt window.
+        docs = backend.load_finance_documents(since - timedelta(days=14))
+        lines_by_doc: dict[int, list] = {}
+        for ln in backend.load_finance_document_lines([d.doc_id for d in docs]):
+            lines_by_doc.setdefault(ln.doc_id, []).append(ln)
+        self.docs = [d.model_copy(update={"lines": lines_by_doc.get(d.doc_id, [])}) for d in docs]
+        self.docs_by_id = {d.doc_id: d for d in self.docs}
+        nips = supplier_nips or {
+            ebiuro.normalize_nip(s.nip) for s in self.suppliers_by_id.values() if s.nip
+        }
+        self.aliases_by_nip: dict[str, dict[str, str]] = {}
+        for a in backend.load_finance_aliases(sorted(n for n in nips if n)):
+            self.aliases_by_nip.setdefault(a.contractor_nip, {})[a.invoice_name_norm] = a.product_id
+
+    def supplier_nip(self, supplier_id: str) -> Optional[str]:
+        sup = self.suppliers_by_id.get(supplier_id)
+        return ebiuro.normalize_nip(sup.nip) if sup and sup.nip else None
+
+    def company_nip(self, location_id: str) -> Optional[str]:
+        loc = self.locations_by_id.get(location_id)
+        return ebiuro.normalize_nip(loc.company_nip) if loc and loc.company_nip else None
+
+    def line_views(self, lines: list[ReceiptLine]) -> list[finance_match.ReceiptLineView]:
+        out: list[finance_match.ReceiptLineView] = []
+        for ln in lines:
+            product = self.products_by_id.get(ln.product_id)
+            sp = self.sps_by_id.get(ln.supplier_product_id)
+            out.append(
+                finance_match.ReceiptLineView(
+                    order_line_id=ln.order_line_id,
+                    product_id=ln.product_id,
+                    product_name_pl=product.product_name_pl if product else ln.product_id,
+                    supplier_product_name=sp.supplier_product_name if sp else "",
+                    purchase_unit=sp.purchase_unit if sp else "",
+                    units_per_purchase_unit=sp.units_per_purchase_unit if sp else 1.0,
+                    received_qty_purchase=ln.received_qty_purchase,
+                    price_estimate_pln=sp.price_estimate_pln if sp else None,
+                )
+            )
+        return out
+
+    @staticmethod
+    def estimate(views: list[finance_match.ReceiptLineView]) -> Optional[float]:
+        """Σ received × price_estimate; None when any price is missing (review F8)
+        or when the receipt has no lines at all (nothing to price)."""
+        if not views:
+            return None
+        total = 0.0
+        for v in views:
+            if v.price_estimate_pln is None:
+                return None
+            total += v.received_qty_purchase * v.price_estimate_pln
+        return round(total, 2)
+
+
+def _finance_receipt_item(
+    ctx: _FinanceContext,
+    receipt: Receipt,
+    views: list[finance_match.ReceiptLineView],
+    review: Optional[FinanceReceiptReview],
+    duplicate: bool,
+) -> tuple[FinanceReceiptItem, list[FinanceCandidate]]:
+    supplier = ctx.suppliers_by_id.get(receipt.supplier_id)
+    nip = ctx.supplier_nip(receipt.supplier_id)
+    estimate = ctx.estimate(views)
+    candidates = finance_match.candidate_documents(
+        receipt.receipt_date, nip, ctx.company_nip(receipt.location_id), views, ctx.docs,
+        ctx.aliases_by_nip.get(nip or "", {}), estimate_netto=estimate,
+    )
+    best = candidates[0] if candidates else None
+    status = finance_match.receipt_status(best, estimate)
+    if review is not None:
+        status = review.status
+        if review.doc_id is not None:
+            # The card must show THE reviewed document, never the auto-pick next
+            # to a "confirmed" chip (impl-review F5). Outside the date window we
+            # still compare against it; unknown doc → no best.
+            chosen = next((c for c in candidates if c.doc_id == review.doc_id), None)
+            if chosen is None and review.doc_id in ctx.docs_by_id:
+                doc = ctx.docs_by_id[review.doc_id]
+                chosen = finance_match.candidate_documents(
+                    receipt.receipt_date, doc.contractor_nip, doc.company_nip, views, [doc],
+                    ctx.aliases_by_nip.get(nip or "", {}), estimate_netto=estimate,
+                    ignore_window=True,
+                )
+                chosen = chosen[0] if chosen else None
+            best = chosen
+    item = FinanceReceiptItem(
+        receipt_id=receipt.receipt_id,
+        order_id=receipt.order_id,
+        location_id=receipt.location_id,
+        supplier_id=receipt.supplier_id,
+        supplier_name=supplier.supplier_name if supplier else receipt.supplier_id,
+        supplier_nip=nip,
+        receipt_date=receipt.receipt_date,
+        received_by=receipt.received_by,
+        line_count=receipt.line_count,
+        discrepancy_count=receipt.discrepancy_count,
+        wz_photo_count=receipt.wz_photo_count,
+        estimate_netto_pln=estimate,
+        status=status,
+        best=best,
+        candidate_count=len(candidates),
+        review=review,
+        duplicate_receipt=duplicate,
+    )
+    return item, candidates
+
+
+def _finance_document_item(ctx: _FinanceContext, doc: FinanceDocument) -> FinanceDocumentItem:
+    supplier = next(
+        (s for s in ctx.suppliers_by_id.values()
+         if s.nip and ebiuro.normalize_nip(s.nip) == doc.contractor_nip),
+        None,
+    )
+    return FinanceDocumentItem(
+        doc_id=doc.doc_id,
+        contractor_nip=doc.contractor_nip,
+        contractor_name=doc.contractor_name,
+        supplier_id=supplier.supplier_id if supplier else None,
+        supplier_name=supplier.supplier_name if supplier else None,
+        doc_type=doc.doc_type,
+        invoice_number=doc.invoice_number,
+        issue_date=doc.issue_date,
+        sell_date=doc.sell_date,
+        netto=doc.netto,
+        brutto=doc.brutto,
+        is_correction=finance_match.is_correction(doc),
+    )
+
+
+@app.get("/api/manager/finance/overview", response_model=FinanceOverview)
+def manager_finance_overview(
+    location_id: Optional[str] = None,
+    days: int = 30,
+    _: None = Depends(require_manager),
+):
+    """Receipts of the last ``days`` (one location or all) each paired with the
+    most likely eBiuro purchase document, plus the documents from known suppliers
+    that matched nothing ("faktury bez dostawy") and the corrections. Advisory
+    only — see ``finance_match.receipt_status``."""
+    backend = _choose_backend()
+    _finance_503(backend)
+    days = max(1, min(days, 120))
+    since = datetime.now(_WARSAW_TZ).date() - timedelta(days=days)
+
+    receipts = backend.load_receipts_since(since, location_id)
+    ctx = _FinanceContext(backend, since)
+    lines_by_receipt: dict[str, list[ReceiptLine]] = {}
+    for ln in backend.load_receipt_lines_for_receipts([r.receipt_id for r in receipts]):
+        lines_by_receipt.setdefault(ln.receipt_id, []).append(ln)
+    reviews = {rv.receipt_id: rv for rv in backend.load_finance_reviews([r.receipt_id for r in receipts])}
+    per_order: dict[str, int] = {}
+    for r in receipts:
+        per_order[r.order_id] = per_order.get(r.order_id, 0) + 1
+
+    items: list[FinanceReceiptItem] = []
+    used_docs: set[int] = set()
+    for r in receipts:
+        views = ctx.line_views(lines_by_receipt.get(r.receipt_id, []))
+        item, _cands = _finance_receipt_item(
+            ctx, r, views, reviews.get(r.receipt_id), per_order.get(r.order_id, 0) > 1
+        )
+        if item.best is not None:
+            used_docs.add(item.best.doc_id)
+        items.append(item)
+
+    known_nips = {ctx.supplier_nip(sid) for sid in ctx.suppliers_by_id} - {None}
+    newest_seen = max((d.last_seen_at for d in ctx.docs if d.last_seen_at), default=None)
+    unmatched: list[FinanceDocumentItem] = []
+    corrections: list[FinanceDocumentItem] = []
+    for d in ctx.docs:
+        if d.contractor_nip not in known_nips or not finance_match.is_purchase_doc(d):
+            continue
+        if d.issue_date is not None and d.issue_date < since:
+            continue
+        # A document missing from the newest listing for > 2 days is stale (removed /
+        # re-typed in eBiuro) — hide it rather than show a phantom (review F11).
+        if newest_seen and d.last_seen_at and (newest_seen - d.last_seen_at).days > 2:
+            continue
+        if finance_match.is_correction(d):
+            corrections.append(_finance_document_item(ctx, d))
+        elif d.doc_id not in used_docs:
+            unmatched.append(_finance_document_item(ctx, d))
+
+    synced_at = max((d.synced_at for d in ctx.docs if d.synced_at), default=None)
+    return FinanceOverview(
+        location_id=location_id,
+        days=days,
+        synced_at=synced_at,
+        sync_configured=ebiuro.is_configured(),
+        receipts=items,
+        unmatched_documents=unmatched,
+        corrections=corrections,
+    )
+
+
+def _receipt_photos(receipt: Receipt) -> list[ReceiptPhotoItem]:
+    """Signed WZ photo URLs for a receipt; [] when Storage is not configured."""
+    if not supabase_storage.is_configured():
+        return []
+    prefix = receipt.wz_photo_path_prefix or supabase_storage.order_prefix(receipt.order_id)
+    try:
+        paths = supabase_storage.list_photos(prefix)
+    except Exception:
+        log.warning("WZ photo listing failed for %s", receipt.receipt_id, exc_info=True)
+        return []
+    return [
+        ReceiptPhotoItem(
+            name=path.rsplit("/", 1)[-1], signed_url=supabase_storage.create_signed_url(path)
+        )
+        for path in paths
+    ]
+
+
+def _finance_receipt_detail(backend, receipt_id: str, doc_id: Optional[int]) -> FinanceReceiptDetail:
+    receipt = backend.get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+    ctx = _FinanceContext(backend, receipt.receipt_date - timedelta(days=1))
+    views = ctx.line_views(receipt.lines)
+    review = next(iter(backend.load_finance_reviews([receipt_id])), None)
+    siblings = [
+        r for r in backend.load_receipts_since(
+            receipt.receipt_date - timedelta(days=30), receipt.location_id
+        )
+        if r.order_id == receipt.order_id and r.receipt_id != receipt_id
+    ]
+    item, candidates = _finance_receipt_item(ctx, receipt, views, review, bool(siblings))
+
+    chosen: Optional[FinanceDocument] = None
+    if doc_id is not None:
+        chosen = ctx.docs_by_id.get(doc_id) or backend.get_finance_document(doc_id)
+        if chosen is None:
+            raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    elif review is not None and review.doc_id is not None:
+        chosen = ctx.docs_by_id.get(review.doc_id) or backend.get_finance_document(review.doc_id)
+    elif item.best is not None:
+        chosen = ctx.docs_by_id.get(item.best.doc_id)
+
+    lines, extras = [], []
+    if chosen is not None:
+        nip = ctx.supplier_nip(receipt.supplier_id) or ""
+        lines, extras = finance_match.compare_lines(views, chosen.lines, ctx.aliases_by_nip.get(nip, {}))
+    else:
+        lines, extras = finance_match.compare_lines(views, [])
+
+    return FinanceReceiptDetail(
+        receipt=item,
+        document=chosen,
+        candidates=candidates[:5],
+        lines=lines,
+        extra_lines=extras,
+        photos=_receipt_photos(receipt),
+        notes=receipt.notes or "",
+    )
+
+
+@app.get("/api/manager/finance/receipt/{receipt_id}", response_model=FinanceReceiptDetail)
+def manager_finance_receipt(
+    receipt_id: str,
+    doc_id: Optional[int] = None,
+    _: None = Depends(require_manager),
+):
+    """One receipt compared line-by-line with the chosen document (``doc_id``),
+    the reviewed one, or the best candidate — plus WZ photo links."""
+    backend = _choose_backend()
+    _finance_503(backend)
+    return _finance_receipt_detail(backend, receipt_id, doc_id)
+
+
+@app.post(
+    "/api/manager/finance/receipt/{receipt_id}/review", response_model=FinanceReceiptReview
+)
+def manager_finance_review(
+    receipt_id: str,
+    req: FinanceReviewRequest,
+    _: None = Depends(require_manager),
+):
+    """Persist the Manager's verdict. 409 when the document is already confirmed
+    against another receipt (one invoice ↔ one receipt)."""
+    backend = _choose_backend()
+    _finance_503(backend)
+    if backend.get_receipt(receipt_id) is None:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+    if req.doc_id is not None and backend.get_finance_document(req.doc_id) is None:
+        raise HTTPException(status_code=404, detail=f"Document {req.doc_id} not found")
+    review = FinanceReceiptReview(
+        receipt_id=receipt_id,
+        doc_id=req.doc_id,
+        status=req.status,
+        note=req.note.strip(),
+        actor=req.actor.strip() or "manager",
+        reviewed_at=datetime.now(timezone.utc),
+    )
+    try:
+        backend.upsert_finance_review(review)
+    except errors.OrderStatusConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Faktura {req.doc_id} jest już potwierdzona przy innym przyjęciu — "
+                f"sprawdź duplikat przyjęcia dla tego zamówienia."
+            ),
+        )
+    return review
+
+
+@app.post("/api/manager/finance/receipt/{receipt_id}/alias", response_model=FinanceReceiptDetail)
+def manager_finance_alias(
+    receipt_id: str,
+    req: FinanceAliasRequest,
+    _: None = Depends(require_manager),
+):
+    """Teach the matcher: invoice position ``invoice_ordinal`` on ``doc_id`` is
+    our ``product_id`` (stored per supplier NIP), then re-compare."""
+    backend = _choose_backend()
+    _finance_503(backend)
+    receipt = backend.get_receipt(receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+    if not any(ln.product_id == req.product_id for ln in receipt.lines):
+        raise HTTPException(
+            status_code=400, detail=f"product '{req.product_id}' is not on receipt {receipt_id}"
+        )
+    doc = backend.get_finance_document(req.doc_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"Document {req.doc_id} not found")
+    line = next((ln for ln in doc.lines if ln.ordinal == req.invoice_ordinal), None)
+    if line is None:
+        raise HTTPException(
+            status_code=404, detail=f"Position {req.invoice_ordinal} not on document {req.doc_id}"
+        )
+    if not doc.contractor_nip:
+        raise HTTPException(status_code=400, detail="Document has no contractor NIP — cannot store alias")
+    norm = finance_match.normalize_name(line.name)
+    if not norm:
+        raise HTTPException(
+            status_code=400, detail="Invoice position has no usable name — cannot store alias"
+        )
+    backend.upsert_finance_alias(
+        FinanceLineAlias(
+            contractor_nip=doc.contractor_nip,
+            invoice_name_norm=norm,
+            product_id=req.product_id,
+            invoice_name=line.name,
+            actor=req.actor.strip() or "manager",
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    return _finance_receipt_detail(backend, receipt_id, req.doc_id)
+
+
+_FINANCE_SYNC_MIN_INTERVAL_S = 60
+_FINANCE_SYNC_MAX_FETCH = 200
+_finance_sync_last_run: dict[str, float] = {"at": 0.0}
+
+
+@app.post("/api/manager/finance/sync", response_model=FinanceSyncResponse)
+def manager_finance_sync(_: None = Depends(require_manager)):
+    """Pull purchase documents from Symfonia eBiuro for the configured companies
+    into the mirror tables. Read-only against eBiuro; capped at 200 detail
+    fetches per run; refuses to run twice within 60 s (single web worker)."""
+    backend = _choose_backend()
+    _finance_503(backend)
+    if not ebiuro.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "eBiuro nie jest skonfigurowane na serwerze — ustaw SUPPLY_OS_EBIURO_EMAIL, "
+                "SUPPLY_OS_EBIURO_APIKEY i SUPPLY_OS_EBIURO_COMPANY_IDS (Railway)."
+            ),
+        )
+    import time as _time
+
+    now = _time.monotonic()
+    if now - _finance_sync_last_run["at"] < _FINANCE_SYNC_MIN_INTERVAL_S:
+        raise HTTPException(status_code=429, detail="Sync uruchomiony przed chwilą — spróbuj za minutę.")
+    _finance_sync_last_run["at"] = now
+
+    client = ebiuro.EbiuroClient.from_settings()
+    try:
+        companies = {
+            int(c["id"]): ebiuro.normalize_nip(c.get("nip"))
+            for c in client.get_companies()
+            if str(c.get("id", "")).isdigit()
+        }
+    except (ebiuro.EbiuroError, ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(status_code=502, detail=f"eBiuro: {type(exc).__name__}: {exc}")
+
+    totals = {"fetched": 0, "unchanged": 0, "skipped": 0, "upserted": 0}
+    seen_at = datetime.now(timezone.utc)
+    for company_id in ebiuro.company_ids():
+        known = backend.load_finance_fingerprints(company_id)
+        try:
+            docs, counts = ebiuro.sync_company(
+                client, company_id, companies.get(company_id), known,
+                max_fetch=_FINANCE_SYNC_MAX_FETCH,
+            )
+        except Exception as exc:  # shape change at eBiuro must be a 502, not a 500
+            log.warning("finance sync failed for company %s", company_id, exc_info=True)
+            raise HTTPException(status_code=502, detail=f"eBiuro: {type(exc).__name__}: {exc}")
+        totals["fetched"] += counts["fetched"]
+        totals["unchanged"] += counts["unchanged"]
+        totals["skipped"] += counts["skipped"]
+        totals["upserted"] += backend.upsert_finance_documents(docs)
+        backend.touch_finance_documents_seen(counts.get("seen_ids", []), seen_at)
+    return FinanceSyncResponse(companies=len(ebiuro.company_ids()), **totals)
+
+
+@app.get("/api/manager/finance/document/{doc_id}/pdf")
+def manager_finance_document_pdf(doc_id: int, _: None = Depends(require_manager)):
+    """Stream the invoice PDF from eBiuro. ``doc_id`` only: the URL comes from
+    the mirror row, never from the client; documents outside the configured
+    companies are 403 (blast-radius control for the shared Manager token)."""
+    backend = _choose_backend()
+    _finance_503(backend)
+    doc = backend.get_finance_document(doc_id)
+    if doc is None or not doc.pdf_url:
+        raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
+    if not ebiuro.is_configured():
+        raise HTTPException(status_code=503, detail="eBiuro nie jest skonfigurowane na serwerze.")
+    if doc.company_id not in ebiuro.company_ids():
+        raise HTTPException(status_code=403, detail="Document outside configured companies")
+    try:
+        content = ebiuro.EbiuroClient.from_settings().download_pdf(doc.pdf_url)
+    except ebiuro.EbiuroError as exc:
+        raise HTTPException(status_code=502, detail=f"eBiuro: {exc}")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{doc.invoice_number or doc.doc_id}.pdf"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@app.get("/api/manager/receipt/{receipt_id}/photos", response_model=list[ReceiptPhotoItem])
+def manager_receipt_photo_urls(receipt_id: str, _: None = Depends(require_manager)):
+    """Manager twin of the Captain photo listing (no location scope) — the
+    finance screen shows the WZ photo next to the invoice."""
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(status_code=503, detail="Photo viewing requires a persistent backend")
+    if not supabase_storage.is_configured():
+        raise HTTPException(status_code=503, detail="Supabase Storage not configured")
+    try:
+        receipt = backend.get_receipt(receipt_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(status_code=503, detail="Goods-receipt worksheets not configured")
+    if receipt is None:
+        raise HTTPException(status_code=404, detail=f"Receipt {receipt_id} not found")
+    return _receipt_photos(receipt)

@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     supabase_service_role_key: SecretStr = SecretStr("")
     supabase_wz_bucket: str = "wz-photos"
 
+    # Symfonia eBiuro (finance-invoice-reconciliation MVP) — READ-ONLY mirror of the
+    # accountant's verified purchase invoices. The API key is the accountant's
+    # connector key ("Klucz 1 / Oprogramowanie księgowe"): never regenerate it, never
+    # write through it. ``ebiuro_company_ids`` = comma-separated eBiuro company ids to
+    # sync (KEN pilot = 7189181). All three empty => finance sync/PDF routes 503.
+    ebiuro_email: str = ""
+    ebiuro_apikey: SecretStr = SecretStr("")
+    ebiuro_company_ids: str = ""
+
     # PostHog
     posthog_api_key: SecretStr = SecretStr("")
     posthog_host: str = "https://eu.i.posthog.com"

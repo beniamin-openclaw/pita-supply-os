@@ -14,6 +14,7 @@ import { ManagerPage } from "./pages/ManagerPage";
 import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
 import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
 import { TransportPage } from "./pages/manager/TransportPage";
+import { ManagerFinancePage } from "./pages/manager/finance/ManagerFinancePage";
 import { DebugPage } from "./pages/DebugPage";
 import { OAuthGmailCallback } from "./pages/OAuthGmailCallback";
 import { BASE_URL } from "./apiClient";
@@ -146,6 +147,14 @@ export default function App() {
             element={
               <AuthGate role="manager">
                 <TransportPage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/manager/finance"
+            element={
+              <AuthGate role="manager">
+                <ManagerFinancePage />
               </AuthGate>
             }
           />

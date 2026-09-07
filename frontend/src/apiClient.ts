@@ -15,6 +15,12 @@ import type {
   CaptainOrderListItem,
   CaptainSubmitRequest,
   CaptainSubmitResponse,
+  FinanceAliasRequest,
+  FinanceOverview,
+  FinanceReceiptDetail,
+  FinanceReceiptReview,
+  FinanceReviewRequest,
+  FinanceSyncResponse,
   InventoryCountDetail,
   InventoryCountEditRequest,
   InventoryCountEditResponse,
@@ -255,6 +261,46 @@ export function apiPost<T>(path: string, body: unknown, role: Role): Promise<T> 
 
 export function apiPatch<T>(path: string, body: unknown, role: Role): Promise<T> {
   return request<T>("PATCH", path, role, body);
+}
+
+/**
+ * GET a binary response (e.g. a finance document PDF). Parallel to request()
+ * but never assumes a JSON body: on success it returns the raw Blob; on
+ * failure it best-effort parses a JSON `detail` (mirrors request()'s error
+ * handling) and falls back to `resp.statusText` for a non-JSON error body
+ * (e.g. a plain-text 503 from a misconfigured proxy). Same Bearer + 401
+ * handling as request().
+ */
+export async function apiGetBlob(path: string, role: Role): Promise<Blob> {
+  const tokenAtRequest = getToken(role);
+  const headers: Record<string, string> = {};
+  if (tokenAtRequest) headers["Authorization"] = `Bearer ${tokenAtRequest}`;
+
+  let resp: Response;
+  try {
+    resp = await fetch(`${BASE_URL}${path}`, { method: "GET", headers });
+  } catch (err) {
+    throw new ApiError(0, (err as Error).message || "Network error");
+  }
+
+  if (resp.status === 401) {
+    const currentToken = getToken(role);
+    if (currentToken === tokenAtRequest) fireAuthInvalid(role);
+    throw new ApiError(401, "Bearer token invalid — please re-enter the code");
+  }
+
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try {
+      const payload: unknown = await resp.json();
+      detail = localizedErrorDetail(payload, resp.statusText);
+    } catch {
+      // non-JSON error body — keep statusText
+    }
+    throw new ApiError(resp.status, detail);
+  }
+
+  return resp.blob();
 }
 
 /**
@@ -517,6 +563,42 @@ export const api = {
   // needs to special-case.
   transportDraftConfig: () =>
     apiGet<TransportDraftConfig>("/api/manager/transport/draft-config", "manager"),
+  // Finance reconciliation ("Faktury vs dostawy", pilot KEN) — eBiuro-mirrored
+  // invoices vs. Captain goods-receipts. See supply-os-v1/app/models.py Finance*.
+  financeOverview: (location_id: string, days: number) =>
+    apiGet<FinanceOverview>(
+      `/api/manager/finance/overview?location_id=${encodeURIComponent(location_id)}&days=${days}`,
+      "manager",
+    ),
+  // `doc_id` re-compares the receipt against a specific candidate document
+  // (the candidate-switcher pills) instead of the backend's best match.
+  financeReceipt: (receipt_id: string, doc_id?: number) => {
+    const qs = doc_id != null ? `?doc_id=${encodeURIComponent(String(doc_id))}` : "";
+    return apiGet<FinanceReceiptDetail>(
+      `/api/manager/finance/receipt/${encodeURIComponent(receipt_id)}${qs}`,
+      "manager",
+    );
+  },
+  financeReview: (receipt_id: string, req: FinanceReviewRequest) =>
+    apiPost<FinanceReceiptReview>(
+      `/api/manager/finance/receipt/${encodeURIComponent(receipt_id)}/review`,
+      req,
+      "manager",
+    ),
+  // Links one invoice position to a received product; persists a supplier-level
+  // alias server-side and returns the re-compared detail.
+  financeAlias: (receipt_id: string, req: FinanceAliasRequest) =>
+    apiPost<FinanceReceiptDetail>(
+      `/api/manager/finance/receipt/${encodeURIComponent(receipt_id)}/alias`,
+      req,
+      "manager",
+    ),
+  // 503 (eBiuro not configured on the server) surfaces as ApiError.detail —
+  // callers show it as an inline notice, not a crash.
+  financeSync: () => apiPost<FinanceSyncResponse>("/api/manager/finance/sync", {}, "manager"),
+  // Binary PDF (503 when not configured) — open via URL.createObjectURL.
+  financeDocumentPdf: (doc_id: number) =>
+    apiGetBlob(`/api/manager/finance/document/${encodeURIComponent(String(doc_id))}/pdf`, "manager"),
 };
 
 export { BASE_URL };
