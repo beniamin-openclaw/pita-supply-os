@@ -25,7 +25,7 @@ import gspread
 from gspread.exceptions import APIError, SpreadsheetNotFound, WorksheetNotFound
 from gspread.utils import rowcol_to_a1
 from google.oauth2.service_account import Credentials
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .config import has_service_account_creds, resolve_service_account_info, settings
 from .errors import (
@@ -39,6 +39,7 @@ from .models import (
     InventoryCountLine,
     Location,
     LocationProductSetting,
+    LocationProductUsage,
     Order,
     OrderLine,
     OrderStatus,
@@ -231,8 +232,13 @@ def _read_with_ttl(
     worksheet_name: str,
     model_cls: Type[T],
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    tolerant: bool = False,
 ) -> list[T]:
-    """Fetch worksheet rows → list of Pydantic models with TTL caching."""
+    """Fetch worksheet rows → list of Pydantic models with TTL caching.
+
+    ``tolerant=True`` (optional master data such as location_product_usage)
+    skips-and-logs a row that fails validation instead of failing the whole
+    worksheet — one bad cell must not switch every location to static targets."""
     sheet_id = settings.google_sheet_id
     key = (sheet_id, worksheet_name)
     now = time.time()
@@ -247,9 +253,18 @@ def _read_with_ttl(
     _validate_headers(worksheet_name, headers, model_cls)
 
     rows: list[T] = []
-    for raw in records:
+    for idx, raw in enumerate(records, start=2):
         cleaned = _normalize(raw)
         cleaned = {k: v for k, v in cleaned.items() if v is not None}
+        if tolerant:
+            try:
+                rows.append(model_cls(**cleaned))
+            except (ValidationError, TypeError, ValueError):
+                log.warning(
+                    "worksheet '%s' row %d skipped — invalid %s row: %r",
+                    worksheet_name, idx, model_cls.__name__, raw, exc_info=True,
+                )
+            continue
         rows.append(model_cls(**cleaned))
     _ttl_cache[key] = (now, rows)
     return rows
@@ -275,6 +290,13 @@ def load_supplier_products() -> list[SupplierProduct]:
 
 def load_location_product_settings() -> list[LocationProductSetting]:
     return _read_with_ttl("location_product_settings", LocationProductSetting)
+
+
+def load_location_product_usage() -> list[LocationProductUsage]:
+    """Daily usage estimates (dynamic-target-wola). Raises ``WorksheetNotFound``
+    when the tab has not been created (mirrors ``load_transport_batches``);
+    ``main._load_usage_safe`` degrades that to "no dynamic targets"."""
+    return _read_with_ttl("location_product_usage", LocationProductUsage, tolerant=True)
 
 
 def load_meta(ttl_seconds: int = DEFAULT_TTL_SECONDS) -> dict:

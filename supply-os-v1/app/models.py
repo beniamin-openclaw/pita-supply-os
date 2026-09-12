@@ -1,7 +1,7 @@
 """Pydantic models matching docs/pita-supply-os-v1/DATA_MODEL.md."""
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -142,6 +142,50 @@ class LocationProductSetting(BaseModel):
     is_critical_for_location: bool = False
     allow_over_max_due_to_packaging: bool = False
     notes: str = ""
+
+
+class LocationProductUsage(BaseModel):
+    """Daily usage estimate per location × product (dynamic-target-wola, migration
+    0018). Master data seeded from the GoStock analysis (usage/day in the product's
+    inventory unit, confidence A/B/C, basis, source, as_of). The dynamic-target
+    engine (`app/dynamic_target.py`) uses only ACTIVE rows with confidence A or B;
+    everything else keeps the static target. `ge=0` on the two numeric fields so a
+    bad row fails at load time (the route degrades to static) instead of reaching
+    `compute_suggestion`, which raises ValueError on a negative target."""
+    usage_id: str
+    location_id: str
+    product_id: str
+    usage_per_day_base: float = Field(ge=0)
+    confidence: str = "C"
+    basis: str = ""
+    source: str = ""
+    as_of: Optional[date] = None
+    safety_days: float = Field(default=1.0, ge=0)
+    active: bool = True
+    notes: str = ""
+
+
+class TargetSource(BaseModel):
+    """Why an orderable item carries the target it carries (dynamic-target-wola).
+    `mode="static"` = the location_product_settings value, with `reason` naming the
+    fallback cause; `mode="dynamic"` = usage × (days until delivery + horizon) +
+    safety, with every input the Captain's card renders as visible math. Not
+    persisted — the order line snapshots only the resulting target."""
+    mode: Literal["static", "dynamic"] = "static"
+    static_target_base: float = 0
+    usage_per_day_base: Optional[float] = None
+    confidence: Optional[str] = None
+    delivery_date: Optional[date] = None
+    next_delivery_date: Optional[date] = None
+    days_until_delivery: Optional[int] = None
+    horizon_days: Optional[int] = None
+    safety_days: Optional[float] = None
+    safety_base: Optional[float] = None
+    # Static max_stock_qty_base when the dynamic target exceeded it and the
+    # effective max was raised to the target (so the over-MAX gate never fires
+    # against a ceiling below the target the engine itself asked for).
+    max_raised_from: Optional[float] = None
+    reason: str = ""
 
 
 # ---------- Orders ----------

@@ -5,19 +5,23 @@ CSVs. Hot-reloads when the file changes (useful during the Wola Captain
 data-input session when seed values are being refreshed live).
 """
 import csv
+import logging
 from pathlib import Path
 from typing import Type, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from .config import settings
 from .models import (
     Location,
     LocationProductSetting,
+    LocationProductUsage,
     Product,
     Supplier,
     SupplierProduct,
 )
+
+log = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -94,3 +98,39 @@ def load_location_product_settings() -> list[LocationProductSetting]:
         settings.seed_dir / "location_product_settings.csv",
         LocationProductSetting,
     )
+
+
+def load_location_product_usage() -> list[LocationProductUsage]:
+    """Daily usage estimates (dynamic-target-wola). OPTIONAL master data: unlike the
+    other seed files a missing ``location_product_usage.csv`` is not an error —
+    it simply means no location has a dynamic target yet, so this returns ``[]``
+    instead of raising ``FileNotFoundError``."""
+    path = settings.seed_dir / "location_product_usage.csv"
+    if not path.exists():
+        return []
+    return _read_rows_tolerant(path, LocationProductUsage)
+
+
+def _read_rows_tolerant(path: Path, model: Type[T]) -> list[T]:
+    """Like ``_read`` but PER ROW: a row that fails validation (negative usage,
+    text in a number cell) is logged and skipped instead of failing the whole
+    file. One bad cell must not silently switch every location back to static
+    targets (adversarial finding #1). mtime-cached like the other loaders."""
+    key = f"{path}::tolerant"
+    mtime = path.stat().st_mtime
+    cached = _cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]  # type: ignore[return-value]
+    rows: list[T] = []
+    with path.open(encoding="utf-8") as f:
+        for idx, raw in enumerate(csv.DictReader(f), start=2):
+            cleaned = {k: v for k, v in _normalize(raw).items() if v is not None}
+            try:
+                rows.append(model(**cleaned))
+            except (ValidationError, TypeError, ValueError):
+                log.warning(
+                    "%s line %d skipped — invalid %s row: %r",
+                    path.name, idx, model.__name__, raw, exc_info=True,
+                )
+    _cache[key] = (mtime, rows)
+    return rows

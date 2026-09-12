@@ -55,6 +55,7 @@ from .models import (
     InventoryCountLine,
     Location,
     LocationProductSetting,
+    LocationProductUsage,
     Order,
     OrderLine,
     Product,
@@ -113,6 +114,10 @@ _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "max_stock_qty_base", "target_stock_qty_base", "is_critical_for_location",
     "allow_over_max_due_to_packaging", "notes",
 ]
+_LOCATION_PRODUCT_USAGE_COLUMNS = [
+    "usage_id", "location_id", "product_id", "usage_per_day_base", "confidence",
+    "basis", "source", "as_of", "safety_days", "active", "notes",
+]
 _ORDER_COLUMNS = [
     "order_id", "location_id", "supplier_id", "order_date",
     "requested_delivery_date", "status", "captain_user", "captain_submitted_at",
@@ -165,7 +170,7 @@ _TRANSPORT_EVENT_COLUMNS = [
 _DATE_COLS = frozenset(
     {
         "order_date", "requested_delivery_date", "count_date", "receipt_date",
-        "pickup_date", "issue_date", "sell_date", "payment_deadline",
+        "pickup_date", "as_of", "issue_date", "sell_date", "payment_deadline",
     }
 )
 # NOTE: these casting sets are GLOBAL across tables, keyed by bare column name
@@ -323,6 +328,16 @@ def load_location_product_settings() -> list[LocationProductSetting]:
     return _fetch_all(
         "SELECT * FROM location_product_settings ORDER BY setting_id",
         LocationProductSetting,
+    )
+
+
+def load_location_product_usage() -> list[LocationProductUsage]:
+    """Daily usage estimates (dynamic-target-wola, migration 0018). Raises a
+    SQLAlchemy ProgrammingError while the table does not exist yet (code deployed
+    before the migration) — ``main._load_usage_safe`` catches ANY exception and
+    degrades to static targets, so that deploy-ordering window never 500s."""
+    return _fetch_all(
+        "SELECT * FROM location_product_usage ORDER BY usage_id", LocationProductUsage
     )
 
 

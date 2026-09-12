@@ -8,10 +8,14 @@ import { getCutoffUrgency, parseDeliveryDays } from "../lib/dates";
 
 interface ContextStripProps {
   supplier: Supplier | null;
+  // Concrete delivery window (ISO dates) when the screen carries a dynamic
+  // target (dynamic-target-wola): "dostawa wt 08.09 · następna sb 12.09"
+  // replaces the literal delivery_days text. Null/undefined = today's strip.
+  deliveryWindow?: { delivery: string; next: string } | null;
 }
 
-export function ContextStrip({ supplier }: ContextStripProps) {
-  const { t, tPlural } = useT();
+export function ContextStrip({ supplier, deliveryWindow }: ContextStripProps) {
+  const { t, tPlural, formatDateTime } = useT();
   if (!supplier) return null;
 
   const urgency = getCutoffUrgency(supplier.cutoff_time);
@@ -20,8 +24,15 @@ export function ContextStrip({ supplier }: ContextStripProps) {
     : t("dates.cutoff.none");
 
   const parsed = parseDeliveryDays(supplier.delivery_days);
+  const fmtDay = (iso: string) =>
+    formatDateTime(`${iso}T12:00:00`, { weekday: "short", day: "2-digit", month: "2-digit" });
   let deliveryText: string;
-  if (!parsed) {
+  if (deliveryWindow) {
+    deliveryText = t("dates.delivery.window", {
+      delivery: fmtDay(deliveryWindow.delivery),
+      next: fmtDay(deliveryWindow.next),
+    });
+  } else if (!parsed) {
     deliveryText = t("dates.delivery.unsetText");
   } else if (parsed.kind === "days") {
     deliveryText = tPlural("dates.delivery", "days", parsed.n);

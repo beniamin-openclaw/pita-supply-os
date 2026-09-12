@@ -102,3 +102,56 @@ def test_cache_invalidates_on_mtime_change(tmp_path: Path):
     second = _read_cached(csv_path, Product)
     assert len(second) == 2
     assert first is not second  # cache invalidated and re-parsed
+
+
+# ---------- load_location_product_usage (dynamic-target-wola) ----------
+
+def test_load_location_product_usage_missing_file_returns_empty(mocker, tmp_path: Path):
+    """The usage CSV is OPTIONAL master data — a seed dir without it means "no
+    dynamic targets", not an error."""
+    from app import seed_loader
+    mocker.patch.object(seed_loader.settings, "seed_dir", tmp_path)
+    assert seed_loader.load_location_product_usage() == []
+
+
+def test_load_location_product_usage_reads_rows(mocker, tmp_path: Path):
+    from app import seed_loader
+    (tmp_path / "location_product_usage.csv").write_text(
+        "usage_id,location_id,product_id,usage_per_day_base,confidence,basis,source,"
+        "as_of,safety_days,active,notes\n"
+        "WOLA__P024,WOLA,P024,12.75,A,purch+teoret+real,gostock,2026-08-30,1,TRUE,\n",
+        encoding="utf-8",
+    )
+    mocker.patch.object(seed_loader.settings, "seed_dir", tmp_path)
+    rows = seed_loader.load_location_product_usage()
+    assert len(rows) == 1
+    assert rows[0].usage_per_day_base == 12.75
+    assert rows[0].confidence == "A"
+    assert rows[0].as_of.isoformat() == "2026-08-30"
+
+
+def test_repo_seed_carries_the_wola_usage_rows():
+    """The committed seed dir ships the 18 WOLA rows from the GoStock analysis."""
+    from app import seed_loader
+    rows = seed_loader.load_location_product_usage()
+    assert len(rows) == 18
+    assert {r.location_id for r in rows} == {"WOLA"}
+    by_pid = {r.product_id: r for r in rows}
+    assert by_pid["P024"].usage_per_day_base == 12.75 and by_pid["P024"].confidence == "A"
+    assert by_pid["P079"].confidence == "C"
+
+
+def test_load_location_product_usage_skips_a_bad_row_and_keeps_the_rest(mocker, tmp_path: Path):
+    """One malformed cell must not empty the whole table (adversarial #1)."""
+    from app import seed_loader
+    (tmp_path / "location_product_usage.csv").write_text(
+        "usage_id,location_id,product_id,usage_per_day_base,confidence,basis,source,"
+        "as_of,safety_days,active,notes\n"
+        "KEN__BAD,KEN,P024,-1,A,,,,1,TRUE,\n"
+        "WOLA__P024,WOLA,P024,12.75,A,,,,1,TRUE,\n"
+        "WOLA__TXT,WOLA,P026,abc,A,,,,1,TRUE,\n",
+        encoding="utf-8",
+    )
+    mocker.patch.object(seed_loader.settings, "seed_dir", tmp_path)
+    rows = seed_loader.load_location_product_usage()
+    assert [r.usage_id for r in rows] == ["WOLA__P024"]

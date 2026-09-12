@@ -577,3 +577,50 @@ def test_is_configured_true_when_both_set(mocker):
         SecretStr('{"type":"service_account"}'),
     )
     assert sheets.is_configured() is True
+
+
+# ---------- load_location_product_usage (dynamic-target-wola) ----------
+
+LOCATION_PRODUCT_USAGE_HEADERS = [
+    "usage_id", "location_id", "product_id", "usage_per_day_base", "confidence",
+    "basis", "source", "as_of", "safety_days", "active", "notes",
+]
+
+
+def test_load_location_product_usage_happy_path(mocker):
+    from app.models import LocationProductUsage
+    rows = [
+        {
+            "usage_id": "WOLA__P024", "location_id": "WOLA", "product_id": "P024",
+            "usage_per_day_base": 12.75, "confidence": "A", "basis": "purch+teoret+real",
+            "source": "gostock-2026-09-06", "as_of": "2026-08-30", "safety_days": 1,
+            "active": "TRUE", "notes": "",
+        }
+    ]
+    ws = _mk_worksheet(LOCATION_PRODUCT_USAGE_HEADERS, rows)
+    mocker.patch.object(sheets, "_open_worksheet", return_value=ws)
+    usage = sheets.load_location_product_usage()
+    assert len(usage) == 1
+    assert isinstance(usage[0], LocationProductUsage)
+    assert usage[0].usage_per_day_base == 12.75
+    assert usage[0].active is True
+
+
+def test_load_location_product_usage_skips_invalid_rows(mocker):
+    rows = [
+        {
+            "usage_id": "WOLA__BAD", "location_id": "WOLA", "product_id": "P026",
+            "usage_per_day_base": -5, "confidence": "A", "basis": "", "source": "",
+            "as_of": "", "safety_days": 1, "active": "TRUE", "notes": "",
+        },
+        {
+            "usage_id": "WOLA__P024", "location_id": "WOLA", "product_id": "P024",
+            "usage_per_day_base": 12.75, "confidence": "A", "basis": "", "source": "",
+            "as_of": "", "safety_days": 1, "active": "TRUE", "notes": "",
+        },
+    ]
+    ws = _mk_worksheet(LOCATION_PRODUCT_USAGE_HEADERS, rows)
+    mocker.patch.object(sheets, "_open_worksheet", return_value=ws)
+    sheets.invalidate_cache("location_product_usage")
+    usage = sheets.load_location_product_usage()
+    assert [u.usage_id for u in usage] == ["WOLA__P024"]
