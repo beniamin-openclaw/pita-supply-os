@@ -1,10 +1,10 @@
 ---
 change_id: feedback-r7-tushar
 title: Feedback r7 (Tushar) — standing CC biuro@ and blank delivery-date line in the supplier e-mail
-status: implemented
+status: archived
 created: 2026-07-25
 updated: 2026-09-13
-archived_at: null
+archived_at: 2026-09-13T06:48:51Z
 ---
 
 ## Notes
