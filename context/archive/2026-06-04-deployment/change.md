@@ -1,10 +1,10 @@
 ---
 change_id: deployment
 title: Deployment plan (m1l5) — Vercel frontend + backend host decision
-status: implemented
+status: archived
 created: 2026-06-04
 updated: 2026-09-13
-archived_at: null
+archived_at: 2026-09-13T06:48:52Z
 ---
 
 ## Notes
