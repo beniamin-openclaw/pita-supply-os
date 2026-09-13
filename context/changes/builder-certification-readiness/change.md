@@ -1,9 +1,9 @@
 ---
 change_id: builder-certification-readiness
 title: 10xDevs 3.0 Builder (+ Champion A) certification readiness — reconcile docs with code, add test plan, AI review in CI
-status: plan_reviewed
+status: implementing
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-13
 archived_at: null
 ---
 

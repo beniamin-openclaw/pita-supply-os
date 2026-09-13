@@ -1,6 +1,6 @@
 # Plan: builder-certification-readiness
 
-> Status: plan_reviewed (revision 2 after two independent reviews, 2026-09-12) · Owner: Ben (operator) + Claude (autonomous execution)
+> Status: implementing (revision 2 after two independent reviews, 2026-09-12; execution started 2026-09-13) · Owner: Ben (operator) + Claude (autonomous execution)
 > Deadline: submission Sun 2026-09-13 22:00 target, hard stop Mon 2026-09-14 18:00 (window closes 23:59 Warsaw time).
 
 ## End state
@@ -105,17 +105,17 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Automated
 
-- [ ] 1.1 Park dynamic-target-wola on its own branch + PR (raw exports excluded)
-- [ ] 1.2 Fix finance sync re-entry sentinel on clean main; CI green; cherry-pick to DTW branch
-- [ ] 1.3 Create cert/builder-readiness with this change folder
-- [ ] 1.4 Install course packs m3l1 m5l2 m5l3 m0l0; CLAUDE.md symlink intact
+- [x] 1.1 Park dynamic-target-wola on its own branch + PR (raw exports excluded) — b581fce (PR #30)
+- [x] 1.2 Fix finance sync re-entry sentinel on clean main; CI green; cherry-pick to DTW branch — e3d8059 (CI run 34743256514 green; cherry-pick 02c136e)
+- [x] 1.3 Create cert/builder-readiness with this change folder — 8e0ed36
+- [x] 1.4 Install course packs m3l1 m5l2 m5l3 m0l0; CLAUDE.md symlink intact (no commit — `.claude/` is gitignored)
 
 ### Phase 2: Test plan (m3l1)
 
 #### Automated
 
-- [ ] 2.1 Author context/foundation/test-plan.md per schema (6 risks, response guidance, phases, cookbook)
-- [ ] 2.2 Append lesson: reconcile roadmap/AGENTS.md when archiving
+- [x] 2.1 Author context/foundation/test-plan.md per schema (6 risks, response guidance, phases, cookbook) — 96950f0
+- [x] 2.2 Append lesson: reconcile roadmap/AGENTS.md when archiving — 96950f0
 
 ### Phase 3: Documentation reconciliation
 
