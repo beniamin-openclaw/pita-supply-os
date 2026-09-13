@@ -5517,7 +5517,10 @@ def manager_finance_alias(
 
 _FINANCE_SYNC_MIN_INTERVAL_S = 60
 _FINANCE_SYNC_MAX_FETCH = 200
-_finance_sync_last_run: dict[str, float] = {"at": 0.0}
+# -inf, not 0.0: time.monotonic() counts from an arbitrary origin (seconds since boot on
+# Linux), so on a freshly booted CI runner or container `now - 0.0 < 60` is true and the
+# first sync would be rejected with 429.
+_finance_sync_last_run: dict[str, float] = {"at": float("-inf")}
 
 
 @app.post("/api/manager/finance/sync", response_model=FinanceSyncResponse)

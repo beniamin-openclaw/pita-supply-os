@@ -268,10 +268,10 @@ def test_sync_unconfigured_503_and_reentry_guard(fake, monkeypatch):
         return len(docs)
     fake.upsert_finance_documents = _upsert
     fake.touch_finance_documents_seen = lambda ids, at: calls["seen"].extend(ids)
-    main_mod._finance_sync_last_run["at"] = 0.0
+    main_mod._finance_sync_last_run["at"] = float("-inf")
     r = client.post("/api/manager/finance/sync", headers=MANAGER)
     assert r.status_code == 200, r.text
     assert r.json() == {"companies": 1, "fetched": 1, "unchanged": 0, "skipped": 0, "upserted": 1}
     assert calls["seen"] == [fake.doc.doc_id]
     assert client.post("/api/manager/finance/sync", headers=MANAGER).status_code == 429
-    main_mod._finance_sync_last_run["at"] = 0.0
+    main_mod._finance_sync_last_run["at"] = float("-inf")
