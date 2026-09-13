@@ -1,10 +1,10 @@
 ---
 change_id: finance-invoice-reconciliation
 title: Raport przyjęć dla finansów + kojarzenie faktur z dostawami (Symfonia eBiuro / KSeF)
-status: implemented
+status: archived
 created: 2026-09-06
-updated: 2026-09-07
-archived_at: null
+updated: 2026-09-13
+archived_at: 2026-09-13T06:48:51Z
 ---
 
 ## Notes
