@@ -21,7 +21,7 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 
 ## Local setup & gotchas
 - **Local dev needs no Google credentials**: set `SUPPLY_OS_DATA_BACKEND=seed` to read CSVs from `SUPPLY_OS_SEED_DIR` (default `../docs/pita-supply-os-v1/seed`). The `sheet` backend additionally needs `SUPPLY_OS_GOOGLE_SERVICE_ACCOUNT_JSON` (inline or file path) + `SUPPLY_OS_GOOGLE_SHEET_ID`.
-- **API URL is env-driven — don't hardcode it.** Dev sets `VITE_API_URL=http://localhost:8901`; in prod `apiClient` uses `BASE_URL=""` and Vercel rewrites `/api/*` to the Railway backend (see @frontend/vercel.json).
+- **API URL is env-driven — don't hardcode it.** Dev sets `VITE_API_URL=http://localhost:<backend port>` (8901 in `frontend/.env.example`; the README walkthrough uses 8931); in prod `apiClient` uses `BASE_URL=""` and Vercel rewrites `/api/*` to the Railway backend (see @frontend/vercel.json).
 - **Auth:** `SUPPLY_OS_CAPTAIN_TOKENS` (LOCATION:token pairs) + `SUPPLY_OS_MANAGER_TOKEN`; empty disables auth (dev only). Copy each app's `.env.example` → `.env`.
 
 ## Conventions & deploy
@@ -32,7 +32,7 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 - Known gaps on `main`: backend has no lockfile and no type-checker; TS `strict` is off. All three are implemented on PR #27 (H-01), unmerged. Detail: @context/foundation/health-check.md.
 
 ## Tooling & vendors
-The user holds paid premium subscriptions on the platforms in @docs/tooling.md — informational only; no tool or host preference is set yet (decisions pending).
+Hosting is decided: Railway (backend), Vercel (frontend), Supabase (Postgres + Storage) — rationale and triggers in @context/foundation/infrastructure.md. @docs/tooling.md lists the paid platforms available to the operator (informational).
 
 ## Agent tooling
 - `CLAUDE.md` is a **symlink to this file** — single source of truth, so Claude Code, Cursor, and Codex all read the same rules.

@@ -202,7 +202,7 @@ Next step: knock out the Category A high-severity fixes — extend CI to the pro
 
 ## Re-check 2026-09-13
 
-`.github/workflows/ci.yml` now runs the actual product across three jobs: backend (ruff + pytest), backend-integration (pytest -m integration against a real Postgres 16 service), and frontend (build + lint + vitest). This closes Fix #1 (CI covers the product, not sibling tooling) and Fix #2 (frontend test runner) from the original list above — Vitest is wired in and the frontend suite has grown to 365 tests; the backend suite has grown to 668 tests plus 21 integration tests.
+`.github/workflows/ci.yml` now runs the actual product across three jobs: backend (ruff + pytest), backend-integration (pytest -m integration against a real Postgres 16 service), and frontend (build + lint + vitest). This closes the CI fix (original list item #5) (CI covers the product, not sibling tooling) and Fix #2 (frontend test runner) from the original list above — Vitest is wired in and the frontend suite has grown to 365 tests; the backend suite has grown to 668 tests plus 21 integration tests.
 
 Still open on `main`: the backend lockfile (#3), TypeScript `strict` (#4), and a static type-checker (mypy/pyright, part of #4/#5's follow-on). All three are implemented — TS `strict` on, `requirements.lock` wired into CI, an advisory pyright job added — on the `claude/multi-location-master-data` branch (PR #27, tracked as roadmap **H-01**), which is unmerged as of this re-check.
 

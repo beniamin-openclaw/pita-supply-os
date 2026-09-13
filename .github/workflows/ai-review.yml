@@ -81,8 +81,8 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq '[.[] | select(.body | contains("<!-- ai-code-review -->"))] | last | .id // empty')
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --slurp \
+            --jq '[.[][] | select(.body | contains("<!-- ai-code-review -->"))] | last | .id // empty')
           if [ -n "$existing" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@ai-review-out/review.md >/dev/null
             echo "updated comment $existing"

@@ -82,3 +82,15 @@ def test_main_happy_path_renders_table(tmp_path, monkeypatch):
     assert review.main() == 0
     md = (tmp_path / "out" / "review.md").read_text()
     assert "AI code review — PASS" in md and "`a.py:3`" in md and "| complexity | 7/10 |" in md
+
+
+def test_call_openrouter_rejects_truncated_output(monkeypatch):
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self):
+            return json.dumps({"choices": [{"finish_reason": "length", "message": {"content": "{"}}]}).encode()
+
+    monkeypatch.setattr(review.urllib.request, "urlopen", lambda req, timeout=0: FakeResp())
+    with pytest.raises(RuntimeError, match="truncated"):
+        review.call_openrouter("k", "m", "high", [{"role": "user", "content": "x"}])

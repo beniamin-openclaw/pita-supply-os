@@ -150,13 +150,15 @@ def render_markdown(review: dict, verdict: str, model: str, effort: str, truncat
 
 
 def call_openrouter(api_key: str, model: str, effort: str, messages: list[dict],
-                    timeout: int = 180) -> str:
+                    timeout: int = 300) -> str:
     payload = {
         "model": model,
         "messages": messages,
         "response_format": {"type": "json_object"},
-        "reasoning": {"effort": effort},
-        "max_tokens": 4000,
+        # Reasoning tokens share max_tokens on OpenRouter; keep a wide budget and drop
+        # the reasoning text from the response so the JSON answer is never truncated.
+        "reasoning": {"effort": effort, "exclude": True},
+        "max_tokens": 16000,
         "temperature": 0.2,
     }
     req = urllib.request.Request(
@@ -175,7 +177,10 @@ def call_openrouter(api_key: str, model: str, effort: str, messages: list[dict],
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
-            return body["choices"][0]["message"]["content"]
+            choice = body["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise RuntimeError("model output truncated (finish_reason=length) — raise max_tokens")
+            return choice["message"]["content"]
         except urllib.error.HTTPError as exc:
             if exc.code >= 500 and attempt == 0:
                 last_error = exc

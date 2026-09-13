@@ -61,7 +61,7 @@ research's job, see §1 principle #3).
 | #1 | Seed/test dispatch never sends; a second dispatch is rejected; placeholder supplier e-mails refused | "the two-step confirm is enough" | dispatch entry point, status transitions, channel boundary | unit + route | happy path only |
 | #2 | Engine returns what the supplier can ship for every rounding rule; UI shows the stored number | "rounding is a display concern" | engine contract, master-data unit fields, UI formatting | unit + component | copying the production formula |
 | #3 | Concurrent claim/save/cancel yields one winner and a 409; a failed multi-row write rolls back | "single worker means no races" | persisted state per backend, row-lock contract | integration on Postgres | over-mocking the backend |
-| #4 | Every route rejects the other role; location A's Captain gets 404 for location B; each screen sends its own role's token | "require_any_auth covers it" | token per screen, ownership check per route | route tests, both headers | testing with auth disabled |
+| #4 | Every route rejects the other role; location A's Captain gets 404 for location B; each screen sends its own role's token | "the shared auth dependency covers it" | token per screen, ownership check per route | route tests, both headers | testing with auth disabled |
 | #5 | Aggregation sums per location, drops cancelled and zero lines; finalize refuses an empty column | "the manager will notice" | aggregation inputs, lifecycle events, finalize guard | unit + route | brittle list-order asserts |
 | #6 | One receipt per sent order of the same location; variance = received − effective ordered; missing photo flagged, not fatal | "photo failure should fail the receipt" | status guard, effective-quantity rule, photo degradation | route + integration | whole-payload snapshots |
 
@@ -120,7 +120,7 @@ How to add new tests in this project.
 ### 6.1 Adding a backend unit or route test
 
 - **Location**: `supply-os-v1/tests/test_<area>.py`; one file per route family or engine.
-- **Fixtures**: `tests/conftest.py` sets the seed backend and the test tokens once per session; use `headers=MANAGER` / captain headers from the module-level constants in the reference tests. Never set env per file.
+- **Fixtures**: `tests/conftest.py` sets the seed backend and the test tokens once per session; use the module-level `MANAGER_AUTH` / `WOLA_AUTH` header constants from the reference tests. Never set env per file.
 - **Reference tests**: Risk #1 — `tests/test_manager_dispatch.py::test_dispatch_already_manager_sent`, `::test_dispatch_email_channel_rejects_placeholder_email`, `::test_dispatch_concurrent_dispatch_raises`; `tests/test_captain_submit.py::test_submit_critical_underorder_no_reason`. Risk #2 — `tests/test_suggestion.py::test_half_allowed_rule`, `::test_critical_zero_stock_orders_full_unit`, `tests/test_captain_submit.py::test_submit_bukat_p009_subkg_tenth_kg_from_seed`.
 - **Run locally**: `cd supply-os-v1 && python -m pytest -q`.
 

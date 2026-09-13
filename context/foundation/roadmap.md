@@ -273,7 +273,7 @@ Horizon 2 shipped the infrastructure (Supabase, multi-supplier data, product CI)
 
 ## 10x Execution Playbook
 
-How to execute Horizon 2 for maximum efficiency and lowest rework — the 10x skill chain, the lessons to pre-load, and the verify gate per item. The standard build chain is `/10x-new → /10x-research → /10x-plan → /10x-plan-review → /10x-implement → /10x-impl-review → /10x-archive`, with `/10x-frame` inserted first when *what* to build is uncertain, and `/verify` at every gate. `context/foundation/lessons.md` (7 entries) is read as priors by every review skill — **Lesson 5** (keep skill artifacts in English) and **Lesson 4** (roadmap is the source of truth; `/10x-archive` flips a slice to done) apply to **all** of them.
+How to execute Horizon 2 for maximum efficiency and lowest rework — the 10x skill chain, the lessons to pre-load, and the verify gate per item. The standard build chain is `/10x-new → /10x-research → /10x-plan → /10x-plan-review → /10x-implement → /10x-impl-review → /10x-archive`, with `/10x-frame` inserted first when *what* to build is uncertain, and `/verify` at every gate. `context/foundation/lessons.md (13 entries) is read as priors by every review skill — **Lesson 5** (keep skill artifacts in English) and **Lesson 4** (roadmap is the source of truth; `/10x-archive` flips a slice to done) apply to **all** of them.
 
 | Next item | Recommended 10x chain | Lessons to pre-load | Verify gate | Session |
 | --------- | --------------------- | ------------------- | ----------- | ------- |

@@ -73,7 +73,8 @@ SUPPLY_OS_DATABASE_URL= \
 SUPPLY_OS_SUPABASE_URL= \
 SUPPLY_OS_SUPABASE_SERVICE_ROLE_KEY= \
 SUPPLY_OS_CAPTAIN_TOKENS=WOLA:demo-captain \
-SUPPLY_OS_MANAGER_TOKEN=demo-manager \
+SUPPLY_OS_EBIURO_APIKEY= \
+  SUPPLY_OS_MANAGER_TOKEN=demo-manager \
 python3 -m uvicorn app.main:app --port 8931
 ```
 
@@ -170,7 +171,7 @@ Product decisions and their history live under `context/`:
   re-read by the planning and review steps below).
 - `context/changes/` — one folder per change in progress, each with its own `change.md` and
   `plan.md`.
-- `context/archive/` — changes that shipped and were closed out; 45 changes archived so far
+- `context/archive/` — changes that shipped and were closed out; 54 changes archived so far
   (`ls context/archive | wc -l`).
 
 Day-to-day development follows the 10x workflow: `/10x-new` opens a change, `/10x-research` and
