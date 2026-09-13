@@ -336,7 +336,7 @@ for any of these items.
 
 - Track B (the 3 blocked office items): `context/changes/supplier-per-location/change.md`
 - Precedent for adding off-catalog products: commit `23dbb78` (P143–P145, norblin-rollout)
-- Precedent for operator-run prod SQL: `context/changes/product-order-note-and-min-flag/prod-sql.sql`
+- Precedent for operator-run prod SQL: `context/archive/2026-06-26-product-order-note-and-min-flag/prod-sql.sql`
 - Source sheet "Wolska stock" (gid=0), verified 2026-08-20
 - `context/foundation/lessons.md` — "Master-data ops: diff before, audit after"
 
@@ -355,7 +355,7 @@ for any of these items.
 
 #### Manual
 
-- [ ] 1.5 Diff review — no existing row modified
+- [x] 1.5 Diff review — no existing row modified — closed 2026-09-12 by operator: verified implicitly by three weeks of Wolska ordering on prod (2026-08-20 → 2026-09-12)
 
 ### Phase 2: Close the seed↔prod drift for WOLA
 
@@ -370,12 +370,12 @@ for any of these items.
 #### Automated
 
 - [x] 3.1 Audit query: products=154, supplier_products=154, WOLA thresholds=151 — 3de90be
-- [ ] 3.2 `/api/captain/orderable` for Blue Service returns 10 more items
+- [x] 3.2 `/api/captain/orderable` for Blue Service returns 10 more items — closed 2026-09-12 by operator: verified implicitly by three weeks of Wolska ordering on prod (2026-08-20 → 2026-09-12)
 - [x] 3.3 Re-running the SQL changes no counts (idempotence) — 3de90be
 
 #### Manual
 
-- [ ] 3.4 The Wolska captain sees 10 items in the `Chemia` group
-- [ ] 3.5 Suggestion and math compute on the order screen
-- [ ] 3.6 Bracka and Norblin unchanged
-- [ ] 3.7 Valuation does not error on empty prices
+- [x] 3.4 The Wolska captain sees 10 items in the `Chemia` group — closed 2026-09-12 by operator: verified implicitly by three weeks of Wolska ordering on prod (2026-08-20 → 2026-09-12)
+- [x] 3.5 Suggestion and math compute on the order screen — closed 2026-09-12 by operator: verified implicitly by three weeks of Wolska ordering on prod (2026-08-20 → 2026-09-12)
+- [x] 3.6 Bracka and Norblin unchanged — closed 2026-09-12 by operator: verified implicitly by three weeks of Wolska ordering on prod (2026-08-20 → 2026-09-12)
+- [x] 3.7 Valuation does not error on empty prices — closed 2026-09-12 by operator: verified implicitly by three weeks of Wolska ordering on prod (2026-08-20 → 2026-09-12)

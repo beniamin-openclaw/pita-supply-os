@@ -9,6 +9,10 @@ status: plan (no production change executed by this document)
 
 # Deployment Plan — Pita Supply OS
 
+> **Superseded 2026-06-15.** The backend now runs on Railway (auto-deploy from `main`); the droplet
+> described below is a cold fallback. See `context/foundation/infrastructure.md` § Update 2026-06-12
+> and `docs/pita-supply-os-v1/RAILWAY_DEPLOY_RUNBOOK.md`. Kept as the m1l5 lesson artifact.
+
 > Built from `context/foundation/infrastructure.md` (the platform decision contract) per the m1l5 lesson prompts. This is a **plan**, not an execution log — completing the lesson does **not** change production. Real (re)deploys, secret provisioning, and domain changes are gated separately.
 
 ## §0 Context & scope

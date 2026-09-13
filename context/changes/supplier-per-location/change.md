@@ -1,9 +1,9 @@
 ---
 change_id: supplier-per-location
 title: Supplier dimension at the location level — one product, many suppliers, per-location choice
-status: new
+status: blocked
 created: 2026-08-20
-updated: 2026-08-20
+updated: 2026-09-13
 archived_at: null
 ---
 
@@ -72,3 +72,14 @@ explicitly requires P127, P132, P133 to be present. Track B will change it (→ 
 `/10x-shape supplier-per-location` — this is a domain-model change touching the PRD's
 governing rule ("single path from location stock counts to supplier dispatch") and its
 Data section, which today states plainly "no schema change in the baseline pilot".
+
+## Outcome so far (recorded 2026-09-13)
+
+- 2026-08-20/21: implemented on branch `claude/supplier-per-location` (PR #26, 9 commits, green on all
+  four gates), then the office-supply **pin mechanism was dropped** (`5b5af29`): Wolska's office
+  supplies come from Pago, not Blue Service, so the premise did not survive real data. One prod write
+  stayed (Allegro as an inactive portal supplier, `62cafa4`).
+- Still open on `main`: `supplier_products.active` is not enforced by the orderable list; five real
+  per-location candidates (P088/P095/P096/P097/P102) wait for an operator decision (Selgros vs Allegro).
+- Follow-up lane `claude/multi-location-master-data` (PR #27) builds on this branch; both PRs parked.
+- Status set to `blocked` (operator decision) on 2026-09-13; this folder stays in `context/changes/`.

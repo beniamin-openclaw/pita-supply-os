@@ -263,8 +263,8 @@ All reads ride existing TTL caches and the targeted `load_order_lines_for_orders
 #### Manual
 
 - [x] 3.4 Preview verified (selection → create → batch detail → driver-list copy) + screenshot saved
-- [ ] 3.5 Email button: totals-only draft for valid email (Bukat), disabled+hint for TBD (Pago)
-- [ ] 3.6 TRN chip visible on sent lane for a combined order
+- [x] 3.5 Email button: totals-only draft for valid email (Bukat), disabled+hint for TBD (Pago) — superseded by v5 approval semantics ("Zatwierdź transport"); e-mail automation deferred, see Open Questions
+- [x] 3.6 TRN chip visible on sent lane for a combined order — superseded by v5 (batch naming + NOWY badge)
 
 ---
 
@@ -311,7 +311,7 @@ Success criteria (automated): vitest green (matrix edit helpers, weight panel ma
 
 #### Manual
 
-- [ ] 5.4 Draft→edit→finalize flow verified in preview with auth ON + screenshot
+- [x] 5.4 Draft→edit→finalize flow verified in preview with auth ON + screenshot — superseded by live verification on prod 2026-08-28 (ADDENDUM v5.6, Gmail-draft flow)
 
 ---
 

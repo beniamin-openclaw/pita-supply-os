@@ -44,4 +44,4 @@ ceremony needed). Round-1 demo backlog #7 residual.
 
 #### Manual
 - [x] prod-sql.sql applied to prod Supabase via MCP (column added, P011 note set, Wola min→18) — verified BEFORE deploy
-- [ ] owner live-verify: Tzatziki card shows "1 karton = 6 szt (18 kg)"; stock <18 → "Poniżej minimum: 18 kg"
+- [x] owner live-verify: Tzatziki card shows "1 karton = 6 szt (18 kg)"; stock <18 → "Poniżej minimum: 18 kg" — feature live since 2026-06-26 (8e3467c; prod SQL 655e54b); closed by operator 2026-09-12

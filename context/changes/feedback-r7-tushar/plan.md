@@ -5,10 +5,10 @@ created: 2026-07-25
 updated: 2026-07-25
 ---
 
-> **Stan: zaimplementowane 2026-07-25, niewdrożone.** Fazy A i B.1 zapisane w prod
-> Supabase (działają od razu). Fazy B.2 i C leżą jako zmiana kodowa na gałęzi
-> `claude/tushara-feedback-new-products-7623b8` — niezacommitowane i niewdrożone.
-> Dziennik wykonania: §10.
+> **Status (corrected 2026-09-13): implemented AND deployed.** Phases A and B.1 were written to prod
+> Supabase on 2026-07-25; phases B.2 and C were merged to `main` the same day as `d45840f`
+> (Railway/Vercel auto-deploy). The earlier banner ("niewdrożone") was never updated after the
+> merge. Execution log: §10.
 
 # feedback-r7-tushar — plan ostateczny
 
@@ -355,7 +355,7 @@ Rollback: `DELETE` po `product_id IN ('P139','P140','P141')` (settings → suppl
 
 ### Otwarte
 
-- [ ] Commit + merge do `main` (Railway/Vercel) — czeka na decyzję operatora
+- [x] Commit + merge do `main` (Railway/Vercel) — d45840f (2026-07-25)
 - [ ] Po wdrożeniu: sprawdzić na prod, że w oknie Gmaila są **oba** adresy Intermlecza
       w „Do" i `biuro@pitabros.pl` w „DW"
-- [ ] Dni i godziny dostaw Intermlecza w `suppliers` — po stronie operatora
+- [ ] Dni i godziny dostaw Intermlecza w `suppliers` — po stronie operatora → carried to `context/changes/master-data-followups/` (2026-09-13)

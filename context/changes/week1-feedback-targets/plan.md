@@ -169,7 +169,7 @@ SELECT count(*) FROM location_product_settings WHERE min_stock_qty_base > target
   AND location_id IN ('KEN','WOLA','BRACKA','BROWARY','NORBLIN');   -- expect 0
 ```
 
-Uwagi do kolumn: wzorzec INSERT-ów skopiować 1:1 z `context/changes/inventory-confirm-and-history/prod-sql.sql`
+Uwagi do kolumn: wzorzec INSERT-ów skopiować 1:1 z `context/archive/2026-09-06-inventory-confirm-and-history/prod-sql.sql`
 (P176–P179 wstawione dziś) — tam są dokładne nazwy kolumn `supplier_products` po migracjach 0006–0015
 (`order_note`, `unit_weight_kg`, `supplier_sku`, `warehouse_pickup NOT NULL DEFAULT false`).
 

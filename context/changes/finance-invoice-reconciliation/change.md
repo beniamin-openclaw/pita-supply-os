@@ -31,3 +31,6 @@ feedback z rozmowy z finansami wciąż do dopisania (sekcja 6).
 - Do zrobienia ręcznie (Ben): zmienne eBiuro na Railway (patrz implementation-notes.md) — bez nich
   "Odśwież z eBiuro" i "Otwórz PDF" odpowiadają 503 z czytelnym komunikatem; panel działa na
   zasianym zrzucie. Test na żywo: `/manager/finance`, KEN, 30 dni.
+
+2026-09-13: archived; the eBiuro env vars on Railway remain an operator task (until then the
+panel serves the seeded snapshot and sync/PDF answer 503 with a readable message).

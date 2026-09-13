@@ -87,3 +87,6 @@ Nic ponad zakres.
 - C-3 Coca-Cola KEN (faktury + minimum 500) → ewentualna korekta 72/96 → 48/72.
 - A′ wtorek rano: snapshoty halloumi KEN/BRACKA/BROWARY, gyros BROWARY (plan §2.5).
 - D wysyłka poniedziałek. Archiwum po C-1.
+
+2026-09-13: archived with the four items above still open — carried forward to
+`context/changes/master-data-followups/change.md` (owner: operator).
