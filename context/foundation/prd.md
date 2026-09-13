@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 2
 status: draft
 created: 2026-06-04
-updated: 2026-06-04   # v2: +Location Inventory Count change (FR-015…FR-019, US-02)
+updated: 2026-09-13   # v2: +Location Inventory Count change (FR-015…FR-019, US-02)
 context_type: brownfield
 product_type: web-app
 target_scale:
@@ -236,7 +236,7 @@ Notes carried from shaping: the operator reviewed a fuller role→capability mat
 - **Auto-ordering without a human final** — the system only suggests; the Captain and Manager always commit (governing rule).
 - **Auto-generating draft orders from an inventory count** — the Location Inventory Count change only *pre-fills* the stock field; it never creates orders automatically (consistent with the suggest-only governing rule).
 - **Guest / customer-facing restaurant ordering** — Supply OS is internal supplier ordering only.
-- **GoStock integration, receiving/WZ, finance/KSeF, predictive AI** — per existing roadmap postponements.
+- **GoStock integration, receiving/WZ, finance/KSeF, predictive AI** — per existing roadmap postponements. Horizon 1 non-goal, partially taken up in Horizon 3: the finance mirror shipped 2026-09-07 (`finance-invoice-reconciliation`) and GoStock-seeded usage feeds the dynamic target (`dynamic-target-wola`, PR #30).
 
 **Non-functional non-goals (quality dimensions week 1 will NOT aim for):**
 
@@ -251,3 +251,16 @@ Notes carried from shaping: the operator reviewed a fuller role→capability mat
 2. **Bukat master-data readiness** — ready for week 1, or does it need a prep pass before the Captain pilot? *Blocking for pilot start.*
 3. **End-state scale** — frontmatter `users: small` (pilot); company-wide rollout is likely `medium` — confirm before scale work.
 4. **Token rotation** — two tokens were exposed earlier; rotate before wider rollout (deferred).
+
+---
+
+## Scope since v2 (2026-09-13)
+
+- Locations: Bracka, Norblin, KEN, Browary added beyond the Wola-only baseline (7 more staged, unmerged, on PR #27).
+- Manager Transport: combines several locations' orders into one supplier pickup, with driver logistics docs and per-user Gmail drafts.
+- Goods receiving: Captain confirms deliveries with WZ delivery-note photos and ordered-vs-received variance.
+- Inventory: a post-submit confirmation card and a combined Orders/Inventories history view.
+- Dynamic target: Wola's Pago/Coca-Cola targets from usage × days-to-delivery, replacing a static number (PR #30, open).
+- Finance: a KEN-pilot receipts-vs-invoices reconciliation mirror ("Faktury vs dostawy").
+
+Requirements for these live in their change folders (`context/archive/`, `context/changes/`); the PRD body above is the v2 baseline and is intentionally not rewritten.
