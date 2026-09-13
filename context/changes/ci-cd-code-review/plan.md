@@ -52,7 +52,7 @@ job never blocks a merge; without the secret it skips visibly; `ai-cr:review` re
 
 - [x] 2.1 action.yml with inputs/outputs and key masking — 6d98c2c
 - [x] 2.2 ai-review.yml with fork guard, key check, non-blocking review, comment, labels, artifact — 6d98c2c
-- [ ] 2.3 Workflow visible on GitHub and first run green on the skip path
+- [x] 2.3 Workflow visible on GitHub and first run green on the skip path — run 34744005524 (PR #31)
 
 ### Phase 3: Live run + evidence
 

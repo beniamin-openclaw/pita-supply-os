@@ -1,7 +1,7 @@
 ---
 change_id: ci-cd-code-review
 title: AI code review in GitHub Actions — OpenRouter (DeepSeek V4.1 Flash) scores every PR on six criteria
-status: implementing
+status: impl_reviewed
 created: 2026-09-13
 updated: 2026-09-13
 archived_at: null

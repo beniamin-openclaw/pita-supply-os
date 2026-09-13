@@ -134,7 +134,7 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 - [x] 4.1 ci-cd-code-review change folder (change, requirements, research, plan) — 6d98c2c
 - [x] 4.2 Composite action + review.py + test_review.py — 6d98c2c
 - [x] 4.3 ai-review.yml with skip path, label retrigger, non-blocking — 6d98c2c (dry runs: skip path + HTTP 401 path exit 0)
-- [ ] 4.6 impl-review of ci-cd-code-review recorded
+- [x] 4.6 impl-review of ci-cd-code-review recorded — bd72a5b (reviews/impl-review.md)
 
 #### Manual
 
@@ -147,7 +147,7 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 - [x] 5.1 All gates green + secret grep clean — f4f711f (ruff, pytest 668, action tests 8, vite build, eslint, vitest 365; grep clean)
 - [x] 5.2 mvp-check 5/5 — reviews/mvp-check.md
-- [ ] 5.3 Independent impl-review recorded and triaged
+- [x] 5.3 Independent impl-review recorded and triaged — reviews/impl-review.md + reviews/triage.md; fixes in bd72a5b
 - [x] 5.4 Cert PR opened — PR #31 (draft until impl-review triage; CI + AI Review skip path green)
 
 #### Manual
