@@ -1,0 +1,116 @@
+# AI code review on pull requests — course m5l3 (10xDevs), Champion path A.
+#
+# Advisory only: the job never fails the PR (the product CI in ci.yml is the merge gate).
+# Posts/updates one PR comment and sets ai-cr:passed / ai-cr:failed. Skips cleanly when the
+# OPENROUTER_API_KEY secret is missing. Re-trigger on demand by adding the ai-cr:review label.
+name: AI Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions: {}
+
+jobs:
+  ai-code-review:
+    name: AI code review (OpenRouter · DeepSeek V4.1 Flash)
+    # Run on code events, or on the ai-cr:review label; never on fork PRs (no secrets there).
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'labeled' || github.event.label.name == 'ai-cr:review')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    concurrency:
+      group: ai-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit-test the reviewer (no network)
+        run: |
+          python3 -m pip install -q pytest
+          python3 -m pytest -q .github/actions/ai-code-review
+
+      - name: Build the PR diff
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git fetch -q origin "$BASE_REF"
+          git diff "origin/$BASE_REF...HEAD" > pr.diff
+          echo "diff lines: $(wc -l < pr.diff)"
+
+      - name: Check for the OpenRouter key
+        id: key
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -n "$OPENROUTER_API_KEY" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "AI review skipped: OPENROUTER_API_KEY not set (Settings → Secrets → Actions)."
+          fi
+
+      - name: Review with the model
+        id: review
+        if: steps.key.outputs.has_key == 'true'
+        continue-on-error: true
+        uses: ./.github/actions/ai-code-review
+        with:
+          openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          model: deepseek/deepseek-v4.1-flash
+          reasoning_effort: high
+          pr_title: ${{ github.event.pull_request.title }}
+          pr_body: ${{ github.event.pull_request.body }}
+          diff_path: pr.diff
+
+      - name: Post or update the PR comment
+        if: steps.key.outputs.has_key == 'true' && steps.review.outcome == 'success' && steps.review.outputs.status == 'ok'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | contains("<!-- ai-code-review -->"))] | last | .id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@ai-review-out/review.md >/dev/null
+            echo "updated comment $existing"
+          else
+            gh pr comment "$PR" --body-file ai-review-out/review.md
+          fi
+
+      - name: Set verdict label
+        if: steps.key.outputs.has_key == 'true' && steps.review.outcome == 'success' && steps.review.outputs.status == 'ok'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          VERDICT: ${{ steps.review.outputs.verdict }}
+        run: |
+          gh label create "ai-cr:passed" --color 0e8a16 --description "AI review: all criteria >= threshold" --force
+          gh label create "ai-cr:failed" --color b60205 --description "AI review: at least one criterion below threshold" --force
+          gh label create "ai-cr:review" --color 0075ca --description "Add to re-run the AI review" --force
+          if [ "$VERDICT" = "pass" ]; then
+            gh pr edit "$PR" --add-label "ai-cr:passed" --remove-label "ai-cr:failed,ai-cr:review"
+          else
+            gh pr edit "$PR" --add-label "ai-cr:failed" --remove-label "ai-cr:passed,ai-cr:review"
+          fi
+
+      - name: Upload review artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-review
+          path: ai-review-out/
+          if-no-files-found: ignore
