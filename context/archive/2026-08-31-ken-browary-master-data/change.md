@@ -1,10 +1,10 @@
 ---
 change_id: ken-browary-master-data
 title: KEN + Browary master data rollout — thresholds upsert and BROWARY activation for the 2026-09-01 training
-status: implemented
+status: archived
 created: 2026-08-31
 updated: 2026-09-13
-archived_at: null
+archived_at: 2026-09-13T06:48:52Z
 ---
 
 ## Notes
