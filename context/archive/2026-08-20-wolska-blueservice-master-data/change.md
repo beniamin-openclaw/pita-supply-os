@@ -1,10 +1,10 @@
 ---
 change_id: wolska-blueservice-master-data
 title: WOLA — 9 new Blue Service products + thresholds for paper trays (track A)
-status: implemented
+status: archived
 created: 2026-08-20
-updated: 2026-08-20
-archived_at: null
+updated: 2026-09-13
+archived_at: 2026-09-13T06:48:51Z
 ---
 
 ## Notes
