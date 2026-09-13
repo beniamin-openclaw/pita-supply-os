@@ -1,10 +1,10 @@
 ---
 change_id: product-order-note-and-min-flag
 title: Product-card order annotation + below-minimum signal (bucket #7)
-status: implemented
+status: archived
 created: 2026-06-26
 updated: 2026-09-13
-archived_at: null
+archived_at: 2026-09-13T06:48:51Z
 ---
 
 ## Notes
