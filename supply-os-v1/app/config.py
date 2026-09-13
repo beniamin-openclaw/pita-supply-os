@@ -92,6 +92,14 @@ class Settings(BaseSettings):
     # without "@" is ignored by the builders (mirrors the recipient gate).
     order_cc_email: str = "biuro@pitabros.pl"
 
+    # Dynamic target kill switch (dynamic-target-wola). True in prod: a location ×
+    # product with an active A/B row in location_product_usage AND a supplier
+    # with a parseable weekday calendar gets target = usage × days-to-next-delivery
+    # + safety instead of the static target. False restores the static target
+    # everywhere without touching data. tests/conftest.py sets it to false so the
+    # suite stays date-independent; dynamic tests flip it via mocker.patch.object.
+    dynamic_target_enabled: bool = True
+
 
 settings = Settings()
 

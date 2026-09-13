@@ -33,6 +33,7 @@ import { computeRowState } from "./lib/compute";
 import { overruleAll } from "./lib/overruleAll";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
+import { deliveryWindowOf } from "./lib/dynamicTarget";
 import { serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
 
@@ -585,6 +586,9 @@ export function CaptainMP() {
   // ---- Derived state ---------------------------------------------------------
   const activeSupplier =
     suppliers.find((s) => s.supplier_id === activeSupplierId) || null;
+  // Concrete delivery window for the context strip when any line carries a
+  // dynamic target (dynamic-target-wola); null keeps today's strip text.
+  const deliveryWindow = useMemo(() => deliveryWindowOf(orderableItems), [orderableItems]);
 
   const stats = useMemo(() => {
     let deviationCount = 0;
@@ -700,7 +704,7 @@ export function CaptainMP() {
         />
       )}
 
-      <ContextStrip supplier={activeSupplier} />
+      <ContextStrip supplier={activeSupplier} deliveryWindow={deliveryWindow} />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
         {/* Order-history link — mirrors the Remanent screen's "Historia →"

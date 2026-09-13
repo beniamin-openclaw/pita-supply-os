@@ -19,3 +19,6 @@ build/
 sa.json
 service_account*.json
 *.pem
+
+# GoStock analysis inputs/outputs (purchase prices, stock values) — confidential, stay local
+docs/pita-supply-os-v1/analysis/

@@ -76,6 +76,29 @@ export interface OrderableItem {
   // data (e.g. "1 karton = 6 szt (18 kg)"), shown on the product card. Absent on
   // the edit screen (rebuilt from order lines, which don't carry it).
   order_note?: string | null;
+  // Why `target_stock_qty_base` is what it is (dynamic-target-wola). Present only
+  // when the backend flag is on; `mode: "dynamic"` carries the visible math. The
+  // suggestion code path NEVER reads this — it keeps using target_stock_qty_base,
+  // which already IS the effective target. Absent on the edit screen's
+  // snapshot-derived items (the snapshot target has no live math to show).
+  target_source?: TargetSource | null;
+}
+
+// Mirrors app/models.py TargetSource (dynamic-target-wola). Every field but
+// `mode` is Optional with a default on the Pydantic side, hence `?:` here.
+export interface TargetSource {
+  mode: "static" | "dynamic";
+  static_target_base?: number;
+  usage_per_day_base?: number | null;
+  confidence?: string | null;
+  delivery_date?: string | null;
+  next_delivery_date?: string | null;
+  days_until_delivery?: number | null;
+  horizon_days?: number | null;
+  safety_days?: number | null;
+  safety_base?: number | null;
+  max_raised_from?: number | null;
+  reason?: string;
 }
 
 // Captain Submit -------------------------------------------------------------

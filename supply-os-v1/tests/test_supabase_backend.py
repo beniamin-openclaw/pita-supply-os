@@ -705,3 +705,22 @@ def test_route_captain_edit_status_conflict_returns_409(mocker):
     }
     r = client.patch("/api/captain/order/ORD-EDIT-2", json=body, headers=CAPTAIN_AUTH)
     assert r.status_code == 409
+
+
+# ---------- load_location_product_usage (dynamic-target-wola) ----------
+
+def test_load_location_product_usage_maps_rows_to_models(mocker):
+    from datetime import date as _date
+    rows = [
+        {
+            "usage_id": "WOLA__P024", "location_id": "WOLA", "product_id": "P024",
+            "usage_per_day_base": 12.75, "confidence": "A", "basis": "purch+teoret+real",
+            "source": "gostock-2026-09-06", "as_of": _date(2026, 8, 30),
+            "safety_days": 1.0, "active": True, "notes": "",
+        }
+    ]
+    _fake_engine(mocker, mappings=rows)
+    usage = supabase_backend.load_location_product_usage()
+    assert len(usage) == 1
+    assert usage[0].usage_id == "WOLA__P024"
+    assert usage[0].as_of == _date(2026, 8, 30)
