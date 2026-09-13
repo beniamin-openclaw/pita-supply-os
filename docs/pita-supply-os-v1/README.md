@@ -1,3 +1,5 @@
+> **Historical (pre-10x, May 2026).** This folder holds the pilot-era design docs and seed CSVs. The current source of truth is `context/foundation/` (PRD, roadmap, test plan, infrastructure) and the root `README.md`.
+
 # Pita Bros Supply OS v1 — Wola Pilot Workspace
 
 Project workspace for the Captain-submits / Manager-dispatches order workflow,
