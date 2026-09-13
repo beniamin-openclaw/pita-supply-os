@@ -110,7 +110,7 @@ Postgres instance and run only in CI (`pytest -m integration`); they skip locall
 cd frontend && npm run build && npm run lint && npm run test
 ```
 
-375 tests (Vitest + Testing Library).
+365 tests (Vitest + Testing Library).
 
 `context/foundation/test-plan.md` is the risk-to-test map: it lists the top failure scenarios (a
 test dispatching a real order, wrong purchase-unit rounding, a lost edit under concurrent access,

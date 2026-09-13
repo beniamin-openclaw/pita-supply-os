@@ -89,7 +89,7 @@ the open gap: role checks exist per route ad hoc, not as a systematic sweep.
 |-------|------|---------|-------|
 | backend unit + route | pytest + FastAPI TestClient | pytest 9.0.3, FastAPI 0.136 | 668 tests on `main`; seed backend forced by conftest |
 | backend integration | pytest `-m integration` on PostgreSQL 16 | psycopg2, SQLAlchemy 2 | 21 tests; skip without `SUPPLY_OS_DATABASE_URL`; CI supplies a container |
-| frontend unit + component | Vitest + jsdom + Testing Library | vitest 4.1, RTL 16.3, jsdom 29 | 375 tests; `*.test.ts(x)` next to the module |
+| frontend unit + component | Vitest + jsdom + Testing Library | vitest 4.1, RTL 16.3, jsdom 29 | 365 tests; `*.test.ts(x)` next to the module |
 | lint / types | ruff; eslint + `tsc -b` | ruff 0.15.16, eslint 10 | `tsc` runs in `npm run build`; TS `strict` off (H-01) |
 | e2e | none — not planned | — | see §7 |
 | accessibility | none | — | audit doc 2026-05-24 only |

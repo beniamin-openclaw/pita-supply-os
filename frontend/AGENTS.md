@@ -16,7 +16,7 @@ TypeScript + React SPA (Vite, Tailwind) for Pita Supply OS — the Captain and M
 Component files PascalCase; hooks and utilities camelCase.
 
 ## Tripwires
-- Vitest is the runner (`npm run test` → `vitest run`, 375 tests): pure helpers (`src/lib/`, `src/components/ui/number.ts`) and component tests with Testing Library + jsdom (`pages/captain-mp/components/*.test.tsx`). No E2E harness — role-scoped screens are verified by hand against a backend with auth ON (see `context/foundation/lessons.md`, `test-plan.md`).
+- Vitest is the runner (`npm run test` → `vitest run`, 365 tests): pure helpers (`src/lib/`, `src/components/ui/number.ts`) and component tests with Testing Library + jsdom (`pages/captain-mp/components/*.test.tsx`). No E2E harness — role-scoped screens are verified by hand against a backend with auth ON (see `context/foundation/lessons.md`, `test-plan.md`).
 - TypeScript `strict` is not enabled in @./tsconfig.app.json — prefer explicit types; do not lean on inference.
 
 See @../AGENTS.md for the repo-wide operating constitution.

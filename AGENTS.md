@@ -16,7 +16,7 @@ Pita Supply OS — internal supplier ordering: a location Captain submits stock-
 
 ## Build, test, run
 - Backend (`supply-os-v1/`): test `python -m pytest` (668 tests; `pytest -m integration` runs 21 more on a real Postgres) · run `uvicorn app.main:app` · lint `ruff check .`
-- Frontend (`frontend/`): `npm install`, then `npm run dev | build | lint | test` (Vitest, 375 tests)
+- Frontend (`frontend/`): `npm install`, then `npm run dev | build | lint | test` (Vitest, 365 tests)
 - Verify before committing: `/verify` (Claude Code skill) or run the four checks above. A `PostToolUse` hook auto-runs `ruff check --fix` (`.py`) / `eslint --fix` (`frontend/`) on edits.
 
 ## Local setup & gotchas
