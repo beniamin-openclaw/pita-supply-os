@@ -1,10 +1,10 @@
 ---
 change_id: week1-feedback-targets
 title: Tydzień 1 Supply OS — feedback kapitanów: targety KEN/Wola, bifteki, powód „zapas do dostawy”, komunikacja
-status: implemented
+status: archived
 created: 2026-09-06
-updated: 2026-09-06
-archived_at: null
+updated: 2026-09-13
+archived_at: 2026-09-13T06:48:51Z
 ---
 
 ## Notes
