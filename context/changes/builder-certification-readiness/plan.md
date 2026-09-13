@@ -121,19 +121,19 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Automated
 
-- [ ] 3.1 Root README.md with verified seed-mode commands and certification map
-- [ ] 3.2 AGENTS.md ×3 corrections
-- [ ] 3.3 roadmap.md Horizon 3 + Non-goal revision; prd.md scope note
-- [ ] 3.4 health-check / deployment-plan / 10xdevs.md / docs README notes
-- [ ] 3.5 Archive shipped changes; create master-data-followups; annotate supplier-per-location
+- [x] 3.1 Root README.md with verified seed-mode commands and certification map — 7b9c14e
+- [x] 3.2 AGENTS.md ×3 corrections — 0bce8a9
+- [x] 3.3 roadmap.md Horizon 3 + Non-goal revision; prd.md scope note — aab3059
+- [x] 3.4 health-check / deployment-plan / 10xdevs.md / docs README notes — 5d4305c (deployment-plan header in 236802e)
+- [x] 3.5 Archive shipped changes; create master-data-followups; annotate supplier-per-location — 236802e + c15bb10…93bc4f3 (nine archive commits)
 
 ### Phase 4: Champion A — AI review in CI
 
 #### Automated
 
-- [ ] 4.1 ci-cd-code-review change folder (change, requirements, research, plan)
-- [ ] 4.2 Composite action + review.py + test_review.py
-- [ ] 4.3 ai-review.yml with skip path, label retrigger, non-blocking
+- [x] 4.1 ci-cd-code-review change folder (change, requirements, research, plan) — 6d98c2c
+- [x] 4.2 Composite action + review.py + test_review.py — 6d98c2c
+- [x] 4.3 ai-review.yml with skip path, label retrigger, non-blocking — 6d98c2c (dry runs: skip path + HTTP 401 path exit 0)
 - [ ] 4.6 impl-review of ci-cd-code-review recorded
 
 #### Manual
