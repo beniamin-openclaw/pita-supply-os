@@ -145,10 +145,10 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Automated
 
-- [ ] 5.1 All gates green + secret grep clean
-- [ ] 5.2 mvp-check 5/5
+- [x] 5.1 All gates green + secret grep clean — f4f711f (ruff, pytest 668, action tests 8, vite build, eslint, vitest 365; grep clean)
+- [x] 5.2 mvp-check 5/5 — reviews/mvp-check.md
 - [ ] 5.3 Independent impl-review recorded and triaged
-- [ ] 5.4 Cert PR opened
+- [x] 5.4 Cert PR opened — PR #31 (draft until impl-review triage; CI + AI Review skip path green)
 
 #### Manual
 
@@ -158,8 +158,8 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Automated
 
-- [ ] 6.1 Builder screenshots captured from local seed run
-- [ ] 6.2 FORMULARZ-BUILDER.md and FORMULARZ-CHAMPION.md written
+- [x] 6.1 Builder screenshots captured from local seed run — 12 PNG in certyfikacja/screenshots/builder/ (local Postgres with prod migrations + seed master data, auth ON, demo orders via API; no prod traffic)
+- [x] 6.2 FORMULARZ-BUILDER.md and FORMULARZ-CHAMPION.md written — certyfikacja/ (course workspace)
 
 #### Manual
 
