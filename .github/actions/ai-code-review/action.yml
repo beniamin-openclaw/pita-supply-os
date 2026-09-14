@@ -1,0 +1,64 @@
+name: AI code review (OpenRouter)
+description: >
+  Scores a pull request on six criteria (correctness, idiomaticity, complexity, test/risk
+  coverage, documentation, security) with an LLM via OpenRouter and writes review.md /
+  review.json. Skips cleanly when no API key is provided; never fails the job by itself.
+inputs:
+  openrouter_api_key:
+    description: OpenRouter API key (pass a secret). Empty = skip.
+    required: false
+    default: ""
+  model:
+    description: OpenRouter model id
+    required: false
+    default: deepseek/deepseek-v4.1-flash
+  reasoning_effort:
+    description: OpenRouter reasoning.effort (low | medium | high)
+    required: false
+    default: high
+  pass_threshold:
+    description: Minimum score every criterion must reach for a "pass" verdict
+    required: false
+    default: "6"
+  pr_title:
+    required: true
+  pr_body:
+    required: false
+    default: ""
+  diff_path:
+    description: Path to the unified diff to review
+    required: true
+  max_diff_chars:
+    required: false
+    default: "60000"
+  output_dir:
+    required: false
+    default: ai-review-out
+outputs:
+  status:
+    description: ok | skipped | error
+    value: ${{ steps.run.outputs.status }}
+  verdict:
+    description: pass | fail | none
+    value: ${{ steps.run.outputs.verdict }}
+  review_md:
+    description: Path to the rendered Markdown review
+    value: ${{ inputs.output_dir }}/review.md
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        OPENROUTER_API_KEY: ${{ inputs.openrouter_api_key }}
+        AI_REVIEW_MODEL: ${{ inputs.model }}
+        AI_REVIEW_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
+        AI_REVIEW_PASS_THRESHOLD: ${{ inputs.pass_threshold }}
+        AI_REVIEW_MAX_DIFF_CHARS: ${{ inputs.max_diff_chars }}
+        PR_TITLE: ${{ inputs.pr_title }}
+        PR_BODY: ${{ inputs.pr_body }}
+        DIFF_PATH: ${{ inputs.diff_path }}
+        OUTPUT_DIR: ${{ inputs.output_dir }}
+      run: |
+        if [ -n "$OPENROUTER_API_KEY" ]; then echo "::add-mask::$OPENROUTER_API_KEY"; fi
+        python3 "${{ github.action_path }}/review.py"

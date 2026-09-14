@@ -199,3 +199,11 @@ Health status: needs-attention
 The product is fundamentally sound for agent-assisted work: a mainstream, well-documented stack; clean frontend dependencies; and a genuinely healthy backend test suite (196 tests collecting in under a second). The gaps are all addressable and none are emergencies — the standouts are that **CI tests sibling tooling instead of the product** (false-green), the **frontend has no tests** and **`strict` is off**, and the **backend has no lockfile**. Dependency security is clean on both halves — frontend `npm audit` and backend `pip-audit` both found zero vulnerabilities.
 
 Next step: knock out the Category A high-severity fixes — extend CI to the product (#5), add frontend tests (#2), enable TS strict (#4), and add a backend lockfile (#3) — then proceed to **agent onboarding (M1L4)**, where you'll fold the stack-assess compensation blocks into `CLAUDE.md`/`AGENTS.md`.
+
+## Re-check 2026-09-13
+
+`.github/workflows/ci.yml` now runs the actual product across three jobs: backend (ruff + pytest), backend-integration (pytest -m integration against a real Postgres 16 service), and frontend (build + lint + vitest). This closes the CI fix (original list item #5) (CI covers the product, not sibling tooling) and Fix #2 (frontend test runner) from the original list above — Vitest is wired in and the frontend suite has grown to 365 tests; the backend suite has grown to 668 tests plus 21 integration tests.
+
+Still open on `main`: the backend lockfile (#3), TypeScript `strict` (#4), and a static type-checker (mypy/pyright, part of #4/#5's follow-on). All three are implemented — TS `strict` on, `requirements.lock` wired into CI, an advisory pyright job added — on the `claude/multi-location-master-data` branch (PR #27, tracked as roadmap **H-01**), which is unmerged as of this re-check.
+
+Verdict: **healthy, with H-01 (lockfile/strict/pyright) pending merge on PR #27** — the frontmatter `health_status` value above is left as-is per the schema's allowed vocabulary; this section carries the updated read.
