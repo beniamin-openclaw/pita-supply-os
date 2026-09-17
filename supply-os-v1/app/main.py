@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import (
+    dynamic_target,
     ebiuro,
     errors,
     finance_match,
@@ -56,6 +57,7 @@ from .models import (
     InventoryProduct,
     Location,
     LocationProductSetting,
+    LocationProductUsage,
     ManagerAddLineRequest,
     ManagerAddLineResponse,
     ManagerCancelRequest,
@@ -256,7 +258,26 @@ def _build_orderable_items(
         and sp.product_id in settings_by_pid
         and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
-    return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
+    items = [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
+    # Dynamic target overlay (dynamic-target-wola). Flag off => the dicts above
+    # are returned untouched (no supplier / usage read at all). Flag on => every
+    # item carries target_source; only items with an active A/B usage row AND a
+    # supplier calendar actually get a computed target.
+    if settings.dynamic_target_enabled and items:
+        usage_by_pid = _load_usage_safe(backend, location_id)
+        supplier = _supplier_safe(backend, supplier_id)
+        today_warsaw = _today_warsaw()
+        for item in items:
+            pid = item["product_id"]
+            _apply_effective_target(
+                item,
+                settings_by_pid[pid],
+                usage_by_pid.get(pid),
+                supplier,
+                products_by_id[pid].inventory_unit,
+                today_warsaw,
+            )
+    return items
 
 
 @app.get("/api/captain/orderable")
@@ -361,10 +382,102 @@ def _is_persistent(backend) -> bool:
     return getattr(backend, "SUPPORTS_PERSISTENCE", False) is True
 
 
+def _today_warsaw() -> date:
+    """Operator-local calendar date (Europe/Warsaw) — the ONLY ``today`` the
+    dynamic-target math may use. ``captain_submit`` also keeps a UTC ``today``
+    for the order id; never feed that one into the horizon calculation."""
+    return datetime.now(_WARSAW_TZ).date()
+
+
+def _load_usage_safe(backend, location_id: str) -> dict[str, LocationProductUsage]:
+    """``product_id -> LocationProductUsage`` for one location, BEST-EFFORT.
+
+    Returns ``{}`` without touching the backend when the dynamic-target flag is
+    off, and ``{}`` (logged) on ANY failure: a seed dir without the CSV, a Sheet
+    without the tab (``WorksheetNotFound``) or — the deploy-ordering window — a
+    Supabase without migration 0018, which raises a SQLAlchemy ProgrammingError,
+    not ``WorksheetNotFound`` (see ``_load_inventory_events_safe`` for the same
+    lesson). Missing usage data means "static targets", never a 500."""
+    if not settings.dynamic_target_enabled:
+        return {}
+    loader = getattr(backend, "load_location_product_usage", None)
+    if loader is None:
+        return {}
+    try:
+        rows = loader()
+        out: dict[str, LocationProductUsage] = {}
+        for u in rows:
+            if u.location_id != location_id:
+                continue
+            if u.product_id in out:
+                # Supabase rejects a duplicate (location, product) at insert;
+                # the CSV / Sheets paths cannot, so the FIRST row wins here and
+                # the duplicate is logged instead of silently overriding it.
+                log.warning(
+                    "location_product_usage: duplicate row for %s/%s (%s) ignored, "
+                    "keeping %s",
+                    location_id, u.product_id, u.usage_id, out[u.product_id].usage_id,
+                )
+                continue
+            out[u.product_id] = u
+        return out
+    except Exception:
+        log.warning(
+            "location_product_usage unavailable for %s — dynamic target off "
+            "(static targets served)",
+            location_id,
+            exc_info=True,
+        )
+        return {}
+
+
+def _supplier_safe(backend, supplier_id: str) -> Optional[Supplier]:
+    """Supplier row for the DISPLAY path (orderable list) — best-effort, ``None``
+    on any failure so the list still renders with static targets. The submit
+    path keeps its hard 400 in ``_resolve_master_data``; do not unify the two."""
+    try:
+        return next(
+            (s for s in backend.load_suppliers() if s.supplier_id == supplier_id),
+            None,
+        )
+    except Exception:
+        log.warning("suppliers unavailable for %s — dynamic target off", supplier_id,
+                    exc_info=True)
+        return None
+
+
+def _apply_effective_target(
+    item: dict,
+    setting: LocationProductSetting,
+    usage: Optional[LocationProductUsage],
+    supplier: Optional[Supplier],
+    inventory_unit: str,
+    today: date,
+) -> None:
+    """Overlay the dynamic target onto one orderable dict (in place): the
+    effective target replaces ``target_stock_qty_base`` (so the frontend math,
+    which reads only that field, stays byte-identical), ``max_stock_qty_base``
+    is raised to the target when the static ceiling sits below it, and
+    ``target_source`` carries the visible math. Static items get
+    ``target_source.mode == "static"`` with the fallback reason."""
+    target, effective_max, source = dynamic_target.resolve_effective_target(
+        setting=setting,
+        usage=usage,
+        supplier=supplier,
+        inventory_unit=inventory_unit,
+        today=today,
+        requested_delivery_date=None,
+        enabled=settings.dynamic_target_enabled,
+    )
+    item["target_stock_qty_base"] = target
+    item["max_stock_qty_base"] = effective_max
+    item["target_source"] = source.model_dump(mode="json")
+
+
 class _MasterData:
     """Bundle of loaded master data for one captain submit call."""
 
-    __slots__ = ("products_by_id", "supplier", "sps_by_id", "settings_by_pid")
+    __slots__ = ("products_by_id", "supplier", "sps_by_id", "settings_by_pid", "usage_by_pid")
 
     def __init__(
         self,
@@ -372,11 +485,15 @@ class _MasterData:
         supplier: Supplier,
         sps_by_id: dict[str, SupplierProduct],
         settings_by_pid: dict[str, LocationProductSetting],
+        usage_by_pid: Optional[dict[str, LocationProductUsage]] = None,
     ) -> None:
         self.products_by_id = products_by_id
         self.supplier = supplier
         self.sps_by_id = sps_by_id
         self.settings_by_pid = settings_by_pid
+        # Daily usage per product (dynamic-target-wola); {} when the flag is off
+        # or the data is unavailable — every product then resolves to static.
+        self.usage_by_pid = usage_by_pid or {}
 
 
 def _resolve_master_data(backend, location_id: str, supplier_id: str) -> _MasterData:
@@ -398,7 +515,8 @@ def _resolve_master_data(backend, location_id: str, supplier_id: str) -> _Master
         for s in backend.load_location_product_settings()
         if s.location_id == location_id
     }
-    return _MasterData(products_by_id, supplier, sps_by_id, settings_by_pid)
+    usage_by_pid = _load_usage_safe(backend, location_id)
+    return _MasterData(products_by_id, supplier, sps_by_id, settings_by_pid, usage_by_pid)
 
 
 def _generate_order_id(location_id: str, supplier_id: str, today: date) -> str:
@@ -442,8 +560,17 @@ def _evaluate_submit_line(
     product: Product,
     order_line_id: str,
     order_id: str,
+    effective_target: Optional[float] = None,
+    effective_max: Optional[float] = None,
 ) -> tuple[OrderLine, Optional[str], float]:
     """Validate one captain-submitted line and build its persisted OrderLine.
+
+    ``effective_target`` / ``effective_max`` (dynamic-target-wola) override the
+    static ``setting`` values when the caller resolved a dynamic target — the
+    same numbers the orderable item carried, so the gates below judge the
+    Captain against the suggestion they actually saw. ``None`` keeps today's
+    behaviour byte-identically. The persisted ``target_stock_qty_base`` is the
+    effective target (the audit snapshot of what the engine asked for).
 
     Shared by ``captain_submit`` and ``captain_order_edit`` so their per-line
     gates cannot drift. Returns ``(order_line, warning_or_None, line_value_pln)``
@@ -464,17 +591,41 @@ def _evaluate_submit_line(
     is_critical = setting.is_critical_for_location or product.is_critical
     stock = line.current_stock_qty_base
     current_for_math = stock if stock is not None else 0.0
-    suggestion = compute_suggestion(
-        SuggestionInput(
-            current_stock_qty_base=current_for_math,
-            target_stock_qty_base=setting.target_stock_qty_base,
-            max_stock_qty_base=setting.max_stock_qty_base,
-            units_per_purchase_unit=sp.units_per_purchase_unit,
-            rounding_rule=sp.rounding_rule,
-            is_critical=is_critical,
-            allow_over_max_due_to_packaging=setting.allow_over_max_due_to_packaging,
-        )
+    target_base = (
+        setting.target_stock_qty_base if effective_target is None else effective_target
     )
+    max_base = setting.max_stock_qty_base if effective_max is None else effective_max
+
+    def _suggest(target: float, max_: float):
+        return compute_suggestion(
+            SuggestionInput(
+                current_stock_qty_base=current_for_math,
+                target_stock_qty_base=target,
+                max_stock_qty_base=max_,
+                units_per_purchase_unit=sp.units_per_purchase_unit,
+                rounding_rule=sp.rounding_rule,
+                is_critical=is_critical,
+                allow_over_max_due_to_packaging=setting.allow_over_max_due_to_packaging,
+            )
+        )
+
+    if effective_target is None:
+        suggestion = _suggest(target_base, max_base)
+    else:
+        # A dynamic target must never take the whole order down: on a bad value
+        # (NaN / negative from a corrupt usage row) degrade THIS line to the
+        # static target and log, instead of a 500 for every product.
+        try:
+            suggestion = _suggest(target_base, max_base)
+        except ValueError:
+            log.warning(
+                "dynamic target %r rejected for %s — falling back to static %r",
+                effective_target, line.product_id, setting.target_stock_qty_base,
+                exc_info=True,
+            )
+            target_base = setting.target_stock_qty_base
+            max_base = setting.max_stock_qty_base
+            suggestion = _suggest(target_base, max_base)
     suggested_qty_purchase = suggestion.suggested_qty_purchase
     suggested_qty_base = suggestion.suggested_qty_base
 
@@ -484,23 +635,23 @@ def _evaluate_submit_line(
     if stock is None:
         # Uncounted — over-MAX is the only reason gate.
         over_max = (
-            setting.max_stock_qty_base > 0
+            max_base > 0
             and not setting.allow_over_max_due_to_packaging
-            and order_base > setting.max_stock_qty_base
+            and order_base > max_base
         )
         if over_max and line.reason_code is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Line '{line.product_id}' ordered over MAX "
-                    f"({order_base:g} > {setting.max_stock_qty_base:g}) "
+                    f"({order_base:g} > {max_base:g}) "
                     f"without reason_code"
                 ),
             )
         if over_max and line.reason_code is not None:
             warning = (
                 f"Line {line.product_id}: over MAX "
-                f"({order_base:g} > {setting.max_stock_qty_base:g}), "
+                f"({order_base:g} > {max_base:g}), "
                 f"reason: {line.reason_code.value}"
             )
         stored_stock = 0.0
@@ -549,7 +700,7 @@ def _evaluate_submit_line(
         product_id=line.product_id,
         supplier_product_id=line.supplier_product_id,
         current_stock_qty_base=stored_stock,
-        target_stock_qty_base=setting.target_stock_qty_base,
+        target_stock_qty_base=target_base,
         suggested_qty_base=suggested_qty_base,
         suggested_qty_purchase=suggested_qty_purchase,
         captain_final_qty_purchase=line.captain_final_qty_purchase,
@@ -586,6 +737,8 @@ def captain_submit(
 
     today = datetime.now(timezone.utc).date()
     order_id = _generate_order_id(location_id, req.supplier_id, today)
+    # Warsaw date for the dynamic-target horizon (NOT the UTC ``today`` above).
+    today_warsaw = _today_warsaw()
 
     order_lines: list[OrderLine] = []
     warnings: list[str] = []
@@ -625,6 +778,24 @@ def captain_submit(
                 ),
             )
 
+        # Dynamic target (dynamic-target-wola): the same resolution the orderable
+        # item used, anchored on the client's requested_delivery_date only when
+        # it is a valid delivery day inside the next 14 days (else the server
+        # calendar) — so the gate judges the suggestion the Captain saw.
+        effective_target: Optional[float] = None
+        effective_max: Optional[float] = None
+        if settings.dynamic_target_enabled:
+            effective_target, effective_max, _source = (
+                dynamic_target.resolve_effective_target(
+                    setting=setting,
+                    usage=master.usage_by_pid.get(line.product_id),
+                    supplier=master.supplier,
+                    inventory_unit=product.inventory_unit,
+                    today=today_warsaw,
+                    requested_delivery_date=req.requested_delivery_date,
+                    enabled=True,
+                )
+            )
         order_line, warning, line_value = _evaluate_submit_line(
             line,
             sp,
@@ -632,6 +803,8 @@ def captain_submit(
             product,
             order_line_id=f"OL-{order_id}-{idx:03d}",
             order_id=order_id,
+            effective_target=effective_target,
+            effective_max=effective_max,
         )
         if warning is not None:
             warnings.append(warning)
@@ -678,12 +851,10 @@ def _deviation_threshold() -> float:
     return _DEVIATION_THRESHOLD
 
 
-# Weekday tokens we accept in supplier.delivery_days. English + Polish abbrev.
-# Order matters for matching (case-insensitive); we keep map values as ints.
-WEEKDAY_MAP: dict[str, int] = {
-    "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6,
-    "pon": 0, "wt": 1, "śr": 2, "sr": 2, "czw": 3, "pt": 4, "sob": 5, "nd": 6, "niedz": 6,
-}
+# Weekday parsing lives in app/dynamic_target.py (shared with the dynamic-target
+# engine); the old names stay importable from here.
+WEEKDAY_MAP = dynamic_target.WEEKDAY_MAP
+_parse_weekdays = dynamic_target.parse_delivery_weekdays
 
 _WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
@@ -704,40 +875,6 @@ def _parse_cutoff_time(raw: Optional[str]) -> Optional[tuple[int, int]]:
     if not (0 <= h <= 23 and 0 <= m <= 59):
         return None
     return h, m
-
-
-def _parse_weekdays(raw: Optional[str]) -> Optional[list[int]]:
-    """Parse supplier.delivery_days into a sorted list of weekday ints (0=Mon).
-
-    Accepts 'Tue', 'Mon, Wed, Fri', 'daily', 'codziennie'. Returns None when
-    unparseable (which makes the cutoff fall back to None).
-    """
-    if not raw:
-        return None
-    s = raw.strip().lower()
-    if not s:
-        return None
-    if s in {"daily", "codziennie", "everyday", "every day"}:
-        return [0, 1, 2, 3, 4, 5, 6]
-
-    tokens = [t.strip() for t in s.replace(";", ",").split(",") if t.strip()]
-    if not tokens:
-        return None
-    out: set[int] = set()
-    for tok in tokens:
-        # Try direct lookup, then short prefix (e.g. "tuesday" -> "tue").
-        if tok in WEEKDAY_MAP:
-            out.add(WEEKDAY_MAP[tok])
-            continue
-        if tok[:3] in WEEKDAY_MAP:
-            out.add(WEEKDAY_MAP[tok[:3]])
-            continue
-        if tok[:2] in WEEKDAY_MAP:
-            out.add(WEEKDAY_MAP[tok[:2]])
-            continue
-        # Unknown token — bail out; we don't want a partially-correct cutoff.
-        return None
-    return sorted(out)
 
 
 def _compute_next_cutoff(supplier: Supplier, now_utc: datetime) -> Optional[datetime]:
@@ -1034,7 +1171,7 @@ def manager_order_detail(
                 price_estimate_pln=sp.price_estimate_pln if sp else None,
                 current_stock_qty_base=line.current_stock_qty_base,
                 target_stock_qty_base=line.target_stock_qty_base,
-                max_stock_qty_base=setting.max_stock_qty_base if setting else 0,
+                max_stock_qty_base=_detail_max(setting, line),
                 allow_over_max_due_to_packaging=(
                     setting.allow_over_max_due_to_packaging if setting else False
                 ),
@@ -1097,6 +1234,18 @@ def manager_order_detail(
 # ---------- Captain own-orders view + edit (Phase E3) ----------
 
 
+def _detail_max(setting: Optional[LocationProductSetting], line: OrderLine) -> float:
+    """Max shown on a persisted line: the static ceiling, raised to the line's
+    snapshotted target when the dynamic target sat above it (mirrors the
+    effective max the submit gate used, so a re-displayed / re-edited line never
+    reads "max < target" and never trips a false over-MAX pill). Flag off →
+    the static ceiling exactly as before."""
+    static_max = setting.max_stock_qty_base if setting else 0
+    if settings.dynamic_target_enabled:
+        return max(static_max, line.target_stock_qty_base)
+    return static_max
+
+
 def _enrich_lines_for_detail(
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
@@ -1132,7 +1281,7 @@ def _enrich_lines_for_detail(
                 price_estimate_pln=sp.price_estimate_pln if sp else None,
                 current_stock_qty_base=line.current_stock_qty_base,
                 target_stock_qty_base=line.target_stock_qty_base,
-                max_stock_qty_base=setting.max_stock_qty_base if setting else 0,
+                max_stock_qty_base=_detail_max(setting, line),
                 allow_over_max_due_to_packaging=(
                     setting.allow_over_max_due_to_packaging if setting else False
                 ),
@@ -1342,6 +1491,13 @@ def captain_order_edit(
         )
 
     master = _resolve_master_data(backend, location_id, existing.supplier_id)
+    # Dynamic target on edit (dynamic-target-wola): a product that was on the
+    # original order keeps the target snapshotted on its line (the edit screen
+    # overlays the same snapshot, so both sides gate on one number); a product
+    # newly added on edit resolves a fresh target off today's calendar. With the
+    # flag off the whole block is inert and the edit behaves as before.
+    snapshot_by_pid = {ln.product_id: ln for ln in existing.lines}
+    today_warsaw = _today_warsaw()
 
     new_lines: list[OrderLine] = []
     warnings: list[str] = []
@@ -1381,6 +1537,25 @@ def captain_order_edit(
                 ),
             )
 
+        effective_target: Optional[float] = None
+        effective_max: Optional[float] = None
+        if settings.dynamic_target_enabled:
+            snap = snapshot_by_pid.get(line.product_id)
+            if snap is not None:
+                effective_target = snap.target_stock_qty_base
+                effective_max = max(setting.max_stock_qty_base, effective_target)
+            else:
+                effective_target, effective_max, _source = (
+                    dynamic_target.resolve_effective_target(
+                        setting=setting,
+                        usage=master.usage_by_pid.get(line.product_id),
+                        supplier=master.supplier,
+                        inventory_unit=product.inventory_unit,
+                        today=today_warsaw,
+                        requested_delivery_date=None,
+                        enabled=True,
+                    )
+                )
         order_line, warning, line_value = _evaluate_submit_line(
             line,
             sp,
@@ -1388,6 +1563,8 @@ def captain_order_edit(
             product,
             order_line_id=f"OL-{order_id}-{idx:03d}",
             order_id=order_id,
+            effective_target=effective_target,
+            effective_max=effective_max,
         )
         if warning is not None:
             warnings.append(warning)

@@ -119,3 +119,59 @@ describe("ProductCard — ×1 SKU renders byte-identically to today", () => {
     expect(screen.getByText("brakuje 80 szt → 80 szt")).toBeInTheDocument();
   });
 });
+
+describe("ProductCard — dynamic target (dynamic-target-wola)", () => {
+  const dynamicItem = makeItem({
+    product_name_pl: "Gyros 15 KG",
+    inventory_unit: "kg",
+    purchase_unit: "blok",
+    units_per_purchase_unit: 15,
+    min_stock_qty_base: 2,
+    max_stock_qty_base: 76.6,
+    target_stock_qty_base: 76.6,
+    target_source: {
+      mode: "dynamic",
+      static_target_base: 10,
+      usage_per_day_base: 12.75,
+      confidence: "A",
+      delivery_date: "2026-09-08",
+      next_delivery_date: "2026-09-12",
+      days_until_delivery: 1,
+      horizon_days: 4,
+      safety_days: 1,
+      safety_base: 12.8,
+      max_raised_from: 10,
+    },
+  });
+
+  it("shows the badge, the math line and the delivery dates", () => {
+    renderCard(dynamicItem, makeLine({ current_stock_qty_base: 20 }));
+
+    expect(screen.getByTestId("dynamic-badge-P1")).toHaveTextContent("dynamiczny · A");
+    expect(screen.getByTestId("dynamic-math-P1")).toHaveTextContent(
+      "12.75 kg/dzień × 5 dni + zapas 12.8 kg = 76.6 kg",
+    );
+    expect(screen.getByTestId("dynamic-math-P1")).toHaveTextContent("dostawa wt., 08.09");
+    expect(screen.getByTestId("dynamic-math-P1")).toHaveTextContent("następna sob., 12.09");
+    // The suggestion is computed from target_stock_qty_base exactly as before:
+    // 76.6 − 20 = 56.6 kg → 3.77 → 4 bloki.
+    expect(screen.getByText(/brakuje 56.6 kg/)).toBeInTheDocument();
+    expect(screen.getByText("→ 4 bloki")).toBeInTheDocument();
+  });
+
+  it("compares the below-floor signal against the safety stock, not the raw min", () => {
+    // stock 5 ≥ min 2 but < safety 12.8 → "Poniżej zapasu", not "Poniżej minimum".
+    renderCard(dynamicItem, makeLine({ current_stock_qty_base: 5 }));
+    expect(screen.getByText(/Poniżej zapasu: 12.8 kg/)).toBeInTheDocument();
+    expect(screen.queryByText(/Poniżej minimum/)).not.toBeInTheDocument();
+  });
+
+  it("renders a static item without any dynamic badge or math", () => {
+    renderCard(
+      makeItem({ target_source: { mode: "static", reason: "confidence_c" } }),
+      makeLine({ current_stock_qty_base: 40 }),
+    );
+    expect(screen.queryByTestId("dynamic-badge-P1")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("dynamic-math-P1")).not.toBeInTheDocument();
+  });
+});

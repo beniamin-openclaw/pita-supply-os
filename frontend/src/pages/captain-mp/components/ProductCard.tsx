@@ -16,6 +16,7 @@ import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lu
 import type { OrderableItem, CardState } from "../types";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
+import { dynamicSource } from "../lib/dynamicTarget";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
@@ -81,21 +82,33 @@ function StateIcon({ state }: { state: CardState }) {
 }
 
 export function ProductCard({ item, line, onChange }: ProductCardProps) {
-  const { t, lang } = useT();
+  const { t, lang, formatDateTime } = useT();
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
   const colors = STATE_STYLES[state];
   const currentVal = Number(line.current_stock_qty_base) || 0;
+  // Dynamic target (dynamic-target-wola): item.target_stock_qty_base already IS
+  // the effective target (the suggestion math above never looks at this); the
+  // source only feeds the badge + the visible math line under the header.
+  const dyn = dynamicSource(item);
   // Informational "below minimum" signal — does NOT gate submit or feed the
-  // suggestion (min is otherwise unused). Only meaningful once stock is typed.
+  // suggestion. Only meaningful once stock is typed. With a dynamic target the
+  // floor shown is the engine's safety stock (which already absorbed `min`), so
+  // the card never shows two different "minimums" for one product.
+  const belowFloor =
+    dyn && dyn.safety_base != null ? dyn.safety_base : item.min_stock_qty_base;
   const belowMin =
-    line.current_stock_qty_base !== "" &&
-    item.min_stock_qty_base > 0 &&
-    currentVal < item.min_stock_qty_base;
-  const { base: suggestedBase, purchase: suggestedPurchase } = computeSuggestion(
+    line.current_stock_qty_base !== "" && belowFloor > 0 && currentVal < belowFloor;
+  const fmtDay = (iso: string) =>
+    formatDateTime(`${iso}T12:00:00`, { weekday: "short", day: "2-digit", month: "2-digit" });
+  const { base: suggestedBaseRaw, purchase: suggestedPurchase } = computeSuggestion(
     item,
     currentVal,
   );
+  // Display copy of the base deficit: a dynamic target (76.6) minus a typed
+  // stock (20) is 56.599999999999994 in IEEE-754; the tile must say 56.6.
+  // The purchase-unit suggestion above is computed from the raw value.
+  const suggestedBase = roundQty(suggestedBaseRaw);
 
   // Pack-unit display (pack-units-display-mobile-wrap Track A) — only when the
   // purchase unit actually packs multiple inventory units (e.g. a "zgrzewka"
@@ -156,12 +169,22 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
           <h3 className="font-semibold text-slate-900 leading-tight">
             {item.product_name_pl}
           </h3>
-          {item.is_critical && (
-            <span className="flex items-center gap-1 bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">
-              <AlertOctagon size={10} aria-hidden="true" />
-              {t("card.critical")}
-            </span>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {dyn && (
+              <span
+                data-testid={`dynamic-badge-${item.product_id}`}
+                className="bg-blue-100 text-blue-900 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap"
+              >
+                {t("card.dynamicBadge", { conf: dyn.confidence ?? "" })}
+              </span>
+            )}
+            {item.is_critical && (
+              <span className="flex items-center gap-1 bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                <AlertOctagon size={10} aria-hidden="true" />
+                {t("card.critical")}
+              </span>
+            )}
+          </div>
         </div>
         <div className="text-xs text-slate-600 mb-4">
           {packBased ? (
@@ -209,6 +232,35 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
           )}
         </div>
 
+        {/* Dynamic-target math (dynamic-target-wola): what the target above is
+            made of, so the Captain can argue with the number, not guess at it. */}
+        {dyn && dyn.usage_per_day_base != null && dyn.safety_base != null && (
+          <div
+            data-testid={`dynamic-math-${item.product_id}`}
+            className="-mt-2 mb-3 text-[11px] leading-snug text-blue-900"
+          >
+            <div>
+              {t("card.dynamicMath", {
+                // Full precision (the DB column has 4 decimals): a 2dp display
+                // would not reproduce the target the engine computed from it.
+                usage: dyn.usage_per_day_base,
+                unit: item.inventory_unit,
+                days: (dyn.days_until_delivery ?? 0) + (dyn.horizon_days ?? 0),
+                safety: roundQty(dyn.safety_base),
+                target: item.target_stock_qty_base,
+              })}
+            </div>
+            {dyn.delivery_date && dyn.next_delivery_date && (
+              <div className="text-slate-600">
+                {t("card.dynamicDates", {
+                  delivery: fmtDay(dyn.delivery_date),
+                  next: fmtDay(dyn.next_delivery_date),
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Master-data annotation + below-minimum signal (both optional) */}
         {(item.order_note || belowMin) && (
           <div className="-mt-2 mb-3 space-y-1">
@@ -221,8 +273,8 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
             {belowMin && (
               <div className="flex items-center gap-1 text-xs font-semibold text-red-700">
                 <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
-                {t("card.belowMin", {
-                  min: item.min_stock_qty_base,
+                {t(dyn ? "card.belowSafety" : "card.belowMin", {
+                  min: belowFloor,
                   unit: item.inventory_unit,
                 })}
               </div>

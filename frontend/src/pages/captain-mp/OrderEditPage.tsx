@@ -28,6 +28,7 @@ import { Toast, type ToastProps } from "./components/Toast";
 import { ExtraItemsControl } from "./components/ExtraItemsControl";
 import { OrderCommentField } from "./components/OrderCommentField";
 import { computeRowState } from "./lib/compute";
+import { overlaySnapshotTargets } from "./lib/dynamicTarget";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { parseExtraItems, serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
@@ -135,7 +136,10 @@ export function OrderEditPage() {
             const missing = builtItems.filter(
               (it) => !inOrderable.has(it.product_id),
             );
-            setItems([...orderable, ...missing]);
+            // dynamic-target-wola (H4): products already on the order keep the
+            // target snapshotted on their line — the backend edit gate uses
+            // that snapshot, not today's dynamic value the fresh list carries.
+            setItems([...overlaySnapshotTargets(orderable, data.lines), ...missing]);
           })
           .catch(() => {
             /* degraded: order lines only */

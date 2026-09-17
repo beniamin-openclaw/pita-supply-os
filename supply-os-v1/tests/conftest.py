@@ -45,3 +45,9 @@ os.environ.setdefault("SUPPLY_OS_DATABASE_URL", "")
 os.environ.setdefault("SUPPLY_OS_EBIURO_EMAIL", "")
 os.environ.setdefault("SUPPLY_OS_EBIURO_APIKEY", "")
 os.environ.setdefault("SUPPLY_OS_EBIURO_COMPANY_IDS", "")
+# Dynamic target OFF for the suite (dynamic-target-wola): the seed dir carries
+# location_product_usage.csv for WOLA, so with the flag on every WOLA orderable /
+# submit test would depend on today's weekday. Dynamic tests enable it per-test
+# with mocker.patch.object(settings, "dynamic_target_enabled", True) and pin
+# `today` — never via os.environ (settings load once; see lessons.md).
+os.environ.setdefault("SUPPLY_OS_DYNAMIC_TARGET_ENABLED", "false")

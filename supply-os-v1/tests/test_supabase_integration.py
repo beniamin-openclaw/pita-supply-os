@@ -30,6 +30,7 @@ from app.models import (
     InventoryCountLine,
     Location,
     LocationProductSetting,
+    LocationProductUsage,
     Order,
     OrderLine,
     OrderStatus,
@@ -52,6 +53,7 @@ _ALL_TABLES = [
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
     "order_lines", "orders", "transport_events", "transport_batches",
+    "location_product_usage",
     "location_product_settings", "supplier_products", "locations", "suppliers",
     "products", "_meta",
 ]
@@ -141,11 +143,21 @@ def _schema():
     warehouse_pickup = (
         MIGRATIONS_DIR / "0015_supplier_product_warehouse_pickup.sql"
     ).read_text()
+    # 0016 widens the order_lines reason_code CHECK (STOCK_UNTIL_NEXT_DELIVERY);
+    # 0018 adds location_product_usage (dynamic-target-wola), read by
+    # load_location_product_usage and inserted by the smoke test below. Also
+    # add the new table to _ALL_TABLES (lesson: wire every new migration in).
+    reason_code = (
+        MIGRATIONS_DIR / "0016_reason_code_stock_until_next_delivery.sql"
+    ).read_text()
     # 0017 adds suppliers.nip + the finance mirror tables (finance_documents,
     # finance_document_lines, finance_receipt_reviews, finance_line_aliases) read
     # and written by the finance functions exercised below.
     finance_documents = (
         MIGRATIONS_DIR / "0017_finance_documents.sql"
+    ).read_text()
+    location_product_usage = (
+        MIGRATIONS_DIR / "0018_location_product_usage.sql"
     ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
@@ -164,7 +176,9 @@ def _schema():
         conn.exec_driver_sql(extra_items)
         conn.exec_driver_sql(inventory_count_edit)
         conn.exec_driver_sql(warehouse_pickup)
+        conn.exec_driver_sql(reason_code)
         conn.exec_driver_sql(finance_documents)
+        conn.exec_driver_sql(location_product_usage)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -685,6 +699,32 @@ def test_concurrent_double_claim_exactly_one_409():
 
     assert sorted(results) == ["conflict", "ok"], results
     assert supabase_backend.get_order(oid).status is OrderStatus.MANAGER_CLAIMED
+
+
+# ---------- dynamic-target-wola: location_product_usage (migration 0018) ----------
+
+def test_location_product_usage_insert_and_read_roundtrip():
+    """Smoke test for migration 0018 against real Postgres: a row written through
+    the seam's insert helper reads back via load_location_product_usage with the
+    numeric/date columns mapped onto the model."""
+    supabase_backend._insert(
+        "location_product_usage", supabase_backend._LOCATION_PRODUCT_USAGE_COLUMNS,
+        LocationProductUsage(
+            usage_id="WOLA__P1", location_id="WOLA", product_id="P1",
+            usage_per_day_base=9.4, confidence="A", basis="purch+teoret+real",
+            source="gostock-2026-09-06", as_of=date(2026, 8, 30), safety_days=1.0,
+        ),
+    )
+    try:
+        rows = supabase_backend.load_location_product_usage()
+        assert [r.usage_id for r in rows] == ["WOLA__P1"]
+        assert rows[0].usage_per_day_base == 9.4
+        assert rows[0].confidence == "A"
+        assert rows[0].as_of == date(2026, 8, 30)
+        assert rows[0].active is True
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql("DELETE FROM location_product_usage")
 
 
 def test_finance_documents_upsert_review_alias_roundtrip():

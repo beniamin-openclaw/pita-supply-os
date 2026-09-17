@@ -178,6 +178,25 @@ export const STRINGS = {
     en: "need {base} {inventoryUnit}",
   },
 
+  // ProductCard — dynamic target (dynamic-target-wola) ------------------------
+  "card.dynamicBadge": { pl: "dynamiczny · {conf}", en: "dynamic · {conf}" },
+  "card.dynamicMath": {
+    pl: "{usage} {unit}/dzień × {days} dni + zapas {safety} {unit} = {target} {unit}",
+    en: "{usage} {unit}/day × {days} days + safety {safety} {unit} = {target} {unit}",
+  },
+  "card.dynamicDates": {
+    pl: "dostawa {delivery}, następna {next}",
+    en: "delivery {delivery}, next {next}",
+  },
+  "card.belowSafety": {
+    pl: "Poniżej zapasu: {min} {unit}",
+    en: "Below safety stock: {min} {unit}",
+  },
+  "dates.delivery.window": {
+    pl: "dostawa {delivery} · następna {next}",
+    en: "delivery {delivery} · next {next}",
+  },
+
   // Row state messages (compute.ts) -----------------------------------------
   "state.empty": { pl: "Wpisz zamówienie", en: "Enter order qty" },
   "state.devNoReason": {

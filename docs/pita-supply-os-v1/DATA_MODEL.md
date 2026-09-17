@@ -131,6 +131,38 @@ different settings per location (Wola has 20 m² of cooler; another point has
 
 ---
 
+## 5a. `location_product_usage` (migration 0018, dynamic-target-wola)
+
+Daily usage estimate per product per location, in inventory unit. The dynamic
+target reads it: `target = usage × (days until delivery + days to the next
+delivery) + safety` (`app/dynamic_target.py`). Only ACTIVE rows with confidence
+A or B are used; any other product keeps the static `target_stock_qty`.
+
+| Column               | Type        | Notes                                                        |
+| -------------------- | ----------- | ------------------------------------------------------------ |
+| `usage_id`           | string (PK) | `LOC__PRODUCT`, e.g. `WOLA__P024`                            |
+| `location_id`        | string (FK) | → `locations.location_id`                                    |
+| `product_id`         | string (FK) | → `products.product_id`                                      |
+| `usage_per_day_base` | number ≥ 0  | In `products.inventory_unit` (pita: opak, not szt)           |
+| `confidence`         | A / B / C   | A: sources agree within 15 %, B: within 40 %, C: not trusted |
+| `basis`              | string      | e.g. `purch+teoret+real`, `POS_only`                         |
+| `source`             | string      | e.g. `gostock-2026-09-06`                                    |
+| `as_of`              | date        | Last day of the observation window                           |
+| `safety_days`        | number ≥ 0  | Days of usage kept as safety stock (default 1)               |
+| `active`             | boolean     | `false` = ignored by the engine                              |
+| `notes`              | string      |                                                              |
+
+Unique per `(location_id, product_id)`. Seed: `seed/location_product_usage.csv`
+(WOLA, 18 rows from the GoStock analysis). Optional master data — a backend
+without the table/CSV/worksheet serves static targets.
+
+**Effect on `order_lines.target_stock_qty_base`:** the snapshot is the
+EFFECTIVE target the Captain saw (dynamic when the engine resolved one), no
+longer always equal to `location_product_settings.target_stock_qty`. The mode
+is not persisted (known limitation, see the change folder).
+
+---
+
 ## 6. `orders`
 
 Order header. One row per `(location, supplier, order_date)`.
@@ -168,7 +200,7 @@ Line-level data. This is **the audit asset** of the whole system.
 | `product_id`                   | string (FK) | → `products.product_id`                                        |
 | `supplier_product_id`          | string (FK) | → `supplier_products.supplier_product_id` (locks conversion)   |
 | `current_stock_qty_base`       | number      | Reported by Captain, in inventory unit                         |
-| `target_stock_qty_base`        | number      | Snapshot from `location_product_settings.target_stock_qty`     |
+| `target_stock_qty_base`        | number      | Snapshot of the effective target (static setting, or the dynamic target — see §5a) |
 | `suggested_qty_base`           | number      | Computed: `max(0, target − current)`                           |
 | `suggested_qty_purchase`       | number      | Computed: rounded per `rounding_rule`                          |
 | `captain_final_qty_purchase`   | number      | Captain's decision in purchase unit                            |
