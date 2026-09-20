@@ -514,6 +514,25 @@ export interface ManagerOrderDetail {
   // Reverse link to a Manager Transport batch — see ManagerQueueItem's field
   // of the same name for the full explanation.
   supplier_order_reference?: string | null;
+  // Post-send edit log (week2-feedback-quantities Phase 6), newest first,
+  // capped 100 server-side. Pydantic `default_factory=list` → optional here.
+  events?: OrderEvent[];
+  // True only for a manager_sent order with no receipt that is NOT a Transport
+  // batch member — the exact set the post-send save/add-line accept. Pydantic
+  // `bool = False` → optional here; absent reads as false.
+  editable_after_send?: boolean;
+}
+
+// One append-only row of an order's post-send edit log (week2-feedback-
+// quantities Phase 6, migration 0020) — mirrors TransportEvent. `event_type` is
+// quantities_changed ("Name: old → new" details) or line_added.
+export interface OrderEvent {
+  event_id: string;
+  order_id: string;
+  event_type: string;
+  actor?: string | null;
+  at?: string | null; // ISO datetime
+  details: string;
 }
 
 // Manager Dispatch -----------------------------------------------------------

@@ -31,6 +31,7 @@ from app.models import (
     Location,
     LocationProductSetting,
     Order,
+    OrderEvent,
     OrderLine,
     OrderStatus,
     Product,
@@ -517,6 +518,48 @@ def test_inventory_count_edit_roundtrip():
     )
     refreshed = {e.event_id: e for e in supabase_backend.load_inventory_count_events_for(cid)}
     assert refreshed[f"ICE-{cid}-BLANK"].details == ""
+
+
+def test_order_event_roundtrip():
+    """Phase 6 (week2-feedback-quantities): append_order_event / load_order_events_for
+    against the REAL order_events table (migration 0020) — proves the column list
+    and the NOT NULL DEFAULT '' `details` binding (mirrors the inventory event
+    round-trip above)."""
+    oid = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-IT-EV")
+    now = datetime.now(timezone.utc)
+    supabase_backend.append_order_event(
+        OrderEvent(
+            event_id="OEV-IT-1", order_id=oid, event_type="quantities_changed",
+            actor="manager-default", at=now, details="Pita: 8 → 6",
+        )
+    )
+    supabase_backend.append_order_event(
+        OrderEvent(event_id="OEV-IT-2", order_id=oid, event_type="line_added")
+    )
+    events = {e.event_id: e for e in supabase_backend.load_order_events_for(oid)}
+    assert set(events) == {"OEV-IT-1", "OEV-IT-2"}
+    assert events["OEV-IT-1"].details == "Pita: 8 → 6"
+    assert events["OEV-IT-1"].actor == "manager-default"
+    assert events["OEV-IT-2"].details == ""
+    assert supabase_backend.load_order_events_for("ORD-IT-NOPE") == []
+
+
+def test_save_after_send_guard_on_real_row():
+    """The post-send save's guarded update (expected_status=manager_sent) applies
+    on a real manager_sent row and 409s (OrderStatusConflictError) once the
+    order is closed."""
+    oid = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-IT-EAS")
+    now = datetime.now(timezone.utc)
+    supabase_backend.update_order(
+        oid, total_value_estimate_pln=1.0, last_edited_at=now, expected_status="manager_sent"
+    )
+    got = supabase_backend.get_order(oid)
+    assert got is not None and got.last_edited_at is not None
+    supabase_backend.update_order(oid, status="closed", expected_status="manager_sent")
+    with pytest.raises(errors.OrderStatusConflictError):
+        supabase_backend.update_order(
+            oid, total_value_estimate_pln=2.0, expected_status="manager_sent"
+        )
 
 
 def test_receipt_roundtrip_and_update():

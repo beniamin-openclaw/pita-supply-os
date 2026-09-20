@@ -15,7 +15,7 @@ from datetime import date, datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import sheets
+from app import errors, sheets
 from app.config import DataBackend
 from app.main import app
 from app.models import (
@@ -23,6 +23,7 @@ from app.models import (
     OrderLine,
     OrderStatus,
     Product,
+    Receipt,
     SupplierProduct,
 )
 
@@ -95,7 +96,7 @@ def _supplier_products() -> list[SupplierProduct]:
     ]
 
 
-def _activate(mocker, order: Order | None):
+def _activate(mocker, order: Order | None, receipts: list[Receipt] | None = None):
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "get_order", return_value=order)
@@ -111,10 +112,16 @@ def _activate(mocker, order: Order | None):
     mock_update_lines = mocker.patch.object(sheets, "update_order_lines")
     mock_update_order = mocker.patch.object(sheets, "update_order")
     mock_event = mocker.patch.object(sheets, "append_transport_event")
+    # Phase 6 (week2-feedback-quantities): the post-send gate reads receipts and
+    # the post-send save appends an order_events row. Default: no receipts.
+    mock_receipts = mocker.patch.object(sheets, "load_receipts_for_orders", return_value=receipts or [])
+    mock_order_event = mocker.patch.object(sheets, "append_order_event")
     return {
         "update_order_lines": mock_update_lines,
         "update_order": mock_update_order,
         "append_transport_event": mock_event,
+        "load_receipts_for_orders": mock_receipts,
+        "append_order_event": mock_order_event,
     }
 
 
@@ -167,11 +174,121 @@ def test_save_writes_full_qty_and_comment(mocker):
     assert payload["manager_comment"] == "Cut from 5 — leftover"
 
 
-def test_save_409_when_already_dispatched(mocker):
-    _activate(mocker, _claimed_order(status=OrderStatus.MANAGER_SENT))
+def _receipt() -> Receipt:
+    return Receipt(
+        receipt_id="RCP-1",
+        order_id=ORDER_ID,
+        location_id="WOLA",
+        supplier_id="SUP_PAGO",
+        receipt_date=date(2026, 5, 26),
+        line_count=2,
+    )
+
+
+# ---------- Phase 6 (week2-feedback-quantities): edit after send ----------
+
+def test_save_manager_sent_without_receipt_is_editable(mocker):
+    """A manager_sent order with no receipt accepts a save: status stays
+    manager_sent, the guarded update uses the CURRENT status, last_edited_at is
+    stamped, and ONE quantities_changed order event carries "Name: old → new"."""
+    mocks = _activate(mocker, _claimed_order(status=OrderStatus.MANAGER_SENT))
+    body = {
+        "manager_finals": [
+            {"order_line_id": "OL-001", "manager_final_qty_purchase": 3},
+            {"order_line_id": "OL-002", "manager_final_qty_purchase": 5},  # unchanged
+        ]
+    }
+    r = _patch(body)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "manager_sent"
+    _, kwargs = mocks["update_order"].call_args
+    assert "status" not in kwargs
+    assert kwargs["expected_status"] == "manager_sent"
+    assert kwargs["last_edited_at"] is not None
+
+    mocks["append_order_event"].assert_called_once()
+    event = mocks["append_order_event"].call_args.args[0]
+    assert event.order_id == ORDER_ID
+    assert event.event_type == "quantities_changed"
+    assert event.details == "Souvlaki Kurczak: 5 → 3"
+    # Not a transport member → no transport event.
+    mocks["append_transport_event"].assert_not_called()
+
+
+def test_save_manager_sent_guards_order_before_writing_lines(mocker):
+    """Post-send, the guarded order update runs BEFORE the line write, so a
+    concurrent receipt (manager_sent -> closed) fails the save with 409 before
+    any line is overwritten (impl-review Phase 6 F2)."""
+    from unittest.mock import Mock
+
+    mocks = _activate(mocker, _claimed_order(status=OrderStatus.MANAGER_SENT))
+    parent = Mock()
+    parent.attach_mock(mocks["update_order"], "update_order")
+    parent.attach_mock(mocks["update_order_lines"], "update_order_lines")
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 3}]})
+    assert r.status_code == 200, r.text
+    names = [c[0] for c in parent.mock_calls]
+    assert names.index("update_order") < names.index("update_order_lines")
+
+    # And a guard miss leaves the lines untouched.
+    mocks["update_order"].reset_mock()
+    mocks["update_order_lines"].reset_mock()
+    mocks["append_order_event"].reset_mock()
+    mocks["update_order"].side_effect = errors.OrderStatusConflictError("closed meanwhile")
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 3}]})
+    assert r.status_code == 409, r.text
+    mocks["update_order_lines"].assert_not_called()
+    mocks["append_order_event"].assert_not_called()
+
+
+def test_save_manager_claimed_stamps_no_last_edited_and_no_event(mocker):
+    mocks = _activate(mocker, _claimed_order())
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 3}]})
+    assert r.status_code == 200, r.text
+    _, kwargs = mocks["update_order"].call_args
+    assert kwargs["expected_status"] == "manager_claimed"
+    assert "last_edited_at" not in kwargs
+    mocks["append_order_event"].assert_not_called()
+
+
+def test_save_409_manager_sent_with_receipt(mocker):
+    """A receipt locks the order ("odbiór już potwierdzony") — no write."""
+    mocks = _activate(mocker, _claimed_order(status=OrderStatus.MANAGER_SENT), receipts=[_receipt()])
     r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 1}]})
     assert r.status_code == 409
-    assert "manager_sent" in r.json()["detail"]
+    assert "receipt" in r.json()["detail"]
+    mocks["update_order_lines"].assert_not_called()
+    mocks["append_order_event"].assert_not_called()
+
+
+def test_save_409_closed(mocker):
+    """closed (first receipt flipped manager_sent → closed) is never editable."""
+    mocks = _activate(mocker, _claimed_order(status=OrderStatus.CLOSED))
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 1}]})
+    assert r.status_code == 409
+    assert "closed" in r.json()["detail"]
+    mocks["update_order_lines"].assert_not_called()
+
+
+def test_save_409_manager_sent_transport_member(mocker):
+    """A sent Transport batch member is frozen here — edit via Transport."""
+    order = _claimed_order(status=OrderStatus.MANAGER_SENT).model_copy(
+        update={"supplier_order_reference": "TRN-20260520-PAGO-abc123"}
+    )
+    mocks = _activate(mocker, order)
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 1}]})
+    assert r.status_code == 409
+    assert "edit via Transport" in r.json()["detail"]
+    mocks["update_order_lines"].assert_not_called()
+    mocks["append_order_event"].assert_not_called()
+    mocks["append_transport_event"].assert_not_called()
+
+
+def test_save_manager_sent_event_emission_failure_does_not_fail_save(mocker):
+    mocks = _activate(mocker, _claimed_order(status=OrderStatus.MANAGER_SENT))
+    mocks["append_order_event"].side_effect = RuntimeError("no order_events tab")
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 3}]})
+    assert r.status_code == 200, r.text
 
 
 def test_save_409_when_back_with_captain(mocker):

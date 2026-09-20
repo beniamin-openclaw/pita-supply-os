@@ -216,6 +216,22 @@ class Order(BaseModel):
     lines: list[OrderLine] = Field(default_factory=list)
 
 
+class OrderEvent(BaseModel):
+    """One append-only row of an order's post-send edit log (week2-feedback-
+    quantities Phase 6, migration 0020) — mirrors `TransportEvent` /
+    `InventoryCountEvent`. Emitted best-effort via `main._log_order_event` when
+    a Manager changes quantities (`quantities_changed`, details "Name: old → new")
+    or adds a line (`line_added`) on a `manager_sent` order that has no receipt
+    yet. Never updated or deleted; `details` is computed server-side at emission
+    time from the pre-write order, not reconstructed later."""
+    event_id: str
+    order_id: str
+    event_type: str
+    actor: Optional[str] = None
+    at: Optional[datetime] = None
+    details: str = ""
+
+
 # ---------- Captain submit request/response (Phase C3) ----------
 
 class OrderLineSubmit(BaseModel):
@@ -299,7 +315,7 @@ class ManagerSaveRequest(BaseModel):
 
 class ManagerSaveResponse(BaseModel):
     order_id: str
-    status: OrderStatus  # stays manager_claimed
+    status: OrderStatus  # echoes the order's status (manager_claimed or, post-send, manager_sent)
     lines_updated: int
     total_value_estimate_pln: float
 
@@ -470,6 +486,14 @@ class ManagerOrderDetail(BaseModel):
     # Reverse link to a Manager Transport batch (to-ordering-pago Phase 2) —
     # see ManagerQueueItem.supplier_order_reference for the same field's meaning.
     supplier_order_reference: str | None = None
+    # Post-send edit log (week2-feedback-quantities Phase 6): newest first,
+    # capped 100 by the route; [] when nothing was edited after send or the
+    # 'order_events' worksheet/table is absent (never a 500).
+    events: list[OrderEvent] = Field(default_factory=list)
+    # True only when the order is `manager_sent`, has NO goods-receipt yet and is
+    # NOT a Transport batch member (a "TRN-" marker) — the exact set the post-send
+    # save/add-line routes accept. `closed` (first receipt) is never editable.
+    editable_after_send: bool = False
 
 
 # ---------- Captain own-orders view + edit (Phase E3) ----------
@@ -597,10 +621,10 @@ class ManagerAddLineRequest(BaseModel):
 class ManagerAddLineResponse(BaseModel):
     """Result of add-line — a skeleton OrderLine (all quantities 0) was appended;
     the Manager then sets manager_final via the existing save/dispatch flow. The
-    order status is unchanged (stays manager_claimed)."""
+    order status is unchanged (manager_claimed, or manager_sent for a post-send add)."""
     order_id: str
     order_line_id: str
-    status: OrderStatus  # manager_claimed on success
+    status: OrderStatus  # the order's status (unchanged by the add)
 
 
 # ---------- Inventory count (S-06) ----------

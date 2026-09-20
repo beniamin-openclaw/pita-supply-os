@@ -109,3 +109,19 @@ orders with a period selector, location/supplier filters and a cap notice (newes
 Backend: `ManagerQueueItem.last_received_at` from the existing receipt scan (sent/closed lanes only), no new
 endpoint. Impl-review: APPROVE WITH NOTES (cap notice + DST-proof render assertion applied). Verify: ruff
 clean, pytest 692, vitest 393, build + lint clean. Manual items 5.2–5.4 for the operator after deploy.
+
+## Phase 6 implemented (2026-09-20)
+
+A `manager_sent` order stays editable until its first receipt, unless it is a Transport batch member:
+`PATCH /api/manager/order/{id}` and `POST …/add-line` accept `manager_sent` (409 for a TRN- member —
+"edit via Transport" — and for an order with a receipt; `closed` is locked); post-send edits stamp
+`last_edited_at` and append `order_events` rows (`quantities_changed` "Name: old → new", `line_added`)
+via best-effort `_log_order_event`; `OrderEvent` persistence on Supabase + Sheets (seed no-op). Detail
+returns `events` (sent + closed) and `editable_after_send`. Frontend: ResendPanel ("Dosyłka —" Gmail link
+for e-mail suppliers only, plain list otherwise, shown only when the draft is clean), OrderHistorySection,
+`isOrderEditable`, "zablokowane po odbiorze" on closed. Impl-review (Fable high): REWORK → fixed before
+commit: original "Otwórz email" link restored on a just-dispatched order; post-send save/add-line now run the
+guarded order update BEFORE the line write so a concurrent receipt 409s with lines untouched (new test);
+receipts cache invalidated in the gate; detail reuses the loaded receipts; seed stubs; docstrings. Verify:
+ruff clean, pytest 706, vitest 400, build + lint clean. Progress 6.1 (integration CI) and manual 6.3/6.4
+remain.

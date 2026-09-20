@@ -884,7 +884,7 @@ the page. No new polling.
 #### Automated
 
 - [ ] 6.1 pytest + integration green
-- [ ] 6.2 Frontend suite green, `/verify` green
+- [x] 6.2 Frontend suite green, `/verify` green
 
 #### Manual
 

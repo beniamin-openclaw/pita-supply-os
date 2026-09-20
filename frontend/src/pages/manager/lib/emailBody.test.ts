@@ -3,7 +3,9 @@ import { describe, it, expect } from "vitest";
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types";
 import {
   buildEmailBody,
+  buildEmailSubject,
   buildGmailComposeUrl,
+  buildResendSubject,
   joinCc,
   MAX_GMAIL_URL_LENGTH,
 } from "./emailBody";
@@ -263,5 +265,23 @@ describe("joinCc", () => {
     const { url } = buildGmailComposeUrl({ to: "x@y.pl", subject: "s", body: "b", cc });
     expect(url.split("&cc=").length).toBe(2);
     expect(url).toContain("cc=biuro%40pitabros.pl%2Cwola%40pitabros.pl");
+  });
+});
+
+describe("buildResendSubject — post-send dosyłka (week2-feedback-quantities Phase 6)", () => {
+  it("prefixes the regular subject with 'Dosyłka —'", () => {
+    const d = detail({ location_name: "Pita Bros Wola" });
+    expect(buildEmailSubject(d)).toBe("Zamówienie Pita Bros Wola");
+    expect(buildResendSubject(d)).toBe("Dosyłka — Zamówienie Pita Bros Wola");
+  });
+
+  it("lands in the Gmail su= parameter unchanged", () => {
+    const d = detail({ location_name: "Pita Bros Wola" });
+    const { url } = buildGmailComposeUrl({
+      to: "z@bukat.example",
+      subject: buildResendSubject(d),
+      body: buildEmailBody(d, noLines),
+    });
+    expect(url).toContain(`su=${encodeURIComponent("Dosyłka — Zamówienie Pita Bros Wola")}`);
   });
 });

@@ -1078,6 +1078,31 @@ export const STRINGS = {
     pl: "Dodano produkt do zamówienia",
     en: "Product added to order",
   },
+  // Edit after send (week2-feedback-quantities Phase 6): a manager_sent order
+  // without a receipt stays editable; changes are logged and a "dosyłka"
+  // e-mail is rebuilt from the current quantities.
+  "manager.resend.save": { pl: "Zapisz zmiany (dosyłka)", en: "Save changes (top-up)" },
+  "manager.resend.title": { pl: "Dosyłka do dostawcy", en: "Top-up to supplier" },
+  "manager.resend.note": {
+    pl: "Zamówienie już wysłane. Zapisz zmiany, a potem wyślij dosyłkę z aktualnymi ilościami.",
+    en: "This order was already sent. Save your changes, then send a top-up with the current quantities.",
+  },
+  "manager.resend.unsaved": {
+    pl: "Najpierw zapisz zmiany — dosyłka jest budowana z zapisanych ilości.",
+    en: "Save your changes first — the top-up is built from the saved quantities.",
+  },
+  "manager.resend.openGmail": { pl: "Otwórz dosyłkę w Gmail", en: "Open top-up in Gmail" },
+  "manager.resend.editViaTransport": {
+    pl: "Zamówienie należy do transportu — edytuj je na ekranie Transport.",
+    en: "This order belongs to a transport — edit it on the Transport screen.",
+  },
+  "manager.lockedAfterReceipt": {
+    pl: "Zablokowane po odbiorze",
+    en: "Locked after receipt",
+  },
+  "manager.events.title": { pl: "Historia zmian", en: "Change history" },
+  "manager.events.type.quantitiesChanged": { pl: "Zmieniono ilości", en: "Quantities changed" },
+  "manager.events.type.lineAdded": { pl: "Dodano pozycję", en: "Line added" },
   // Manager Transport (to-ordering-pago) — combine several locations' orders
   // for one supplier into a single Transport ("TO") batch.
   "manager.transport.navLink": { pl: "Transport (TO)", en: "Transport" },

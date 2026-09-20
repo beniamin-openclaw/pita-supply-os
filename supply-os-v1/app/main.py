@@ -73,6 +73,7 @@ from .models import (
     ManagerSaveRequest,
     ManagerSaveResponse,
     Order,
+    OrderEvent,
     OrderLine,
     OrderLineSubmit,
     OrderingMethod,
@@ -1106,6 +1107,21 @@ def manager_order_detail(
             backend, order_id, products_by_id, sps_by_id
         )
 
+    # Post-send edit log + gate (week2-feedback-quantities Phase 6). Only a
+    # manager_sent order can carry events or be editable; other statuses skip
+    # both reads (the receipt scan inside the gate is the expensive one).
+    order_events: list[OrderEvent] = []
+    editable_after_send = False
+    if order.status == OrderStatus.MANAGER_SENT:
+        order_events = _load_order_events_safe(backend, order_id)
+        # Receipts were already loaded above — no second receipt query.
+        editable_after_send = (
+            not (order.supplier_order_reference or "").startswith("TRN-")
+            and not order_receipts
+        )
+    elif order.status == OrderStatus.CLOSED:
+        order_events = _load_order_events_safe(backend, order_id)
+
     return ManagerOrderDetail(
         order_id=order.order_id,
         location_id=order.location_id,
@@ -1138,6 +1154,8 @@ def manager_order_detail(
         lines=enriched_lines,
         receipts=order_receipts,
         supplier_order_reference=order.supplier_order_reference,
+        events=order_events,
+        editable_after_send=editable_after_send,
     )
 
 
@@ -1619,6 +1637,134 @@ def _log_transport_event(
         )
 
 
+def _log_order_event(
+    backend,
+    order_id: str,
+    event_type: str,
+    details: str,
+    actor: str = "manager-default",
+) -> None:
+    """Emit one post-send order edit-log row (week2-feedback-quantities Phase 6)
+    — BEST-EFFORT, never raises, mirroring ``_log_transport_event`` /
+    ``_log_inventory_event``. A missing 'order_events' worksheet/table, a seed
+    backend without ``append_order_event``, or any other backend failure must
+    not break the edit that triggered it (the line/order write already
+    succeeded by the time this is called) — only logs a warning."""
+    try:
+        backend.append_order_event(
+            OrderEvent(
+                event_id=f"OEV-{secrets.token_hex(4)}",
+                order_id=order_id,
+                event_type=event_type,
+                actor=actor,
+                at=datetime.now(timezone.utc),
+                details=details,
+            )
+        )
+    except Exception:
+        log.warning(
+            "Order event emission failed (order_id=%s, event_type=%s) "
+            "— continuing without recording this event",
+            order_id,
+            event_type,
+            exc_info=True,
+        )
+
+
+def _load_order_events_safe(backend, order_id: str) -> list[OrderEvent]:
+    """Read one order's post-send edit log, newest first, capped 100 — NEVER
+    raising (mirrors ``_load_inventory_events_safe``): the history annotates an
+    order the caller already loaded, so no failure reading it (missing
+    worksheet, absent table ahead of migration 0020, seed backend) may cost the
+    reader the order itself."""
+    try:
+        events = backend.load_order_events_for(order_id)
+    except Exception:
+        log.warning(
+            "Order event history unavailable for order_id=%s — returning [] "
+            "(the order itself is unaffected)",
+            order_id,
+            exc_info=True,
+        )
+        return []
+    events.sort(
+        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
+    )
+    return events[:100]
+
+
+def _has_receipts(backend, order_id: str) -> bool:
+    """True when at least one goods-receipt exists for ``order_id``. A missing
+    'receipts' worksheet reads as "no receipts" (mirrors ``manager_queue``)."""
+    try:
+        return bool(backend.load_receipts_for_orders([order_id]))
+    except sheets.WorksheetNotFound:
+        return False
+
+
+def _is_editable_after_send(backend, order: Order) -> bool:
+    """Post-send edit gate (Phase 6 + plan-review amendments): only a
+    ``manager_sent`` order with NO receipt that is NOT a Transport batch member.
+    ``closed`` (the first receipt flips manager_sent → closed) is never editable."""
+    if order.status != OrderStatus.MANAGER_SENT:
+        return False
+    if (order.supplier_order_reference or "").startswith("TRN-"):
+        return False
+    return not _has_receipts(backend, order.order_id)
+
+
+def _reject_if_not_editable_after_send(backend, order: Order, action: str) -> None:
+    """409 unless a ``manager_sent`` order may still be edited: a Transport batch
+    member must be edited via the Transport screen (its aggregate is frozen at
+    finalize); an order with a receipt is locked ("odbiór już potwierdzony")."""
+    backend.invalidate_cache("receipts")
+    if (order.supplier_order_reference or "").startswith("TRN-"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order.order_id} belongs to transport "
+                f"{order.supplier_order_reference} — cannot {action} it here; "
+                f"edit via Transport instead."
+            ),
+        )
+    if _has_receipts(backend, order.order_id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order.order_id} already has a goods receipt "
+                f"(odbiór już potwierdzony) — cannot {action} after receipt"
+            ),
+        )
+
+
+def _effective_qty_changes(
+    order: Order,
+    finals_by_line_id: dict,
+    products_by_id: dict[str, Product],
+) -> list[str]:
+    """Per-line "Name: old → new" diff for every line whose EFFECTIVE quantity
+    (manager_final if > 0 else captain_final) actually changes in this save —
+    the same rule the transport ``quantities_changed`` event uses. Computed
+    from the pre-write ``order``."""
+    changes: list[str] = []
+    for original_line in order.lines:
+        final = finals_by_line_id.get(original_line.order_line_id)
+        if final is None:
+            continue
+        old_qty = (
+            original_line.manager_final_qty_purchase
+            if original_line.manager_final_qty_purchase > 0
+            else original_line.captain_final_qty_purchase
+        )
+        new_qty = final.manager_final_qty_purchase
+        if new_qty == old_qty:
+            continue
+        product = products_by_id.get(original_line.product_id)
+        name = product.product_name_pl if product else original_line.product_id
+        changes.append(f"{name}: {old_qty:g} → {new_qty:g}")
+    return changes
+
+
 @app.post("/api/manager/release/{order_id}", response_model=ManagerReleaseResponse)
 def manager_release(
     order_id: str,
@@ -1926,19 +2072,25 @@ def manager_order_save(
         )
 
     # Own preflight (see docstring): fresh read + status gate before any write.
+    # Phase 6 (week2-feedback-quantities): a manager_sent order stays editable
+    # until its first receipt (and never when it is a Transport batch member);
+    # the "dosyłka" e-mail is rebuilt client-side from the saved quantities.
     backend.invalidate_cache("orders")
     order = backend.get_order(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
-    if order.status != OrderStatus.MANAGER_CLAIMED:
+    if order.status not in (OrderStatus.MANAGER_CLAIMED, OrderStatus.MANAGER_SENT):
         raise HTTPException(
             status_code=409,
             detail=(
                 f"Order {order_id} status is {order.status.value}, "
-                f"expected manager_claimed (it may have been dispatched or "
-                f"released — refresh the queue)"
+                f"expected manager_claimed or manager_sent (it may have been "
+                f"released or received — refresh the queue)"
             ),
         )
+    post_send = order.status == OrderStatus.MANAGER_SENT
+    if post_send:
+        _reject_if_not_editable_after_send(backend, order, "save")
 
     sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
     finals_by_line_id = {f.order_line_id: f for f in req.manager_finals}
@@ -1970,27 +2122,57 @@ def manager_order_save(
 
     total_rounded = round(total, 2)
 
-    # Empty payload → no write (pure no-op); status stays manager_claimed.
+    # Empty payload → no write (pure no-op); the status is never touched.
     if line_updates:
-        backend.update_order_lines(order_id, line_updates)
         # Persist the recomputed total only; never pass `status`, so the order
-        # stays manager_claimed (no dispatch). `expected_status` makes the write
-        # atomic on Supabase — a concurrent dispatch/release that already moved
-        # the order off manager_claimed yields 0 rows → 409 (Sheets ignores it).
-        try:
-            backend.update_order(
-                order_id,
-                total_value_estimate_pln=total_rounded,
-                expected_status=OrderStatus.MANAGER_CLAIMED.value,
-            )
-        except errors.OrderStatusConflictError:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Order {order_id} is no longer manager_claimed (it may have "
-                    f"been dispatched or released — refresh the queue)"
-                ),
-            )
+        # keeps its status (no dispatch). `expected_status` = the order's CURRENT
+        # status, which makes the write atomic on Supabase — a concurrent
+        # transition yields 0 rows → 409 (Sheets ignores it). A post-send edit
+        # also stamps `last_edited_at` so the queue/detail can show it.
+        order_updates: dict = {"total_value_estimate_pln": total_rounded}
+        if post_send:
+            order_updates["last_edited_at"] = datetime.now(timezone.utc)
+
+        def _guarded_order_update() -> None:
+            try:
+                backend.update_order(
+                    order_id,
+                    **order_updates,
+                    expected_status=order.status.value,
+                )
+            except errors.OrderStatusConflictError:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Order {order_id} is no longer {order.status.value} (it "
+                        f"may have been dispatched, released or received — refresh "
+                        f"the queue)"
+                    ),
+                )
+
+        # Write ORDER: post-send, the guarded order update goes FIRST so a
+        # concurrent receipt (manager_sent → closed) makes the whole save fail
+        # cleanly with 409 BEFORE any line is overwritten — otherwise a closed
+        # order could end up with lines that differ from what its receipt
+        # snapshotted, and no event row (impl-review Phase 6 F2). The claimed
+        # path keeps its historical lines-then-order sequence byte-identical.
+        if post_send:
+            _guarded_order_update()
+            backend.update_order_lines(order_id, line_updates)
+        else:
+            backend.update_order_lines(order_id, line_updates)
+            _guarded_order_update()
+
+        # Phase 6: a post-send save logs ONE `quantities_changed` order event
+        # listing every line whose EFFECTIVE quantity actually changed
+        # ("Name: old → new"), computed from the pre-write `order`. Best-effort.
+        if post_send:
+            products_by_id = {p.product_id: p for p in backend.load_products()}
+            changes = _effective_qty_changes(order, finals_by_line_id, products_by_id)
+            if changes:
+                _log_order_event(
+                    backend, order_id, "quantities_changed", "; ".join(changes)
+                )
 
         # v3 Phase 6: when this order is a Transport batch member, log one
         # "quantities_changed" event listing every line whose EFFECTIVE
@@ -2000,22 +2182,7 @@ def manager_order_save(
         marker = order.supplier_order_reference or ""
         if marker.startswith("TRN-"):
             products_by_id = {p.product_id: p for p in backend.load_products()}
-            changes: list[str] = []
-            for original_line in order.lines:
-                final = finals_by_line_id.get(original_line.order_line_id)
-                if final is None:
-                    continue
-                old_qty = (
-                    original_line.manager_final_qty_purchase
-                    if original_line.manager_final_qty_purchase > 0
-                    else original_line.captain_final_qty_purchase
-                )
-                new_qty = final.manager_final_qty_purchase
-                if new_qty == old_qty:
-                    continue
-                product = products_by_id.get(original_line.product_id)
-                name = product.product_name_pl if product else original_line.product_id
-                changes.append(f"{name}: {old_qty:g} → {new_qty:g}")
+            changes = _effective_qty_changes(order, finals_by_line_id, products_by_id)
             if changes:
                 _log_transport_event(
                     backend,
@@ -2027,7 +2194,7 @@ def manager_order_save(
 
     return ManagerSaveResponse(
         order_id=order_id,
-        status=OrderStatus.MANAGER_CLAIMED,
+        status=order.status,
         lines_updated=len(line_updates),
         total_value_estimate_pln=total_rounded,
     )
@@ -2087,14 +2254,19 @@ def manager_add_line(
     order = backend.get_order(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
-    if order.status != OrderStatus.MANAGER_CLAIMED:
+    if order.status not in (OrderStatus.MANAGER_CLAIMED, OrderStatus.MANAGER_SENT):
         raise HTTPException(
             status_code=409,
             detail=(
                 f"Order {order_id} status is {order.status.value}, "
-                f"expected manager_claimed (cannot add a line)"
+                f"expected manager_claimed or manager_sent (cannot add a line)"
             ),
         )
+    # Phase 6 (week2-feedback-quantities): a manager_sent order accepts new
+    # lines until its first receipt, unless it is a Transport batch member.
+    post_send = order.status == OrderStatus.MANAGER_SENT
+    if post_send:
+        _reject_if_not_editable_after_send(backend, order, "add a line to")
 
     # Orderable membership for THIS order's supplier + location (server-side
     # re-check; the picker's list is advisory).
@@ -2143,12 +2315,39 @@ def manager_add_line(
         manager_final_qty_base=0,
         delta_vs_suggestion_pct=None,
     )
+    # Phase 6: a post-send add first stamps `last_edited_at` (guarded on the
+    # current status — a concurrent receipt makes it 409 BEFORE the line is
+    # appended, mirroring the save route's write order), then appends the
+    # skeleton line and logs ONE `line_added` event. Best-effort event.
+    if post_send:
+        try:
+            backend.update_order(
+                order_id,
+                last_edited_at=datetime.now(timezone.utc),
+                expected_status=OrderStatus.MANAGER_SENT.value,
+            )
+        except errors.OrderStatusConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Order {order_id} is no longer manager_sent (it may have "
+                    f"been received — refresh the queue)"
+                ),
+            )
     backend.append_order_lines([new_line])
+
+    if post_send:
+        _log_order_event(
+            backend,
+            order_id,
+            "line_added",
+            f"{match['product_name_pl']}: dodano ({match['purchase_unit']})",
+        )
 
     return ManagerAddLineResponse(
         order_id=order_id,
         order_line_id=order_line_id,
-        status=OrderStatus.MANAGER_CLAIMED,
+        status=order.status,
     )
 
 

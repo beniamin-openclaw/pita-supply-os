@@ -22,6 +22,7 @@ from app.main import app
 from app.models import (
     Location,
     Order,
+    OrderEvent,
     OrderLine,
     OrderStatus,
     Product,
@@ -411,3 +412,57 @@ def test_queue_sent_lane_degrades_when_receipts_tab_missing(mocker):
     )
     assert r.status_code == 200, r.text  # must NOT 500
     assert r.json()[0]["received_count"] == 0
+
+
+# ---------- Phase 6 (week2-feedback-quantities): editable_after_send + events ----------
+
+def test_detail_editable_after_send_when_sent_without_receipt(mocker):
+    order_id = "ORD-EAS-1"
+    order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
+    _enable(mocker, orders=[order], get_order_return=order)
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["editable_after_send"] is True
+    # Missing 'order_events' worksheet degrades to [] — never a 500.
+    assert r.json()["events"] == []
+
+
+def test_detail_not_editable_after_send_with_receipt_or_trn_or_closed(mocker):
+    order_id = "ORD-EAS-2"
+    order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
+    receipt = _receipt("RCP-1", order_id, datetime(2026, 6, 21, 10, 0, tzinfo=timezone.utc))
+    _enable(mocker, orders=[order], get_order_return=order, receipts=[receipt])
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["editable_after_send"] is False
+
+    trn = order.model_copy(update={"supplier_order_reference": "TRN-X"})
+    _enable(mocker, orders=[trn], get_order_return=trn)
+    assert client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH).json()[
+        "editable_after_send"
+    ] is False
+
+    closed = order.model_copy(update={"status": OrderStatus.CLOSED})
+    _enable(mocker, orders=[closed], get_order_return=closed)
+    assert client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH).json()[
+        "editable_after_send"
+    ] is False
+
+
+def test_detail_events_newest_first(mocker):
+    order_id = "ORD-EAS-3"
+    order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
+    _enable(mocker, orders=[order], get_order_return=order)
+    older = OrderEvent(
+        event_id="OEV-1", order_id=order_id, event_type="quantities_changed",
+        at=datetime(2026, 6, 21, 9, 0, tzinfo=timezone.utc), details="Souvlaki Kurczak: 5 → 3",
+    )
+    newer = OrderEvent(
+        event_id="OEV-2", order_id=order_id, event_type="line_added",
+        at=datetime(2026, 6, 21, 10, 0, tzinfo=timezone.utc), details="Gyros: dodano (karton)",
+    )
+    mocker.patch.object(sheets, "load_order_events_for", return_value=[older, newer])
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert [e["event_id"] for e in r.json()["events"]] == ["OEV-2", "OEV-1"]
+    assert r.json()["events"][1]["details"] == "Souvlaki Kurczak: 5 → 3"

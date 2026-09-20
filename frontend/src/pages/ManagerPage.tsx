@@ -34,6 +34,7 @@ import {
   hasDirtyDrafts,
   seedDrafts,
 } from "./manager/lib/draftState";
+import { isOrderEditable } from "./manager/lib/managerLine";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
 // location_id as an optional filter, so omitting it returns every location. It
@@ -124,10 +125,11 @@ export function ManagerPage() {
           if (latestDetailRequest.current !== orderId) return; // stale
           setDetail(d);
           setDrafts(seedDrafts(d)); // reseed draft baseline on every load
-          // Add-product (add-product-to-order): only a manager_claimed order can
-          // take new lines, so fetch the supplier's orderable list just for that
-          // lane. Non-fatal — the picker stays hidden if it fails.
-          if (d.status === "manager_claimed") {
+          // Add-product (add-product-to-order): only an editable order (claimed,
+          // or sent-and-still-editable — Phase 6) can take new lines, so fetch
+          // the supplier's orderable list just for those. Non-fatal — the picker
+          // stays hidden if it fails.
+          if (isOrderEditable(d)) {
             api
               .managerOrderable(d.supplier_id, d.location_id)
               .then((orderable) => {
@@ -161,7 +163,7 @@ export function ManagerPage() {
 
   // Warn before discarding unsaved dirty edits when switching orders.
   const confirmDiscardIfDirty = useCallback((): boolean => {
-    if (detail && detail.status === "manager_claimed" && hasDirtyDrafts(drafts, detail.lines)) {
+    if (detail && isOrderEditable(detail) && hasDirtyDrafts(drafts, detail.lines)) {
       return window.confirm(t("manager.unsavedWarning"));
     }
     return true;
@@ -183,7 +185,7 @@ export function ManagerPage() {
   // Browser-level guard for tab close / reload with unsaved edits.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (detail && detail.status === "manager_claimed" && hasDirtyDrafts(drafts, detail.lines)) {
+      if (detail && isOrderEditable(detail) && hasDirtyDrafts(drafts, detail.lines)) {
         e.preventDefault();
         e.returnValue = "";
       }

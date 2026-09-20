@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-import type { ManagerOrderLineDetail } from "../../../types";
-import { isManagerEngaged, lineVisualState, managerSummary } from "./managerLine";
+import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types";
+import { isManagerEngaged, isOrderEditable, lineVisualState, managerSummary } from "./managerLine";
 
 /** Minimal fixture — only the fields the visual/summary math reads matter. */
 function line(
@@ -77,5 +77,21 @@ describe("isManagerEngaged — Bug C summary status guard", () => {
     expect(isManagerEngaged("manager_claimed")).toBe(true);
     expect(isManagerEngaged("manager_sent")).toBe(true);
     expect(isManagerEngaged("closed")).toBe(true);
+  });
+});
+
+describe("isOrderEditable — edit after send (week2-feedback-quantities Phase 6)", () => {
+  const base = { status: "manager_sent" } as ManagerOrderDetail;
+  it("claimed is always editable", () => {
+    expect(isOrderEditable({ ...base, status: "manager_claimed" })).toBe(true);
+  });
+  it("sent is editable only when the backend says editable_after_send", () => {
+    expect(isOrderEditable({ ...base, editable_after_send: true })).toBe(true);
+    expect(isOrderEditable({ ...base, editable_after_send: false })).toBe(false);
+    expect(isOrderEditable(base)).toBe(false); // field absent → false
+  });
+  it("closed / captain_submitted are never editable", () => {
+    expect(isOrderEditable({ ...base, status: "closed", editable_after_send: false })).toBe(false);
+    expect(isOrderEditable({ ...base, status: "captain_submitted" })).toBe(false);
   });
 });

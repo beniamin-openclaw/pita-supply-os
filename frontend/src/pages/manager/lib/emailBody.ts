@@ -36,6 +36,19 @@ export function buildEmailSubject(detail: ManagerOrderDetail): string {
   return `Zamówienie ${detail.location_name}`;
 }
 
+/** Subject prefix for a post-send "dosyłka" (top-up) e-mail (Phase 6). */
+export const RESEND_SUBJECT_PREFIX = "Dosyłka —";
+
+/**
+ * Subject for the "dosyłka" e-mail rebuilt from a manager_sent order's CURRENT
+ * effective quantities after a post-send edit (week2-feedback-quantities
+ * Phase 6): "Dosyłka — Zamówienie {location_name}". Same body builder as the
+ * original dispatch; only the subject marks it as a top-up.
+ */
+export function buildResendSubject(detail: ManagerOrderDetail): string {
+  return `${RESEND_SUBJECT_PREFIX} ${buildEmailSubject(detail)}`;
+}
+
 /**
  * Plaintext Polish body (mirrors gmail_url._build_body). Lines whose effective
  * qty is 0 are skipped; visible lines are sorted by order_line_id.

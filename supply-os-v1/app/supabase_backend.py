@@ -56,6 +56,7 @@ from .models import (
     Location,
     LocationProductSetting,
     Order,
+    OrderEvent,
     OrderLine,
     Product,
     Receipt,
@@ -156,6 +157,9 @@ _TRANSPORT_BATCH_COLUMNS = [
 ]
 _TRANSPORT_EVENT_COLUMNS = [
     "event_id", "transport_id", "order_id", "event_type", "actor", "at", "details",
+]
+_ORDER_EVENT_COLUMNS = [
+    "event_id", "order_id", "event_type", "actor", "at", "details",
 ]
 
 # Temporal columns get an explicit cast in INSERT/UPDATE so a value bound as an
@@ -865,6 +869,25 @@ def append_transport_event(event: TransportEvent) -> None:
     Callers (``main._log_transport_event``) treat this as best-effort and
     never let a failure here break the business action that triggered it."""
     _insert("transport_events", _TRANSPORT_EVENT_COLUMNS, event)
+
+
+# ---------- Order post-send edit log (week2-feedback-quantities Phase 6, migration 0020) ----------
+
+def load_order_events_for(order_id: str) -> list[OrderEvent]:
+    """Targeted read for one order's post-send edit log — not a full-table scan
+    (mirrors ``load_transport_events_for``)."""
+    return _fetch_all(
+        "SELECT * FROM order_events WHERE order_id = :oid ORDER BY at DESC",
+        OrderEvent,
+        {"oid": order_id},
+    )
+
+
+def append_order_event(event: OrderEvent) -> None:
+    """Append-only — there is no update/delete for an audit-trail row.
+    Callers (``main._log_order_event``) treat this as best-effort and never
+    let a failure here break the edit that triggered it."""
+    _insert("order_events", _ORDER_EVENT_COLUMNS, event)
 
 
 # ---------- Finance: eBiuro document mirror, reviews, aliases (migration 0017) ----------
