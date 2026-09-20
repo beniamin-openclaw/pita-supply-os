@@ -181,7 +181,20 @@ export function OrderLineTable({
                 {/* Δ vs sug. + reason badge (captain's deviation) */}
                 <td className="px-3 py-2 whitespace-nowrap">
                   {line.suggested_qty_purchase === 0 ? (
-                    <span className="text-slate-400">{t("deviation.noBaseline")}</span>
+                    // Suggestion 0: a counted stock at/above target was ordered
+                    // as information ("ponad cel"); only an uncounted line
+                    // (stock stored 0 below a positive target) is "brak bazy".
+                    // A qty-0 line (manager add-line / transport prefill
+                    // skeleton, nobody counted or ordered) shows a dash.
+                    <span className="text-slate-400">
+                      {line.captain_final_qty_purchase === 0
+                        ? "—"
+                        : t(
+                            line.current_stock_qty_base >= line.target_stock_qty_base
+                              ? "deviation.aboveTarget"
+                              : "deviation.noBaseline",
+                          )}
+                    </span>
                   ) : typeof line.delta_vs_suggestion_pct === "number" &&
                     Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
                     <span

@@ -147,6 +147,24 @@ describe("overruleAll — skips lines that don't require a reason", () => {
     expect(result).toBe(lines);
   });
 
+  it("leaves a suggestion-0 line (stock ≥ target, ordered anyway) without a reason", () => {
+    // week2-feedback-quantities Phase 1: current=60 ≥ target=50 → suggestion 0
+    // is information, requiresReason=false, so "overrule all" must skip it.
+    const items = [makeItem({ product_id: "P005" })];
+    const lines = {
+      P005: makeLine({
+        product_id: "P005",
+        current_stock_qty_base: 60,
+        captain_final_qty_purchase: 3,
+      }),
+    };
+
+    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+
+    expect(result.P005.reason_code).toBe("");
+    expect(result).toBe(lines);
+  });
+
   it("leaves a blank (not-yet-ordered) line untouched", () => {
     const items = [makeItem({ product_id: "P004" })];
     const lines = { P004: makeLine({ product_id: "P004" }) };

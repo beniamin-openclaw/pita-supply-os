@@ -239,29 +239,81 @@ describe("computeRowState — deviation threshold is 25% (round-1 quick-win)", (
   });
 });
 
-describe("computeRowState — no suggestion baseline (suggestion 0, round-1 quick-win)", () => {
-  // target=0 → suggestion 0; ordering any positive qty has no % baseline.
-  const item = makeItem({ target_stock_qty_base: 0, units_per_purchase_unit: 10 });
+describe("computeRowState — suggestion 0 is information (week2-feedback-quantities)", () => {
+  // Counted stock at/above target → suggestion 0. Ordering anyway is allowed
+  // without a reason: a yellow informational pill, no % token, no ∞.
+  const item = makeItem({ target_stock_qty_base: 50, units_per_purchase_unit: 10 });
 
-  it("suggestion 0 + positive order, no reason → no-baseline copy, no % token, never ∞", () => {
-    const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 5 });
-    const { state, requiresReason, messageKey, messageVars } = computeRowState(item, line);
-    expect(requiresReason).toBe(true);
-    expect(state).toBe("red"); // no reason given
-    expect(messageKey).toBe("state.noBaselineNoReason");
+  it("stock ≥ target + positive order, no reason → yellow info, requiresReason false", () => {
+    const line = makeLine({ current_stock_qty_base: 60, captain_final_qty_purchase: 5 });
+    const { state, requiresReason, messageKey, messageVars, deviationPct } = computeRowState(
+      item,
+      line,
+    );
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+    expect(messageKey).toBe("state.aboveTargetInfo");
+    expect(messageVars).toEqual({ stock: 60, target: 50, unit: "szt" });
     // The pill carries NO interpolated percentage — so "+∞%" can never render.
     expect(messageVars?.pct).toBeUndefined();
+    expect(deviationPct).toBeNull();
   });
 
-  it("suggestion 0 + positive order + reason → orange no-baseline copy", () => {
+  it("stock ≥ target + positive order + reason → still yellow info (reason is optional)", () => {
     const line = makeLine({
-      current_stock_qty_base: 0,
+      current_stock_qty_base: 50,
       captain_final_qty_purchase: 5,
       reason_code: "LOW_STORAGE",
     });
-    const { state, messageKey, messageVars } = computeRowState(item, line);
-    expect(state).toBe("orange");
-    expect(messageKey).toBe("state.noBaselineReason");
-    expect(messageVars?.pct).toBeUndefined();
+    const { state, requiresReason, messageKey } = computeRowState(item, line);
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+    expect(messageKey).toBe("state.aboveTargetInfo");
+  });
+
+  it("target 0 (bucket SKU) + positive order → same yellow info, never red", () => {
+    const zeroTarget = makeItem({ target_stock_qty_base: 0, units_per_purchase_unit: 10 });
+    const line = makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 5 });
+    const { state, requiresReason, messageKey } = computeRowState(zeroTarget, line);
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+    expect(messageKey).toBe("state.aboveTargetInfo");
+  });
+
+  it("half_allowed rounds a small gap to suggestion 0 below target → neutral info, no reason", () => {
+    // gap 2 szt = 0.2 karton → half_allowed snaps to 0; stock is still < target,
+    // so the pill must not claim "stan ≥ cel".
+    const halfAllowed = makeItem({
+      target_stock_qty_base: 50,
+      units_per_purchase_unit: 10,
+      rounding_rule: "half_allowed",
+    });
+    const line = makeLine({ current_stock_qty_base: 48, captain_final_qty_purchase: 1 });
+    const { state, requiresReason, messageKey, deviationPct } = computeRowState(halfAllowed, line);
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
+    expect(messageKey).toBe("state.suggestionZeroInfo");
+    expect(deviationPct).toBeNull();
+  });
+
+  it("stock ≥ target + order 0 → green match, as today", () => {
+    const line = makeLine({ current_stock_qty_base: 60, captain_final_qty_purchase: 0 });
+    const { state, requiresReason, messageKey, deviationPct } = computeRowState(item, line);
+    expect(state).toBe("green");
+    expect(requiresReason).toBe(false);
+    expect(messageKey).toBe("state.match");
+    expect(deviationPct).toBe(0);
+  });
+
+  it("critical product, stock ≥ target, positive order → still no reason required", () => {
+    const critical = makeItem({
+      is_critical: true,
+      target_stock_qty_base: 50,
+      units_per_purchase_unit: 10,
+    });
+    const line = makeLine({ current_stock_qty_base: 55, captain_final_qty_purchase: 2 });
+    const { state, requiresReason } = computeRowState(critical, line);
+    expect(state).toBe("yellow");
+    expect(requiresReason).toBe(false);
   });
 });

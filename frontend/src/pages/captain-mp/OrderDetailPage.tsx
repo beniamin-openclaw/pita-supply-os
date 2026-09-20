@@ -303,8 +303,16 @@ export function OrderDetailPage() {
                               </div>
                             )}
                           {line.suggested_qty_purchase === 0 ? (
+                            // Stock ≥ target → "ponad cel" (information); an
+                            // uncounted line (stock 0, target > 0) → "brak bazy".
                             <div className="text-xs font-semibold text-slate-500">
-                              {t("deviation.noBaseline")}
+                              {line.captain_final_qty_purchase === 0
+                                ? "—"
+                                : t(
+                                    line.current_stock_qty_base >= line.target_stock_qty_base
+                                      ? "deviation.aboveTarget"
+                                      : "deviation.noBaseline",
+                                  )}
                             </div>
                           ) : (
                             typeof line.delta_vs_suggestion_pct === "number" &&

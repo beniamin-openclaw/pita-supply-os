@@ -67,3 +67,25 @@ diff saved to `prod-diff-before.md`, statements recorded in `prod-sql.sql`.
   order-id lists sit in `prod-sql.sql` section J for the operator. The four fresh `manager_claimed`
   orders from 14–15.09 are left for Marek.
 - Orders after Phase 0: cancelled 54, closed 70, manager_claimed 11, manager_sent 33 (J2–J4 pending).
+
+## Plan review (2026-09-20)
+
+Verdict APPROVE WITH NOTES (Fable high, read-only). No blockers. Amendments folded into `plan.md` as
+"Plan-review amendments" blocks under Phases 2–7: Transport batch members excluded from post-send edit and
+"locked" keyed on `closed` (Phase 6); `groupProductsByCategory` third importer / re-export shim (Phase 4);
+"w kolejce od N dni" wording and `lib/dates.ts` as a new file (Phase 5); extend the existing
+`managerChanged` hint instead of duplicating it and treat the crates prefix as a data-format constant
+(Phase 7); fixture wiring 0016/0019/0020 before `email` joins `_LOCATION_COLUMNS` (Phase 2);
+`packUnits.test.ts` as the Phase 3 criterion. Phase 1 note (suggestion 0 below target under
+`half_allowed`/`up_for_critical` rounding) is handled in the Phase 1 impl-review loop.
+
+## Phase 1 implemented (2026-09-20)
+
+Suggestion 0 on a counted line is information: backend third branch in `_evaluate_submit_line`
+(delta None, no critical-under / deviation gate, "(info)" warning when something is ordered), frontend
+yellow pill `state.aboveTargetInfo` (or the neutral `state.suggestionZeroInfo` when rounding produced 0
+while stock is still below target), read-only views print "ponad cel" / "—" for qty-0 skeleton lines.
+Impl-review (Fable high): APPROVE WITH NOTES — manager-queue None-delta case, dash for qty-0 lines and the
+edit-route docstring applied before commit; over-MAX asymmetry between the uncounted and the new branch
+judged consistent with "engine suggests, never blocks". Verify: ruff clean, pytest 682, vitest 372,
+build + lint clean. Manual items 1.5–1.7 remain for the operator after deploy.

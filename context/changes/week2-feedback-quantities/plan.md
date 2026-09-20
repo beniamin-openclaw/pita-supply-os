@@ -319,7 +319,7 @@ current_stock >= target` → "ponad cel", else "brak bazy").
 
 #### Automated Verification:
 
-- Backend: `cd supply-os-v1 && python -m pytest -q` passes with the new cases (≥ 675 tests)
+- Backend: `cd supply-os-v1 && python -m pytest -q` passes with the new cases (682 after Phase 1)
 - Backend lint: `ruff check .`
 - Frontend: `cd frontend && npm run test` passes (≥ 369 tests), `npm run build`, `npm run lint`
 - `/verify` green
@@ -395,6 +395,13 @@ e-mail yields the office cc only; a placeholder `TBD` is dropped; FE `joinCc` un
 - Operator applied 0019 on prod before the deploy (Supabase SQL editor), confirmed with `SELECT email FROM locations`
 - Prod dispatch panel for a WOLA test order shows DW `biuro@pitabros.pl, <wola mailbox>`; the Gmail draft opens with both; draft discarded, order cancelled
 
+### Plan-review amendments (2026-09-20)
+
+- 0019 is applied as `varchar(120)` (not `text`) — the model stays `Optional[str]`, no code impact.
+- First step of §2: wire 0016, 0019 and 0020 into `tests/test_supabase_integration.py::_schema` (and
+  `order_events` into `_ALL_TABLES` before `orders` + `_TXN_TABLES`) BEFORE `email` joins `_LOCATION_COLUMNS`,
+  otherwise the fixture's `Location(...)` insert fails.
+
 ---
 
 ## Phase 3: Inventory information layer
@@ -448,6 +455,11 @@ warning appears and disappears, declension of `pojemnik` in one/few/many.
 #### Manual Verification:
 
 - Prod, WOLA inventory, auth ON: Korfu Pilsner row shows "1 box = 12 szt", tzatzyki shows "1 pojemnik = 3 kg (karton 6)" and "ostatnio … · 13.09"; typing 200 for tzatzyki (max 36) shows the unit warning; a phone (375 px) wraps, no horizontal scroll
+
+### Plan-review amendments (2026-09-20)
+
+- `pluralKeys.test.ts` only scans `tPlural(` call sites, so it cannot prove the new forms; the success
+  criterion is `lib/packUnits.test.ts` covering `pojemnik`/`paczka` one/few/many (Progress 3.2 updated).
 
 ---
 
@@ -518,6 +530,12 @@ flag rule, Polish collation ("Ł" after "L"); CSV includes new columns.
 - Prod, manager inventory KEN 13.09: group by supplier puts every Blue Service row in one block, sort A→Z matches Sławek's ordering habit, "tylko z uwagą" leaves only rows below min / above 3 × max / zero with target
 - Captain WOLA grid: typing "kor" shows the Korfu rows with their category expanded
 
+### Plan-review amendments (2026-09-20)
+
+- `groupProductsByCategory` has THREE importers: `InventoryCountGrid.tsx`, `InventoryCountPage.tsx` and
+  `InventoryCountEditPage.tsx`. Either update all three in §5 or keep `pages/captain-mp/lib/inventoryGrouping.ts`
+  as a re-export shim (preferred: shim, zero-risk).
+
 ---
 
 ## Phase 5: Manager queue — collapsed lanes, "w realizacji od N dni", archive
@@ -572,6 +590,12 @@ midnight; lanes default state and chip threshold (3 days) in a component test.
 - Prod manager queue opens with "do przejęcia" and "w realizacji" expanded, the two others collapsed with counts
 - A claimed test order back-dated is not possible on prod; instead verify the chip on an existing >3-day claimed order before the Phase 0 cleanup, or in the local seed run
 - `/manager/archive` lists received orders older than 3 days and cancelled ones; the queue's closed lane is short
+
+### Plan-review amendments (2026-09-20)
+
+- `Order` has no claim timestamp; the chip is keyed on `captain_submitted_at`, so the copy is
+  "w kolejce od N dni" / "in the queue for N days" (not "w realizacji"). Do not add a claim column.
+- `frontend/src/lib/dates.ts` is a NEW file; `formatDateTime` today lives in `useT()` (`i18n/index.ts`).
 
 ---
 
@@ -643,6 +667,20 @@ round-trip and the save guard on a real row; FE: "Dosyłka —" subject.
 - Operator applied 0020 on prod before deploy
 - Prod: a WOLA × Bukat test order dispatched (Gmail draft discarded), then +1 line added and one quantity changed from the manager screen; the order shows two history rows; the "dosyłka" link opens a draft with the new quantities (discarded); after a captain receipt the order is locked
 
+### Plan-review amendments (2026-09-20)
+
+- Transport batch members are NOT editable after send: `editable_after_send = status == manager_sent and
+  no receipts and not (supplier_order_reference or "").startswith("TRN-")`. The write routes 409 on a
+  `TRN-` member with detail "edit via Transport"; one test per route. A sent batch's aggregate/driver list
+  is frozen at finalize (`manager_transport_finalize`).
+- "Locked after receipt" is effectively `status == closed` (`captain_receipt_submit` flips
+  manager_sent → closed on the first receipt). The "zablokowane po odbiorze" copy keys on `closed`;
+  `editable_after_send` is false for `closed`; manual step 6.4 expects the test order to become `closed`.
+- The "dosyłka" Gmail link is built only when `ordering_method === "email"` (DispatchPanel already branches on
+  it); portal/phone/manual reuse the plain-text list.
+- Manual test residue: a real `manager_sent` order cannot be cancelled (409); close it with a receipt
+  afterwards, or run the manual test on a non-email supplier at a location without invoices.
+
 ---
 
 ## Phase 7: Small captain and manager items
@@ -693,6 +731,16 @@ case), show a one-line info banner counting the changed lines.
 #### Manual Verification:
 
 - Prod: captain receipt with notes visible on the manager order; Coca-Cola test order at WOLA shows the crates inputs and the manager sees the first line of the note; a dispatched order with a changed line shows the banner on the captain detail
+
+### Plan-review amendments (2026-09-20)
+
+- §3: `OrderDetailPage.tsx` already prints `orders.detail.managerChanged` per line when
+  `manager_final > 0 && manager_final !== captain_final`. Extend that condition to cover
+  `manager_final === 0 && captain_final > 0` on sent/closed orders and add the order-level count banner —
+  do not add a second per-line hint.
+- §2: `captain_note` already renders in `OrderDetailPane.tsx` for every channel — do not duplicate it in
+  DispatchPanel. The serialised prefix `Skrzynki do odbioru: …` in `supplierPrompts.ts` is a stable
+  data-format constant (parser contract), explicitly exempt from the i18n rule; say so in a comment.
 
 ---
 
@@ -774,10 +822,10 @@ the page. No new polling.
 
 #### Automated
 
-- [ ] 1.1 Backend pytest passes with the new cases
-- [ ] 1.2 ruff clean
-- [ ] 1.3 Frontend test, build, lint pass
-- [ ] 1.4 `/verify` green
+- [x] 1.1 Backend pytest passes with the new cases
+- [x] 1.2 ruff clean
+- [x] 1.3 Frontend test, build, lint pass
+- [x] 1.4 `/verify` green
 
 #### Manual
 
@@ -802,7 +850,7 @@ the page. No new polling.
 #### Automated
 
 - [ ] 3.1 Backend + frontend suites green, `/verify` green
-- [ ] 3.2 pluralKeys test passes with `pojemnik`/`paczka`
+- [ ] 3.2 `lib/packUnits.test.ts` covers `pojemnik`/`paczka` one/few/many
 
 #### Manual
 

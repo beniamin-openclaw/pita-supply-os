@@ -277,6 +277,9 @@ def test_queue_computes_deviation_count(mocker):
         _line("ORD-A", "OL-1", delta_pct=0.25, reason_code=ReasonCode.OTHER),
         _line("ORD-A", "OL-2", delta_pct=0.10),
         _line("ORD-A", "OL-3", delta_pct=0.05),
+        # Suggestion-0 informational line (week2-feedback-quantities Phase 1):
+        # delta is None and must never inflate the badge.
+        _line("ORD-A", "OL-4", delta_pct=None),
     ]
     _enable_sheet_backend(mocker, orders=orders, lines=lines)
 
@@ -284,7 +287,7 @@ def test_queue_computes_deviation_count(mocker):
     assert r.status_code == 200, r.text
     payload = r.json()
     assert payload[0]["deviation_count"] == 1
-    assert payload[0]["line_count"] == 3
+    assert payload[0]["line_count"] == 4
 
 
 def test_queue_deviation_threshold_is_25pct(mocker):

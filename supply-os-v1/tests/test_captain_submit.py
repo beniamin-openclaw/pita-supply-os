@@ -683,3 +683,98 @@ def test_submit_deviation_with_stock_until_next_delivery_reason():
     assert r.status_code == 200, r.text
     out = r.json()
     assert any("STOCK_UNTIL_NEXT_DELIVERY" in w for w in out["warnings"])
+
+
+# ---------- Counted stock at/above target — suggestion 0 is information ----------
+# (week2-feedback-quantities Phase 1). WOLA × P027: target 12, max 12, 5 kg/karton,
+# critical. Stock 12 → suggestion 0.
+
+
+def _above_target_body(**line_overrides) -> dict:
+    line = {
+        "product_id": "P027",
+        "supplier_product_id": "SP_PAGO_P027",
+        "current_stock_qty_base": 12,
+        "captain_final_qty_purchase": 2,
+    }
+    line.update(line_overrides)
+    return {"supplier_id": "SUP_PAGO", "ordered_by": "Jan Kowalski", "lines": [line]}
+
+
+def _patch_sheet_master_data(mocker):
+    """Sheet mode with master data served from the seed CSVs, so the persisted
+    OrderLine can be captured off ``append_order_lines``."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    mocker.patch.object(sheets, "append_order")
+    mocked_append_lines = mocker.patch.object(sheets, "append_order_lines")
+
+    from app import seed_loader
+
+    mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
+    mocker.patch.object(
+        sheets, "load_supplier_products", side_effect=seed_loader.load_supplier_products
+    )
+    mocker.patch.object(
+        sheets,
+        "load_location_product_settings",
+        side_effect=seed_loader.load_location_product_settings,
+    )
+    return mocked_append_lines
+
+
+def test_submit_stock_at_target_order_without_reason_is_info(mocker):
+    """Counted stock 12 ≥ target 12 → suggestion 0. Ordering 2 kartons with NO
+    reason_code is accepted (200), the line stores delta_vs_suggestion_pct=None
+    and the counted stock, and an informational "(info)" warning is returned.
+    Before Phase 1 this was a 400 (critical under-order / ∞ deviation)."""
+    mocked_append_lines = _patch_sheet_master_data(mocker)
+    r = client.post("/api/captain/submit", json=_above_target_body(), headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert any("(info)" in w and "stock 12" in w and "ordered 2" in w for w in out["warnings"])
+    assert not any("without reason" in w for w in out["warnings"])
+    appended = mocked_append_lines.call_args[0][0]
+    assert len(appended) == 1
+    assert appended[0].suggested_qty_purchase == 0
+    assert appended[0].current_stock_qty_base == 12
+    assert appended[0].delta_vs_suggestion_pct is None
+    assert appended[0].reason_code is None
+
+
+def test_submit_stock_above_target_with_reason_stores_reason(mocker):
+    """Same above-target line WITH a reason_code → still 200 and the reason is
+    stored on the line (a reason is optional, never required, on this branch)."""
+    mocked_append_lines = _patch_sheet_master_data(mocker)
+    body = _above_target_body(current_stock_qty_base=15, reason_code="EVENT_HIGH_TRAFFIC")
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert any("(info)" in w for w in out["warnings"])
+    appended = mocked_append_lines.call_args[0][0]
+    assert appended[0].delta_vs_suggestion_pct is None
+    assert appended[0].current_stock_qty_base == 15
+    assert appended[0].reason_code.value == "EVENT_HIGH_TRAFFIC"
+
+
+def test_submit_stock_at_target_zero_order_no_warning():
+    """Stock at target and nothing ordered: 200 with no info warning (nothing to
+    tell the Manager about)."""
+    r = client.post(
+        "/api/captain/submit",
+        json=_above_target_body(captain_final_qty_purchase=0),
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert not any("(info)" in w for w in r.json()["warnings"])
+
+
+def test_submit_stock_below_target_200pct_deviation_no_reason_still_400():
+    """Regression guard: counted stock 7 < target 12 → suggestion 1 karton;
+    ordering 3 is a 200 % deviation and, with no reason_code, remains a 400.
+    The Phase 1 branch must only fire when the suggestion is 0."""
+    body = _above_target_body(current_stock_qty_base=7, captain_final_qty_purchase=3)
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "deviates 200%" in r.json()["detail"]

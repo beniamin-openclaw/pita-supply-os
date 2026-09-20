@@ -449,7 +449,8 @@ def _evaluate_submit_line(
     gates cannot drift. Returns ``(order_line, warning_or_None, line_value_pln)``
     and raises ``HTTPException`` on a hard gate.
 
-    Two branches on whether the Captain counted stock:
+    Three branches on whether the Captain counted stock and what the engine
+    suggested:
 
     - **Uncounted** (``line.current_stock_qty_base is None``): there is no real
       suggestion to deviate from (SUGESTIA renders "—"), so the deviation and
@@ -458,8 +459,17 @@ def _evaluate_submit_line(
       (``order_base > max`` and not ``allow_over_max_due_to_packaging``). The line
       persists with ``current_stock_qty_base=0`` (column stays NOT NULL) and
       ``delta_vs_suggestion_pct=None`` (so it never inflates deviation roll-ups).
-    - **Counted** (a value was given): the existing critical-under and >25%
-      deviation gates apply byte-identically.
+    - **Counted, at/above target** (``stock is not None`` and
+      ``suggested_qty_purchase == 0``; week2-feedback-quantities Phase 1): the
+      suggestion is 0, so there is no baseline to deviate from — the deviation
+      and critical-under gates are skipped and NO reason is required. The line
+      persists the counted stock and ``delta_vs_suggestion_pct=None`` (so it
+      never inflates deviation roll-ups). When a quantity was ordered anyway, an
+      informational warning ``"... (info)"`` is returned; a ``reason_code``, if
+      the Captain gave one, is stored as before.
+    - **Counted, below target** (a value was given and the suggestion is > 0):
+      the existing critical-under and >25% deviation gates apply
+      byte-identically.
     """
     is_critical = setting.is_critical_for_location or product.is_critical
     stock = line.current_stock_qty_base
@@ -505,6 +515,18 @@ def _evaluate_submit_line(
             )
         stored_stock = 0.0
         delta_pct: Optional[float] = None
+    elif suggested_qty_purchase == 0:
+        # Counted at/above target — suggestion 0 is information, not a gate.
+        # No baseline to express a deviation against, so nothing is required
+        # of the Captain; a reason, if given, is still stored below.
+        if line.captain_final_qty_purchase > 0:
+            warning = (
+                f"Line {line.product_id}: stock {stock:g} ≥ target "
+                f"{setting.target_stock_qty_base:g}, ordered "
+                f"{line.captain_final_qty_purchase:g} (info)"
+            )
+        stored_stock = stock
+        delta_pct = None
     else:
         delta_pct = abs(
             line.captain_final_qty_purchase - suggested_qty_purchase
@@ -580,6 +602,10 @@ def captain_submit(
         without reason_code -> 400. When stock is uncounted the deviation +
         critical gates are skipped (no real suggestion); only over-MAX forces a
         reason. See `_evaluate_submit_line`.
+      - counted line at/above target (suggested_qty_purchase == 0) -> never a
+        400: no reason is required, delta_vs_suggestion_pct is stored as None,
+        and an "(info)" warning names the ordered quantity when it is > 0
+        (week2-feedback-quantities Phase 1). See `_evaluate_submit_line`.
     """
     backend = _choose_backend()
     master = _resolve_master_data(backend, location_id, req.supplier_id)
@@ -1302,7 +1328,8 @@ def captain_order_edit(
         manager.
       - Same line-level validation as POST /api/captain/submit (critical zero
         requires reason, >25% deviation requires reason, supplier_product
-        orderable here, etc.).
+        orderable here, etc.; a counted line with suggestion 0 is informational
+        — see the third branch of `_evaluate_submit_line`).
 
     On success:
       - Existing order_lines rows are deleted from the sheet.

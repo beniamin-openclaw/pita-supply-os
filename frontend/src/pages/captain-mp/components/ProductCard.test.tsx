@@ -119,3 +119,23 @@ describe("ProductCard — ×1 SKU renders byte-identically to today", () => {
     expect(screen.getByText("brakuje 80 szt → 80 szt")).toBeInTheDocument();
   });
 });
+
+describe("ProductCard — suggestion 0 is information (week2-feedback-quantities)", () => {
+  it("stock ≥ target with a positive order mounts NO ReasonPicker and shows the info pill", () => {
+    // target 120, stock 130 → suggestion 0; ordering 2 zgrzewki anyway.
+    renderCard(makeItem(), makeLine({ current_stock_qty_base: 130, captain_final_qty_purchase: 2 }));
+
+    expect(screen.queryByText("Wybierz powód odchylenia")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Stan 130 ≥ cel 120 szt — powód niewymagany",
+    );
+  });
+
+  it("stock below target with a >25% deviation still mounts the ReasonPicker", () => {
+    // target 120, stock 40 → suggestion 4; ordering 8 is +100% → reason required.
+    renderCard(makeItem(), makeLine({ current_stock_qty_base: 40, captain_final_qty_purchase: 8 }));
+
+    expect(screen.getByText("Wybierz powód odchylenia")).toBeInTheDocument();
+  });
+});

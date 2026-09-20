@@ -208,10 +208,21 @@ export const STRINGS = {
     pl: "Zamówienie bez stanu",
     en: "Order without current stock",
   },
-  // No-baseline variants: the suggestion is 0 (e.g. bucket SKUs), so a "%
-  // deviation" is mathematically meaningless / explodes. Show "brak bazy" copy
-  // instead of a huge or ∞ percentage. State + requiresReason stay as the gate
-  // dictates; only the wording (no embedded %) changes.
+  // Counted stock at/above target → suggestion 0 is information, not a gate
+  // (week2-feedback-quantities Phase 1): yellow pill, no %, no reason picker.
+  "state.aboveTargetInfo": {
+    pl: "Stan {stock} ≥ cel {target} {unit} — powód niewymagany",
+    en: "Stock {stock} ≥ target {target} {unit} — no reason needed",
+  },
+  // Same branch when rounding produced suggestion 0 with stock still below
+  // target (raw gap < half a purchase unit) — neutral wording, no reason.
+  "state.suggestionZeroInfo": {
+    pl: "Sugestia 0 (stan {stock} z {target} {unit}) — powód niewymagany",
+    en: "Suggestion 0 (stock {stock} of {target} {unit}) — no reason needed",
+  },
+  // No-baseline variants: kept for reference / the manager view; since Phase 1
+  // of week2-feedback-quantities compute.ts no longer reaches them (a
+  // suggestion-0 line is informational, see state.aboveTargetInfo).
   "state.noBaselineNoReason": {
     pl: "Brak bazy sugestii — wymagany powód",
     en: "No suggestion baseline — reason required",
@@ -222,6 +233,9 @@ export const STRINGS = {
   },
   // Short token for the captain order-detail + manager line-table % cells.
   "deviation.noBaseline": { pl: "brak bazy", en: "no baseline" },
+  // Counted stock ≥ target (suggestion 0, delta null) — the line was ordered
+  // above target as information, not a deviation (week2-feedback-quantities).
+  "deviation.aboveTarget": { pl: "ponad cel", en: "above target" },
 
   // Reason picker -----------------------------------------------------------
   "reason.label": {
