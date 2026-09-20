@@ -14,7 +14,7 @@ import { useT } from "../../i18n";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
-import { InventoryCountGrid } from "./components/InventoryCountGrid";
+import { InventoryCountGrid, type PreviousCount } from "./components/InventoryCountGrid";
 import { InventorySubmittedCard } from "./components/InventorySubmittedCard";
 import { Toast, type ToastProps } from "./components/Toast";
 import { groupProductsByCategory } from "./lib/inventoryGrouping";
@@ -308,6 +308,21 @@ export function InventoryCountPage() {
     return formatDateTime(latestSnapshot.count_date, { dateStyle: "short" });
   }, [formatDateTime, latestSnapshot]);
 
+  // "ostatnio {qty} · {date}" per product (Phase 3) — built from the latest
+  // snapshot already fetched for the banner; no extra request.
+  const previousByProduct = useMemo((): Record<string, PreviousCount> | undefined => {
+    if (!latestSnapshot) return undefined;
+    // count_date (the day the stock was true), same as the banner above —
+    // a back-dated count must not show one day on the banner and another
+    // on every row (impl-review Phase 3 F1).
+    const date: string = formatDateTime(latestSnapshot.count_date, { dateStyle: "short" });
+    const out: Record<string, PreviousCount> = {};
+    for (const ln of latestSnapshot.lines) {
+      out[ln.product_id] = { qty: ln.current_stock_qty_base, date };
+    }
+    return out;
+  }, [formatDateTime, latestSnapshot]);
+
   // Only products with a typed stock value become lines (blank = not counted).
   const countedLines = useMemo<InventoryCountLineSubmit[]>(
     () =>
@@ -526,6 +541,7 @@ export function InventoryCountPage() {
                 onToggleCategory={toggleCategory}
                 onStockChange={handleStockChange}
                 onCommentChange={handleCommentChange}
+                previousByProduct={previousByProduct}
               />
             )}
           </>

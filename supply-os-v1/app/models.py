@@ -639,6 +639,20 @@ class InventoryProduct(BaseModel):
     product_category: str
     inventory_unit: str
     is_critical: bool
+    # Information layer (week2-feedback-quantities Phase 3): pack hint + thresholds
+    # for the count grid. All Optional/defaulted so legacy callers and older
+    # backends keep working. The four supplier fields come from the product's
+    # PRIMARY supplier_product (`main._primary_supplier_product`) and stay None
+    # when the product has no active supplier_product; the thresholds come from
+    # the location_product_setting the route already iterates.
+    purchase_unit: Optional[str] = None
+    units_per_purchase_unit: Optional[float] = None
+    order_note: Optional[str] = None
+    supplier_id: Optional[str] = None
+    supplier_name: Optional[str] = None
+    min_stock_qty_base: float = 0
+    target_stock_qty_base: float = 0
+    max_stock_qty_base: float = 0
 
 
 class InventoryCountLine(BaseModel):

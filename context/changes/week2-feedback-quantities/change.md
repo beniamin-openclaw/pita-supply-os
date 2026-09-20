@@ -125,3 +125,14 @@ guarded order update BEFORE the line write so a concurrent receipt 409s with lin
 receipts cache invalidated in the gate; detail reuses the loaded receipts; seed stubs; docstrings. Verify:
 ruff clean, pytest 706, vitest 400, build + lint clean. Progress 6.1 (integration CI) and manual 6.3/6.4
 remain.
+
+## Phase 3 implemented (2026-09-20)
+
+`GET /api/captain/inventory/products` is enriched per product from the primary active supplier_product
+(`_primary_supplier_product`: active SP + active supplier, lowest id, SUP_INTERNAL only when alone):
+purchase unit, units per pack, order note, supplier, and the location's min/target/max. The captain grid
+shows under each input "1 karton = 12 szt" (+ "≈ 2,5 karton" for the typed stock), the order note,
+"ostatnio {qty} · {date}" from the latest snapshot already fetched for the banner, and an amber
+"sprawdź jednostkę" hint when stock > 3 × max. Nothing blocks submit. `pojemnik`/`paczka` declensions added.
+Impl-review: APPROVE WITH NOTES (row date now `count_date`, matching the banner). Verify: ruff clean,
+pytest 711, vitest 409, build + lint clean. Manual 3.3 for the operator after deploy.

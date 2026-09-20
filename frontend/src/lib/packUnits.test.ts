@@ -77,7 +77,7 @@ describe("formatPacks", () => {
   });
 
   it("unknown unit falls back to the raw unit, unpluralized", () => {
-    expect(formatPacks(3, "paczka", "pl")).toBe("3 paczka");
+    expect(formatPacks(3, "tacka", "pl")).toBe("3 tacka");
   });
 });
 
@@ -107,6 +107,30 @@ describe("isPackBased", () => {
     expect(isPackBased(-1)).toBe(false);
     expect(isPackBased(NaN)).toBe(false);
     expect(isPackBased(Infinity)).toBe(false);
+  });
+});
+
+describe("pojemnik / paczka declension (week2-feedback-quantities Phase 3)", () => {
+  it("pojemnik: one / few / many (pl)", () => {
+    expect(formatPacks(1, "pojemnik", "pl")).toBe("1 pojemnik");
+    expect(formatPacks(2, "pojemnik", "pl")).toBe("2 pojemniki");
+    expect(formatPacks(5, "pojemnik", "pl")).toBe("5 pojemników");
+    expect(formatPacks(22, "pojemnik", "pl")).toBe("22 pojemniki");
+    expect(formatPacks(1.5, "pojemnik", "pl")).toBe("1,5 pojemnika");
+  });
+
+  it("paczka: one / few / many (pl)", () => {
+    expect(formatPacks(1, "paczka", "pl")).toBe("1 paczka");
+    expect(formatPacks(3, "paczka", "pl")).toBe("3 paczki");
+    expect(formatPacks(12, "paczka", "pl")).toBe("12 paczek");
+    expect(formatPacks(2.5, "paczka", "pl")).toBe("2,5 paczki");
+  });
+
+  it("pojemnik / paczka: one / many (en)", () => {
+    expect(formatPacks(1, "pojemnik", "en")).toBe("1 container");
+    expect(formatPacks(3, "pojemnik", "en")).toBe("3 containers");
+    expect(formatPacks(1, "paczka", "en")).toBe("1 packet");
+    expect(formatPacks(5, "paczka", "en")).toBe("5 packets");
   });
 });
 

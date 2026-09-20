@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 
 from app import seed_loader, sheets
 from app.config import DataBackend
-from app.main import _WARSAW_TZ, app
+from app.main import _WARSAW_TZ, _primary_supplier_product, app
+from app.models import Supplier, SupplierProduct
 
 client = TestClient(app)
 
@@ -40,10 +41,79 @@ def test_inventory_products_lists_location_products():
         "product_category",
         "inventory_unit",
         "is_critical",
+        # Information layer (week2-feedback-quantities Phase 3)
+        "purchase_unit",
+        "units_per_purchase_unit",
+        "order_note",
+        "supplier_id",
+        "supplier_name",
+        "min_stock_qty_base",
+        "target_stock_qty_base",
+        "max_stock_qty_base",
     }
     assert p027["is_critical"] is True
     assert p027["inventory_unit"] == "kg"
     assert p027["product_category"] == "Mrożonki"
+
+
+def test_inventory_products_carry_pack_hint_and_thresholds():
+    """Phase 3: P027 at WOLA → Pago karton of 5 kg, thresholds 4/12/12 (seed)."""
+    r = client.get("/api/captain/inventory/products", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    p027 = next(it for it in r.json() if it["product_id"] == "P027")
+    assert p027["supplier_id"] == "SUP_PAGO"
+    assert p027["supplier_name"] == "Pago"
+    assert p027["purchase_unit"] == "karton"
+    assert p027["units_per_purchase_unit"] == 5
+    assert p027["order_note"] is None
+    assert p027["min_stock_qty_base"] == 4
+    assert p027["target_stock_qty_base"] == 12
+    assert p027["max_stock_qty_base"] == 12
+
+
+# ---------- _primary_supplier_product (pure helper, Phase 3 / reused by Phase 4) ----------
+
+def _sp(sp_id: str, supplier_id: str, product_id: str = "P001", active: bool = True):
+    return SupplierProduct(
+        supplier_product_id=sp_id,
+        supplier_id=supplier_id,
+        product_id=product_id,
+        supplier_product_name=sp_id,
+        purchase_unit="karton",
+        active=active,
+    )
+
+
+_SUPPLIERS = {
+    "SUP_BUKAT": Supplier(supplier_id="SUP_BUKAT", supplier_name="Bukat"),
+    "SUP_PAGO": Supplier(supplier_id="SUP_PAGO", supplier_name="Pago"),
+    "SUP_INTERNAL": Supplier(supplier_id="SUP_INTERNAL", supplier_name="Internal"),
+    "SUP_DEAD": Supplier(supplier_id="SUP_DEAD", supplier_name="Dead", active=False),
+}
+
+
+def test_primary_sp_none_when_no_active_supplier_product():
+    sps = [_sp("SP_A", "SUP_BUKAT", active=False), _sp("SP_B", "SUP_DEAD")]
+    assert _primary_supplier_product("P001", sps, _SUPPLIERS) is None
+    assert _primary_supplier_product("P999", sps, _SUPPLIERS) is None
+
+
+def test_primary_sp_skips_internal_when_another_exists():
+    sps = [_sp("SP_A_INTERNAL", "SUP_INTERNAL"), _sp("SP_Z_BUKAT", "SUP_BUKAT")]
+    picked = _primary_supplier_product("P001", sps, _SUPPLIERS)
+    assert picked is not None and picked.supplier_id == "SUP_BUKAT"
+
+
+def test_primary_sp_falls_back_to_internal_when_alone():
+    sps = [_sp("SP_INT", "SUP_INTERNAL"), _sp("SP_OTHER", "SUP_BUKAT", product_id="P002")]
+    picked = _primary_supplier_product("P001", sps, _SUPPLIERS)
+    assert picked is not None and picked.supplier_id == "SUP_INTERNAL"
+
+
+def test_primary_sp_lowest_id_wins():
+    sps = [_sp("SP_B", "SUP_PAGO"), _sp("SP_A", "SUP_BUKAT")]
+    picked = _primary_supplier_product("P001", sps, _SUPPLIERS)
+    assert picked is not None and picked.supplier_product_id == "SP_A"
 
 
 def test_inventory_products_empty_for_location_without_settings():

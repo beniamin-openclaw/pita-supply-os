@@ -120,6 +120,18 @@ export interface InventoryProduct {
   product_category: string;
   inventory_unit: string;
   is_critical: boolean;
+  // Information layer (week2-feedback-quantities Phase 3). Backend
+  // Optional[...] = None / defaulted → optional here (lessons.md: mirror
+  // Pydantic optionality). Supplier fields come from the product's primary
+  // supplier_product and are null when it has none.
+  purchase_unit?: string | null;
+  units_per_purchase_unit?: number | null;
+  order_note?: string | null;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
+  min_stock_qty_base?: number;
+  target_stock_qty_base?: number;
+  max_stock_qty_base?: number;
 }
 
 export interface InventoryLatestLine {

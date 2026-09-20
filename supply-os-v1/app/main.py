@@ -2494,6 +2494,40 @@ def _log_inventory_event(
         )
 
 
+_INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
+
+
+def _primary_supplier_product(
+    product_id: str,
+    sps: list[SupplierProduct],
+    suppliers_by_id: dict[str, Supplier],
+) -> Optional[SupplierProduct]:
+    """The one supplier_product to show for ``product_id`` on a location-wide
+    (supplier-agnostic) list — the inventory grid's pack hint (Phase 3) and the
+    Manager inventory detail's supplier grouping (Phase 4).
+
+    Pure function. Candidates are the ACTIVE supplier_products of ``product_id``
+    whose supplier is known AND active; the lowest ``supplier_product_id`` wins
+    (stable, data-independent tie-break). ``SUP_INTERNAL`` (on-site production,
+    "not a real ordering supplier") is skipped whenever any other candidate
+    exists, so a sauce that is both made in-house and bought from Bukat shows
+    Bukat. ``None`` when nothing qualifies — callers leave the supplier fields
+    unset rather than guessing.
+    """
+    candidates = [
+        sp
+        for sp in sps
+        if sp.product_id == product_id
+        and sp.active
+        and getattr(suppliers_by_id.get(sp.supplier_id), "active", False)
+    ]
+    if not candidates:
+        return None
+    external = [sp for sp in candidates if sp.supplier_id != _INTERNAL_SUPPLIER_ID]
+    pool = external or candidates
+    return min(pool, key=lambda sp: sp.supplier_product_id)
+
+
 @app.get(
     "/api/captain/inventory/products",
     response_model=list[InventoryProduct],
@@ -2510,9 +2544,18 @@ def captain_inventory_products(
     location. Discontinued SKUs (`active = False`) are skipped — a location-wide
     list would otherwise surface products the per-supplier order screen never
     showed.
+
+    Information layer (week2-feedback-quantities Phase 3): each row also carries
+    the location thresholds (min/target/max, off the setting already iterated)
+    and the pack hint fields of its primary supplier_product
+    (`_primary_supplier_product` — one extra `load_supplier_products` +
+    `load_suppliers` read, both TTL-cached). A product without an active
+    supplier_product keeps the four supplier fields ``None``.
     """
     backend = _choose_backend()
     products_by_id = {p.product_id: p for p in backend.load_products()}
+    sps = backend.load_supplier_products()
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     items: list[InventoryProduct] = []
     for setting in backend.load_location_product_settings():
         if setting.location_id != location_id:
@@ -2520,6 +2563,8 @@ def captain_inventory_products(
         product = products_by_id.get(setting.product_id)
         if product is None or not product.active:
             continue
+        sp = _primary_supplier_product(product.product_id, sps, suppliers_by_id)
+        supplier = suppliers_by_id.get(sp.supplier_id) if sp else None
         items.append(
             InventoryProduct(
                 product_id=product.product_id,
@@ -2527,6 +2572,14 @@ def captain_inventory_products(
                 product_category=product.product_category,
                 inventory_unit=product.inventory_unit,
                 is_critical=setting.is_critical_for_location or product.is_critical,
+                purchase_unit=sp.purchase_unit if sp else None,
+                units_per_purchase_unit=sp.units_per_purchase_unit if sp else None,
+                order_note=sp.order_note if sp else None,
+                supplier_id=sp.supplier_id if sp else None,
+                supplier_name=supplier.supplier_name if supplier else None,
+                min_stock_qty_base=setting.min_stock_qty_base,
+                target_stock_qty_base=setting.target_stock_qty_base,
+                max_stock_qty_base=setting.max_stock_qty_base,
             )
         )
     return items

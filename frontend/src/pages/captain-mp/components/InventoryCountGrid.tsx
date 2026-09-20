@@ -5,13 +5,29 @@
 // Phase 2) so the two flows render byte-identical UI; only the caller's
 // fetch/submit logic differs.
 
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react";
 
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { useT } from "../../../i18n";
 import { categoryLabel } from "../../../i18n/categoryLabels";
+import { packUnitLabel } from "../../../i18n/packUnits";
+import { isPackBased, packHint } from "../../../lib/packUnits";
 import type { InventoryProductGroup } from "../lib/inventoryGrouping";
 import { blankInventoryLine, type InventoryLineInput } from "../lib/inventoryLines";
+
+/** Typed stock above this multiple of the location max shows the yellow
+ *  "sprawdź jednostkę" hint (week2-feedback-quantities Phase 3). Information
+ *  only — nothing blocks submit. */
+export const CHECK_UNIT_FACTOR = 3;
+
+/** Previous count per product_id, from the latest snapshot's `lines`
+ *  (week2-feedback-quantities Phase 3) — the count page builds it from the
+ *  `api.inventoryLatest()` response it already fetches for the banner. */
+export interface PreviousCount {
+  qty: number;
+  /** Pre-formatted date/time label of the snapshot (formatDateTime output). */
+  date: string;
+}
 
 export interface InventoryCountGridProps {
   groupedProducts: InventoryProductGroup[];
@@ -20,6 +36,8 @@ export interface InventoryCountGridProps {
   onToggleCategory: (category: string) => void;
   onStockChange: (productId: string, value: number | "") => void;
   onCommentChange: (productId: string, value: string) => void;
+  /** Optional — the edit page reuses the grid without it (no "ostatnio" line). */
+  previousByProduct?: Record<string, PreviousCount>;
 }
 
 export function InventoryCountGrid({
@@ -29,6 +47,7 @@ export function InventoryCountGrid({
   onToggleCategory,
   onStockChange,
   onCommentChange,
+  previousByProduct,
 }: InventoryCountGridProps) {
   const { t, lang } = useT();
 
@@ -74,6 +93,20 @@ export function InventoryCountGrid({
               <ul className="space-y-2 border-t border-gray-100 p-2">
                 {group.items.map((p) => {
                   const line = lines[p.product_id] || blankInventoryLine();
+                  const upp: number = p.units_per_purchase_unit ?? 1;
+                  const packUnit: string = p.purchase_unit ?? "";
+                  const showPack: boolean = packUnit !== "" && isPackBased(upp);
+                  const stock: number | "" = line.current_stock_qty_base;
+                  const stockNum: number | null =
+                    stock === "" || stock === undefined ? null : Number(stock);
+                  const packEquivalent: string | null =
+                    showPack && stockNum !== null && stockNum > 0
+                      ? packHint(stockNum, upp, packUnit, lang)
+                      : null;
+                  const maxBase: number = p.max_stock_qty_base ?? 0;
+                  const checkUnit: boolean =
+                    maxBase > 0 && stockNum !== null && stockNum > CHECK_UNIT_FACTOR * maxBase;
+                  const previous: PreviousCount | undefined = previousByProduct?.[p.product_id];
                   return (
                     <li
                       key={p.product_id}
@@ -106,6 +139,55 @@ export function InventoryCountGrid({
                           />
                         </div>
                       </div>
+                      {/* Information layer (Phase 3): pack hint, master-data note,
+                          previous count, 3 x max unit warning. Never blocks. */}
+                      {(showPack || p.order_note || previous || checkUnit) && (
+                        <div className="mt-1.5 space-y-0.5 text-xs text-slate-500">
+                          {showPack && (
+                            <div className="break-words" data-testid={`pack-${p.product_id}`}>
+                              {t("inventory.packHint", {
+                                packUnit: packUnitLabel(1, packUnit, lang),
+                                upp,
+                                unit: p.inventory_unit,
+                              })}
+                              {packEquivalent && (
+                                <span className="ml-1 text-slate-400">
+                                  {t("inventory.packEquivalent", { packs: packEquivalent })}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {p.order_note && (
+                            <div className="flex items-center gap-1 text-slate-600">
+                              <Info size={12} aria-hidden="true" className="shrink-0 text-slate-400" />
+                              <span className="break-words">{p.order_note}</span>
+                            </div>
+                          )}
+                          {previous && (
+                            <div className="tabular-nums" data-testid={`prev-${p.product_id}`}>
+                              {t("inventory.previousCount", {
+                                qty: previous.qty,
+                                date: previous.date,
+                              })}
+                            </div>
+                          )}
+                          {checkUnit && (
+                            <div
+                              role="status"
+                              data-testid={`check-unit-${p.product_id}`}
+                              className="flex items-center gap-1 font-semibold text-amber-700"
+                            >
+                              <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
+                              <span className="break-words">
+                                {t("inventory.checkUnitHint", {
+                                  max: maxBase,
+                                  unit: p.inventory_unit,
+                                })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <label htmlFor={`comment-${p.product_id}`} className="sr-only">
                         {t("inventory.commentPlaceholder")}
                       </label>

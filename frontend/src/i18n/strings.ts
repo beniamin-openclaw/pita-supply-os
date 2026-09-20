@@ -752,6 +752,20 @@ export const STRINGS = {
     pl: "Ostatni remanent: {who} · {time}",
     en: "Last count: {who} · {time}",
   },
+  // Information layer under each stock input (week2-feedback-quantities Phase 3).
+  "inventory.packHint": {
+    pl: "1 {packUnit} = {upp} {unit}",
+    en: "1 {packUnit} = {upp} {unit}",
+  },
+  "inventory.packEquivalent": { pl: "≈ {packs}", en: "≈ {packs}" },
+  "inventory.previousCount": {
+    pl: "ostatnio {qty} · {date}",
+    en: "last {qty} · {date}",
+  },
+  "inventory.checkUnitHint": {
+    pl: "sprawdź jednostkę — max to {max} {unit}",
+    en: "check the unit — max is {max} {unit}",
+  },
   "inventory.blankVsZeroHint": {
     pl: "Puste = nie policzone · 0 = brak na stanie",
     en: "Blank = not counted · 0 = zero on hand",

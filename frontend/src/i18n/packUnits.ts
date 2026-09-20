@@ -67,6 +67,14 @@ export const PACK_UNIT_FORMS: Record<string, PackUnitForms> = {
     pl: { one: "box", few: "box", many: "box", frac: "box", loc: "box" },
     en: { one: "box", many: "boxes" },
   },
+  pojemnik: {
+    pl: { one: "pojemnik", few: "pojemniki", many: "pojemników", frac: "pojemnika", loc: "pojemnikach" },
+    en: { one: "container", many: "containers" },
+  },
+  paczka: {
+    pl: { one: "paczka", few: "paczki", many: "paczek", frac: "paczki", loc: "paczkach" },
+    en: { one: "packet", many: "packets" },
+  },
 };
 
 /**

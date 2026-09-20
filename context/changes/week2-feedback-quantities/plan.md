@@ -849,8 +849,8 @@ the page. No new polling.
 
 #### Automated
 
-- [ ] 3.1 Backend + frontend suites green, `/verify` green
-- [ ] 3.2 `lib/packUnits.test.ts` covers `pojemnik`/`paczka` one/few/many
+- [x] 3.1 Backend + frontend suites green, `/verify` green
+- [x] 3.2 `lib/packUnits.test.ts` covers `pojemnik`/`paczka` one/few/many
 
 #### Manual
 
