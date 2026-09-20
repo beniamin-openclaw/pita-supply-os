@@ -5,18 +5,38 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Download } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
+import { ProductListToolbar } from "../../components/ui/ProductListToolbar";
 import { useT } from "../../i18n";
+import { categoryLabel } from "../../i18n/categoryLabels";
+import {
+  DEFAULT_PRODUCT_LIST_VIEW,
+  applyProductListView,
+  attentionReason,
+  stockDelta,
+  type ProductListView,
+} from "../../lib/productListFilter";
 import type {
   InventoryCountDetail,
+  InventoryCountDetailLine,
   InventoryCountManagerItem,
 } from "../../types";
 import { buildInventoryCsv, inventoryCsvFilename } from "./lib/inventoryCsv";
 
+/** Sticky group header offset = the page header's height (px-4 py-3 + text-lg). */
+// Page header: px-4 py-3 (24px) + p-2 button around a 22px block-level svg = 62px.
+const STICKY_GROUP_TOP = "top-[62px]";
+
+function formatDelta(delta: number | null): string {
+  if (delta === null) return "—";
+  if (delta > 0) return `+${delta}`;
+  return String(delta);
+}
+
 export function ManagerInventoryPage() {
-  const { t, tPlural, formatDateTime } = useT();
+  const { t, tPlural, formatDateTime, lang } = useT();
   const navigate = useNavigate();
 
   const [counts, setCounts] = useState<InventoryCountManagerItem[] | null>(null);
@@ -26,6 +46,17 @@ export function ManagerInventoryPage() {
   const [detail, setDetail] = useState<InventoryCountDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  // Decision-layer view (Phase 4): search / group / sort / attention filter.
+  // Ephemeral by design (S-05 precedent) and reset per opened snapshot.
+  const [listView, setListView] = useState<ProductListView>(DEFAULT_PRODUCT_LIST_VIEW);
+  const patchListView = useCallback((patch: Partial<ProductListView>) => {
+    setListView((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const listResult = useMemo(
+    () => applyProductListView<InventoryCountDetailLine>(detail?.lines ?? [], listView),
+    [detail, listView],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +98,7 @@ export function ManagerInventoryPage() {
   const selectCount = useCallback((countId: string) => {
     detailReqRef.current = countId;
     setSelectedId(countId);
+    setListView(DEFAULT_PRODUCT_LIST_VIEW);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(true);
@@ -167,42 +199,139 @@ export function ManagerInventoryPage() {
                 </p>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="text-left font-semibold px-3 py-2">
-                        {t("manager.inventory.productCol")}
-                      </th>
-                      <th className="text-right font-semibold px-3 py-2">
-                        {t("manager.inventory.stockCol")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.lines.map((ln) => (
-                      <tr key={ln.product_id} className="border-t border-gray-100 align-top">
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-slate-900">{ln.product_name_pl}</span>
-                            {ln.is_critical && (
-                              <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
-                                {t("card.critical")}
-                              </span>
-                            )}
-                          </div>
-                          {ln.count_comment && (
-                            <div className="text-xs text-slate-500 mt-0.5">{ln.count_comment}</div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                          {ln.current_stock_qty_base} {ln.inventory_unit}
-                        </td>
+              <ProductListToolbar
+                idPrefix="mgr-inv-list"
+                view={listView}
+                onChange={patchListView}
+                showGroupBy
+                showSort
+                toggles={["attention", "critical"]}
+              />
+
+              {listResult.groups.length === 0 ? (
+                <div className="rounded border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+                  {t("manager.inventory.noResults")}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-white">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">
+                          {t("manager.inventory.productCol")}
+                        </th>
+                        <th className="text-right font-semibold px-2 py-2">
+                          {t("manager.inventory.stockCol")}
+                        </th>
+                        <th className="text-right font-semibold px-2 py-2">
+                          {t("manager.inventory.targetCol")}
+                        </th>
+                        <th className="text-right font-semibold px-2 py-2">
+                          {t("manager.inventory.deltaCol")}
+                        </th>
+                        <th className="text-left font-semibold px-2 py-2">
+                          {t("manager.inventory.flagCol")}
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    {listResult.groups.map((group) => {
+                      const groupLabel: string =
+                        listView.groupBy === "supplier"
+                          ? group.label || t("manager.inventory.noSupplier")
+                          : group.label
+                            ? categoryLabel(group.label, lang)
+                            : t("inventory.uncategorized");
+                      return (
+                        <tbody key={`${listView.groupBy}:${group.key}`}>
+                          <tr>
+                            <th
+                              colSpan={5}
+                              scope="colgroup"
+                              className={`sticky ${STICKY_GROUP_TOP} z-10 border-t border-gray-200 bg-slate-100 px-3 py-1.5 text-left text-xs font-semibold text-slate-700`}
+                            >
+                              {groupLabel}
+                              <span className="ml-2 font-normal text-slate-500 tabular-nums">
+                                {group.items.length}
+                              </span>
+                            </th>
+                          </tr>
+                          {group.items.map((ln) => {
+                            const reason = attentionReason(ln);
+                            const delta = stockDelta(ln);
+                            return (
+                              <tr
+                                key={ln.product_id}
+                                data-testid={`mgr-inv-row-${ln.product_id}`}
+                                className={`border-t border-gray-100 align-top ${
+                                  reason ? "bg-amber-50/60" : ""
+                                }`}
+                              >
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-slate-900 break-words">
+                                      {ln.product_name_pl}
+                                    </span>
+                                    {ln.is_critical && (
+                                      <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
+                                        {t("card.critical")}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {listView.groupBy !== "supplier" && ln.supplier_name && (
+                                    <div className="text-xs text-slate-500">{ln.supplier_name}</div>
+                                  )}
+                                  {ln.count_comment && (
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                      {ln.count_comment}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+                                  {ln.current_stock_qty_base} {ln.inventory_unit}
+                                </td>
+                                <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-slate-600">
+                                  {ln.target_stock_qty_base ?? "—"}
+                                </td>
+                                <td
+                                  className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${
+                                    delta !== null && delta < 0 ? "text-red-700" : "text-slate-600"
+                                  }`}
+                                >
+                                  {formatDelta(delta)}
+                                </td>
+                                <td className="px-2 py-2">
+                                  {reason && (
+                                    <span
+                                      className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700"
+                                      data-testid={`mgr-inv-flag-${ln.product_id}`}
+                                    >
+                                      <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
+                                      <span>
+                                        {reason === "belowMin" &&
+                                          t("manager.inventory.attention.belowMin", {
+                                            min: ln.min_stock_qty_base ?? 0,
+                                          })}
+                                        {reason === "overMax" &&
+                                          t("manager.inventory.attention.overMax", {
+                                            max: ln.max_stock_qty_base ?? 0,
+                                          })}
+                                        {reason === "zeroWithTarget" &&
+                                          t("manager.inventory.attention.zeroWithTarget", {
+                                            target: ln.target_stock_qty_base ?? 0,
+                                          })}
+                                      </span>
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      );
+                    })}
+                  </table>
+                </div>
+              )}
 
               {/* Read-only correction history (Phase 2, training-feedback-0901) —
                   omitted entirely when this snapshot was never corrected. */}

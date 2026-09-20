@@ -807,6 +807,19 @@ class InventoryCountDetailLine(BaseModel):
     is_critical: bool
     current_stock_qty_base: float = 0
     count_comment: str = ""
+    # Decision layer (week2-feedback-quantities Phase 4): the location thresholds
+    # (off the location_product_setting) and the product's PRIMARY
+    # supplier_product (`main._primary_supplier_product`, the Phase 3 helper) so
+    # the Manager detail can group by supplier, sort, and flag attention rows.
+    # All Optional/defaulted so older callers and a product without a setting or
+    # an active supplier_product keep working (the fields simply stay None).
+    min_stock_qty_base: Optional[float] = None
+    target_stock_qty_base: Optional[float] = None
+    max_stock_qty_base: Optional[float] = None
+    purchase_unit: Optional[str] = None
+    units_per_purchase_unit: Optional[float] = None
+    supplier_id: Optional[str] = None
+    supplier_name: Optional[str] = None
 
 
 class InventoryCountEvent(BaseModel):

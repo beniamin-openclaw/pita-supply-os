@@ -900,6 +900,42 @@ export const STRINGS = {
   "manager.inventory.lineCount.many.items": { pl: "{n} pozycji", en: "{n} items" },
   "manager.inventory.productCol": { pl: "Produkt", en: "Product" },
   "manager.inventory.stockCol": { pl: "Stan", en: "Stock" },
+  // Decision layer (week2-feedback-quantities Phase 4): threshold columns +
+  // attention flag on the Manager inventory detail.
+  "manager.inventory.targetCol": { pl: "Cel", en: "Target" },
+  "manager.inventory.deltaCol": { pl: "Δ", en: "Δ" },
+  "manager.inventory.flagCol": { pl: "Uwaga", en: "Flag" },
+  "manager.inventory.attention.belowMin": { pl: "poniżej min ({min})", en: "below min ({min})" },
+  "manager.inventory.attention.overMax": { pl: "ponad 3 × max ({max})", en: "over 3 × max ({max})" },
+  "manager.inventory.attention.zeroWithTarget": {
+    pl: "zero przy celu {target}",
+    en: "zero with target {target}",
+  },
+  "manager.inventory.noSupplier": { pl: "Bez dostawcy", en: "No supplier" },
+  "manager.inventory.noResults": {
+    pl: "Brak pozycji pasujących do filtrów.",
+    en: "No items match the filters.",
+  },
+
+  // Shared product-list toolbar (week2-feedback-quantities Phase 4) ---------
+  "productList.searchLabel": { pl: "Szukaj produktu", en: "Search products" },
+  "productList.searchPlaceholder": { pl: "Szukaj produktu…", en: "Search products…" },
+  "productList.searchClear": { pl: "Wyczyść wyszukiwanie", en: "Clear search" },
+  "productList.groupByLabel": { pl: "Grupuj", en: "Group by" },
+  "productList.groupBy.category": { pl: "Kategoria", en: "Category" },
+  "productList.groupBy.supplier": { pl: "Dostawca", en: "Supplier" },
+  "productList.sortLabel": { pl: "Sortuj", en: "Sort" },
+  "productList.sort.name": { pl: "Nazwa A→Z", en: "Name A→Z" },
+  "productList.sort.stock": { pl: "Stan rosnąco", en: "Stock ascending" },
+  "productList.sort.delta": { pl: "Największy brak", en: "Largest deficit" },
+  "productList.sort.category": { pl: "Kategoria", en: "Category" },
+  "productList.onlyAttention": { pl: "Tylko z uwagą", en: "Only flagged" },
+  "productList.onlyCritical": { pl: "Tylko krytyczne", en: "Only critical" },
+  "productList.onlyUncounted": { pl: "Tylko nieliczone", en: "Only uncounted" },
+  "inventory.noResults": {
+    pl: "Brak produktów pasujących do filtrów.",
+    en: "No products match the filters.",
+  },
   // CSV export of one inventory count (manager-only; training-feedback-0901
   // follow-up, operator request 2026-09-02).
   "manager.inventory.csvButton": { pl: "Pobierz CSV", en: "Download CSV" },
@@ -917,6 +953,9 @@ export const STRINGS = {
   "manager.inventory.csv.colCategory": { pl: "Kategoria", en: "Category" },
   "manager.inventory.csv.colUnit": { pl: "Jednostka", en: "Unit" },
   "manager.inventory.csv.colQty": { pl: "Ilość", en: "Quantity" },
+  "manager.inventory.csv.colMin": { pl: "Min", en: "Min" },
+  "manager.inventory.csv.colTarget": { pl: "Cel", en: "Target" },
+  "manager.inventory.csv.colMax": { pl: "Max", en: "Max" },
   "manager.inventory.csv.colCritical": { pl: "Krytyczny", en: "Critical" },
   "manager.inventory.csv.colPrice": { pl: "Cena jedn. (PLN)", en: "Unit price (PLN)" },
   "manager.inventory.csv.colValue": { pl: "Wartość (PLN)", en: "Value (PLN)" },

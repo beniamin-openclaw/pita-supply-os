@@ -4,7 +4,7 @@
 // with the typed stock. Nothing here blocks submit — the grid has no submit.
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { LangProvider } from "../../../i18n";
 import type { InventoryProduct } from "../../../types";
@@ -118,5 +118,115 @@ describe("InventoryCountGrid information layer", () => {
     );
     expect(screen.queryByTestId("check-unit-P040")).not.toBeInTheDocument();
     expect(screen.queryByTestId("check-unit-P041")).not.toBeInTheDocument();
+  });
+});
+
+// Phase 4 (week2-feedback-quantities): search + toggle chips filter the grid
+// and a hit expands its (otherwise collapsed) category.
+describe("InventoryCountGrid toolbar", () => {
+  function renderCollapsed(lines: Record<string, InventoryLineInput>) {
+    const groups: InventoryProductGroup[] = [
+      { category: "Napoje", items: [KORFU] },
+      { category: "Chłodnia", items: [{ ...TZATZYKI, is_critical: true }] },
+    ];
+    render(
+      <LangProvider>
+        <InventoryCountGrid
+          groupedProducts={groups}
+          lines={lines}
+          collapsedCategories={new Set(["Napoje", "Chłodnia"])}
+          onToggleCategory={vi.fn()}
+          onStockChange={vi.fn()}
+          onCommentChange={vi.fn()}
+        />
+      </LangProvider>,
+    );
+  }
+
+  it("keeps collapsed categories closed without a filter", () => {
+    renderCollapsed({});
+    expect(screen.queryByText("Korfu Pilsner")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tzatzyki")).not.toBeInTheDocument();
+  });
+
+  it("typing a query (after the debounce) shows only the hits, category expanded", async () => {
+    vi.useFakeTimers();
+    try {
+      renderCollapsed({});
+      fireEvent.change(screen.getByPlaceholderText("Szukaj produktu…"), {
+        target: { value: "kor" },
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByText("Korfu Pilsner")).toBeInTheDocument();
+      expect(screen.queryByText("Tzatzyki")).not.toBeInTheDocument();
+      expect(screen.queryByText("Chłodnia")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("'tylko nieliczone' hides counted products and expands the rest", () => {
+    renderCollapsed({ P170: line(12) });
+    fireEvent.click(screen.getByRole("button", { name: "Tylko nieliczone" }));
+    expect(screen.queryByText("Korfu Pilsner")).not.toBeInTheDocument();
+    expect(screen.getByText("Tzatzyki")).toBeInTheDocument();
+  });
+
+  it("'tylko nieliczone' keeps the card the Captain is typing into (frozen set)", () => {
+    // Regression (impl-review Phase 4 F1): with the toggle on, entering the
+    // first digit must NOT unmount the card — the uncounted membership is
+    // frozen when the toggle turns on, not read from the live inputs.
+    const groups: InventoryProductGroup[] = [
+      { category: "Napoje", items: [KORFU] },
+      { category: "Chłodnia", items: [TZATZYKI] },
+    ];
+    const tree = (lines: Record<string, InventoryLineInput>) => (
+      <LangProvider>
+        <InventoryCountGrid
+          groupedProducts={groups}
+          lines={lines}
+          collapsedCategories={new Set()}
+          onToggleCategory={vi.fn()}
+          onStockChange={vi.fn()}
+          onCommentChange={vi.fn()}
+        />
+      </LangProvider>
+    );
+    const { rerender } = render(tree({ P170: line("") }));
+    fireEvent.click(screen.getByRole("button", { name: "Tylko nieliczone" }));
+    expect(screen.getByText("Korfu Pilsner")).toBeInTheDocument();
+    // The Captain types "1" (of "12") — the parent writes it into `lines`.
+    rerender(tree({ P170: line(1) }));
+    expect(screen.getByText("Korfu Pilsner")).toBeInTheDocument();
+    // Toggling off and on again rebuilds the set: Korfu is now counted.
+    fireEvent.click(screen.getByRole("button", { name: "Tylko nieliczone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tylko nieliczone" }));
+    expect(screen.queryByText("Korfu Pilsner")).not.toBeInTheDocument();
+    expect(screen.getByText("Tzatzyki")).toBeInTheDocument();
+  });
+
+  it("'tylko krytyczne' keeps critical products only", () => {
+    renderCollapsed({});
+    fireEvent.click(screen.getByRole("button", { name: "Tylko krytyczne" }));
+    expect(screen.queryByText("Korfu Pilsner")).not.toBeInTheDocument();
+    expect(screen.getByText("Tzatzyki")).toBeInTheDocument();
+  });
+
+  it("shows an empty state when nothing matches", async () => {
+    vi.useFakeTimers();
+    try {
+      renderCollapsed({});
+      fireEvent.change(screen.getByPlaceholderText("Szukaj produktu…"), {
+        target: { value: "zzz" },
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(screen.getByText("Brak produktów pasujących do filtrów.")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -206,6 +206,17 @@ export interface InventoryCountDetailLine {
   is_critical: boolean;
   current_stock_qty_base: number;
   count_comment: string;
+  // Decision layer (week2-feedback-quantities Phase 4): this location's
+  // thresholds + the product's primary supplier_product. Backend
+  // Optional[...] = None → optional here (lessons.md: mirror Pydantic
+  // optionality); null when no setting / no active supplier_product.
+  min_stock_qty_base?: number | null;
+  target_stock_qty_base?: number | null;
+  max_stock_qty_base?: number | null;
+  purchase_unit?: string | null;
+  units_per_purchase_unit?: number | null;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
 }
 
 export interface InventoryCountDetail {

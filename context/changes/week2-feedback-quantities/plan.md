@@ -860,7 +860,7 @@ the page. No new polling.
 
 #### Automated
 
-- [ ] 4.1 Backend + frontend suites green, `/verify` green
+- [x] 4.1 Backend + frontend suites green, `/verify` green
 
 #### Manual
 

@@ -136,3 +136,16 @@ shows under each input "1 karton = 12 szt" (+ "≈ 2,5 karton" for the typed sto
 "sprawdź jednostkę" hint when stock > 3 × max. Nothing blocks submit. `pojemnik`/`paczka` declensions added.
 Impl-review: APPROVE WITH NOTES (row date now `count_date`, matching the banner). Verify: ruff clean,
 pytest 711, vitest 409, build + lint clean. Manual 3.3 for the operator after deploy.
+
+## Phase 4 implemented (2026-09-20)
+
+Manager inventory detail: lines enriched with the count location's min/target/max, purchase unit and
+primary supplier; grouped by category or supplier with sticky headers, columns Produkt · Stan · Cel · Δ ·
+Uwaga, attention flags (below min, > 3 × max, zero with target), A→Z with Polish collation, CSV gains
+Min/Cel/Max. Shared `ProductListToolbar` (search 150 ms debounce, group-by, sort, toggle chips, ephemeral
+state) and pure `applyProductListView` in `lib/productListFilter.ts`. Captain grid: search + "tylko
+nieliczone" + "tylko krytyczne"; a hit expands its category; `groupProductsByCategory` generalised into
+`lib/inventoryGrouping.ts` behind a re-export shim. Impl-review (Fable high): REWORK → fixed: the
+"tylko nieliczone" set is frozen when the toggle turns on so the card being typed into never unmounts
+(regression test); sticky header offset 62px; native search cancel button hidden. Verify: ruff clean,
+pytest 713, vitest 438, build + lint clean. Manual 4.2/4.3 for the operator.

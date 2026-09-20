@@ -3034,16 +3034,33 @@ def _enrich_inventory_count_detail(
     products_by_id: dict[str, Product],
     location: Optional[Location],
     events: Optional[list[InventoryCountEvent]] = None,
+    settings_by_pid: Optional[dict[str, LocationProductSetting]] = None,
+    primary_sp_by_pid: Optional[dict[str, SupplierProduct]] = None,
+    suppliers_by_id: Optional[dict[str, Supplier]] = None,
 ) -> InventoryCountDetail:
     """Join product master-data + location_name onto a snapshot for the
     Manager/owner read view (S-08). Mirrors `manager_order_detail`'s line
     enrichment; a since-removed product falls back to its id for the name.
     `events` (Phase 2, training-feedback-0901) is the count's correction
     history, loaded by the caller so this stays a pure function; ``None``/[]
-    when there is none yet or the worksheet is missing."""
+    when there is none yet or the worksheet is missing.
+
+    Decision layer (week2-feedback-quantities Phase 4): ``settings_by_pid``
+    (this location's ``location_product_settings``) supplies min/target/max,
+    ``primary_sp_by_pid`` (the product's primary supplier_product, resolved by
+    the caller via ``_primary_supplier_product``) supplies the pack unit and
+    supplier id, and ``suppliers_by_id`` the supplier name. All three maps are
+    optional so the function stays pure and older callers keep working; a
+    product missing from a map keeps those fields ``None``."""
+    settings_by_pid = settings_by_pid or {}
+    primary_sp_by_pid = primary_sp_by_pid or {}
+    suppliers_by_id = suppliers_by_id or {}
     enriched: list[InventoryCountDetailLine] = []
     for line in count.lines:
         product = products_by_id.get(line.product_id)
+        setting = settings_by_pid.get(line.product_id)
+        sp = primary_sp_by_pid.get(line.product_id)
+        supplier = suppliers_by_id.get(sp.supplier_id) if sp else None
         enriched.append(
             InventoryCountDetailLine(
                 product_id=line.product_id,
@@ -3053,6 +3070,13 @@ def _enrich_inventory_count_detail(
                 is_critical=bool(product.is_critical) if product else False,
                 current_stock_qty_base=line.current_stock_qty_base,
                 count_comment=line.count_comment,
+                min_stock_qty_base=setting.min_stock_qty_base if setting else None,
+                target_stock_qty_base=setting.target_stock_qty_base if setting else None,
+                max_stock_qty_base=setting.max_stock_qty_base if setting else None,
+                purchase_unit=sp.purchase_unit if sp else None,
+                units_per_purchase_unit=sp.units_per_purchase_unit if sp else None,
+                supplier_id=sp.supplier_id if sp else None,
+                supplier_name=supplier.supplier_name if supplier else None,
             )
         )
     return InventoryCountDetail(
@@ -3171,13 +3195,35 @@ def manager_inventory_count_detail(
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     location = locations_by_id.get(count.location_id)
 
+    # Decision layer (week2-feedback-quantities Phase 4): thresholds off this
+    # location's settings + the primary supplier_product per counted product
+    # (one extra load each of supplier_products and suppliers, both TTL-cached).
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == count.location_id
+    }
+    sps = backend.load_supplier_products()
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    primary_sp_by_pid: dict[str, SupplierProduct] = {}
+    for line in count.lines:
+        sp = _primary_supplier_product(line.product_id, sps, suppliers_by_id)
+        if sp is not None:
+            primary_sp_by_pid[line.product_id] = sp
+
     # Correction history (Phase 2, training-feedback-0901) — degrades to []
     # on a missing worksheet, never a 500 (mirrors the receipts/transport-
     # events scans elsewhere in this module).
     events = _load_inventory_events_safe(backend, count_id)
 
     return _enrich_inventory_count_detail(
-        count, products_by_id, location, events[:100]
+        count,
+        products_by_id,
+        location,
+        events[:100],
+        settings_by_pid=settings_by_pid,
+        primary_sp_by_pid=primary_sp_by_pid,
+        suppliers_by_id=suppliers_by_id,
     )
 
 
