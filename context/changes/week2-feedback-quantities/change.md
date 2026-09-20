@@ -89,3 +89,13 @@ Impl-review (Fable high): APPROVE WITH NOTES — manager-queue None-delta case, 
 edit-route docstring applied before commit; over-MAX asymmetry between the uncounted and the new branch
 judged consistent with "engine suggests, never blocks". Verify: ruff clean, pytest 682, vitest 372,
 build + lint clean. Manual items 1.5–1.7 remain for the operator after deploy.
+
+## Phase 2 implemented (2026-09-20)
+
+`Location.email` (migration 0019, already on prod) reaches the dispatch e-mail as a second DW address:
+backend `_join_cc` composes `settings.order_cc_email` + `location.email` ("@"-gated, placeholders dropped)
+for `gmail_url.build_draft_url`; `ManagerOrderDetail.location_email`; frontend `joinCc` in the DispatchPanel
+(both addresses in the DW row and in the compose URL). Integration fixture now applies 0016, 0019, 0020 and
+knows `order_events`. Seed `locations.csv` gained `email` (WOLA test value only). Impl-review: APPROVE WITH
+NOTES (doc-comment placement fixed; DATA_MODEL.md locations table updated). Verify: ruff clean, pytest 690,
+vitest 379, build + lint clean. Progress 2.1 waits for the CI integration job (no local Postgres here).

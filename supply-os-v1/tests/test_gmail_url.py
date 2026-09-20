@@ -483,6 +483,17 @@ def test_cc_accepts_comma_joined_addresses():
     assert query["cc"] == ["biuro@pitabros.pl,szef@pitabros.pl"]
 
 
+def test_cc_comma_list_survives_url_encoding_as_single_param():
+    """Phase 2 (location mailbox): the office copy + location mailbox are joined
+    with a comma by the caller; the URL must carry ONE cc parameter whose decoded
+    value is the comma list (the comma is percent-encoded, Gmail decodes it)."""
+    url, _ = _url_and_body(cc_email="biuro@pitabros.pl,wola@pitabros.pl")
+    assert url.count("&cc=") == 1
+    assert "cc=biuro%40pitabros.pl%2Cwola%40pitabros.pl" in url
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert query["cc"] == ["biuro@pitabros.pl,wola@pitabros.pl"]
+
+
 # ---------- training-feedback-0901 Phase 1b: ad-hoc items + order comment ----------
 
 

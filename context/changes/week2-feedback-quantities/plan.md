@@ -838,7 +838,7 @@ the page. No new polling.
 #### Automated
 
 - [ ] 2.1 Migration 0019 in the integration fixture, integration job green
-- [ ] 2.2 Backend and frontend suites green, `/verify` green
+- [x] 2.2 Backend and frontend suites green, `/verify` green
 
 #### Manual
 

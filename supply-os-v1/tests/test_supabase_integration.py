@@ -51,7 +51,7 @@ _ALL_TABLES = [
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
-    "order_lines", "orders", "transport_events", "transport_batches",
+    "order_lines", "order_events", "orders", "transport_events", "transport_batches",
     "location_product_settings", "supplier_products", "locations", "suppliers",
     "products", "_meta",
 ]
@@ -60,7 +60,7 @@ _TXN_TABLES = [
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
-    "order_lines", "orders", "transport_events", "transport_batches",
+    "order_lines", "order_events", "orders", "transport_events", "transport_batches",
 ]
 
 
@@ -147,6 +147,19 @@ def _schema():
     finance_documents = (
         MIGRATIONS_DIR / "0017_finance_documents.sql"
     ).read_text()
+    # 0016 widens the order_lines.reason_code CHECK with STOCK_UNTIL_NEXT_DELIVERY
+    # (ReasonCode carries it, so a line with that code would fail the INSERT
+    # against a pre-0016 schema). Was missing here — wired in with 0019/0020.
+    reason_code = (
+        MIGRATIONS_DIR / "0016_reason_code_stock_until_next_delivery.sql"
+    ).read_text()
+    # 0019 adds locations.email; _LOCATION_COLUMNS references it, so the
+    # locations insert below errors against a pre-0019 schema. 0018 belongs to
+    # the dynamic-target lane and is deliberately NOT applied here.
+    location_email = (MIGRATIONS_DIR / "0019_location_email.sql").read_text()
+    # 0020 adds the order_events audit table (post-send edit log, Phase 6);
+    # also listed in _ALL_TABLES (before orders) and _TXN_TABLES above.
+    order_events = (MIGRATIONS_DIR / "0020_order_events.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -165,6 +178,9 @@ def _schema():
         conn.exec_driver_sql(inventory_count_edit)
         conn.exec_driver_sql(warehouse_pickup)
         conn.exec_driver_sql(finance_documents)
+        conn.exec_driver_sql(reason_code)
+        conn.exec_driver_sql(location_email)
+        conn.exec_driver_sql(order_events)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

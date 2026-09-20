@@ -613,6 +613,43 @@ def test_order_detail_exposes_office_cc(mocker):
     assert _detail_payload()["cc_email"] is None
 
 
+# ---------- week2-feedback-quantities Phase 2: location mailbox in DW ----------
+
+
+def test_order_detail_exposes_location_email(mocker):
+    """The dispatch panel CCs the location's own mailbox next to the office copy,
+    so detail must serve locations.email — null when the location has none."""
+    order_id = "ORD-LOCMAIL"
+    order = _order(order_id, location_id="WOLA", supplier_id="SUP_PAGO")
+    order = order.model_copy(
+        update={
+            "lines": [_line(order_id, "OL-1", product_id="P027", sp_id="SP_PAGO_P027")]
+        }
+    )
+
+    def _detail_payload(location: Location) -> dict:
+        _enable_sheet_backend(
+            mocker,
+            orders=[order],
+            get_order_return=order,
+            products=[_product("P027", "Souvlaki Kurczak")],
+            supplier_products=[
+                _supplier_product("SP_PAGO_P027", "SUP_PAGO", "P027", "Souvlaki Karton 5kg")
+            ],
+            suppliers=[_supplier("SUP_PAGO", "Pago", email="zamowienia@pago.example")],
+            locations=[location],
+        )
+        r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    with_email = _location("WOLA", "Pita Bros Wola").model_copy(
+        update={"email": "wola@pitabros.pl"}
+    )
+    assert _detail_payload(with_email)["location_email"] == "wola@pitabros.pl"
+    assert _detail_payload(_location("WOLA", "Pita Bros Wola"))["location_email"] is None
+
+
 # ---------- training-feedback-0901 Phase 1c: minimum_order_value_pln (display-only) ----------
 
 

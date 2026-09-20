@@ -8,6 +8,7 @@
 // fall back to clipboard. Keep this in sync with the Python original.
 
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types";
+import { splitRecipients } from "./transport";
 
 export const GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/";
 export const MAX_GMAIL_URL_LENGTH = 8000;
@@ -127,6 +128,29 @@ export function buildEmailBody(
 
   return out.join("\n");
 }
+
+/**
+ * Join the DW (CC) addresses for the dispatch e-mail: the standing office copy
+ * (`cc_email`) + the location's own mailbox (`location_email`), week2-feedback-
+ * quantities Phase 2. Mirrors main.py `_join_cc`: each part may itself be a
+ * comma/semicolon list; only "@"-carrying addresses survive (a 'TBD' placeholder
+ * is dropped), duplicates collapse, and the result is a comma-joined string —
+ * "" when nothing survives (the panel then shows no DW row / no cc param).
+ */
+export function joinCc(...parts: Array<string | null | undefined>): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of parts) {
+    if (!part) continue;
+    for (const addr of splitRecipients(part)) {
+      if (seen.has(addr)) continue;
+      seen.add(addr);
+      out.push(addr);
+    }
+  }
+  return out.join(",");
+}
+
 
 /**
  * Build the Gmail compose URL from the (possibly EDITED) subject + body:

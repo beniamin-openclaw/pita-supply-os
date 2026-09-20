@@ -700,6 +700,18 @@ def captain_submit(
 _DEVIATION_THRESHOLD = 0.25  # matches captain_submit validation
 
 
+def _join_cc(*parts: Optional[str]) -> Optional[str]:
+    """Comma-join the CC addresses for the dispatch e-mail (the standing office
+    copy + the location's own mailbox, week2-feedback-quantities Phase 2).
+
+    Each part is kept only when it carries an "@" — the same placeholder gate
+    the recipient uses, so a 'TBD' in master data can never become a silent dead
+    CC. Returns None when nothing survives, which ``gmail_url.build_draft_url``
+    treats as "no cc parameter"."""
+    kept = [p.strip() for p in parts if p and "@" in p]
+    return ",".join(kept) if kept else None
+
+
 def _deviation_threshold() -> float:
     return _DEVIATION_THRESHOLD
 
@@ -1099,6 +1111,7 @@ def manager_order_detail(
         supplier_name=supplier.supplier_name if supplier else order.supplier_id,
         supplier_email=supplier.email if supplier else None,
         cc_email=settings.order_cc_email or None,
+        location_email=location.email if location else None,
         ordering_method=supplier.ordering_method if supplier else OrderingMethod.EMAIL,
         supplier_notes=supplier.notes if supplier else "",
         order_date=order.order_date,
@@ -1830,7 +1843,9 @@ def manager_dispatch(
                 lines=enriched_lines,
                 products_by_id={**products_by_id, **sps_by_id},
                 location=location,
-                cc_email=settings.order_cc_email,
+                cc_email=_join_cc(
+                    settings.order_cc_email, location.email if location else None
+                ),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}")

@@ -4,6 +4,7 @@ import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types"
 import {
   buildEmailBody,
   buildGmailComposeUrl,
+  joinCc,
   MAX_GMAIL_URL_LENGTH,
 } from "./emailBody";
 
@@ -219,5 +220,48 @@ describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comm
     const body = buildEmailBody(detail(), noLines);
     expect(body).not.toContain("Pozycje spoza katalogu:");
     expect(body).not.toContain("Komentarz:");
+  });
+});
+
+// ---------- week2-feedback-quantities Phase 2: joinCc (office copy + location mailbox) ----------
+
+describe("joinCc", () => {
+  it("joins the office copy and the location mailbox with a comma", () => {
+    expect(joinCc("biuro@pitabros.pl", "wola@pitabros.pl")).toBe(
+      "biuro@pitabros.pl,wola@pitabros.pl",
+    );
+  });
+
+  it("keeps the office copy alone when the location has no mailbox", () => {
+    expect(joinCc("biuro@pitabros.pl", null)).toBe("biuro@pitabros.pl");
+    expect(joinCc("biuro@pitabros.pl", undefined)).toBe("biuro@pitabros.pl");
+    expect(joinCc("biuro@pitabros.pl", "")).toBe("biuro@pitabros.pl");
+  });
+
+  it("keeps the location mailbox alone when the office setting is empty", () => {
+    expect(joinCc(null, "wola@pitabros.pl")).toBe("wola@pitabros.pl");
+  });
+
+  it("drops a placeholder like TBD (no @), mirroring the recipient gate", () => {
+    expect(joinCc("biuro@pitabros.pl", "TBD")).toBe("biuro@pitabros.pl");
+    expect(joinCc("TBD", "wola@pitabros.pl")).toBe("wola@pitabros.pl");
+  });
+
+  it("returns an empty string when nothing survives", () => {
+    expect(joinCc(null, undefined, "", "TBD")).toBe("");
+    expect(joinCc()).toBe("");
+  });
+
+  it("trims whitespace, accepts semicolon lists and collapses duplicates", () => {
+    expect(joinCc(" biuro@pitabros.pl ; szef@pitabros.pl", "biuro@pitabros.pl")).toBe(
+      "biuro@pitabros.pl,szef@pitabros.pl",
+    );
+  });
+
+  it("feeds buildGmailComposeUrl a single cc param carrying both addresses", () => {
+    const cc = joinCc("biuro@pitabros.pl", "wola@pitabros.pl");
+    const { url } = buildGmailComposeUrl({ to: "x@y.pl", subject: "s", body: "b", cc });
+    expect(url.split("&cc=").length).toBe(2);
+    expect(url).toContain("cc=biuro%40pitabros.pl%2Cwola%40pitabros.pl");
   });
 });

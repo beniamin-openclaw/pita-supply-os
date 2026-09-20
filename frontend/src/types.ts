@@ -479,6 +479,10 @@ export interface ManagerOrderDetail {
   // Standing office copy (DW) for the supplier email, served by the backend from
   // settings.order_cc_email (feedback r7). Absent/empty => no DW row, no cc param.
   cc_email?: string | null;
+  // The location's own mailbox (locations.email, migration 0019) — CC'd next to
+  // cc_email by the dispatch panel (week2-feedback-quantities Phase 2). Optional:
+  // Pydantic `Optional[str] = None`, null/absent => no extra DW address.
+  location_email?: string | null;
   // G3: channel routing + phone/notes for the dispatch panel.
   ordering_method: OrderingMethod;
   supplier_notes: string;

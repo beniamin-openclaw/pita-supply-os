@@ -87,6 +87,11 @@ class Location(BaseModel):
     company_name: Optional[str] = None
     company_address: Optional[str] = None
     company_nip: Optional[str] = None
+    # Per-location gmail mailbox (the account the location's phone reads),
+    # CC'd on the supplier dispatch e-mail next to settings.order_cc_email
+    # (week2-feedback-quantities Phase 2, migration 0019). Nullable — a
+    # location without one simply gets no extra CC.
+    email: Optional[str] = None
 
 
 class SupplierProduct(BaseModel):
@@ -425,6 +430,9 @@ class ManagerOrderDetail(BaseModel):
     # cc from the backend rather than hardcoding a second source of truth. None/empty
     # => the dispatch panel shows no DW row and adds no cc parameter.
     cc_email: Optional[str] = None
+    # The location's own mailbox (locations.email, migration 0019), joined from the
+    # location — the dispatch panel CCs it next to cc_email. None when unset.
+    location_email: Optional[str] = None
     # Channel the dispatch panel must branch on (email|portal|phone|manual).
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
     supplier_notes: str = ""  # fallback source for a phone number etc.
