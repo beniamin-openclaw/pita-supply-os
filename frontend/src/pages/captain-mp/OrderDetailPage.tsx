@@ -22,14 +22,38 @@ import { roundQty } from "../../components/ui/number";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import type {
   CaptainOrderDetail,
+  ManagerOrderLineDetail,
   ReceiptDetail,
   ReceiptPhotoItem,
   ReceiptSummary,
 } from "../../types";
 import { statusVisual } from "./lib/orderStatus";
 
+// "Manager changed this line" (Phase 7, week2-feedback-quantities): the
+// manager's final differs from the captain's — including the case where the
+// manager ZEROED a line the captain ordered (manager_final 0 is otherwise the
+// "not touched" default, so that branch only counts once the order is
+// dispatched/closed — the Pago 14.09 case). Drives both the per-line hint and
+// the order-level count banner, so they can never disagree.
+//
+// NOT for a Transport batch (`sent_method === "transport"`): finalize flips
+// the status without writing manager_final on every line and the backend
+// ships such a line at the captain quantity (`_effective_ordered_qty`), so a
+// 0 there is "untouched", not "zeroed" — reading it as a change would flag
+// every line of every Pago order (impl-review Phase 7 F1).
+function managerChangedLine(
+  line: ManagerOrderLineDetail,
+  order: Pick<CaptainOrderDetail, "status" | "sent_method">,
+): boolean {
+  const manager = line.manager_final_qty_purchase;
+  const captain = line.captain_final_qty_purchase;
+  if (manager > 0) return manager !== captain;
+  if (order.sent_method === "transport") return false;
+  return (order.status === "manager_sent" || order.status === "closed") && captain > 0;
+}
+
 export function OrderDetailPage() {
-  const { t, formatDateTime } = useT();
+  const { t, tPlural, formatDateTime } = useT();
   const navigate = useNavigate();
   const { order_id } = useParams<{ order_id: string }>();
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
@@ -138,6 +162,24 @@ export function OrderDetailPage() {
         ) : !order ? null : (
           <>
             {/* Summary card */}
+            {/* Manager-changed banner (Phase 7): one order-level line counting
+                the lines whose quantity the manager changed (or zeroed), only
+                once the order is dispatched/closed. */}
+            {(order.status === "manager_sent" || order.status === "closed") &&
+              (() => {
+                const changed = order.lines.filter((l) =>
+                  managerChangedLine(l, order),
+                ).length;
+                return changed > 0 ? (
+                  <div
+                    className="mb-4 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900"
+                    role="status"
+                    data-testid="manager-changed-banner"
+                  >
+                    {tPlural("orders.detail.managerChangedBanner", "lines", changed)}
+                  </div>
+                ) : null;
+              })()}
             {/* Send-back banner: manager released the order back with a reason
                 (stored in notes). Show only while editable (captain can act). */}
             {order.editable && order.notes && order.notes.trim() !== "" && (
@@ -291,20 +333,27 @@ export function OrderDetailPage() {
                             </span>
                           </div>
                           {/* Hint only when the manager's final differs from the
-                              captain's — the big number above already shows the
-                              effective (manager) qty; equal/unset → no hint. */}
-                          {line.manager_final_qty_purchase > 0 &&
-                            line.manager_final_qty_purchase !==
-                              line.captain_final_qty_purchase && (
-                              <div className="text-[11px] text-slate-500 mt-0.5">
-                                {t("orders.detail.managerChanged", {
-                                  value: line.captain_final_qty_purchase,
-                                })}
-                              </div>
-                            )}
+                              captain's (incl. zeroed on a sent/closed order) —
+                              the big number above already shows the effective
+                              qty; equal/unset → no hint. */}
+                          {managerChangedLine(line, order) && (
+                            <div className="text-[11px] text-slate-500 mt-0.5">
+                              {t("orders.detail.managerChanged", {
+                                value: line.captain_final_qty_purchase,
+                              })}
+                            </div>
+                          )}
                           {line.suggested_qty_purchase === 0 ? (
+                            // Stock ≥ target → "ponad cel" (information); an
+                            // uncounted line (stock 0, target > 0) → "brak bazy".
                             <div className="text-xs font-semibold text-slate-500">
-                              {t("deviation.noBaseline")}
+                              {line.captain_final_qty_purchase === 0
+                                ? "—"
+                                : t(
+                                    line.current_stock_qty_base >= line.target_stock_qty_base
+                                      ? "deviation.aboveTarget"
+                                      : "deviation.noBaseline",
+                                  )}
                             </div>
                           ) : (
                             typeof line.delta_vs_suggestion_pct === "number" &&

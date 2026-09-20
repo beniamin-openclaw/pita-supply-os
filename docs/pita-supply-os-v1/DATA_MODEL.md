@@ -78,6 +78,10 @@ where multi-supplier consolidation lives.
 | `city`             | string      |                                                |
 | `active`           | boolean     |                                                |
 | `notes`            | string      |                                                |
+| `company_name`     | string?     | Operating company for the e-mail footer (0007) |
+| `company_address`  | string?     | (0007)                                         |
+| `company_nip`      | string?     | (0007)                                         |
+| `email`            | string?     | Location mailbox, CC'd on dispatch (0019)      |
 
 **Why this table:** the order header references it. In v0 only `WOLA` is
 active. In Phase 2 we add more locations and the Manager Dashboard

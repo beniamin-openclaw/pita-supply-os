@@ -22,6 +22,7 @@ from app.models import (
     OrderStatus,
     Product,
     ReasonCode,
+    Receipt,
     Supplier,
     SupplierProduct,
 )
@@ -277,6 +278,9 @@ def test_queue_computes_deviation_count(mocker):
         _line("ORD-A", "OL-1", delta_pct=0.25, reason_code=ReasonCode.OTHER),
         _line("ORD-A", "OL-2", delta_pct=0.10),
         _line("ORD-A", "OL-3", delta_pct=0.05),
+        # Suggestion-0 informational line (week2-feedback-quantities Phase 1):
+        # delta is None and must never inflate the badge.
+        _line("ORD-A", "OL-4", delta_pct=None),
     ]
     _enable_sheet_backend(mocker, orders=orders, lines=lines)
 
@@ -284,7 +288,7 @@ def test_queue_computes_deviation_count(mocker):
     assert r.status_code == 200, r.text
     payload = r.json()
     assert payload[0]["deviation_count"] == 1
-    assert payload[0]["line_count"] == 3
+    assert payload[0]["line_count"] == 4
 
 
 def test_queue_deviation_threshold_is_25pct(mocker):
@@ -610,6 +614,43 @@ def test_order_detail_exposes_office_cc(mocker):
     assert _detail_payload()["cc_email"] is None
 
 
+# ---------- week2-feedback-quantities Phase 2: location mailbox in DW ----------
+
+
+def test_order_detail_exposes_location_email(mocker):
+    """The dispatch panel CCs the location's own mailbox next to the office copy,
+    so detail must serve locations.email — null when the location has none."""
+    order_id = "ORD-LOCMAIL"
+    order = _order(order_id, location_id="WOLA", supplier_id="SUP_PAGO")
+    order = order.model_copy(
+        update={
+            "lines": [_line(order_id, "OL-1", product_id="P027", sp_id="SP_PAGO_P027")]
+        }
+    )
+
+    def _detail_payload(location: Location) -> dict:
+        _enable_sheet_backend(
+            mocker,
+            orders=[order],
+            get_order_return=order,
+            products=[_product("P027", "Souvlaki Kurczak")],
+            supplier_products=[
+                _supplier_product("SP_PAGO_P027", "SUP_PAGO", "P027", "Souvlaki Karton 5kg")
+            ],
+            suppliers=[_supplier("SUP_PAGO", "Pago", email="zamowienia@pago.example")],
+            locations=[location],
+        )
+        r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+        assert r.status_code == 200, r.text
+        return r.json()
+
+    with_email = _location("WOLA", "Pita Bros Wola").model_copy(
+        update={"email": "wola@pitabros.pl"}
+    )
+    assert _detail_payload(with_email)["location_email"] == "wola@pitabros.pl"
+    assert _detail_payload(_location("WOLA", "Pita Bros Wola"))["location_email"] is None
+
+
 # ---------- training-feedback-0901 Phase 1c: minimum_order_value_pln (display-only) ----------
 
 
@@ -696,3 +737,58 @@ def test_order_detail_defaults_extra_items_and_captain_note_to_empty_string(mock
     payload = r.json()
     assert payload["extra_items"] == ""
     assert payload["captain_note"] == ""
+
+
+# ---------- last_received_at (week2-feedback-quantities Phase 5) ----------
+
+
+def _receipt(receipt_id: str, order_id: str, submitted_at: datetime) -> Receipt:
+    return Receipt(
+        receipt_id=receipt_id,
+        order_id=order_id,
+        location_id="WOLA",
+        supplier_id="SUP_PAGO",
+        receipt_date=submitted_at.date(),
+        received_by="Anna",
+        received_submitted_at=submitted_at,
+        line_count=1,
+    )
+
+
+def test_queue_last_received_at_is_newest_receipt(mocker):
+    """Two receipts on one closed order → the queue row carries the NEWER
+    `received_submitted_at`; a sibling without receipts carries null."""
+    orders = [
+        _order("ORD-A", status=OrderStatus.CLOSED),
+        _order("ORD-B", status=OrderStatus.CLOSED),
+    ]
+    _enable_sheet_backend(mocker, orders=orders)
+    older = datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 9, 14, 17, 30, tzinfo=timezone.utc)
+    mocker.patch.object(
+        sheets,
+        "load_receipts_for_orders",
+        return_value=[
+            _receipt("RCP-1", "ORD-A", older),
+            _receipt("RCP-2", "ORD-A", newer),
+        ],
+    )
+
+    r = client.get("/api/manager/queue", params={"status": "closed"}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {row["order_id"]: row for row in r.json()}
+    assert datetime.fromisoformat(by_id["ORD-A"]["last_received_at"]) == newer
+    assert by_id["ORD-A"]["received_count"] == 2
+    assert by_id["ORD-B"]["last_received_at"] is None
+
+
+def test_queue_last_received_at_null_on_submitted_lane(mocker):
+    """The submitted lane never runs the receipt scan → null, and the scan is
+    not even invoked."""
+    _enable_sheet_backend(mocker, orders=[_order("ORD-A")])
+    scan = mocker.patch.object(sheets, "load_receipts_for_orders", return_value=[])
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["last_received_at"] is None
+    scan.assert_not_called()

@@ -34,10 +34,18 @@ interface ManagerFilterBarProps {
   onToggleLane: (lane: QueueLane) => void;
   onClear: () => void;
   anyActive: boolean;
+  /** Status chips to render. Omitted = the four live-queue lanes; the archive
+   *  page passes its own closed/cancelled pair (Phase 5). */
+  lanes?: LaneChip[];
+}
+
+export interface LaneChip {
+  lane: QueueLane;
+  labelKey: StringKey;
 }
 
 // Status chips reuse the queue-group labels (manager.tab.*).
-const LANES: { lane: QueueLane; labelKey: StringKey }[] = [
+const QUEUE_LANES: LaneChip[] = [
   { lane: "submitted", labelKey: "manager.tab.submitted" },
   { lane: "claimed", labelKey: "manager.tab.claimed" },
   { lane: "sent", labelKey: "manager.tab.sent" },
@@ -55,6 +63,7 @@ export function ManagerFilterBar({
   onToggleLane,
   onClear,
   anyActive,
+  lanes = QUEUE_LANES,
 }: ManagerFilterBarProps) {
   const { t } = useT();
 
@@ -113,7 +122,7 @@ export function ManagerFilterBar({
           {t("manager.filter.statusLabel")}
         </span>
         <div className="flex flex-wrap gap-1.5">
-          {LANES.map(({ lane, labelKey }) => {
+          {lanes.map(({ lane, labelKey }) => {
             const active = visibleLanes.has(lane);
             return (
               <button

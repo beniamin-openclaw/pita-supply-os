@@ -28,6 +28,7 @@ import {
   buildEmailBody,
   buildEmailSubject,
   buildGmailComposeUrl,
+  joinCc,
 } from "./lib/emailBody";
 
 interface DispatchPanelProps {
@@ -213,10 +214,12 @@ function EmailDispatch({
   // recipient in a normal-looking Gmail draft. Mirrors the backend gate.
   const noEmail = !to.includes("@");
 
-  // Standing office copy (DW) from the backend — one source of truth shared with
-  // the server-side re-open URL. Shown below so the operator SEES the copy is
-  // going out; the "@" gate mirrors the recipient check (feedback r7).
-  const cc = detail.cc_email ?? "";
+  // DW (CC) from the backend — the standing office copy + the location's own
+  // mailbox (week2-feedback-quantities Phase 2), one source of truth shared with
+  // the server-side re-open URL (main.py `_join_cc`). Shown below so the operator
+  // SEES both copies going out; the "@" gate mirrors the recipient check
+  // (feedback r7) — placeholders like 'TBD' are dropped by joinCc.
+  const cc = joinCc(detail.cc_email, detail.location_email);
   const hasCc = cc.includes("@");
 
   const { url, tooLong } = buildGmailComposeUrl({ to, subject, body, cc });
@@ -243,7 +246,7 @@ function EmailDispatch({
           <span className="w-16 shrink-0 text-xs font-semibold text-slate-500">
             {t("manager.dispatch.emailCc")}
           </span>
-          <span className="font-mono text-slate-800">{cc}</span>
+          <span className="font-mono text-slate-800">{cc.split(",").join(", ")}</span>
         </div>
       )}
 

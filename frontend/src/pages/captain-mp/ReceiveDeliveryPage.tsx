@@ -42,6 +42,9 @@ export function ReceiveDeliveryPage() {
     getNameSuggestions("received_by"),
   );
   const [photos, setPhotos] = useState<File[]>([]);
+  // Phase 7 (week2-feedback-quantities): free-text receipt notes, e.g. items
+  // delivered outside the order. Sent as `ReceiptSubmitRequest.notes`.
+  const [notes, setNotes] = useState<string>("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdReceiptId, setCreatedReceiptId] = useState<string | null>(null);
@@ -128,6 +131,7 @@ export function ReceiveDeliveryPage() {
           order_id: order.order_id,
           received_by: receivedBy.trim(),
           lines,
+          notes: notes.trim(),
         });
         receiptId = resp.receipt_id;
         setCreatedReceiptId(receiptId);
@@ -155,7 +159,7 @@ export function ReceiveDeliveryPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [order, receivedBy, delivered, photos, createdReceiptId, navigate, showToast, t]);
+  }, [order, receivedBy, delivered, notes, photos, createdReceiptId, navigate, showToast, t]);
 
   // The receipt is append-only + persist-first: once it's saved, the quantities
   // are committed and there is no path to re-save edits. Lock the qty + received-by
@@ -268,6 +272,22 @@ export function ReceiveDeliveryPage() {
                 />
               ))}
             </div>
+
+            <label className="mb-4 block">
+              <span className="text-sm font-semibold text-slate-900">
+                {t("delivery.notesLabel")}
+              </span>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t("delivery.notesPlaceholder")}
+                readOnly={receiptSaved}
+                rows={2}
+                className={`mt-1 w-full resize-none rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  receiptSaved ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
+                }`}
+              />
+            </label>
 
             {WZ_PHOTOS_ENABLED && (
               <PhotoUploadControl photos={photos} onChange={setPhotos} disabled={isSubmitting} />

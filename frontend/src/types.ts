@@ -120,6 +120,18 @@ export interface InventoryProduct {
   product_category: string;
   inventory_unit: string;
   is_critical: boolean;
+  // Information layer (week2-feedback-quantities Phase 3). Backend
+  // Optional[...] = None / defaulted → optional here (lessons.md: mirror
+  // Pydantic optionality). Supplier fields come from the product's primary
+  // supplier_product and are null when it has none.
+  purchase_unit?: string | null;
+  units_per_purchase_unit?: number | null;
+  order_note?: string | null;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
+  min_stock_qty_base?: number;
+  target_stock_qty_base?: number;
+  max_stock_qty_base?: number;
 }
 
 export interface InventoryLatestLine {
@@ -194,6 +206,17 @@ export interface InventoryCountDetailLine {
   is_critical: boolean;
   current_stock_qty_base: number;
   count_comment: string;
+  // Decision layer (week2-feedback-quantities Phase 4): this location's
+  // thresholds + the product's primary supplier_product. Backend
+  // Optional[...] = None → optional here (lessons.md: mirror Pydantic
+  // optionality); null when no setting / no active supplier_product.
+  min_stock_qty_base?: number | null;
+  target_stock_qty_base?: number | null;
+  max_stock_qty_base?: number | null;
+  purchase_unit?: string | null;
+  units_per_purchase_unit?: number | null;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
 }
 
 export interface InventoryCountDetail {
@@ -297,6 +320,8 @@ export interface CaptainOrderDetail {
   captain_submitted_at?: string | null;
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   last_edited_at?: string | null;
+  // email|portal|phone|manual|transport; null before dispatch (Phase 7 banner gate).
+  sent_method?: string | null;
   total_value_estimate_pln?: number | null;
   // Supplier's configured minimum order value (display-only; training-
   // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
@@ -397,6 +422,10 @@ export interface ManagerQueueItem {
   // received_count > 0.
   received_count: number;
   received_discrepancy_count: number;
+  // Newest received_submitted_at among the order's receipts (week2-feedback
+  // Phase 5) — only on the sent/closed lanes, null elsewhere. Drives the
+  // closed lane's "recent vs archive" split.
+  last_received_at?: string | null;
   // Reverse link to a Manager Transport batch (to-ordering-pago): set when this
   // order was combined via POST /api/manager/transport/create (a "TRN-…"
   // marker), absent for a normal per-order dispatch. Lets the queue show a
@@ -456,6 +485,9 @@ export interface ManagerOrderReceipt {
   discrepancy_count: number;
   received_with_missing_wz: boolean;
   wz_photo_count: number;
+  // Captain's free-text receipt notes (Phase 7) — mirrors the Pydantic
+  // `str = ""` default, so optional here.
+  notes?: string;
   lines: ManagerOrderReceiptLine[];
 }
 
@@ -479,6 +511,10 @@ export interface ManagerOrderDetail {
   // Standing office copy (DW) for the supplier email, served by the backend from
   // settings.order_cc_email (feedback r7). Absent/empty => no DW row, no cc param.
   cc_email?: string | null;
+  // The location's own mailbox (locations.email, migration 0019) — CC'd next to
+  // cc_email by the dispatch panel (week2-feedback-quantities Phase 2). Optional:
+  // Pydantic `Optional[str] = None`, null/absent => no extra DW address.
+  location_email?: string | null;
   // G3: channel routing + phone/notes for the dispatch panel.
   ordering_method: OrderingMethod;
   supplier_notes: string;
@@ -506,6 +542,25 @@ export interface ManagerOrderDetail {
   // Reverse link to a Manager Transport batch — see ManagerQueueItem's field
   // of the same name for the full explanation.
   supplier_order_reference?: string | null;
+  // Post-send edit log (week2-feedback-quantities Phase 6), newest first,
+  // capped 100 server-side. Pydantic `default_factory=list` → optional here.
+  events?: OrderEvent[];
+  // True only for a manager_sent order with no receipt that is NOT a Transport
+  // batch member — the exact set the post-send save/add-line accept. Pydantic
+  // `bool = False` → optional here; absent reads as false.
+  editable_after_send?: boolean;
+}
+
+// One append-only row of an order's post-send edit log (week2-feedback-
+// quantities Phase 6, migration 0020) — mirrors TransportEvent. `event_type` is
+// quantities_changed ("Name: old → new" details) or line_added.
+export interface OrderEvent {
+  event_id: string;
+  order_id: string;
+  event_type: string;
+  actor?: string | null;
+  at?: string | null; // ISO datetime
+  details: string;
 }
 
 // Manager Dispatch -----------------------------------------------------------

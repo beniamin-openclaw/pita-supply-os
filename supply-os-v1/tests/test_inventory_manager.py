@@ -22,7 +22,10 @@ from app.models import (
     InventoryCount,
     InventoryCountLine,
     Location,
+    LocationProductSetting,
     Product,
+    Supplier,
+    SupplierProduct,
 )
 
 client = TestClient(app)
@@ -42,6 +45,39 @@ PRODUCTS = [
     Product(
         product_id="P026", product_name_pl="Feta blok",
         product_category="Nabiał", inventory_unit="kg",
+    ),
+]
+# Phase 4 (week2-feedback-quantities): the detail joins this location's
+# thresholds + each product's primary supplier_product. P026 has a setting at
+# WOLA but NO supplier_product; P027 has both (Bukat wins over SUP_INTERNAL).
+SETTINGS = [
+    LocationProductSetting(
+        setting_id="S1", location_id="WOLA", product_id="P027",
+        min_stock_qty_base=5, target_stock_qty_base=20, max_stock_qty_base=25,
+    ),
+    LocationProductSetting(
+        setting_id="S2", location_id="WOLA", product_id="P026",
+        min_stock_qty_base=2, target_stock_qty_base=8, max_stock_qty_base=10,
+    ),
+    LocationProductSetting(
+        setting_id="S3", location_id="KEN", product_id="P027",
+        min_stock_qty_base=1, target_stock_qty_base=2, max_stock_qty_base=3,
+    ),
+]
+SUPPLIERS = [
+    Supplier(supplier_id="SUP_BUKAT", supplier_name="Bukat"),
+    Supplier(supplier_id="SUP_INTERNAL", supplier_name="Internal"),
+]
+SUPPLIER_PRODUCTS = [
+    SupplierProduct(
+        supplier_product_id="SP_INT_P027", supplier_id="SUP_INTERNAL",
+        product_id="P027", supplier_product_name="Pomidor (własny)",
+        purchase_unit="kg", units_per_purchase_unit=1,
+    ),
+    SupplierProduct(
+        supplier_product_id="SP_BUK_P027", supplier_id="SUP_BUKAT",
+        product_id="P027", supplier_product_name="Pomidor karton",
+        purchase_unit="karton", units_per_purchase_unit=6,
     ),
 ]
 
@@ -86,6 +122,10 @@ def _activate_sheet(mocker, counts: list[InventoryCount]) -> None:
     mocker.patch.object(sheets, "load_inventory_counts", return_value=counts)
     mocker.patch.object(sheets, "load_locations", return_value=LOCATIONS)
     mocker.patch.object(sheets, "load_products", return_value=PRODUCTS)
+    # Phase 4: the detail route's threshold + supplier joins.
+    mocker.patch.object(sheets, "load_location_product_settings", return_value=SETTINGS)
+    mocker.patch.object(sheets, "load_suppliers", return_value=SUPPLIERS)
+    mocker.patch.object(sheets, "load_supplier_products", return_value=SUPPLIER_PRODUCTS)
     by_id = {c.count_id: c for c in counts}
     mocker.patch.object(
         sheets, "get_inventory_count", side_effect=lambda cid: by_id.get(cid)
@@ -209,6 +249,60 @@ def test_manager_count_detail_enriched(mocker):
     assert by_pid["P026"]["product_name_pl"] == "Feta blok"
 
 
+def test_manager_count_detail_exposes_thresholds_and_supplier(mocker):
+    """Phase 4 (week2-feedback-quantities): each line carries this location's
+    min/target/max and its PRIMARY supplier_product (pack unit + supplier);
+    a product without any supplier_product keeps those fields null."""
+    c = _count(
+        "INV-DEC", "WOLA",
+        datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc), date(2026, 6, 5),
+        lines=[_line("INV-DEC", "P027", 14), _line("INV-DEC", "P026", 6, idx=2)],
+    )
+    _activate_sheet(mocker, [c])
+    r = client.get("/api/manager/inventory/count/INV-DEC", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_pid = {ln["product_id"]: ln for ln in r.json()["lines"]}
+
+    pomidor = by_pid["P027"]
+    assert pomidor["min_stock_qty_base"] == 5
+    assert pomidor["target_stock_qty_base"] == 20
+    assert pomidor["max_stock_qty_base"] == 25
+    # SUP_INTERNAL is skipped when an external candidate exists.
+    assert pomidor["supplier_id"] == "SUP_BUKAT"
+    assert pomidor["supplier_name"] == "Bukat"
+    assert pomidor["purchase_unit"] == "karton"
+    assert pomidor["units_per_purchase_unit"] == 6
+
+    feta = by_pid["P026"]
+    assert feta["min_stock_qty_base"] == 2
+    assert feta["target_stock_qty_base"] == 8
+    assert feta["max_stock_qty_base"] == 10
+    assert feta["supplier_id"] is None
+    assert feta["supplier_name"] is None
+    assert feta["purchase_unit"] is None
+    assert feta["units_per_purchase_unit"] is None
+
+
+def test_manager_count_detail_thresholds_are_location_scoped(mocker):
+    """The thresholds come from the COUNT's location, not any other location's
+    setting for the same product."""
+    c = _count(
+        "INV-KEN", "KEN",
+        datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc), date(2026, 6, 5),
+        lines=[_line("INV-KEN", "P027", 1), _line("INV-KEN", "P026", 1, idx=2)],
+    )
+    _activate_sheet(mocker, [c])
+    r = client.get("/api/manager/inventory/count/INV-KEN", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_pid = {ln["product_id"]: ln for ln in r.json()["lines"]}
+    assert by_pid["P027"]["min_stock_qty_base"] == 1
+    assert by_pid["P027"]["max_stock_qty_base"] == 3
+    # P026 has no setting at KEN -> thresholds null (never another location's).
+    assert by_pid["P026"]["min_stock_qty_base"] is None
+    assert by_pid["P026"]["target_stock_qty_base"] is None
+    assert by_pid["P026"]["max_stock_qty_base"] is None
+
+
 def test_manager_count_detail_unknown_product_falls_back_to_id(mocker):
     """A counted product not in master data falls back to its id for the name."""
     c = _count(
@@ -219,7 +313,11 @@ def test_manager_count_detail_unknown_product_falls_back_to_id(mocker):
     _activate_sheet(mocker, [c])
     r = client.get("/api/manager/inventory/count/INV-GHOST", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json()["lines"][0]["product_name_pl"] == "P999"
+    ghost = r.json()["lines"][0]
+    assert ghost["product_name_pl"] == "P999"
+    # Phase 4: no setting / supplier_product either -> every new field null.
+    assert ghost["min_stock_qty_base"] is None
+    assert ghost["supplier_id"] is None
 
 
 def test_manager_count_detail_missing_404(mocker):

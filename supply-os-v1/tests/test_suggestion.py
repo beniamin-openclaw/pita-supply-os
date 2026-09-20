@@ -217,3 +217,22 @@ def test_rounding_step_per_rule():
     assert rounding_step(RoundingRule.UP_FOR_CRITICAL) == 1.0
     assert rounding_step(RoundingRule.HALF_ALLOWED) == 0.5
     assert rounding_step(RoundingRule.TENTH_KG) == 0.1
+
+
+# ---------- target 0 → suggestion 0 (week2-feedback-quantities Phase 1) ----------
+
+@pytest.mark.parametrize("rule", list(RoundingRule))
+@pytest.mark.parametrize("is_critical", [False, True])
+def test_target_zero_suggests_zero_every_rule(rule, is_critical):
+    """A product whose location target is 0 (e.g. a bucket SKU, or a location
+    that does not stock it) never yields a positive suggestion, whatever the
+    rounding rule and critical flag — the engine's "suggestion 0" is
+    information, not a gate (Phase 1 relies on this)."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=0,
+        max_stock_qty_base=0, units_per_purchase_unit=5,
+        rounding_rule=rule, is_critical=is_critical,
+    ))
+    assert out.suggested_qty_purchase == 0
+    assert out.suggested_qty_base == 0
+    assert out.over_max_qty_base == 0

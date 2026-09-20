@@ -6,6 +6,10 @@
 //     sticky "Zapisz zmiany" affordance.
 // G3: the F3 dispatch button is replaced by the channel-aware DispatchPanel
 //     (email / portal / phone / manual) — rendered only when claimed.
+// Phase 6 (week2-feedback-quantities): a manager_sent order stays editable while
+//     `detail.editable_after_send` (no receipt, not a Transport member); its footer
+//     shows "Zapisz zmiany (dosyłka)" + the ResendPanel instead of dispatch, and
+//     the post-send edit log renders as "Historia zmian". closed = locked.
 
 import { Loader2 } from "lucide-react";
 
@@ -16,9 +20,11 @@ import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
 import { DispatchPanel } from "./DispatchPanel";
+import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
+import { ResendPanel } from "./ResendPanel";
 import { type DraftMap, draftQty, hasDirtyDrafts } from "./lib/draftState";
-import { managerSummary, isManagerEngaged } from "./lib/managerLine";
+import { isOrderEditable, managerSummary, isManagerEngaged } from "./lib/managerLine";
 
 // Kept out of the component body so the impure `Date.now()` read isn't treated
 // as render-time work by the React Compiler. cutoff_iso lives on the queue
@@ -98,7 +104,14 @@ export function OrderDetailPane({
 
   const visual = statusVisual(detail.status);
   const cutoffPast = isCutoffPast(cutoffIso);
-  const editable = detail.status === "manager_claimed";
+  const editable = isOrderEditable(detail);
+  // Post-send edit (Phase 6): editable but already sent → save label + resend
+  // panel instead of release/cancel/dispatch.
+  const postSend = editable && detail.status === "manager_sent";
+  const lockedAfterReceipt = detail.status === "closed";
+  const sentTransportMember =
+    detail.status === "manager_sent" &&
+    (detail.supplier_order_reference ?? "").startsWith("TRN-");
   // Dispatched orders are the only ones where a persisted manager_final 0 means
   // a deliberately-dropped line; before that, 0 = "not set yet" → neutral.
   const dispatched = detail.status === "manager_sent" || detail.status === "closed";
@@ -187,7 +200,7 @@ export function OrderDetailPane({
           onCommentChange={onCommentChange}
         />
 
-        {/* Add ad-hoc product (add-product-to-order) — claimed orders only, and
+        {/* Add ad-hoc product (add-product-to-order) — claimed or still-editable sent orders, and
             only when something is still addable. */}
         {editable && availableToAdd.length > 0 && (
           <div className="mt-3">
@@ -228,7 +241,7 @@ export function OrderDetailPane({
                   {t("manager.saving")}
                 </span>
               ) : (
-                t("manager.save")
+                t(postSend ? "manager.resend.save" : "manager.save")
               )}
             </button>
           )}
@@ -255,6 +268,11 @@ export function OrderDetailPane({
         {/* Read-only delivery section (manager-receiving-view) — renders only
             when the order has at least one goods-receipt. */}
         {detail.receipts.length > 0 && <DeliverySection receipts={detail.receipts} />}
+
+        {/* Post-send edit log (Phase 6) — omitted when nothing was edited after send. */}
+        {(detail.events?.length ?? 0) > 0 && (
+          <OrderHistorySection events={detail.events ?? []} />
+        )}
       </div>
 
       {/* Actions / dispatch */}
@@ -284,6 +302,25 @@ export function OrderDetailPane({
             </>
           )}
         </div>
+      ) : postSend ? (
+        /* Sent but still editable: no release/cancel/dispatch — the original
+           compose link (when this session just dispatched it) plus the
+           "dosyłka" rebuild from the current quantities (Phase 6). */
+        <>
+          {dispatchedEmailUrl && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
+              <a
+                href={dispatchedEmailUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-green-400 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+              >
+                {t("manager.action.openEmail")}
+              </a>
+            </div>
+          )}
+          <ResendPanel detail={detail} drafts={drafts} dirty={dirty} onToast={onToast} />
+        </>
       ) : editable ? (
         <>
           {/* Release stays available alongside the channel-aware dispatch panel. */}
@@ -327,6 +364,14 @@ export function OrderDetailPane({
             </a>
           ) : (
             <span className="text-xs text-slate-500">{t(visual.labelKey)}</span>
+          )}
+          {lockedAfterReceipt && (
+            <span className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              {t("manager.lockedAfterReceipt")}
+            </span>
+          )}
+          {sentTransportMember && (
+            <span className="text-xs text-slate-500">{t("manager.resend.editViaTransport")}</span>
           )}
         </div>
       )}

@@ -8,7 +8,7 @@
 // (instead of always reading the persisted line). The G1 read-only callers pass
 // no override and get the persisted-line behavior unchanged.
 
-import type { ManagerOrderLineDetail, OrderStatus } from "../../../types";
+import type { ManagerOrderDetail, ManagerOrderLineDetail, OrderStatus } from "../../../types";
 import { effectiveOrderedQtyPurchase } from "../../../lib/orderQty";
 
 /**
@@ -138,4 +138,14 @@ export function isManagerEngaged(status: OrderStatus): boolean {
     status === "manager_sent" ||
     status === "closed"
   );
+}
+
+/**
+ * Is the order's line table editable on the Manager screen? A claimed order
+ * always is; a sent order only while the backend says so (`editable_after_send`:
+ * manager_sent, no receipt, not a Transport member — week2-feedback-quantities
+ * Phase 6). `closed` is never editable ("zablokowane po odbiorze").
+ */
+export function isOrderEditable(detail: ManagerOrderDetail): boolean {
+  return detail.status === "manager_claimed" || detail.editable_after_send === true;
 }

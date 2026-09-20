@@ -39,12 +39,12 @@ export function computeSuggestion(
   return { base: suggestedBase, purchase: suggestedPurchase };
 }
 
-// Backend-parity note: the backend deviation gate (captain_submit) floors the
-// denominator at rounding_step(rule), so suggested=0 → denom=step and any
-// positive order trips the >25% reason gate. Here we use Infinity for
-// suggested=0 instead — the observable outcome is identical (any positive order
-// against a 0 suggestion requires a reason on both sides), so the gates never
-// disagree. Keep them in sync if the backend formula changes.
+// Backend-parity note: suggested=0 returns Infinity for a positive order so a
+// caller can never divide by zero. Since week2-feedback-quantities Phase 1 the
+// suggestion-0 case is handled BEFORE this is consulted in computeRowState
+// (the backend `_evaluate_submit_line` likewise skips its deviation gate and
+// stores delta=None there), so the ∞ never reaches a gate or a pill. Keep them
+// in sync if the backend formula changes.
 export function computeDeviation(suggestedPurchase: number, finalPurchase: number): number {
   if (suggestedPurchase === 0) {
     return finalPurchase > 0 ? Infinity : 0;
@@ -111,30 +111,54 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  // Counted path — unchanged.
+  // Counted path.
   const current = Number(line.current_stock_qty_base);
   const { purchase: suggested } = computeSuggestion(item, current);
+
+  // Counted stock at/above target → suggestion 0 is INFORMATION, not a gate
+  // (week2-feedback-quantities Phase 1; mirrors the backend
+  // `_evaluate_submit_line` third branch). There is no baseline to express a
+  // % against, so no reason is ever required here: nothing ordered → green
+  // match as before; something ordered → a yellow informational pill naming
+  // the stock vs target, no % and no ReasonPicker.
+  if (suggested === 0) {
+    if (final === 0) {
+      return {
+        state: "green",
+        messageKey: "state.match",
+        requiresReason: false,
+        deviationPct: 0,
+      };
+    }
+    // `half_allowed` / non-critical `up_for_critical` round a raw gap < 0.5 to
+    // 0, so suggestion 0 can occur with stock still below target — then the
+    // pill must not claim "stan ≥ cel"; a neutral variant is used instead.
+    return {
+      state: "yellow",
+      messageKey:
+        current >= item.target_stock_qty_base
+          ? "state.aboveTargetInfo"
+          : "state.suggestionZeroInfo",
+      messageVars: {
+        stock: current,
+        target: item.target_stock_qty_base,
+        unit: item.inventory_unit,
+      },
+      requiresReason: false,
+      deviationPct: null,
+    };
+  }
 
   const deviation = computeDeviation(suggested, final);
   const absDeviation = Math.abs(deviation);
 
-  // Reason-required result (>25% deviation, or a critical under-order). When the
-  // suggestion is 0 there is no baseline to express a % against (the deviation is
-  // ∞), so swap in the "no baseline" wording — state + requiresReason are
-  // unchanged (the backend still gates on it; only the displayed copy changes).
-  const noBaseline = suggested === 0;
+  // Reason-required result (>25% deviation, or a critical under-order).
   const reasonResult = (): RowState => ({
     state: hasReason ? "orange" : "red",
-    messageKey: noBaseline
-      ? hasReason
-        ? "state.noBaselineReason"
-        : "state.noBaselineNoReason"
-      : hasReason
-        ? "state.devReason"
-        : "state.devNoReason",
-    messageVars: noBaseline ? undefined : { pct: formatPctSigned(deviation) },
+    messageKey: hasReason ? "state.devReason" : "state.devNoReason",
+    messageVars: { pct: formatPctSigned(deviation) },
     requiresReason: true,
-    deviationPct: noBaseline ? null : deviation,
+    deviationPct: deviation,
   });
 
   if (absDeviation > 25) {
@@ -143,8 +167,8 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
 
   // Critical products: any under-order (even ≤25%) requires a reason —
   // mirrors the backend gate in captain_submit / captain_order_edit.
-  // Exception: suggested === 0 means nothing to order, no reason needed.
-  if (item.is_critical && final < suggested && suggested > 0) {
+  // (suggested === 0 already returned above.)
+  if (item.is_critical && final < suggested) {
     return reasonResult();
   }
 

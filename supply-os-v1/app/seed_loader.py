@@ -94,3 +94,18 @@ def load_location_product_settings() -> list[LocationProductSetting]:
         settings.seed_dir / "location_product_settings.csv",
         LocationProductSetting,
     )
+
+
+# ---------- Order post-send edit log (week2-feedback-quantities Phase 6) ----------
+
+def load_order_events_for(order_id: str) -> list:
+    """Seed backend keeps no edit log — always empty (mirrors the seam contract
+    of ``sheets`` / ``supabase_backend``; ``main._load_order_events_safe``
+    degrades the same way)."""
+    return []
+
+
+def append_order_event(event) -> None:
+    """No-op: the seed backend is read-only, nothing is persisted (the caller,
+    ``main._log_order_event``, is best-effort either way)."""
+    return None

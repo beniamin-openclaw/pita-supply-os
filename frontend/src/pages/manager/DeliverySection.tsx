@@ -53,6 +53,13 @@ export function DeliverySection({ receipts }: DeliverySectionProps) {
               )}
             </div>
 
+            {/* Captain's free-text receipt notes (Phase 7) */}
+            {rc.notes && rc.notes.trim() !== "" && (
+              <div className="mt-1.5 whitespace-pre-wrap text-xs text-slate-700">
+                {t("manager.delivery.notes", { value: rc.notes })}
+              </div>
+            )}
+
             {/* Per-line delivered vs ordered + variance pill */}
             <ul className="mt-2 space-y-1.5">
               {rc.lines.map((ln) => {

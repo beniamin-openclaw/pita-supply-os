@@ -87,6 +87,11 @@ class Location(BaseModel):
     company_name: Optional[str] = None
     company_address: Optional[str] = None
     company_nip: Optional[str] = None
+    # Per-location gmail mailbox (the account the location's phone reads),
+    # CC'd on the supplier dispatch e-mail next to settings.order_cc_email
+    # (week2-feedback-quantities Phase 2, migration 0019). Nullable — a
+    # location without one simply gets no extra CC.
+    email: Optional[str] = None
 
 
 class SupplierProduct(BaseModel):
@@ -211,6 +216,22 @@ class Order(BaseModel):
     lines: list[OrderLine] = Field(default_factory=list)
 
 
+class OrderEvent(BaseModel):
+    """One append-only row of an order's post-send edit log (week2-feedback-
+    quantities Phase 6, migration 0020) — mirrors `TransportEvent` /
+    `InventoryCountEvent`. Emitted best-effort via `main._log_order_event` when
+    a Manager changes quantities (`quantities_changed`, details "Name: old → new")
+    or adds a line (`line_added`) on a `manager_sent` order that has no receipt
+    yet. Never updated or deleted; `details` is computed server-side at emission
+    time from the pre-write order, not reconstructed later."""
+    event_id: str
+    order_id: str
+    event_type: str
+    actor: Optional[str] = None
+    at: Optional[datetime] = None
+    details: str = ""
+
+
 # ---------- Captain submit request/response (Phase C3) ----------
 
 class OrderLineSubmit(BaseModel):
@@ -294,7 +315,7 @@ class ManagerSaveRequest(BaseModel):
 
 class ManagerSaveResponse(BaseModel):
     order_id: str
-    status: OrderStatus  # stays manager_claimed
+    status: OrderStatus  # echoes the order's status (manager_claimed or, post-send, manager_sent)
     lines_updated: int
     total_value_estimate_pln: float
 
@@ -332,6 +353,12 @@ class ManagerQueueItem(BaseModel):
     # FE renders a ⚠ chip when discrepancy > 0, else a neutral ✓ chip when count > 0.
     received_count: int = 0
     received_discrepancy_count: int = 0
+    # Newest `received_submitted_at` among this order's receipts (week2-feedback
+    # Phase 5) — taken from the same receipt scan as the counts above, so it is
+    # set only on the manager_sent / closed lanes and None elsewhere. The queue
+    # keeps recently received orders in the closed lane and sends older ones to
+    # the archive on this timestamp.
+    last_received_at: Optional[datetime] = None
     # Reverse link to a Manager Transport batch (to-ordering-pago Phase 2): set
     # when this order was combined via POST /api/manager/transport/create
     # (a "TRN-…" marker), None for a normal per-order dispatch. Lets the queue
@@ -399,6 +426,10 @@ class ManagerOrderReceipt(BaseModel):
     discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
     received_with_missing_wz: bool = True
     wz_photo_count: int = 0
+    # Captain's free-text receipt notes (week2-feedback-quantities Phase 7) —
+    # e.g. items delivered outside the order. Mirrors ``Receipt.notes``; "" when
+    # the Captain left the field blank or on a legacy row.
+    notes: str = ""
     lines: list[ManagerOrderReceiptLine] = Field(default_factory=list)
 
 
@@ -425,6 +456,9 @@ class ManagerOrderDetail(BaseModel):
     # cc from the backend rather than hardcoding a second source of truth. None/empty
     # => the dispatch panel shows no DW row and adds no cc parameter.
     cc_email: Optional[str] = None
+    # The location's own mailbox (locations.email, migration 0019), joined from the
+    # location — the dispatch panel CCs it next to cc_email. None when unset.
+    location_email: Optional[str] = None
     # Channel the dispatch panel must branch on (email|portal|phone|manual).
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
     supplier_notes: str = ""  # fallback source for a phone number etc.
@@ -456,6 +490,14 @@ class ManagerOrderDetail(BaseModel):
     # Reverse link to a Manager Transport batch (to-ordering-pago Phase 2) —
     # see ManagerQueueItem.supplier_order_reference for the same field's meaning.
     supplier_order_reference: str | None = None
+    # Post-send edit log (week2-feedback-quantities Phase 6): newest first,
+    # capped 100 by the route; [] when nothing was edited after send or the
+    # 'order_events' worksheet/table is absent (never a 500).
+    events: list[OrderEvent] = Field(default_factory=list)
+    # True only when the order is `manager_sent`, has NO goods-receipt yet and is
+    # NOT a Transport batch member (a "TRN-" marker) — the exact set the post-send
+    # save/add-line routes accept. `closed` (first receipt) is never editable.
+    editable_after_send: bool = False
 
 
 # ---------- Captain own-orders view + edit (Phase E3) ----------
@@ -505,6 +547,11 @@ class CaptainOrderDetail(BaseModel):
     # Phase 1b) — see Order.extra_items / Order.captain_note.
     extra_items: str = ""
     captain_note: str = ""
+    # How the order was sent (email|portal|phone|manual|transport). The captain
+    # detail needs it for the "menedżer zmienił ilości" reading (week2-feedback
+    # Phase 7): a Transport finalize flips the status without writing
+    # manager_final on every line, so manager_final 0 is NOT a zeroing there.
+    sent_method: Optional[str] = None
     editable: bool
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
 
@@ -583,10 +630,10 @@ class ManagerAddLineRequest(BaseModel):
 class ManagerAddLineResponse(BaseModel):
     """Result of add-line — a skeleton OrderLine (all quantities 0) was appended;
     the Manager then sets manager_final via the existing save/dispatch flow. The
-    order status is unchanged (stays manager_claimed)."""
+    order status is unchanged (manager_claimed, or manager_sent for a post-send add)."""
     order_id: str
     order_line_id: str
-    status: OrderStatus  # manager_claimed on success
+    status: OrderStatus  # the order's status (unchanged by the add)
 
 
 # ---------- Inventory count (S-06) ----------
@@ -601,6 +648,20 @@ class InventoryProduct(BaseModel):
     product_category: str
     inventory_unit: str
     is_critical: bool
+    # Information layer (week2-feedback-quantities Phase 3): pack hint + thresholds
+    # for the count grid. All Optional/defaulted so legacy callers and older
+    # backends keep working. The four supplier fields come from the product's
+    # PRIMARY supplier_product (`main._primary_supplier_product`) and stay None
+    # when the product has no active supplier_product; the thresholds come from
+    # the location_product_setting the route already iterates.
+    purchase_unit: Optional[str] = None
+    units_per_purchase_unit: Optional[float] = None
+    order_note: Optional[str] = None
+    supplier_id: Optional[str] = None
+    supplier_name: Optional[str] = None
+    min_stock_qty_base: float = 0
+    target_stock_qty_base: float = 0
+    max_stock_qty_base: float = 0
 
 
 class InventoryCountLine(BaseModel):
@@ -755,6 +816,19 @@ class InventoryCountDetailLine(BaseModel):
     is_critical: bool
     current_stock_qty_base: float = 0
     count_comment: str = ""
+    # Decision layer (week2-feedback-quantities Phase 4): the location thresholds
+    # (off the location_product_setting) and the product's PRIMARY
+    # supplier_product (`main._primary_supplier_product`, the Phase 3 helper) so
+    # the Manager detail can group by supplier, sort, and flag attention rows.
+    # All Optional/defaulted so older callers and a product without a setting or
+    # an active supplier_product keep working (the fields simply stay None).
+    min_stock_qty_base: Optional[float] = None
+    target_stock_qty_base: Optional[float] = None
+    max_stock_qty_base: Optional[float] = None
+    purchase_unit: Optional[str] = None
+    units_per_purchase_unit: Optional[float] = None
+    supplier_id: Optional[str] = None
+    supplier_name: Optional[str] = None
 
 
 class InventoryCountEvent(BaseModel):

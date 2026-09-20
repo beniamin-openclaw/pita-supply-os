@@ -31,6 +31,7 @@ from app.models import (
     Location,
     LocationProductSetting,
     Order,
+    OrderEvent,
     OrderLine,
     OrderStatus,
     Product,
@@ -51,7 +52,7 @@ _ALL_TABLES = [
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
-    "order_lines", "orders", "transport_events", "transport_batches",
+    "order_lines", "order_events", "orders", "transport_events", "transport_batches",
     "location_product_settings", "supplier_products", "locations", "suppliers",
     "products", "_meta",
 ]
@@ -60,7 +61,7 @@ _TXN_TABLES = [
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
-    "order_lines", "orders", "transport_events", "transport_batches",
+    "order_lines", "order_events", "orders", "transport_events", "transport_batches",
 ]
 
 
@@ -147,6 +148,19 @@ def _schema():
     finance_documents = (
         MIGRATIONS_DIR / "0017_finance_documents.sql"
     ).read_text()
+    # 0016 widens the order_lines.reason_code CHECK with STOCK_UNTIL_NEXT_DELIVERY
+    # (ReasonCode carries it, so a line with that code would fail the INSERT
+    # against a pre-0016 schema). Was missing here — wired in with 0019/0020.
+    reason_code = (
+        MIGRATIONS_DIR / "0016_reason_code_stock_until_next_delivery.sql"
+    ).read_text()
+    # 0019 adds locations.email; _LOCATION_COLUMNS references it, so the
+    # locations insert below errors against a pre-0019 schema. 0018 belongs to
+    # the dynamic-target lane and is deliberately NOT applied here.
+    location_email = (MIGRATIONS_DIR / "0019_location_email.sql").read_text()
+    # 0020 adds the order_events audit table (post-send edit log, Phase 6);
+    # also listed in _ALL_TABLES (before orders) and _TXN_TABLES above.
+    order_events = (MIGRATIONS_DIR / "0020_order_events.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -165,6 +179,9 @@ def _schema():
         conn.exec_driver_sql(inventory_count_edit)
         conn.exec_driver_sql(warehouse_pickup)
         conn.exec_driver_sql(finance_documents)
+        conn.exec_driver_sql(reason_code)
+        conn.exec_driver_sql(location_email)
+        conn.exec_driver_sql(order_events)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -501,6 +518,48 @@ def test_inventory_count_edit_roundtrip():
     )
     refreshed = {e.event_id: e for e in supabase_backend.load_inventory_count_events_for(cid)}
     assert refreshed[f"ICE-{cid}-BLANK"].details == ""
+
+
+def test_order_event_roundtrip():
+    """Phase 6 (week2-feedback-quantities): append_order_event / load_order_events_for
+    against the REAL order_events table (migration 0020) — proves the column list
+    and the NOT NULL DEFAULT '' `details` binding (mirrors the inventory event
+    round-trip above)."""
+    oid = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-IT-EV")
+    now = datetime.now(timezone.utc)
+    supabase_backend.append_order_event(
+        OrderEvent(
+            event_id="OEV-IT-1", order_id=oid, event_type="quantities_changed",
+            actor="manager-default", at=now, details="Pita: 8 → 6",
+        )
+    )
+    supabase_backend.append_order_event(
+        OrderEvent(event_id="OEV-IT-2", order_id=oid, event_type="line_added")
+    )
+    events = {e.event_id: e for e in supabase_backend.load_order_events_for(oid)}
+    assert set(events) == {"OEV-IT-1", "OEV-IT-2"}
+    assert events["OEV-IT-1"].details == "Pita: 8 → 6"
+    assert events["OEV-IT-1"].actor == "manager-default"
+    assert events["OEV-IT-2"].details == ""
+    assert supabase_backend.load_order_events_for("ORD-IT-NOPE") == []
+
+
+def test_save_after_send_guard_on_real_row():
+    """The post-send save's guarded update (expected_status=manager_sent) applies
+    on a real manager_sent row and 409s (OrderStatusConflictError) once the
+    order is closed."""
+    oid = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-IT-EAS")
+    now = datetime.now(timezone.utc)
+    supabase_backend.update_order(
+        oid, total_value_estimate_pln=1.0, last_edited_at=now, expected_status="manager_sent"
+    )
+    got = supabase_backend.get_order(oid)
+    assert got is not None and got.last_edited_at is not None
+    supabase_backend.update_order(oid, status="closed", expected_status="manager_sent")
+    with pytest.raises(errors.OrderStatusConflictError):
+        supabase_backend.update_order(
+            oid, total_value_estimate_pln=2.0, expected_status="manager_sent"
+        )
 
 
 def test_receipt_roundtrip_and_update():

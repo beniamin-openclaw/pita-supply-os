@@ -114,11 +114,17 @@ def _supplier_products() -> list[SupplierProduct]:
     ]
 
 
-def _activate_sheet_backend(mocker, order: Order | None = None, supplier: Supplier | None = None):
+def _activate_sheet_backend(
+    mocker,
+    order: Order | None = None,
+    supplier: Supplier | None = None,
+    location: Location | None = None,
+):
     """Switch the backend selector to `sheets`, and stub all reads.
 
     `supplier` overrides the default email-channel Pago supplier (used by the
-    channel-aware tests to inject a portal/phone supplier).
+    channel-aware tests to inject a portal/phone supplier). `location` overrides
+    the default WOLA location (used by the location-mailbox CC tests).
 
     Returns a dict of mocks so tests can assert on writes.
     """
@@ -127,7 +133,7 @@ def _activate_sheet_backend(mocker, order: Order | None = None, supplier: Suppli
 
     mocker.patch.object(sheets, "get_order", return_value=order)
     mocker.patch.object(sheets, "load_suppliers", return_value=[supplier or _supplier()])
-    mocker.patch.object(sheets, "load_locations", return_value=[_location()])
+    mocker.patch.object(sheets, "load_locations", return_value=[location or _location()])
     mocker.patch.object(sheets, "load_products", return_value=_products())
     mocker.patch.object(sheets, "load_supplier_products", return_value=_supplier_products())
 
@@ -561,16 +567,18 @@ def test_dispatch_email_channel_still_requires_email(mocker):
 # ---------- feedback r7: standing office CC on the dispatch URL ----------
 
 
-def _dispatch_query(mocker, cc_value: str) -> dict:
-    """Dispatch one order with settings.order_cc_email = cc_value; return the
-    parsed query of the returned Gmail compose URL."""
+def _dispatch_query(mocker, cc_value: str, location_email: str | None = None) -> dict:
+    """Dispatch one order with settings.order_cc_email = cc_value (and the WOLA
+    location's mailbox = location_email); return the parsed query of the
+    returned Gmail compose URL."""
     import urllib.parse
 
     from app.config import settings as app_settings
 
     mocker.patch.object(app_settings, "order_cc_email", cc_value)
     order = _captain_submitted_order()
-    _activate_sheet_backend(mocker, order=order)
+    location = _location().model_copy(update={"email": location_email})
+    _activate_sheet_backend(mocker, order=order, location=location)
     body = {
         "order_id": order.order_id,
         "manager_finals": [
@@ -593,3 +601,45 @@ def test_dispatch_url_omits_cc_when_setting_empty(mocker):
     """Empty setting disables the DW entirely — no stray cc parameter."""
     query = _dispatch_query(mocker, "")
     assert "cc" not in query
+
+
+# ---------- week2-feedback-quantities Phase 2: location mailbox in DW ----------
+
+
+def test_dispatch_url_cc_carries_office_and_location_mailbox(mocker):
+    """Both the standing office copy AND the location's own mailbox ride on the
+    cc parameter, comma-joined (Gmail accepts a comma list)."""
+    query = _dispatch_query(mocker, "biuro@pitabros.pl", location_email="wola@pitabros.pl")
+    assert query["cc"] == ["biuro@pitabros.pl,wola@pitabros.pl"]
+
+
+def test_dispatch_url_cc_office_only_when_location_has_no_email(mocker):
+    query = _dispatch_query(mocker, "biuro@pitabros.pl", location_email=None)
+    assert query["cc"] == ["biuro@pitabros.pl"]
+
+
+def test_dispatch_url_cc_drops_location_placeholder(mocker):
+    """A 'TBD' in locations.email must never become a dead CC (same "@" gate as
+    the recipient)."""
+    query = _dispatch_query(mocker, "biuro@pitabros.pl", location_email="TBD")
+    assert query["cc"] == ["biuro@pitabros.pl"]
+
+
+def test_dispatch_url_cc_location_only_when_office_setting_empty(mocker):
+    query = _dispatch_query(mocker, "", location_email="wola@pitabros.pl")
+    assert query["cc"] == ["wola@pitabros.pl"]
+
+
+def test_dispatch_url_omits_cc_when_both_unusable(mocker):
+    query = _dispatch_query(mocker, "TBD", location_email="")
+    assert "cc" not in query
+
+
+def test_join_cc_helper():
+    from app.main import _join_cc
+
+    assert _join_cc("biuro@x.pl", "wola@x.pl") == "biuro@x.pl,wola@x.pl"
+    assert _join_cc(" biuro@x.pl ", None) == "biuro@x.pl"
+    assert _join_cc("TBD", "wola@x.pl") == "wola@x.pl"
+    assert _join_cc(None, "", "TBD") is None
+    assert _join_cc() is None

@@ -625,3 +625,56 @@ def test_order_detail_minimum_order_value_none_when_supplier_has_none(mocker):
     r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
     assert r.status_code == 200, r.text
     assert r.json()["minimum_order_value_pln"] is None
+
+
+# ---------- Suggestion 0 is information (week2-feedback-quantities Phase 1) ----------
+
+
+def test_edit_stock_at_target_order_without_reason_is_info(mocker):
+    """PATCH mirror of the submit case: counted stock 20 = target 20 (fixture
+    setting) → suggestion 0; ordering 2 kartons with no reason_code passes, the
+    persisted line keeps the counted stock and delta_vs_suggestion_pct=None,
+    and the response carries the "(info)" warning. Inherited via the shared
+    _evaluate_submit_line helper."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED, total=500.0)
+    patches = _enable_sheet(
+        mocker, orders=[order], get_order_return=order, delete_lines_return=1
+    )
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "current_stock_qty_base": 20.0,
+                    "captain_final_qty_purchase": 2.0,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert any("(info)" in w for w in r.json()["warnings"])
+    appended = patches["append_order_lines"].call_args[0][0]
+    assert appended[0].suggested_qty_purchase == 0
+    assert appended[0].current_stock_qty_base == 20.0
+    assert appended[0].delta_vs_suggestion_pct is None
+
+
+def test_orders_suggestion_zero_line_does_not_count_as_deviation(mocker):
+    """A line persisted with delta_vs_suggestion_pct=None (stock ≥ target,
+    suggestion 0) never increases deviation_count on the Captain order list —
+    only real >=25 % deltas do."""
+    orders = [_order("ORD-A")]
+    lines = [
+        _line("ORD-A", "OL-1", captain_qty=2.0, delta_pct=None),
+        _line("ORD-A", "OL-2", captain_qty=6.0, delta_pct=0.50),
+    ]
+    _enable_sheet(mocker, orders=orders, lines=lines)
+
+    r = client.get("/api/captain/orders", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    assert payload[0]["line_count"] == 2
+    assert payload[0]["deviation_count"] == 1

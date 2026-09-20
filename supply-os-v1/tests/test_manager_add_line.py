@@ -23,6 +23,7 @@ from app.models import (
     OrderLine,
     OrderStatus,
     Product,
+    Receipt,
     SupplierProduct,
 )
 
@@ -111,7 +112,9 @@ def _order(
     )
 
 
-def _enable_sheet(mocker, order: Order | None = None):
+def _enable_sheet(
+    mocker, order: Order | None = None, receipts: list[Receipt] | None = None
+):
     """Switch the backend selector to `sheets` and stub the reads + the single
     write the add-line path uses. Returns mocks so tests can assert on writes."""
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
@@ -124,7 +127,19 @@ def _enable_sheet(mocker, order: Order | None = None):
         sheets, "load_location_product_settings", return_value=_settings()
     )
     append_mock = mocker.patch.object(sheets, "append_order_lines", return_value=None)
-    return {"append_order_lines": append_mock}
+    # Phase 6 (week2-feedback-quantities): post-send gate + last_edited_at stamp
+    # + line_added order event. Default: no receipts.
+    receipts_mock = mocker.patch.object(
+        sheets, "load_receipts_for_orders", return_value=receipts or []
+    )
+    update_order_mock = mocker.patch.object(sheets, "update_order", return_value=None)
+    event_mock = mocker.patch.object(sheets, "append_order_event", return_value=None)
+    return {
+        "append_order_lines": append_mock,
+        "load_receipts_for_orders": receipts_mock,
+        "update_order": update_order_mock,
+        "append_order_event": event_mock,
+    }
 
 
 # ---------- GET /api/manager/orderable ----------
@@ -224,6 +239,94 @@ def test_add_line_rejects_non_claimed_status(mocker):
     )
     assert r.status_code == 409
     assert "manager_claimed" in r.json()["detail"]
+    mocks["append_order_lines"].assert_not_called()
+
+
+# ---------- Phase 6 (week2-feedback-quantities): add a line after send ----------
+
+def _receipt(order_id: str) -> Receipt:
+    return Receipt(
+        receipt_id="RCP-1",
+        order_id=order_id,
+        location_id="WOLA",
+        supplier_id="SUP_PAGO",
+        receipt_date=date(2026, 5, 26),
+        line_count=1,
+    )
+
+
+def test_add_line_manager_sent_without_receipt(mocker):
+    order = _order(status=OrderStatus.MANAGER_SENT)
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={"product_id": "P026", "supplier_product_id": "SP_PAGO_P026"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "manager_sent"
+    mocks["append_order_lines"].assert_called_once()
+    # last_edited_at stamped, guarded on the current status.
+    _, kwargs = mocks["update_order"].call_args
+    assert kwargs["expected_status"] == "manager_sent"
+    assert kwargs["last_edited_at"] is not None
+    mocks["append_order_event"].assert_called_once()
+    event = mocks["append_order_event"].call_args.args[0]
+    assert event.event_type == "line_added"
+    assert event.order_id == order.order_id
+    assert "Gyros Wieprz" in event.details
+
+
+def test_add_line_manager_claimed_no_stamp_no_event(mocker):
+    order = _order()
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={"product_id": "P026", "supplier_product_id": "SP_PAGO_P026"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    mocks["update_order"].assert_not_called()
+    mocks["append_order_event"].assert_not_called()
+
+
+def test_add_line_409_manager_sent_with_receipt(mocker):
+    order = _order(status=OrderStatus.MANAGER_SENT)
+    mocks = _enable_sheet(mocker, order=order, receipts=[_receipt(order.order_id)])
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={"product_id": "P026", "supplier_product_id": "SP_PAGO_P026"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 409
+    assert "receipt" in r.json()["detail"]
+    mocks["append_order_lines"].assert_not_called()
+
+
+def test_add_line_409_closed(mocker):
+    order = _order(status=OrderStatus.CLOSED)
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={"product_id": "P026", "supplier_product_id": "SP_PAGO_P026"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 409
+    mocks["append_order_lines"].assert_not_called()
+
+
+def test_add_line_409_manager_sent_transport_member(mocker):
+    order = _order(status=OrderStatus.MANAGER_SENT).model_copy(
+        update={"supplier_order_reference": "TRN-20260520-PAGO-abc123"}
+    )
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={"product_id": "P026", "supplier_product_id": "SP_PAGO_P026"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 409
+    assert "edit via Transport" in r.json()["detail"]
     mocks["append_order_lines"].assert_not_called()
 
 

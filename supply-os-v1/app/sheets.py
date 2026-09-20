@@ -40,6 +40,7 @@ from .models import (
     Location,
     LocationProductSetting,
     Order,
+    OrderEvent,
     OrderLine,
     OrderStatus,
     Product,
@@ -1095,3 +1096,27 @@ def append_transport_event(event: TransportEvent) -> None:
     row = _model_to_row(event, column_order)
     ws.append_row(row, value_input_option="USER_ENTERED")
     invalidate_cache("transport_events")
+
+
+# ---------- Order post-send edit log (week2-feedback-quantities Phase 6) ----------
+
+def load_order_events_for(order_id: str) -> list[OrderEvent]:
+    """Read the (TTL-cached) 'order_events' worksheet and filter to ``order_id``
+    in Python — Sheets has no targeted query (mirrors
+    ``load_transport_events_for``). Raises ``WorksheetNotFound`` when the tab
+    hasn't been created yet; callers degrade to "no history shown"."""
+    all_events = _read_with_ttl("order_events", OrderEvent, ORDERS_TTL_SECONDS)
+    return [e for e in all_events if e.order_id == order_id]
+
+
+def append_order_event(event: OrderEvent) -> None:
+    """Append one row to 'order_events', then invalidate the read cache.
+    Append-only — there is no update/delete for an audit-trail row. Mirrors
+    ``append_transport_event``. Callers (``main._log_order_event``) treat this
+    as best-effort and never let a failure here break the edit that
+    triggered it."""
+    ws = _open_worksheet("order_events")
+    column_order = _get_column_order(ws)
+    row = _model_to_row(event, column_order)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    invalidate_cache("order_events")

@@ -208,10 +208,21 @@ export const STRINGS = {
     pl: "Zamówienie bez stanu",
     en: "Order without current stock",
   },
-  // No-baseline variants: the suggestion is 0 (e.g. bucket SKUs), so a "%
-  // deviation" is mathematically meaningless / explodes. Show "brak bazy" copy
-  // instead of a huge or ∞ percentage. State + requiresReason stay as the gate
-  // dictates; only the wording (no embedded %) changes.
+  // Counted stock at/above target → suggestion 0 is information, not a gate
+  // (week2-feedback-quantities Phase 1): yellow pill, no %, no reason picker.
+  "state.aboveTargetInfo": {
+    pl: "Stan {stock} ≥ cel {target} {unit} — powód niewymagany",
+    en: "Stock {stock} ≥ target {target} {unit} — no reason needed",
+  },
+  // Same branch when rounding produced suggestion 0 with stock still below
+  // target (raw gap < half a purchase unit) — neutral wording, no reason.
+  "state.suggestionZeroInfo": {
+    pl: "Sugestia 0 (stan {stock} z {target} {unit}) — powód niewymagany",
+    en: "Suggestion 0 (stock {stock} of {target} {unit}) — no reason needed",
+  },
+  // No-baseline variants: kept for reference / the manager view; since Phase 1
+  // of week2-feedback-quantities compute.ts no longer reaches them (a
+  // suggestion-0 line is informational, see state.aboveTargetInfo).
   "state.noBaselineNoReason": {
     pl: "Brak bazy sugestii — wymagany powód",
     en: "No suggestion baseline — reason required",
@@ -222,6 +233,9 @@ export const STRINGS = {
   },
   // Short token for the captain order-detail + manager line-table % cells.
   "deviation.noBaseline": { pl: "brak bazy", en: "no baseline" },
+  // Counted stock ≥ target (suggestion 0, delta null) — the line was ordered
+  // above target as information, not a deviation (week2-feedback-quantities).
+  "deviation.aboveTarget": { pl: "ponad cel", en: "above target" },
 
   // Reason picker -----------------------------------------------------------
   "reason.label": {
@@ -639,6 +653,20 @@ export const STRINGS = {
     pl: "zmienione przez menedżera (było {value})",
     en: "changed by manager (was {value})",
   },
+  // Phase 7 — order-level banner on a sent/closed order whose quantities the
+  // manager changed (including lines zeroed by the manager).
+  "orders.detail.managerChangedBanner.one.lines": {
+    pl: "Menedżer zmienił ilość w {n} pozycji",
+    en: "The manager changed the quantity on {n} line",
+  },
+  "orders.detail.managerChangedBanner.few.lines": {
+    pl: "Menedżer zmienił ilości w {n} pozycjach",
+    en: "The manager changed quantities on {n} lines",
+  },
+  "orders.detail.managerChangedBanner.many.lines": {
+    pl: "Menedżer zmienił ilości w {n} pozycjach",
+    en: "The manager changed quantities on {n} lines",
+  },
   "orders.detail.orderedLabel": { pl: "Zamówiono", en: "Ordered" },
   "orders.detail.receivedLabel": { pl: "Dostarczono", en: "Delivered" },
   "orders.detail.orderedSecondary": {
@@ -737,6 +765,20 @@ export const STRINGS = {
   "inventory.lastCountBanner": {
     pl: "Ostatni remanent: {who} · {time}",
     en: "Last count: {who} · {time}",
+  },
+  // Information layer under each stock input (week2-feedback-quantities Phase 3).
+  "inventory.packHint": {
+    pl: "1 {packUnit} = {upp} {unit}",
+    en: "1 {packUnit} = {upp} {unit}",
+  },
+  "inventory.packEquivalent": { pl: "≈ {packs}", en: "≈ {packs}" },
+  "inventory.previousCount": {
+    pl: "ostatnio {qty} · {date}",
+    en: "last {qty} · {date}",
+  },
+  "inventory.checkUnitHint": {
+    pl: "sprawdź jednostkę — max to {max} {unit}",
+    en: "check the unit — max is {max} {unit}",
   },
   "inventory.blankVsZeroHint": {
     pl: "Puste = nie policzone · 0 = brak na stanie",
@@ -837,6 +879,15 @@ export const STRINGS = {
     pl: "Dodatkowe informacje dla menedżera lub dostawcy…",
     en: "Extra notes for the manager or supplier…",
   },
+  // Phase 7 (week2-feedback-quantities) — Coca-Cola crates prompt: two small
+  // numeric inputs above the comment, serialised into the first line of
+  // captain_note (see pages/captain-mp/lib/supplierPrompts.ts).
+  "captain.orderComment.crates.legend": {
+    pl: "Skrzynki do odbioru",
+    en: "Crates for pickup",
+  },
+  "captain.orderComment.crates.empty": { pl: "puste", en: "empty" },
+  "captain.orderComment.crates.withBottles": { pl: "z butelkami", en: "with bottles" },
 
   // Phase 5 — permanent Captain tab strip (navigation)
   "tabs.ariaLabel": { pl: "Nawigacja Kapitana", en: "Captain navigation" },
@@ -872,6 +923,42 @@ export const STRINGS = {
   "manager.inventory.lineCount.many.items": { pl: "{n} pozycji", en: "{n} items" },
   "manager.inventory.productCol": { pl: "Produkt", en: "Product" },
   "manager.inventory.stockCol": { pl: "Stan", en: "Stock" },
+  // Decision layer (week2-feedback-quantities Phase 4): threshold columns +
+  // attention flag on the Manager inventory detail.
+  "manager.inventory.targetCol": { pl: "Cel", en: "Target" },
+  "manager.inventory.deltaCol": { pl: "Δ", en: "Δ" },
+  "manager.inventory.flagCol": { pl: "Uwaga", en: "Flag" },
+  "manager.inventory.attention.belowMin": { pl: "poniżej min ({min})", en: "below min ({min})" },
+  "manager.inventory.attention.overMax": { pl: "ponad 3 × max ({max})", en: "over 3 × max ({max})" },
+  "manager.inventory.attention.zeroWithTarget": {
+    pl: "zero przy celu {target}",
+    en: "zero with target {target}",
+  },
+  "manager.inventory.noSupplier": { pl: "Bez dostawcy", en: "No supplier" },
+  "manager.inventory.noResults": {
+    pl: "Brak pozycji pasujących do filtrów.",
+    en: "No items match the filters.",
+  },
+
+  // Shared product-list toolbar (week2-feedback-quantities Phase 4) ---------
+  "productList.searchLabel": { pl: "Szukaj produktu", en: "Search products" },
+  "productList.searchPlaceholder": { pl: "Szukaj produktu…", en: "Search products…" },
+  "productList.searchClear": { pl: "Wyczyść wyszukiwanie", en: "Clear search" },
+  "productList.groupByLabel": { pl: "Grupuj", en: "Group by" },
+  "productList.groupBy.category": { pl: "Kategoria", en: "Category" },
+  "productList.groupBy.supplier": { pl: "Dostawca", en: "Supplier" },
+  "productList.sortLabel": { pl: "Sortuj", en: "Sort" },
+  "productList.sort.name": { pl: "Nazwa A→Z", en: "Name A→Z" },
+  "productList.sort.stock": { pl: "Stan rosnąco", en: "Stock ascending" },
+  "productList.sort.delta": { pl: "Największy brak", en: "Largest deficit" },
+  "productList.sort.category": { pl: "Kategoria", en: "Category" },
+  "productList.onlyAttention": { pl: "Tylko z uwagą", en: "Only flagged" },
+  "productList.onlyCritical": { pl: "Tylko krytyczne", en: "Only critical" },
+  "productList.onlyUncounted": { pl: "Tylko nieliczone", en: "Only uncounted" },
+  "inventory.noResults": {
+    pl: "Brak produktów pasujących do filtrów.",
+    en: "No products match the filters.",
+  },
   // CSV export of one inventory count (manager-only; training-feedback-0901
   // follow-up, operator request 2026-09-02).
   "manager.inventory.csvButton": { pl: "Pobierz CSV", en: "Download CSV" },
@@ -889,6 +976,9 @@ export const STRINGS = {
   "manager.inventory.csv.colCategory": { pl: "Kategoria", en: "Category" },
   "manager.inventory.csv.colUnit": { pl: "Jednostka", en: "Unit" },
   "manager.inventory.csv.colQty": { pl: "Ilość", en: "Quantity" },
+  "manager.inventory.csv.colMin": { pl: "Min", en: "Min" },
+  "manager.inventory.csv.colTarget": { pl: "Cel", en: "Target" },
+  "manager.inventory.csv.colMax": { pl: "Max", en: "Max" },
   "manager.inventory.csv.colCritical": { pl: "Krytyczny", en: "Critical" },
   "manager.inventory.csv.colPrice": { pl: "Cena jedn. (PLN)", en: "Unit price (PLN)" },
   "manager.inventory.csv.colValue": { pl: "Wartość (PLN)", en: "Value (PLN)" },
@@ -1042,6 +1132,16 @@ export const STRINGS = {
     en: "Could not load WZ photos",
   },
   "delivery.missingWz": { pl: "Brak zdjęcia WZ", en: "Missing WZ photo" },
+  // Phase 7 — free-text receipt notes (e.g. items delivered outside the order).
+  "delivery.notesLabel": {
+    pl: "Uwagi do dostawy (np. pozycje spoza zamówienia)",
+    en: "Delivery notes (e.g. items outside the order)",
+  },
+  "delivery.notesPlaceholder": {
+    pl: "Co dowieźli poza zamówieniem, czego brakuje, uwagi do WZ…",
+    en: "What arrived outside the order, what is missing, notes on the WZ…",
+  },
+  "manager.delivery.notes": { pl: "Uwagi: {value}", en: "Notes: {value}" },
   // Manager receiving view (manager-receiving-view) — read-only delivery surface.
   "manager.delivery.section": { pl: "Dostawa", en: "Delivery" },
   "manager.delivery.receivedBy": { pl: "Przyjął: {value}", en: "Received by: {value}" },
@@ -1064,6 +1164,31 @@ export const STRINGS = {
     pl: "Dodano produkt do zamówienia",
     en: "Product added to order",
   },
+  // Edit after send (week2-feedback-quantities Phase 6): a manager_sent order
+  // without a receipt stays editable; changes are logged and a "dosyłka"
+  // e-mail is rebuilt from the current quantities.
+  "manager.resend.save": { pl: "Zapisz zmiany (dosyłka)", en: "Save changes (top-up)" },
+  "manager.resend.title": { pl: "Dosyłka do dostawcy", en: "Top-up to supplier" },
+  "manager.resend.note": {
+    pl: "Zamówienie już wysłane. Zapisz zmiany, a potem wyślij dosyłkę z aktualnymi ilościami.",
+    en: "This order was already sent. Save your changes, then send a top-up with the current quantities.",
+  },
+  "manager.resend.unsaved": {
+    pl: "Najpierw zapisz zmiany — dosyłka jest budowana z zapisanych ilości.",
+    en: "Save your changes first — the top-up is built from the saved quantities.",
+  },
+  "manager.resend.openGmail": { pl: "Otwórz dosyłkę w Gmail", en: "Open top-up in Gmail" },
+  "manager.resend.editViaTransport": {
+    pl: "Zamówienie należy do transportu — edytuj je na ekranie Transport.",
+    en: "This order belongs to a transport — edit it on the Transport screen.",
+  },
+  "manager.lockedAfterReceipt": {
+    pl: "Zablokowane po odbiorze",
+    en: "Locked after receipt",
+  },
+  "manager.events.title": { pl: "Historia zmian", en: "Change history" },
+  "manager.events.type.quantitiesChanged": { pl: "Zmieniono ilości", en: "Quantities changed" },
+  "manager.events.type.lineAdded": { pl: "Dodano pozycję", en: "Line added" },
   // Manager Transport (to-ordering-pago) — combine several locations' orders
   // for one supplier into a single Transport ("TO") batch.
   "manager.transport.navLink": { pl: "Transport (TO)", en: "Transport" },
@@ -1565,6 +1690,35 @@ export const STRINGS = {
   "oauth.gmailCallback.errorPrefix": {
     pl: "Błąd logowania Google: {detail}",
     en: "Google sign-in error: {detail}",
+  },
+
+  // Queue lanes + archive (week2-feedback-quantities Phase 5) --------------
+  "manager.queue.one.inQueueDays": { pl: "w kolejce od {n} dnia", en: "in the queue for {n} day" },
+  "manager.queue.few.inQueueDays": { pl: "w kolejce od {n} dni", en: "in the queue for {n} days" },
+  "manager.queue.many.inQueueDays": { pl: "w kolejce od {n} dni", en: "in the queue for {n} days" },
+  "manager.queue.inQueueDaysTooltip": {
+    pl: "Zamówienie czeka od dnia zgłoszenia przez kapitana",
+    en: "Waiting since the captain submitted it",
+  },
+  "manager.queue.archiveCount": { pl: "w archiwum: {n}", en: "in archive: {n}" },
+  "manager.archive.navLink": { pl: "Archiwum", en: "Archive" },
+  "manager.archive.title": { pl: "Archiwum zamówień", en: "Order archive" },
+  "manager.archive.back": { pl: "Powrót do kolejki", en: "Back to the queue" },
+  "manager.archive.intro": {
+    pl: "Odebrane i anulowane zamówienia. Podgląd tylko do odczytu.",
+    en: "Received and cancelled orders. Read-only.",
+  },
+  "manager.archive.daysLabel": { pl: "Okres", en: "Period" },
+  "manager.archive.capNotice": {
+    pl: "Pokazano {n} najnowszych — starsze nie są tu widoczne",
+    en: "Showing the newest {n} — older ones are not listed here",
+  },
+  "manager.archive.daysOptionLabel": { pl: "{n} dni", en: "{n} days" },
+  "manager.archive.lane.closed": { pl: "Odebrane", en: "Received" },
+  "manager.archive.lane.cancelled": { pl: "Anulowane", en: "Cancelled" },
+  "manager.archive.empty": {
+    pl: "Brak zamówień w wybranym okresie.",
+    en: "No orders in the selected period.",
   },
 
   "manager.queue.transportChip": { pl: "TO", en: "TO" },

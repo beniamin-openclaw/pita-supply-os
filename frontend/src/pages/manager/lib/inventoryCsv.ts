@@ -60,6 +60,17 @@ function formatCsvNumber(n: number): string {
   return String(n).replace(".", ",");
 }
 
+/** Number of columns in the header / product / TOTAL rows (kept in one place
+ *  so the TOTAL row's padding can never drift from the header). */
+const CSV_COLUMN_COUNT = 11;
+
+/** A threshold the backend could not join (no location setting) is `null` /
+ *  absent — emitted as an empty cell, never "0" (which would falsely claim a
+ *  configured zero threshold). */
+function formatCsvThreshold(n: number | null | undefined): string {
+  return n === null || n === undefined ? "" : formatCsvNumber(n);
+}
+
 /** Renders an ISO instant in Europe/Warsaw as "YYYY-MM-DD HH:MM" (no UTC
  *  offset suffix), via `formatToParts` so the exact separators are ours, not
  *  locale-dependent. `hourCycle: "h23"` rather than `hour12: false` — some
@@ -105,8 +116,10 @@ function formatIsoForCsv(iso: string): string {
  * corrected), a header row, one row per counted product, and a final TOTAL
  * row. Returns a single string, BOM-prefixed, ready to hand to a `Blob`.
  *
- * Column order: Produkt, Kategoria, Jednostka, Ilość, Krytyczny, Cena jedn.
- * (PLN), Wartość (PLN), Komentarz. "Cena jedn." and "Wartość" are ALWAYS
+ * Column order: Produkt, Kategoria, Jednostka, Ilość, Min, Cel, Max, Krytyczny,
+ * Cena jedn. (PLN), Wartość (PLN), Komentarz. Min/Cel/Max are the location
+ * thresholds joined by the backend (week2-feedback-quantities Phase 4); a
+ * line without a setting leaves them empty. "Cena jedn." and "Wartość" are ALWAYS
  * empty — see the file-level comment for why, and what backend change would
  * be needed to fill them in. The TOTAL row's value cell is likewise left
  * empty rather than "0" — there is nothing to sum, and writing "0" would
@@ -138,6 +151,9 @@ export function buildInventoryCsv(detail: InventoryCountDetail, t: TFunc): strin
     t("manager.inventory.csv.colCategory"),
     t("manager.inventory.csv.colUnit"),
     t("manager.inventory.csv.colQty"),
+    t("manager.inventory.csv.colMin"),
+    t("manager.inventory.csv.colTarget"),
+    t("manager.inventory.csv.colMax"),
     t("manager.inventory.csv.colCritical"),
     t("manager.inventory.csv.colPrice"),
     t("manager.inventory.csv.colValue"),
@@ -150,6 +166,9 @@ export function buildInventoryCsv(detail: InventoryCountDetail, t: TFunc): strin
       line.product_category,
       line.inventory_unit,
       formatCsvNumber(line.current_stock_qty_base),
+      formatCsvThreshold(line.min_stock_qty_base),
+      formatCsvThreshold(line.target_stock_qty_base),
+      formatCsvThreshold(line.max_stock_qty_base),
       line.is_critical ? yes : no,
       "", // Cena jedn. (PLN) — not reachable; see file-level comment.
       "", // Wartość (PLN) — not reachable; see file-level comment.
@@ -157,7 +176,10 @@ export function buildInventoryCsv(detail: InventoryCountDetail, t: TFunc): strin
     ]),
   );
 
-  const totalRow = csvRow([t("manager.inventory.csv.totalLabel"), "", "", "", "", "", "", ""]);
+  const totalRow = csvRow([
+    t("manager.inventory.csv.totalLabel"),
+    ...Array<string>(CSV_COLUMN_COUNT - 1).fill(""),
+  ]);
 
   const lines = [...metaRows, "", header, ...productRows, totalRow];
   return BOM + lines.join(CSV_NEWLINE);

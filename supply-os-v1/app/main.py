@@ -73,6 +73,7 @@ from .models import (
     ManagerSaveRequest,
     ManagerSaveResponse,
     Order,
+    OrderEvent,
     OrderLine,
     OrderLineSubmit,
     OrderingMethod,
@@ -449,7 +450,8 @@ def _evaluate_submit_line(
     gates cannot drift. Returns ``(order_line, warning_or_None, line_value_pln)``
     and raises ``HTTPException`` on a hard gate.
 
-    Two branches on whether the Captain counted stock:
+    Three branches on whether the Captain counted stock and what the engine
+    suggested:
 
     - **Uncounted** (``line.current_stock_qty_base is None``): there is no real
       suggestion to deviate from (SUGESTIA renders "—"), so the deviation and
@@ -458,8 +460,17 @@ def _evaluate_submit_line(
       (``order_base > max`` and not ``allow_over_max_due_to_packaging``). The line
       persists with ``current_stock_qty_base=0`` (column stays NOT NULL) and
       ``delta_vs_suggestion_pct=None`` (so it never inflates deviation roll-ups).
-    - **Counted** (a value was given): the existing critical-under and >25%
-      deviation gates apply byte-identically.
+    - **Counted, at/above target** (``stock is not None`` and
+      ``suggested_qty_purchase == 0``; week2-feedback-quantities Phase 1): the
+      suggestion is 0, so there is no baseline to deviate from — the deviation
+      and critical-under gates are skipped and NO reason is required. The line
+      persists the counted stock and ``delta_vs_suggestion_pct=None`` (so it
+      never inflates deviation roll-ups). When a quantity was ordered anyway, an
+      informational warning ``"... (info)"`` is returned; a ``reason_code``, if
+      the Captain gave one, is stored as before.
+    - **Counted, below target** (a value was given and the suggestion is > 0):
+      the existing critical-under and >25% deviation gates apply
+      byte-identically.
     """
     is_critical = setting.is_critical_for_location or product.is_critical
     stock = line.current_stock_qty_base
@@ -505,6 +516,18 @@ def _evaluate_submit_line(
             )
         stored_stock = 0.0
         delta_pct: Optional[float] = None
+    elif suggested_qty_purchase == 0:
+        # Counted at/above target — suggestion 0 is information, not a gate.
+        # No baseline to express a deviation against, so nothing is required
+        # of the Captain; a reason, if given, is still stored below.
+        if line.captain_final_qty_purchase > 0:
+            warning = (
+                f"Line {line.product_id}: stock {stock:g} ≥ target "
+                f"{setting.target_stock_qty_base:g}, ordered "
+                f"{line.captain_final_qty_purchase:g} (info)"
+            )
+        stored_stock = stock
+        delta_pct = None
     else:
         delta_pct = abs(
             line.captain_final_qty_purchase - suggested_qty_purchase
@@ -580,6 +603,10 @@ def captain_submit(
         without reason_code -> 400. When stock is uncounted the deviation +
         critical gates are skipped (no real suggestion); only over-MAX forces a
         reason. See `_evaluate_submit_line`.
+      - counted line at/above target (suggested_qty_purchase == 0) -> never a
+        400: no reason is required, delta_vs_suggestion_pct is stored as None,
+        and an "(info)" warning names the ordered quantity when it is > 0
+        (week2-feedback-quantities Phase 1). See `_evaluate_submit_line`.
     """
     backend = _choose_backend()
     master = _resolve_master_data(backend, location_id, req.supplier_id)
@@ -672,6 +699,18 @@ def captain_submit(
 # ---------- Manager Dispatch (auth required) ----------
 
 _DEVIATION_THRESHOLD = 0.25  # matches captain_submit validation
+
+
+def _join_cc(*parts: Optional[str]) -> Optional[str]:
+    """Comma-join the CC addresses for the dispatch e-mail (the standing office
+    copy + the location's own mailbox, week2-feedback-quantities Phase 2).
+
+    Each part is kept only when it carries an "@" — the same placeholder gate
+    the recipient uses, so a 'TBD' in master data can never become a silent dead
+    CC. Returns None when nothing survives, which ``gmail_url.build_draft_url``
+    treats as "no cc parameter"."""
+    kept = [p.strip() for p in parts if p and "@" in p]
+    return ",".join(kept) if kept else None
 
 
 def _deviation_threshold() -> float:
@@ -834,6 +873,9 @@ def manager_queue(
     # absent (mirrors captain_receipts).
     received_count_by_order: dict[str, int] = {}
     received_discrepancy_by_order: dict[str, int] = {}
+    # Newest receipt timestamp per order (week2-feedback Phase 5) — one extra
+    # field off the same scan, no additional query.
+    last_received_by_order: dict[str, datetime] = {}
     if status in (OrderStatus.MANAGER_SENT, OrderStatus.CLOSED):
         try:
             for r in backend.load_receipts_for_orders(order_ids):
@@ -844,6 +886,10 @@ def manager_queue(
                     received_discrepancy_by_order[r.order_id] = (
                         received_discrepancy_by_order.get(r.order_id, 0) + 1
                     )
+                if r.received_submitted_at is not None:
+                    prev = last_received_by_order.get(r.order_id)
+                    if prev is None or r.received_submitted_at > prev:
+                        last_received_by_order[r.order_id] = r.received_submitted_at
         except sheets.WorksheetNotFound:
             pass
 
@@ -889,6 +935,7 @@ def manager_queue(
                 received_discrepancy_count=received_discrepancy_by_order.get(
                     order.order_id, 0
                 ),
+                last_received_at=last_received_by_order.get(order.order_id),
                 supplier_order_reference=order.supplier_order_reference,
             )
         )
@@ -976,6 +1023,7 @@ def _load_order_receipts(
                 discrepancy_count=r.discrepancy_count,
                 received_with_missing_wz=r.received_with_missing_wz,
                 wz_photo_count=r.wz_photo_count,
+                notes=r.notes or "",
                 lines=enriched,
             )
         )
@@ -1060,6 +1108,21 @@ def manager_order_detail(
             backend, order_id, products_by_id, sps_by_id
         )
 
+    # Post-send edit log + gate (week2-feedback-quantities Phase 6). Only a
+    # manager_sent order can carry events or be editable; other statuses skip
+    # both reads (the receipt scan inside the gate is the expensive one).
+    order_events: list[OrderEvent] = []
+    editable_after_send = False
+    if order.status == OrderStatus.MANAGER_SENT:
+        order_events = _load_order_events_safe(backend, order_id)
+        # Receipts were already loaded above — no second receipt query.
+        editable_after_send = (
+            not (order.supplier_order_reference or "").startswith("TRN-")
+            and not order_receipts
+        )
+    elif order.status == OrderStatus.CLOSED:
+        order_events = _load_order_events_safe(backend, order_id)
+
     return ManagerOrderDetail(
         order_id=order.order_id,
         location_id=order.location_id,
@@ -1073,6 +1136,7 @@ def manager_order_detail(
         supplier_name=supplier.supplier_name if supplier else order.supplier_id,
         supplier_email=supplier.email if supplier else None,
         cc_email=settings.order_cc_email or None,
+        location_email=location.email if location else None,
         ordering_method=supplier.ordering_method if supplier else OrderingMethod.EMAIL,
         supplier_notes=supplier.notes if supplier else "",
         order_date=order.order_date,
@@ -1091,6 +1155,8 @@ def manager_order_detail(
         lines=enriched_lines,
         receipts=order_receipts,
         supplier_order_reference=order.supplier_order_reference,
+        events=order_events,
+        editable_after_send=editable_after_send,
     )
 
 
@@ -1282,6 +1348,7 @@ def captain_order_detail(
         notes=order.notes,
         extra_items=order.extra_items,
         captain_note=order.captain_note,
+        sent_method=order.sent_method,
         editable=(order.status == OrderStatus.CAPTAIN_SUBMITTED),
         lines=enriched_lines,
     )
@@ -1302,7 +1369,8 @@ def captain_order_edit(
         manager.
       - Same line-level validation as POST /api/captain/submit (critical zero
         requires reason, >25% deviation requires reason, supplier_product
-        orderable here, etc.).
+        orderable here, etc.; a counted line with suggestion 0 is informational
+        — see the third branch of `_evaluate_submit_line`).
 
     On success:
       - Existing order_lines rows are deleted from the sheet.
@@ -1571,6 +1639,134 @@ def _log_transport_event(
         )
 
 
+def _log_order_event(
+    backend,
+    order_id: str,
+    event_type: str,
+    details: str,
+    actor: str = "manager-default",
+) -> None:
+    """Emit one post-send order edit-log row (week2-feedback-quantities Phase 6)
+    — BEST-EFFORT, never raises, mirroring ``_log_transport_event`` /
+    ``_log_inventory_event``. A missing 'order_events' worksheet/table, a seed
+    backend without ``append_order_event``, or any other backend failure must
+    not break the edit that triggered it (the line/order write already
+    succeeded by the time this is called) — only logs a warning."""
+    try:
+        backend.append_order_event(
+            OrderEvent(
+                event_id=f"OEV-{secrets.token_hex(4)}",
+                order_id=order_id,
+                event_type=event_type,
+                actor=actor,
+                at=datetime.now(timezone.utc),
+                details=details,
+            )
+        )
+    except Exception:
+        log.warning(
+            "Order event emission failed (order_id=%s, event_type=%s) "
+            "— continuing without recording this event",
+            order_id,
+            event_type,
+            exc_info=True,
+        )
+
+
+def _load_order_events_safe(backend, order_id: str) -> list[OrderEvent]:
+    """Read one order's post-send edit log, newest first, capped 100 — NEVER
+    raising (mirrors ``_load_inventory_events_safe``): the history annotates an
+    order the caller already loaded, so no failure reading it (missing
+    worksheet, absent table ahead of migration 0020, seed backend) may cost the
+    reader the order itself."""
+    try:
+        events = backend.load_order_events_for(order_id)
+    except Exception:
+        log.warning(
+            "Order event history unavailable for order_id=%s — returning [] "
+            "(the order itself is unaffected)",
+            order_id,
+            exc_info=True,
+        )
+        return []
+    events.sort(
+        key=lambda e: e.at or datetime.min.replace(tzinfo=timezone.utc), reverse=True
+    )
+    return events[:100]
+
+
+def _has_receipts(backend, order_id: str) -> bool:
+    """True when at least one goods-receipt exists for ``order_id``. A missing
+    'receipts' worksheet reads as "no receipts" (mirrors ``manager_queue``)."""
+    try:
+        return bool(backend.load_receipts_for_orders([order_id]))
+    except sheets.WorksheetNotFound:
+        return False
+
+
+def _is_editable_after_send(backend, order: Order) -> bool:
+    """Post-send edit gate (Phase 6 + plan-review amendments): only a
+    ``manager_sent`` order with NO receipt that is NOT a Transport batch member.
+    ``closed`` (the first receipt flips manager_sent → closed) is never editable."""
+    if order.status != OrderStatus.MANAGER_SENT:
+        return False
+    if (order.supplier_order_reference or "").startswith("TRN-"):
+        return False
+    return not _has_receipts(backend, order.order_id)
+
+
+def _reject_if_not_editable_after_send(backend, order: Order, action: str) -> None:
+    """409 unless a ``manager_sent`` order may still be edited: a Transport batch
+    member must be edited via the Transport screen (its aggregate is frozen at
+    finalize); an order with a receipt is locked ("odbiór już potwierdzony")."""
+    backend.invalidate_cache("receipts")
+    if (order.supplier_order_reference or "").startswith("TRN-"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order.order_id} belongs to transport "
+                f"{order.supplier_order_reference} — cannot {action} it here; "
+                f"edit via Transport instead."
+            ),
+        )
+    if _has_receipts(backend, order.order_id):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order.order_id} already has a goods receipt "
+                f"(odbiór już potwierdzony) — cannot {action} after receipt"
+            ),
+        )
+
+
+def _effective_qty_changes(
+    order: Order,
+    finals_by_line_id: dict,
+    products_by_id: dict[str, Product],
+) -> list[str]:
+    """Per-line "Name: old → new" diff for every line whose EFFECTIVE quantity
+    (manager_final if > 0 else captain_final) actually changes in this save —
+    the same rule the transport ``quantities_changed`` event uses. Computed
+    from the pre-write ``order``."""
+    changes: list[str] = []
+    for original_line in order.lines:
+        final = finals_by_line_id.get(original_line.order_line_id)
+        if final is None:
+            continue
+        old_qty = (
+            original_line.manager_final_qty_purchase
+            if original_line.manager_final_qty_purchase > 0
+            else original_line.captain_final_qty_purchase
+        )
+        new_qty = final.manager_final_qty_purchase
+        if new_qty == old_qty:
+            continue
+        product = products_by_id.get(original_line.product_id)
+        name = product.product_name_pl if product else original_line.product_id
+        changes.append(f"{name}: {old_qty:g} → {new_qty:g}")
+    return changes
+
+
 @app.post("/api/manager/release/{order_id}", response_model=ManagerReleaseResponse)
 def manager_release(
     order_id: str,
@@ -1803,7 +1999,9 @@ def manager_dispatch(
                 lines=enriched_lines,
                 products_by_id={**products_by_id, **sps_by_id},
                 location=location,
-                cc_email=settings.order_cc_email,
+                cc_email=_join_cc(
+                    settings.order_cc_email, location.email if location else None
+                ),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}")
@@ -1876,19 +2074,25 @@ def manager_order_save(
         )
 
     # Own preflight (see docstring): fresh read + status gate before any write.
+    # Phase 6 (week2-feedback-quantities): a manager_sent order stays editable
+    # until its first receipt (and never when it is a Transport batch member);
+    # the "dosyłka" e-mail is rebuilt client-side from the saved quantities.
     backend.invalidate_cache("orders")
     order = backend.get_order(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
-    if order.status != OrderStatus.MANAGER_CLAIMED:
+    if order.status not in (OrderStatus.MANAGER_CLAIMED, OrderStatus.MANAGER_SENT):
         raise HTTPException(
             status_code=409,
             detail=(
                 f"Order {order_id} status is {order.status.value}, "
-                f"expected manager_claimed (it may have been dispatched or "
-                f"released — refresh the queue)"
+                f"expected manager_claimed or manager_sent (it may have been "
+                f"released or received — refresh the queue)"
             ),
         )
+    post_send = order.status == OrderStatus.MANAGER_SENT
+    if post_send:
+        _reject_if_not_editable_after_send(backend, order, "save")
 
     sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
     finals_by_line_id = {f.order_line_id: f for f in req.manager_finals}
@@ -1920,27 +2124,57 @@ def manager_order_save(
 
     total_rounded = round(total, 2)
 
-    # Empty payload → no write (pure no-op); status stays manager_claimed.
+    # Empty payload → no write (pure no-op); the status is never touched.
     if line_updates:
-        backend.update_order_lines(order_id, line_updates)
         # Persist the recomputed total only; never pass `status`, so the order
-        # stays manager_claimed (no dispatch). `expected_status` makes the write
-        # atomic on Supabase — a concurrent dispatch/release that already moved
-        # the order off manager_claimed yields 0 rows → 409 (Sheets ignores it).
-        try:
-            backend.update_order(
-                order_id,
-                total_value_estimate_pln=total_rounded,
-                expected_status=OrderStatus.MANAGER_CLAIMED.value,
-            )
-        except errors.OrderStatusConflictError:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Order {order_id} is no longer manager_claimed (it may have "
-                    f"been dispatched or released — refresh the queue)"
-                ),
-            )
+        # keeps its status (no dispatch). `expected_status` = the order's CURRENT
+        # status, which makes the write atomic on Supabase — a concurrent
+        # transition yields 0 rows → 409 (Sheets ignores it). A post-send edit
+        # also stamps `last_edited_at` so the queue/detail can show it.
+        order_updates: dict = {"total_value_estimate_pln": total_rounded}
+        if post_send:
+            order_updates["last_edited_at"] = datetime.now(timezone.utc)
+
+        def _guarded_order_update() -> None:
+            try:
+                backend.update_order(
+                    order_id,
+                    **order_updates,
+                    expected_status=order.status.value,
+                )
+            except errors.OrderStatusConflictError:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Order {order_id} is no longer {order.status.value} (it "
+                        f"may have been dispatched, released or received — refresh "
+                        f"the queue)"
+                    ),
+                )
+
+        # Write ORDER: post-send, the guarded order update goes FIRST so a
+        # concurrent receipt (manager_sent → closed) makes the whole save fail
+        # cleanly with 409 BEFORE any line is overwritten — otherwise a closed
+        # order could end up with lines that differ from what its receipt
+        # snapshotted, and no event row (impl-review Phase 6 F2). The claimed
+        # path keeps its historical lines-then-order sequence byte-identical.
+        if post_send:
+            _guarded_order_update()
+            backend.update_order_lines(order_id, line_updates)
+        else:
+            backend.update_order_lines(order_id, line_updates)
+            _guarded_order_update()
+
+        # Phase 6: a post-send save logs ONE `quantities_changed` order event
+        # listing every line whose EFFECTIVE quantity actually changed
+        # ("Name: old → new"), computed from the pre-write `order`. Best-effort.
+        if post_send:
+            products_by_id = {p.product_id: p for p in backend.load_products()}
+            changes = _effective_qty_changes(order, finals_by_line_id, products_by_id)
+            if changes:
+                _log_order_event(
+                    backend, order_id, "quantities_changed", "; ".join(changes)
+                )
 
         # v3 Phase 6: when this order is a Transport batch member, log one
         # "quantities_changed" event listing every line whose EFFECTIVE
@@ -1950,22 +2184,7 @@ def manager_order_save(
         marker = order.supplier_order_reference or ""
         if marker.startswith("TRN-"):
             products_by_id = {p.product_id: p for p in backend.load_products()}
-            changes: list[str] = []
-            for original_line in order.lines:
-                final = finals_by_line_id.get(original_line.order_line_id)
-                if final is None:
-                    continue
-                old_qty = (
-                    original_line.manager_final_qty_purchase
-                    if original_line.manager_final_qty_purchase > 0
-                    else original_line.captain_final_qty_purchase
-                )
-                new_qty = final.manager_final_qty_purchase
-                if new_qty == old_qty:
-                    continue
-                product = products_by_id.get(original_line.product_id)
-                name = product.product_name_pl if product else original_line.product_id
-                changes.append(f"{name}: {old_qty:g} → {new_qty:g}")
+            changes = _effective_qty_changes(order, finals_by_line_id, products_by_id)
             if changes:
                 _log_transport_event(
                     backend,
@@ -1977,7 +2196,7 @@ def manager_order_save(
 
     return ManagerSaveResponse(
         order_id=order_id,
-        status=OrderStatus.MANAGER_CLAIMED,
+        status=order.status,
         lines_updated=len(line_updates),
         total_value_estimate_pln=total_rounded,
     )
@@ -2037,14 +2256,19 @@ def manager_add_line(
     order = backend.get_order(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
-    if order.status != OrderStatus.MANAGER_CLAIMED:
+    if order.status not in (OrderStatus.MANAGER_CLAIMED, OrderStatus.MANAGER_SENT):
         raise HTTPException(
             status_code=409,
             detail=(
                 f"Order {order_id} status is {order.status.value}, "
-                f"expected manager_claimed (cannot add a line)"
+                f"expected manager_claimed or manager_sent (cannot add a line)"
             ),
         )
+    # Phase 6 (week2-feedback-quantities): a manager_sent order accepts new
+    # lines until its first receipt, unless it is a Transport batch member.
+    post_send = order.status == OrderStatus.MANAGER_SENT
+    if post_send:
+        _reject_if_not_editable_after_send(backend, order, "add a line to")
 
     # Orderable membership for THIS order's supplier + location (server-side
     # re-check; the picker's list is advisory).
@@ -2093,12 +2317,39 @@ def manager_add_line(
         manager_final_qty_base=0,
         delta_vs_suggestion_pct=None,
     )
+    # Phase 6: a post-send add first stamps `last_edited_at` (guarded on the
+    # current status — a concurrent receipt makes it 409 BEFORE the line is
+    # appended, mirroring the save route's write order), then appends the
+    # skeleton line and logs ONE `line_added` event. Best-effort event.
+    if post_send:
+        try:
+            backend.update_order(
+                order_id,
+                last_edited_at=datetime.now(timezone.utc),
+                expected_status=OrderStatus.MANAGER_SENT.value,
+            )
+        except errors.OrderStatusConflictError:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Order {order_id} is no longer manager_sent (it may have "
+                    f"been received — refresh the queue)"
+                ),
+            )
     backend.append_order_lines([new_line])
+
+    if post_send:
+        _log_order_event(
+            backend,
+            order_id,
+            "line_added",
+            f"{match['product_name_pl']}: dodano ({match['purchase_unit']})",
+        )
 
     return ManagerAddLineResponse(
         order_id=order_id,
         order_line_id=order_line_id,
-        status=OrderStatus.MANAGER_CLAIMED,
+        status=order.status,
     )
 
 
@@ -2245,6 +2496,40 @@ def _log_inventory_event(
         )
 
 
+_INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
+
+
+def _primary_supplier_product(
+    product_id: str,
+    sps: list[SupplierProduct],
+    suppliers_by_id: dict[str, Supplier],
+) -> Optional[SupplierProduct]:
+    """The one supplier_product to show for ``product_id`` on a location-wide
+    (supplier-agnostic) list — the inventory grid's pack hint (Phase 3) and the
+    Manager inventory detail's supplier grouping (Phase 4).
+
+    Pure function. Candidates are the ACTIVE supplier_products of ``product_id``
+    whose supplier is known AND active; the lowest ``supplier_product_id`` wins
+    (stable, data-independent tie-break). ``SUP_INTERNAL`` (on-site production,
+    "not a real ordering supplier") is skipped whenever any other candidate
+    exists, so a sauce that is both made in-house and bought from Bukat shows
+    Bukat. ``None`` when nothing qualifies — callers leave the supplier fields
+    unset rather than guessing.
+    """
+    candidates = [
+        sp
+        for sp in sps
+        if sp.product_id == product_id
+        and sp.active
+        and getattr(suppliers_by_id.get(sp.supplier_id), "active", False)
+    ]
+    if not candidates:
+        return None
+    external = [sp for sp in candidates if sp.supplier_id != _INTERNAL_SUPPLIER_ID]
+    pool = external or candidates
+    return min(pool, key=lambda sp: sp.supplier_product_id)
+
+
 @app.get(
     "/api/captain/inventory/products",
     response_model=list[InventoryProduct],
@@ -2261,9 +2546,18 @@ def captain_inventory_products(
     location. Discontinued SKUs (`active = False`) are skipped — a location-wide
     list would otherwise surface products the per-supplier order screen never
     showed.
+
+    Information layer (week2-feedback-quantities Phase 3): each row also carries
+    the location thresholds (min/target/max, off the setting already iterated)
+    and the pack hint fields of its primary supplier_product
+    (`_primary_supplier_product` — one extra `load_supplier_products` +
+    `load_suppliers` read, both TTL-cached). A product without an active
+    supplier_product keeps the four supplier fields ``None``.
     """
     backend = _choose_backend()
     products_by_id = {p.product_id: p for p in backend.load_products()}
+    sps = backend.load_supplier_products()
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     items: list[InventoryProduct] = []
     for setting in backend.load_location_product_settings():
         if setting.location_id != location_id:
@@ -2271,6 +2565,8 @@ def captain_inventory_products(
         product = products_by_id.get(setting.product_id)
         if product is None or not product.active:
             continue
+        sp = _primary_supplier_product(product.product_id, sps, suppliers_by_id)
+        supplier = suppliers_by_id.get(sp.supplier_id) if sp else None
         items.append(
             InventoryProduct(
                 product_id=product.product_id,
@@ -2278,6 +2574,14 @@ def captain_inventory_products(
                 product_category=product.product_category,
                 inventory_unit=product.inventory_unit,
                 is_critical=setting.is_critical_for_location or product.is_critical,
+                purchase_unit=sp.purchase_unit if sp else None,
+                units_per_purchase_unit=sp.units_per_purchase_unit if sp else None,
+                order_note=sp.order_note if sp else None,
+                supplier_id=sp.supplier_id if sp else None,
+                supplier_name=supplier.supplier_name if supplier else None,
+                min_stock_qty_base=setting.min_stock_qty_base,
+                target_stock_qty_base=setting.target_stock_qty_base,
+                max_stock_qty_base=setting.max_stock_qty_base,
             )
         )
     return items
@@ -2732,16 +3036,33 @@ def _enrich_inventory_count_detail(
     products_by_id: dict[str, Product],
     location: Optional[Location],
     events: Optional[list[InventoryCountEvent]] = None,
+    settings_by_pid: Optional[dict[str, LocationProductSetting]] = None,
+    primary_sp_by_pid: Optional[dict[str, SupplierProduct]] = None,
+    suppliers_by_id: Optional[dict[str, Supplier]] = None,
 ) -> InventoryCountDetail:
     """Join product master-data + location_name onto a snapshot for the
     Manager/owner read view (S-08). Mirrors `manager_order_detail`'s line
     enrichment; a since-removed product falls back to its id for the name.
     `events` (Phase 2, training-feedback-0901) is the count's correction
     history, loaded by the caller so this stays a pure function; ``None``/[]
-    when there is none yet or the worksheet is missing."""
+    when there is none yet or the worksheet is missing.
+
+    Decision layer (week2-feedback-quantities Phase 4): ``settings_by_pid``
+    (this location's ``location_product_settings``) supplies min/target/max,
+    ``primary_sp_by_pid`` (the product's primary supplier_product, resolved by
+    the caller via ``_primary_supplier_product``) supplies the pack unit and
+    supplier id, and ``suppliers_by_id`` the supplier name. All three maps are
+    optional so the function stays pure and older callers keep working; a
+    product missing from a map keeps those fields ``None``."""
+    settings_by_pid = settings_by_pid or {}
+    primary_sp_by_pid = primary_sp_by_pid or {}
+    suppliers_by_id = suppliers_by_id or {}
     enriched: list[InventoryCountDetailLine] = []
     for line in count.lines:
         product = products_by_id.get(line.product_id)
+        setting = settings_by_pid.get(line.product_id)
+        sp = primary_sp_by_pid.get(line.product_id)
+        supplier = suppliers_by_id.get(sp.supplier_id) if sp else None
         enriched.append(
             InventoryCountDetailLine(
                 product_id=line.product_id,
@@ -2751,6 +3072,13 @@ def _enrich_inventory_count_detail(
                 is_critical=bool(product.is_critical) if product else False,
                 current_stock_qty_base=line.current_stock_qty_base,
                 count_comment=line.count_comment,
+                min_stock_qty_base=setting.min_stock_qty_base if setting else None,
+                target_stock_qty_base=setting.target_stock_qty_base if setting else None,
+                max_stock_qty_base=setting.max_stock_qty_base if setting else None,
+                purchase_unit=sp.purchase_unit if sp else None,
+                units_per_purchase_unit=sp.units_per_purchase_unit if sp else None,
+                supplier_id=sp.supplier_id if sp else None,
+                supplier_name=supplier.supplier_name if supplier else None,
             )
         )
     return InventoryCountDetail(
@@ -2869,13 +3197,35 @@ def manager_inventory_count_detail(
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     location = locations_by_id.get(count.location_id)
 
+    # Decision layer (week2-feedback-quantities Phase 4): thresholds off this
+    # location's settings + the primary supplier_product per counted product
+    # (one extra load each of supplier_products and suppliers, both TTL-cached).
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == count.location_id
+    }
+    sps = backend.load_supplier_products()
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    primary_sp_by_pid: dict[str, SupplierProduct] = {}
+    for line in count.lines:
+        sp = _primary_supplier_product(line.product_id, sps, suppliers_by_id)
+        if sp is not None:
+            primary_sp_by_pid[line.product_id] = sp
+
     # Correction history (Phase 2, training-feedback-0901) — degrades to []
     # on a missing worksheet, never a 500 (mirrors the receipts/transport-
     # events scans elsewhere in this module).
     events = _load_inventory_events_safe(backend, count_id)
 
     return _enrich_inventory_count_detail(
-        count, products_by_id, location, events[:100]
+        count,
+        products_by_id,
+        location,
+        events[:100],
+        settings_by_pid=settings_by_pid,
+        primary_sp_by_pid=primary_sp_by_pid,
+        suppliers_by_id=suppliers_by_id,
     )
 
 
