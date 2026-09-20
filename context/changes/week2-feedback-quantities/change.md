@@ -1,7 +1,7 @@
 ---
 change_id: week2-feedback-quantities
 title: Week 2 captain/manager feedback — inventory vs order quantities, unit clarity, list usability, info-only signals
-status: implemented
+status: deployed
 created: 2026-09-17
 updated: 2026-09-20
 archived_at: null
@@ -168,3 +168,16 @@ build + lint exit 0. Manual 7.2 for the operator.
 All phases 0–7 on `feat/week2-feedback-quantities`, one commit per phase, every phase plan-reviewed,
 impl-reviewed (findings fixed before commit) and verified. Next: PR → merge to main → deploy check →
 operator manual items → `/10x-archive`.
+
+## Merged and deployed (2026-09-20)
+
+PR #32 merged to main (`9675d8e`) after all CI checks green (backend ruff + pytest, backend integration
+on real Postgres, frontend build + lint, AI review, Vercel preview). Deploy verified: Railway
+`/health` ok and `/openapi.json` carries `editable_after_send` (new backend live); Vercel serves bundle
+`assets/index-D-KR4GEY.js` containing the `/manager/archive` route. Prod schema was already at
+0019/0020 before the deploy.
+
+Remaining for the operator (then `/10x-archive`): manual Progress items in `plan.md` (auth ON smoke:
+1.5–1.7, 2.3–2.4, 3.3, 4.2–4.3, 5.2–5.4, 6.3–6.4, 7.2; 0.4–0.7 on the master data);
+`prod-sql.sql` section J2–J4 cleanup; post `team-message.md` on Connecteam; Coca-Cola glass prices from
+the CC portal; crate rules with Marek; rotate the Viva Payments keys exposed in the "KLUCZE" mail.
