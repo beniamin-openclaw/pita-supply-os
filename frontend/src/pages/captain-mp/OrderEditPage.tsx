@@ -303,7 +303,11 @@ export function OrderEditPage() {
         {order && (
           <>
             <ExtraItemsControl rows={extraItemRows} onChange={setExtraItemRows} />
-            <OrderCommentField value={captainNote} onChange={setCaptainNote} />
+            <OrderCommentField
+              value={captainNote}
+              onChange={setCaptainNote}
+              supplierId={order.supplier_id}
+            />
           </>
         )}
       </main>

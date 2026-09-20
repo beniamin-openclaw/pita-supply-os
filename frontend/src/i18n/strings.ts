@@ -653,6 +653,20 @@ export const STRINGS = {
     pl: "zmienione przez menedżera (było {value})",
     en: "changed by manager (was {value})",
   },
+  // Phase 7 — order-level banner on a sent/closed order whose quantities the
+  // manager changed (including lines zeroed by the manager).
+  "orders.detail.managerChangedBanner.one.lines": {
+    pl: "Menedżer zmienił ilość w {n} pozycji",
+    en: "The manager changed the quantity on {n} line",
+  },
+  "orders.detail.managerChangedBanner.few.lines": {
+    pl: "Menedżer zmienił ilości w {n} pozycjach",
+    en: "The manager changed quantities on {n} lines",
+  },
+  "orders.detail.managerChangedBanner.many.lines": {
+    pl: "Menedżer zmienił ilości w {n} pozycjach",
+    en: "The manager changed quantities on {n} lines",
+  },
   "orders.detail.orderedLabel": { pl: "Zamówiono", en: "Ordered" },
   "orders.detail.receivedLabel": { pl: "Dostarczono", en: "Delivered" },
   "orders.detail.orderedSecondary": {
@@ -865,6 +879,15 @@ export const STRINGS = {
     pl: "Dodatkowe informacje dla menedżera lub dostawcy…",
     en: "Extra notes for the manager or supplier…",
   },
+  // Phase 7 (week2-feedback-quantities) — Coca-Cola crates prompt: two small
+  // numeric inputs above the comment, serialised into the first line of
+  // captain_note (see pages/captain-mp/lib/supplierPrompts.ts).
+  "captain.orderComment.crates.legend": {
+    pl: "Skrzynki do odbioru",
+    en: "Crates for pickup",
+  },
+  "captain.orderComment.crates.empty": { pl: "puste", en: "empty" },
+  "captain.orderComment.crates.withBottles": { pl: "z butelkami", en: "with bottles" },
 
   // Phase 5 — permanent Captain tab strip (navigation)
   "tabs.ariaLabel": { pl: "Nawigacja Kapitana", en: "Captain navigation" },
@@ -1109,6 +1132,16 @@ export const STRINGS = {
     en: "Could not load WZ photos",
   },
   "delivery.missingWz": { pl: "Brak zdjęcia WZ", en: "Missing WZ photo" },
+  // Phase 7 — free-text receipt notes (e.g. items delivered outside the order).
+  "delivery.notesLabel": {
+    pl: "Uwagi do dostawy (np. pozycje spoza zamówienia)",
+    en: "Delivery notes (e.g. items outside the order)",
+  },
+  "delivery.notesPlaceholder": {
+    pl: "Co dowieźli poza zamówieniem, czego brakuje, uwagi do WZ…",
+    en: "What arrived outside the order, what is missing, notes on the WZ…",
+  },
+  "manager.delivery.notes": { pl: "Uwagi: {value}", en: "Notes: {value}" },
   // Manager receiving view (manager-receiving-view) — read-only delivery surface.
   "manager.delivery.section": { pl: "Dostawa", en: "Delivery" },
   "manager.delivery.receivedBy": { pl: "Przyjął: {value}", en: "Received by: {value}" },

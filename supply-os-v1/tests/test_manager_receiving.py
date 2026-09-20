@@ -221,6 +221,30 @@ def test_detail_attaches_receipts_newest_first(mocker):
     assert newest_line["variance_qty_purchase"] == pytest.approx(1.0)
 
 
+def test_detail_surfaces_receipt_notes(mocker):
+    """Phase 7 (week2-feedback-quantities): the Captain's receipt `notes` ride
+    on each ManagerOrderReceipt; a receipt without notes reads ""."""
+    order_id = "ORD-RCV-NOTES"
+    order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})
+    with_notes = _receipt(
+        "RCP-N", order_id, datetime(2026, 6, 22, 10, 0, tzinfo=timezone.utc)
+    ).model_copy(update={"notes": "Pozycja spoza zamówienia: 1 karton cytryn"})
+    without = _receipt("RCP-B", order_id, datetime(2026, 6, 20, 10, 0, tzinfo=timezone.utc))
+    _enable(
+        mocker,
+        orders=[order],
+        get_order_return=order,
+        receipts=[without, with_notes],
+        receipt_lines=[_receipt_line("RCP-N", order_id), _receipt_line("RCP-B", order_id)],
+    )
+
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {rc["receipt_id"]: rc for rc in r.json()["receipts"]}
+    assert by_id["RCP-N"]["notes"] == "Pozycja spoza zamówienia: 1 karton cytryn"
+    assert by_id["RCP-B"]["notes"] == ""
+
+
 def test_detail_empty_receipts_when_none(mocker):
     order_id = "ORD-RCV-2"
     order = _order(order_id).model_copy(update={"lines": [_line(order_id, "OL-1")]})

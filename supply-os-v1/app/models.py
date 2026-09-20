@@ -426,6 +426,10 @@ class ManagerOrderReceipt(BaseModel):
     discrepancy_count: int = 0  # lines with variance_qty_purchase != 0
     received_with_missing_wz: bool = True
     wz_photo_count: int = 0
+    # Captain's free-text receipt notes (week2-feedback-quantities Phase 7) —
+    # e.g. items delivered outside the order. Mirrors ``Receipt.notes``; "" when
+    # the Captain left the field blank or on a legacy row.
+    notes: str = ""
     lines: list[ManagerOrderReceiptLine] = Field(default_factory=list)
 
 
@@ -543,6 +547,11 @@ class CaptainOrderDetail(BaseModel):
     # Phase 1b) — see Order.extra_items / Order.captain_note.
     extra_items: str = ""
     captain_note: str = ""
+    # How the order was sent (email|portal|phone|manual|transport). The captain
+    # detail needs it for the "menedżer zmienił ilości" reading (week2-feedback
+    # Phase 7): a Transport finalize flips the status without writing
+    # manager_final on every line, so manager_final 0 is NOT a zeroing there.
+    sent_method: Optional[str] = None
     editable: bool
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
 

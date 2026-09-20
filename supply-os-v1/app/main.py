@@ -1023,6 +1023,7 @@ def _load_order_receipts(
                 discrepancy_count=r.discrepancy_count,
                 received_with_missing_wz=r.received_with_missing_wz,
                 wz_photo_count=r.wz_photo_count,
+                notes=r.notes or "",
                 lines=enriched,
             )
         )
@@ -1347,6 +1348,7 @@ def captain_order_detail(
         notes=order.notes,
         extra_items=order.extra_items,
         captain_note=order.captain_note,
+        sent_method=order.sent_method,
         editable=(order.status == OrderStatus.CAPTAIN_SUBMITTED),
         lines=enriched_lines,
     )

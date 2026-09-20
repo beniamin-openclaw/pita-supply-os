@@ -145,6 +145,35 @@ def test_receipt_submit_happy_path(mocker):
     assert ol1.variance_qty_purchase == 0
 
 
+# ---------- Phase 7 (week2-feedback-quantities): receipt notes ----------
+
+def test_receipt_submit_persists_notes(mocker):
+    """`notes` (free text, e.g. items delivered outside the order) lands on the
+    persisted Receipt verbatim; omitting it persists ""."""
+    _patch_sheet_backend(mocker)
+    mocker.patch.object(sheets, "get_order", return_value=_fake_order())
+    appended = mocker.patch.object(sheets, "append_receipt")
+    mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(sheets, "update_order")
+
+    body = {
+        "order_id": ORDER_ID,
+        "received_by": RECEIVED_BY,
+        "lines": _two_lines(),
+        "notes": "Dowieźli 2 kartony wody spoza zamówienia",
+    }
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    receipt_arg = appended.call_args[0][0]
+    assert receipt_arg.notes == "Dowieźli 2 kartony wody spoza zamówienia"
+
+    appended.reset_mock()
+    body.pop("notes")
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert appended.call_args[0][0].notes == ""
+
+
 # ---------- v3 Phase 8: transport delivery-acceptance parity ----------
 
 def test_receipt_submit_transport_member_emits_delivery_confirmed_event(mocker):

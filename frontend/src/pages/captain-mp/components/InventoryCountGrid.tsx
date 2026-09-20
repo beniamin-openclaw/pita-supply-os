@@ -5,7 +5,7 @@
 // Phase 2) so the two flows render byte-identical UI; only the caller's
 // fetch/submit logic differs.
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react";
 
 import { DecimalInput } from "../../../components/ui/DecimalInput";
@@ -73,7 +73,11 @@ export function InventoryCountGrid({
   // again; a product counted while the filter is active stays visible.
   const [uncountedSnapshot, setUncountedSnapshot] = useState<Set<string> | null>(null);
   const linesRef = useRef(lines);
-  linesRef.current = lines;
+  // Mirror `lines` into the ref after commit (never during render —
+  // react-hooks/refs); it is only read inside the click-driven callback below.
+  useEffect(() => {
+    linesRef.current = lines;
+  }, [lines]);
   const patchListView = useCallback(
     (patch: Partial<ProductListView>): void => {
       if (patch.onlyUncounted === true) {

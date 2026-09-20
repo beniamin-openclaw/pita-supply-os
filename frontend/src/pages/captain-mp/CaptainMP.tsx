@@ -825,7 +825,11 @@ export function CaptainMP() {
         {showExtraItemsSection && (
           <>
             <ExtraItemsControl rows={extraItemRows} onChange={setExtraItemRows} />
-            <OrderCommentField value={captainNote} onChange={setCaptainNote} />
+            <OrderCommentField
+              value={captainNote}
+              onChange={setCaptainNote}
+              supplierId={activeSupplierId}
+            />
           </>
         )}
       </main>

@@ -320,6 +320,8 @@ export interface CaptainOrderDetail {
   captain_submitted_at?: string | null;
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   last_edited_at?: string | null;
+  // email|portal|phone|manual|transport; null before dispatch (Phase 7 banner gate).
+  sent_method?: string | null;
   total_value_estimate_pln?: number | null;
   // Supplier's configured minimum order value (display-only; training-
   // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
@@ -483,6 +485,9 @@ export interface ManagerOrderReceipt {
   discrepancy_count: number;
   received_with_missing_wz: boolean;
   wz_photo_count: number;
+  // Captain's free-text receipt notes (Phase 7) — mirrors the Pydantic
+  // `str = ""` default, so optional here.
+  notes?: string;
   lines: ManagerOrderReceiptLine[];
 }
 

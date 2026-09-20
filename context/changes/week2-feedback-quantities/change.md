@@ -1,7 +1,7 @@
 ---
 change_id: week2-feedback-quantities
 title: Week 2 captain/manager feedback — inventory vs order quantities, unit clarity, list usability, info-only signals
-status: in-progress
+status: implemented
 created: 2026-09-17
 updated: 2026-09-20
 archived_at: null
@@ -149,3 +149,22 @@ nieliczone" + "tylko krytyczne"; a hit expands its category; `groupProductsByCat
 "tylko nieliczone" set is frozen when the toggle turns on so the card being typed into never unmounts
 (regression test); sticky header offset 62px; native search cancel button hidden. Verify: ruff clean,
 pytest 713, vitest 438, build + lint clean. Manual 4.2/4.3 for the operator.
+
+## Phase 7 implemented (2026-09-20)
+
+Receipt notes: captain textarea → `ReceiptSubmitRequest.notes`, surfaced as `ManagerOrderReceipt.notes` in
+the manager delivery section. Coca-Cola crates: `supplierPrompts.ts` serialises "puste N, z butelkami M"
+into the first line of `captain_note` (stable data-format prefix, i18n-exempt; parser leaves free text
+untouched; both counts 0 → no line, so the Captain can retract it). "Menedżer zmienił ilości" banner on the
+captain detail + the per-line hint now also covers a line the manager zeroed on a sent/closed order —
+except Transport orders (`CaptainOrderDetail.sent_method` added; finalize never writes manager_final, so 0
+is "untouched" there). Impl-review (Fable high): REWORK → both fixes applied with tests (Transport
+false-positive, retractable crates line). Also carries a lint fix for Phase 4's grid ref (`react-hooks/refs`)
+that my `tail -1` lint check had masked at the Phase 4 commit. Verify: ruff clean, pytest 715, vitest 454,
+build + lint exit 0. Manual 7.2 for the operator.
+
+## Implementation complete (2026-09-20)
+
+All phases 0–7 on `feat/week2-feedback-quantities`, one commit per phase, every phase plan-reviewed,
+impl-reviewed (findings fixed before commit) and verified. Next: PR → merge to main → deploy check →
+operator manual items → `/10x-archive`.

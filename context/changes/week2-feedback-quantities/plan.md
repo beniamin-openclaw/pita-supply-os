@@ -895,7 +895,7 @@ the page. No new polling.
 
 #### Automated
 
-- [ ] 7.1 Backend + frontend suites green, `/verify` green
+- [x] 7.1 Backend + frontend suites green, `/verify` green
 
 #### Manual
 
