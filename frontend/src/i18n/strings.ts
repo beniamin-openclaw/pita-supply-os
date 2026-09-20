@@ -1581,6 +1581,35 @@ export const STRINGS = {
     en: "Google sign-in error: {detail}",
   },
 
+  // Queue lanes + archive (week2-feedback-quantities Phase 5) --------------
+  "manager.queue.one.inQueueDays": { pl: "w kolejce od {n} dnia", en: "in the queue for {n} day" },
+  "manager.queue.few.inQueueDays": { pl: "w kolejce od {n} dni", en: "in the queue for {n} days" },
+  "manager.queue.many.inQueueDays": { pl: "w kolejce od {n} dni", en: "in the queue for {n} days" },
+  "manager.queue.inQueueDaysTooltip": {
+    pl: "Zamówienie czeka od dnia zgłoszenia przez kapitana",
+    en: "Waiting since the captain submitted it",
+  },
+  "manager.queue.archiveCount": { pl: "w archiwum: {n}", en: "in archive: {n}" },
+  "manager.archive.navLink": { pl: "Archiwum", en: "Archive" },
+  "manager.archive.title": { pl: "Archiwum zamówień", en: "Order archive" },
+  "manager.archive.back": { pl: "Powrót do kolejki", en: "Back to the queue" },
+  "manager.archive.intro": {
+    pl: "Odebrane i anulowane zamówienia. Podgląd tylko do odczytu.",
+    en: "Received and cancelled orders. Read-only.",
+  },
+  "manager.archive.daysLabel": { pl: "Okres", en: "Period" },
+  "manager.archive.capNotice": {
+    pl: "Pokazano {n} najnowszych — starsze nie są tu widoczne",
+    en: "Showing the newest {n} — older ones are not listed here",
+  },
+  "manager.archive.daysOptionLabel": { pl: "{n} dni", en: "{n} days" },
+  "manager.archive.lane.closed": { pl: "Odebrane", en: "Received" },
+  "manager.archive.lane.cancelled": { pl: "Anulowane", en: "Cancelled" },
+  "manager.archive.empty": {
+    pl: "Brak zamówień w wybranym okresie.",
+    en: "No orders in the selected period.",
+  },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",

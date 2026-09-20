@@ -872,6 +872,9 @@ def manager_queue(
     # absent (mirrors captain_receipts).
     received_count_by_order: dict[str, int] = {}
     received_discrepancy_by_order: dict[str, int] = {}
+    # Newest receipt timestamp per order (week2-feedback Phase 5) — one extra
+    # field off the same scan, no additional query.
+    last_received_by_order: dict[str, datetime] = {}
     if status in (OrderStatus.MANAGER_SENT, OrderStatus.CLOSED):
         try:
             for r in backend.load_receipts_for_orders(order_ids):
@@ -882,6 +885,10 @@ def manager_queue(
                     received_discrepancy_by_order[r.order_id] = (
                         received_discrepancy_by_order.get(r.order_id, 0) + 1
                     )
+                if r.received_submitted_at is not None:
+                    prev = last_received_by_order.get(r.order_id)
+                    if prev is None or r.received_submitted_at > prev:
+                        last_received_by_order[r.order_id] = r.received_submitted_at
         except sheets.WorksheetNotFound:
             pass
 
@@ -927,6 +934,7 @@ def manager_queue(
                 received_discrepancy_count=received_discrepancy_by_order.get(
                     order.order_id, 0
                 ),
+                last_received_at=last_received_by_order.get(order.order_id),
                 supplier_order_reference=order.supplier_order_reference,
             )
         )

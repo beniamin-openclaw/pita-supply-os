@@ -443,6 +443,10 @@ export const api = {
     if (limit) params.set("limit", String(limit));
     return apiGet<ManagerQueueItem[]>(`/api/manager/queue?${params}`, "manager");
   },
+  // Archive lane (week2-feedback Phase 5): one status, newest 200 — the
+  // backend clamp — so the archive page sees the whole recent history.
+  managerArchiveLane: (status: OrderStatus) =>
+    api.managerQueue(undefined, status, 200),
   managerOrder: (order_id: string) =>
     apiGet<ManagerOrderDetail>(`/api/manager/order/${encodeURIComponent(order_id)}`, "manager"),
   // Save manager edits WITHOUT dispatch (Phase G2). Stays manager_claimed.

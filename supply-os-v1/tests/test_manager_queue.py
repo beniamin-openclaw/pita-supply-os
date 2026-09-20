@@ -22,6 +22,7 @@ from app.models import (
     OrderStatus,
     Product,
     ReasonCode,
+    Receipt,
     Supplier,
     SupplierProduct,
 )
@@ -736,3 +737,58 @@ def test_order_detail_defaults_extra_items_and_captain_note_to_empty_string(mock
     payload = r.json()
     assert payload["extra_items"] == ""
     assert payload["captain_note"] == ""
+
+
+# ---------- last_received_at (week2-feedback-quantities Phase 5) ----------
+
+
+def _receipt(receipt_id: str, order_id: str, submitted_at: datetime) -> Receipt:
+    return Receipt(
+        receipt_id=receipt_id,
+        order_id=order_id,
+        location_id="WOLA",
+        supplier_id="SUP_PAGO",
+        receipt_date=submitted_at.date(),
+        received_by="Anna",
+        received_submitted_at=submitted_at,
+        line_count=1,
+    )
+
+
+def test_queue_last_received_at_is_newest_receipt(mocker):
+    """Two receipts on one closed order → the queue row carries the NEWER
+    `received_submitted_at`; a sibling without receipts carries null."""
+    orders = [
+        _order("ORD-A", status=OrderStatus.CLOSED),
+        _order("ORD-B", status=OrderStatus.CLOSED),
+    ]
+    _enable_sheet_backend(mocker, orders=orders)
+    older = datetime(2026, 9, 10, 9, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 9, 14, 17, 30, tzinfo=timezone.utc)
+    mocker.patch.object(
+        sheets,
+        "load_receipts_for_orders",
+        return_value=[
+            _receipt("RCP-1", "ORD-A", older),
+            _receipt("RCP-2", "ORD-A", newer),
+        ],
+    )
+
+    r = client.get("/api/manager/queue", params={"status": "closed"}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {row["order_id"]: row for row in r.json()}
+    assert datetime.fromisoformat(by_id["ORD-A"]["last_received_at"]) == newer
+    assert by_id["ORD-A"]["received_count"] == 2
+    assert by_id["ORD-B"]["last_received_at"] is None
+
+
+def test_queue_last_received_at_null_on_submitted_lane(mocker):
+    """The submitted lane never runs the receipt scan → null, and the scan is
+    not even invoked."""
+    _enable_sheet_backend(mocker, orders=[_order("ORD-A")])
+    scan = mocker.patch.object(sheets, "load_receipts_for_orders", return_value=[])
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["last_received_at"] is None
+    scan.assert_not_called()

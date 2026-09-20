@@ -397,6 +397,10 @@ export interface ManagerQueueItem {
   // received_count > 0.
   received_count: number;
   received_discrepancy_count: number;
+  // Newest received_submitted_at among the order's receipts (week2-feedback
+  // Phase 5) — only on the sent/closed lanes, null elsewhere. Drives the
+  // closed lane's "recent vs archive" split.
+  last_received_at?: string | null;
   // Reverse link to a Manager Transport batch (to-ordering-pago): set when this
   // order was combined via POST /api/manager/transport/create (a "TRN-…"
   // marker), absent for a normal per-order dispatch. Lets the queue show a

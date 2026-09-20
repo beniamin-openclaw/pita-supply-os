@@ -432,10 +432,13 @@ export function ManagerPage() {
     });
   }, []);
 
+  // Reset to the SAME four-lane set the initial state and `anyFilterActive`
+  // (`size < 4`) use — the old three-lane reset left "clear" permanently
+  // active and hid the closed lane (Phase 5 reconciliation).
   const handleClearFilters = useCallback(() => {
     setFilterSupplierId(null);
     setFilterLocationId(null);
-    setVisibleLanes(new Set<QueueLane>(["submitted", "claimed", "sent"]));
+    setVisibleLanes(new Set<QueueLane>(["submitted", "claimed", "sent", "closed"]));
   }, []);
 
   // cutoff_iso is only on the queue item, not on ManagerOrderDetail — look it
@@ -488,6 +491,12 @@ export function ManagerPage() {
               className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
               {t("manager.finance.navLink")}
+            </Link>
+            <Link
+              to="/manager/archive"
+              className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              {t("manager.archive.navLink")}
             </Link>
             <button
               type="button"

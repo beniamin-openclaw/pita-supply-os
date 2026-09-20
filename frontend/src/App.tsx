@@ -11,6 +11,7 @@ import { OrderDetailPage } from "./pages/captain-mp/OrderDetailPage";
 import { OrderEditPage } from "./pages/captain-mp/OrderEditPage";
 import { ReceiveDeliveryPage } from "./pages/captain-mp/ReceiveDeliveryPage";
 import { ManagerPage } from "./pages/ManagerPage";
+import { ManagerArchivePage } from "./pages/manager/ManagerArchivePage";
 import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
 import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
 import { TransportPage } from "./pages/manager/TransportPage";
@@ -155,6 +156,14 @@ export default function App() {
             element={
               <AuthGate role="manager">
                 <ManagerFinancePage />
+              </AuthGate>
+            }
+          />
+          <Route
+            path="/manager/archive"
+            element={
+              <AuthGate role="manager">
+                <ManagerArchivePage />
               </AuthGate>
             }
           />

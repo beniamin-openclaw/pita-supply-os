@@ -337,6 +337,12 @@ class ManagerQueueItem(BaseModel):
     # FE renders a ⚠ chip when discrepancy > 0, else a neutral ✓ chip when count > 0.
     received_count: int = 0
     received_discrepancy_count: int = 0
+    # Newest `received_submitted_at` among this order's receipts (week2-feedback
+    # Phase 5) — taken from the same receipt scan as the counts above, so it is
+    # set only on the manager_sent / closed lanes and None elsewhere. The queue
+    # keeps recently received orders in the closed lane and sends older ones to
+    # the archive on this timestamp.
+    last_received_at: Optional[datetime] = None
     # Reverse link to a Manager Transport batch (to-ordering-pago Phase 2): set
     # when this order was combined via POST /api/manager/transport/create
     # (a "TRN-…" marker), None for a normal per-order dispatch. Lets the queue

@@ -1,19 +1,25 @@
-// Left pane of the Manager v2 two-pane shell (Phase G1). Three collapsible
-// groups (captain_submitted / manager_claimed / manager_sent), each fed by a
-// separate managerQueue call in the parent. Cards are selectable; the selected
+// Left pane of the Manager v2 two-pane shell (Phase G1). Four collapsible
+// groups (captain_submitted / manager_claimed / manager_sent / closed), each
+// fed by a separate managerQueue call in the parent. Week2-feedback Phase 5:
+// the two working lanes open by default, sent/closed start collapsed; a
+// claimed order waiting ≥3 days gets an age chip; closed orders received more
+// than 3 days ago leave the lane for /manager/archive. Cards are selectable; the selected
 // card is highlighted and selection survives the 60s refresh (the parent keeps
 // selectedId in state independent of the queue data).
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
 import type { ManagerQueueItem } from "../../types";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
+import { inQueueDays, splitClosedLane } from "./lib/queueAge";
 
-/** The queue lanes (one status group each). */
-export type QueueLane = "submitted" | "claimed" | "sent" | "closed";
+/** The queue lanes (one status group each). `cancelled` exists only for the
+ *  archive page's filter bar — the live queue never renders it. */
+export type QueueLane = "submitted" | "claimed" | "sent" | "closed" | "cancelled";
 
 /** Day + month + time, NO year, for the queue card's cutoff / submitted stamps.
  * The Manager scans this lane many times a day and every order in it is from
@@ -33,6 +39,12 @@ interface QueueGroup {
   titleKey: StringKey;
   accent: string;
   items: ManagerQueueItem[] | null;
+  /** Whether the section starts expanded. The two working lanes open; sent
+   *  and closed start collapsed with their counts (Phase 5). */
+  defaultOpen: boolean;
+  /** Closed lane only: rows hidden from the lane because their last receipt is
+   *  older than QUEUE_AGE_DAYS — rendered as a "w archiwum: N" link. */
+  archivedCount?: number;
 }
 
 interface ManagerQueueProps {
@@ -55,11 +67,37 @@ export function ManagerQueue({
   onSelect,
   visibleLanes,
 }: ManagerQueueProps) {
+  const closedSplit = splitClosedLane(closed);
   const groups: QueueGroup[] = [
-    { key: "submitted", titleKey: "manager.tab.submitted", accent: "text-blue-800", items: submitted },
-    { key: "claimed", titleKey: "manager.tab.claimed", accent: "text-orange-700", items: claimed },
-    { key: "sent", titleKey: "manager.tab.sent", accent: "text-green-700", items: sent },
-    { key: "closed", titleKey: "manager.tab.closed", accent: "text-slate-600", items: closed },
+    {
+      key: "submitted",
+      titleKey: "manager.tab.submitted",
+      accent: "text-blue-800",
+      items: submitted,
+      defaultOpen: true,
+    },
+    {
+      key: "claimed",
+      titleKey: "manager.tab.claimed",
+      accent: "text-orange-700",
+      items: claimed,
+      defaultOpen: true,
+    },
+    {
+      key: "sent",
+      titleKey: "manager.tab.sent",
+      accent: "text-green-700",
+      items: sent,
+      defaultOpen: false,
+    },
+    {
+      key: "closed",
+      titleKey: "manager.tab.closed",
+      accent: "text-slate-600",
+      items: closedSplit.recent,
+      defaultOpen: false,
+      archivedCount: closedSplit.archived,
+    },
   ];
   const shown = visibleLanes ? groups.filter((g) => visibleLanes.has(g.key)) : groups;
 
@@ -87,8 +125,9 @@ function QueueGroupSection({
   onSelect: (orderId: string) => void;
 }) {
   const { t } = useT();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(group.defaultOpen);
   const count = group.items?.length ?? 0;
+  const archived = group.archivedCount ?? 0;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white">
@@ -123,9 +162,18 @@ function QueueGroupSection({
                   item={q}
                   selected={q.order_id === selectedId}
                   onSelect={onSelect}
+                  showQueueAge={group.key === "claimed"}
                 />
               ))}
             </ul>
+          )}
+          {archived > 0 && (
+            <Link
+              to="/manager/archive"
+              className="mt-2 block px-2 text-xs font-medium text-blue-700 underline hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              {t("manager.queue.archiveCount", { n: archived })}
+            </Link>
           )}
         </div>
       )}
@@ -133,16 +181,18 @@ function QueueGroupSection({
   );
 }
 
-function QueueCard({
-  item,
-  selected,
-  onSelect,
-}: {
+export interface QueueCardProps {
   item: ManagerQueueItem;
   selected: boolean;
   onSelect: (orderId: string) => void;
-}) {
+  /** Claimed lane only: render the amber "w kolejce od N dni" chip once the
+   *  order has waited QUEUE_AGE_DAYS since the captain submitted it. */
+  showQueueAge?: boolean;
+}
+
+export function QueueCard({ item, selected, onSelect, showQueueAge = false }: QueueCardProps) {
   const { t, tPlural, formatDateTime } = useT();
+  const queueAge = showQueueAge ? inQueueDays(item) : null;
 
   return (
     <li>
@@ -163,6 +213,14 @@ function QueueCard({
           {item.last_edited_at && (
             <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-purple-800">
               {t("orders.editedBadge")}
+            </span>
+          )}
+          {queueAge !== null && (
+            <span
+              className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900"
+              title={t("manager.queue.inQueueDaysTooltip")}
+            >
+              {tPlural("manager.queue", "inQueueDays", queueAge)}
             </span>
           )}
           {item.supplier_order_reference?.startsWith("TRN-") && (

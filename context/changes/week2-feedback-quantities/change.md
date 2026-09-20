@@ -99,3 +99,13 @@ for `gmail_url.build_draft_url`; `ManagerOrderDetail.location_email`; frontend `
 knows `order_events`. Seed `locations.csv` gained `email` (WOLA test value only). Impl-review: APPROVE WITH
 NOTES (doc-comment placement fixed; DATA_MODEL.md locations table updated). Verify: ruff clean, pytest 690,
 vitest 379, build + lint clean. Progress 2.1 waits for the CI integration job (no local Postgres here).
+
+## Phase 5 implemented (2026-09-20)
+
+Manager queue: sent/closed lanes collapsed by default with counts; amber "w kolejce od N dni" chip on the
+claimed lane (≥ 3 Warsaw calendar days since `captain_submitted_at`, `lib/dates.ts`); closed lane keeps only
+rows received within 3 days or without a receipt; `/manager/archive` lists older received and cancelled
+orders with a period selector, location/supplier filters and a cap notice (newest 200 per lane).
+Backend: `ManagerQueueItem.last_received_at` from the existing receipt scan (sent/closed lanes only), no new
+endpoint. Impl-review: APPROVE WITH NOTES (cap notice + DST-proof render assertion applied). Verify: ruff
+clean, pytest 692, vitest 393, build + lint clean. Manual items 5.2–5.4 for the operator after deploy.
