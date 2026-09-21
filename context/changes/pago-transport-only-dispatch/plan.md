@@ -394,10 +394,10 @@ re-run that script against suppliers.
 
 #### Automated
 
-- [x] 1.1 ruff clean in supply-os-v1
-- [x] 1.2 pytest green including the new dispatch tests
-- [x] 1.3 409 fires for a transport supplier and for an order carrying a TRN- marker
-- [x] 1.4 Existing portal, phone, manual and e-mail dispatch tests still pass
+- [x] 1.1 ruff clean in supply-os-v1 — 5ce76eb
+- [x] 1.2 pytest green including the new dispatch tests — 5ce76eb
+- [x] 1.3 409 fires for a transport supplier and for an order carrying a TRN- marker — 5ce76eb
+- [x] 1.4 Existing portal, phone, manual and e-mail dispatch tests still pass — 5ce76eb
 
 #### Manual
 
@@ -407,16 +407,16 @@ re-run that script against suppliers.
 
 #### Automated
 
-- [x] 2.1 npm run test green including DispatchPanel.test.tsx
-- [x] 2.2 npm run build succeeds
-- [x] 2.3 npm run lint exits 0
+- [x] 2.1 npm run test green including DispatchPanel.test.tsx — 5ce76eb
+- [x] 2.2 npm run build succeeds — 5ce76eb
+- [x] 2.3 npm run lint exits 0 — 5ce76eb
 
 ### Phase 3: Operator rollout package
 
 #### Automated
 
-- [x] 3.1 prod-sql.sql has no unguarded UPDATE and no DELETE
-- [x] 3.2 The data pass carries AND ordering_method IN ('manual', 'email')
+- [x] 3.1 prod-sql.sql has no unguarded UPDATE and no DELETE — 5ce76eb
+- [x] 3.2 The data pass carries AND ordering_method IN ('manual', 'email') — 5ce76eb
 
 #### Manual
 
