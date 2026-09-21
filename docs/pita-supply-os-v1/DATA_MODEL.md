@@ -55,7 +55,7 @@ Master list of suppliers.
 | `supplier_id`          | string (PK) | Stable code, e.g., `SUP_KEY_ACCOUNT_A`                 |
 | `supplier_name`        | string      | Display name                                           |
 | `email`                | string      | Order destination email                                |
-| `ordering_method`      | enum        | `email`, `portal`, `phone`, `manual`                   |
+| `ordering_method`      | enum        | `email`, `portal`, `phone`, `manual`, `transport` (0021) |
 | `delivery_days`        | string      | Free text, e.g., `Mon, Wed, Fri`                       |
 | `cutoff_time`          | string      | `HH:MM` in `Europe/Warsaw`                             |
 | `minimum_order_value_pln` | number   | For warning when order is below                        |

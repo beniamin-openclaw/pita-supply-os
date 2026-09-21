@@ -161,6 +161,11 @@ def _schema():
     # 0020 adds the order_events audit table (post-send edit log, Phase 6);
     # also listed in _ALL_TABLES (before orders) and _TXN_TABLES above.
     order_events = (MIGRATIONS_DIR / "0020_order_events.sql").read_text()
+    # 0021 widens suppliers_ordering_method_check so a supplier row can carry
+    # ordering_method='transport' (pago-transport-only-dispatch).
+    ordering_transport = (
+        MIGRATIONS_DIR / "0021_supplier_ordering_method_transport.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -182,6 +187,7 @@ def _schema():
         conn.exec_driver_sql(reason_code)
         conn.exec_driver_sql(location_email)
         conn.exec_driver_sql(order_events)
+        conn.exec_driver_sql(ordering_transport)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

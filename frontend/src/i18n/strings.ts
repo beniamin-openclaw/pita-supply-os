@@ -541,6 +541,7 @@ export const STRINGS = {
   "manager.dispatch.portal": { pl: "Wysyłka: portal dostawcy (ręcznie)", en: "Dispatch: supplier portal (manual)" },
   "manager.dispatch.phone": { pl: "Wysyłka: telefon", en: "Dispatch: phone" },
   "manager.dispatch.manual": { pl: "Wysyłka: ręcznie", en: "Dispatch: manual" },
+  "manager.dispatch.transport": { pl: "Wysyłka: przez Transport", en: "Dispatch: via Transport" },
   "manager.dispatch.emailTo": { pl: "Do:", en: "To:" },
   "manager.dispatch.emailCc": { pl: "DW:", en: "CC:" },
   "manager.dispatch.emailSubject": { pl: "Temat:", en: "Subject:" },
@@ -592,6 +593,11 @@ export const STRINGS = {
     pl: "Zamówienie wewnętrzne / ręczne — brak e-maila i portalu.",
     en: "Internal / manual order — no e-mail or portal.",
   },
+  "manager.transportOnlyNote": {
+    pl: "{supplier} zamawia się wyłącznie w ramach transportu zbiorczego — tego zamówienia nie wysyła się z tego ekranu. Dodaj je do partii na ekranie Transport.",
+    en: "{supplier} is ordered only as part of a Transport batch — this order is not sent from this screen. Add it to a batch on the Transport screen.",
+  },
+  "manager.transportOnlyLink": { pl: "Przejdź do ekranu Transport", en: "Go to the Transport screen" },
   "manager.copyList.header": { pl: "Produkt | Ilość | Kod", en: "Product | Qty | Code" },
 
   // Captain "My orders" view (Phase E4) -------------------------------------

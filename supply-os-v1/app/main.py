@@ -1598,6 +1598,32 @@ def _reject_if_locked_in_draft_transport(backend, order: Order, action: str) -> 
         )
 
 
+def _reject_if_transport_only_supplier(order: Order, supplier: Supplier) -> None:
+    """409 when ``supplier.ordering_method`` is ``transport`` — its orders leave
+    the system only through a Manager Transport batch (finalize), never via the
+    per-order dispatch route.
+
+    Pure (no backend, no I/O) and UNCONDITIONAL: there is deliberately no
+    exception for an order carrying a ``TRN-`` marker. A batch member never
+    legitimately reaches ``manager_dispatch`` (finalize is a separate route),
+    and the marker survives at least four states that would otherwise wave an
+    order through — a sent batch whose member was skipped at finalize, a
+    cancelled batch that kept the marker, a legacy marker with no header row,
+    and a ``WorksheetNotFound`` degrade in the draft guard. Unlike the sibling
+    ``_reject_if_locked_in_draft_transport`` there is no ``action`` parameter:
+    this guard has exactly one call site."""
+    if supplier.ordering_method != OrderingMethod.TRANSPORT:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Order {order.order_id}: supplier {supplier.supplier_id} "
+            f"({supplier.supplier_name}) is ordered only via Transport — "
+            f"cannot dispatch it here. Use the Transport screen instead."
+        ),
+    )
+
+
 def _log_transport_event(
     backend,
     transport_id: str,
@@ -1891,6 +1917,10 @@ def manager_dispatch(
     Sheet backend only — seed mode cannot persist the state transition. Writes
     are ordered: line updates first, then the order status row, so a crash
     mid-way leaves the order in captain_submitted (not in a torn state).
+
+    A supplier on the ``transport`` channel is refused here with 409 before any
+    read of its email or any write — see ``_reject_if_transport_only_supplier``.
+    Its orders leave only through ``manager_transport_finalize``.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -1921,6 +1951,7 @@ def manager_dispatch(
             status_code=500,
             detail=f"Supplier {order.supplier_id} not in master data",
         )
+    _reject_if_transport_only_supplier(order, supplier)
     # Channel-aware: only the email channel requires/builds a Gmail URL. Portal,
     # phone and manual suppliers "mark ordered" — they record the transition +
     # sent_method but have no email artifact. Branch on the supplier's
