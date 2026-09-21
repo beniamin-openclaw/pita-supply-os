@@ -13,6 +13,9 @@ class OrderingMethod(str, Enum):
     PORTAL = "portal"
     PHONE = "phone"
     MANUAL = "manual"
+    # Supplier ordered ONLY through a Manager Transport batch (finalize writes
+    # sent_method="transport"); manager_dispatch returns 409 for its orders.
+    TRANSPORT = "transport"
 
 
 class OrderStatus(str, Enum):
@@ -285,7 +288,10 @@ class ManagerDispatchRequest(BaseModel):
     manager_finals: list[OrderLineManagerFinal] = Field(min_length=1)
     # Transport actually used; mapped from supplier.ordering_method by the UI
     # (email|portal|phone|manual). Default "email" matches the enum — the legacy
-    # "gmail" default was inconsistent with OrderingMethod.
+    # "gmail" default was inconsistent with OrderingMethod. There is deliberately
+    # NO 'transport' value here: that channel never dispatches per order (
+    # manager_dispatch 409s it), and a batch finalize writes sent_method
+    # ="transport" on the order directly.
     sent_method: str = "email"
 
 

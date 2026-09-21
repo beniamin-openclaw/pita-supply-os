@@ -19,7 +19,7 @@ export type ReasonCode =
   | "SYSTEM_SUGGESTION_WRONG"
   | "OTHER";
 
-export type OrderingMethod = "email" | "portal" | "phone" | "manual";
+export type OrderingMethod = "email" | "portal" | "phone" | "manual" | "transport";
 export type RoundingRule = "full_only" | "half_allowed" | "up_for_critical" | "tenth_kg";
 
 // Master data ----------------------------------------------------------------

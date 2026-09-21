@@ -466,6 +466,7 @@ def test_dispatch_empty_manager_finals():
 
 # ---------- Channel-aware dispatch (Phase G3) ----------
 
+from app import gmail_url  # noqa: E402
 from app.models import OrderingMethod  # noqa: E402
 
 
@@ -488,6 +489,84 @@ def _phone_supplier() -> Supplier:
         ordering_method=OrderingMethod.PHONE,
         notes="tel: +48 600 000 000",
     )
+
+
+def _transport_supplier(email: str | None = None) -> Supplier:
+    # Transport-only channel (SUP_PAGO after pago-transport-only-dispatch):
+    # orders leave only via a Transport batch, never per-order dispatch.
+    return Supplier(
+        supplier_id="SUP_PAGO",
+        supplier_name="Pago",
+        email=email,
+        ordering_method=OrderingMethod.TRANSPORT,
+    )
+
+
+def _dispatch_body(order: Order) -> dict:
+    return {
+        "order_id": order.order_id,
+        "manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 5}],
+        "sent_method": "email",
+    }
+
+
+def test_dispatch_transport_supplier_refused_409(mocker):
+    """A transport-only supplier's order is refused with 409 that points at the
+    Transport screen, and NOTHING is written."""
+    order = _captain_submitted_order()
+    mocks = _activate_sheet_backend(mocker, order=order, supplier=_transport_supplier())
+    r = client.post("/api/manager/dispatch", json=_dispatch_body(order), headers=MANAGER_AUTH)
+    assert r.status_code == 409, r.text
+    assert "Transport screen" in r.json()["detail"]
+    mocks["update_order"].assert_not_called()
+    mocks["update_order_lines"].assert_not_called()
+
+
+def test_dispatch_transport_supplier_refused_even_with_trn_marker(mocker):
+    """The guard is UNCONDITIONAL: a TRN- marker (legacy / sent / cancelled
+    batch — here: no header row) must not wave the order through."""
+    order = _captain_submitted_order().model_copy(
+        update={"supplier_order_reference": "TRN-20260921-PAGO-abc123"}
+    )
+    mocks = _activate_sheet_backend(mocker, order=order, supplier=_transport_supplier())
+    # The draft-transport guard reads the header; no header = legacy marker,
+    # which that guard passes through — so only the new guard can refuse.
+    mocker.patch.object(sheets, "invalidate_cache")
+    mocker.patch.object(sheets, "get_transport_batch", return_value=None)
+    r = client.post("/api/manager/dispatch", json=_dispatch_body(order), headers=MANAGER_AUTH)
+    assert r.status_code == 409, r.text
+    assert "Transport screen" in r.json()["detail"]
+    mocks["update_order"].assert_not_called()
+    mocks["update_order_lines"].assert_not_called()
+
+
+def test_dispatch_transport_supplier_with_valid_email_refused_without_writes(mocker):
+    """A transport supplier with a perfectly good email is still refused, no Gmail
+    compose URL is built, and nothing is written.
+
+    Be precise about what each assertion buys. ``build_draft_url`` is unreachable for
+    a TRANSPORT supplier BY CONSTRUCTION — ``is_email_channel`` compares against
+    ``OrderingMethod.EMAIL``, and the two values are mutually exclusive — so
+    ``build_url.assert_not_called()`` does NOT pin the guard ahead of the email
+    branch; it would still hold with the guard moved below it. It is kept as a
+    regression pin on that mutual exclusivity: if someone ever makes the email branch
+    fire for a non-EMAIL channel, this test fails instead of a supplier getting mail.
+
+    What the test actually pins is the guard ahead of BOTH writes (the two
+    ``assert_not_called`` on the backend mocks), and that a perfectly valid ``@``
+    address does not reopen the route — the placeholder-email check at the top of the
+    email branch is not what is refusing this order."""
+    order = _captain_submitted_order()
+    mocks = _activate_sheet_backend(
+        mocker, order=order, supplier=_transport_supplier(email="orders@pago.example")
+    )
+    build_url = mocker.patch.object(gmail_url, "build_draft_url")
+    r = client.post("/api/manager/dispatch", json=_dispatch_body(order), headers=MANAGER_AUTH)
+    assert r.status_code == 409, r.text
+    assert "Transport screen" in r.json()["detail"]
+    build_url.assert_not_called()
+    mocks["update_order"].assert_not_called()
+    mocks["update_order_lines"].assert_not_called()
 
 
 def test_dispatch_portal_no_email_no_url(mocker):
