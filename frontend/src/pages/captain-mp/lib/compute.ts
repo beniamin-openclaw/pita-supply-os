@@ -81,6 +81,27 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   }
 
   const final = Number(line.captain_final_qty_purchase);
+
+  // Supplier with suggestion alerts off (Pago, pago-suggestion-no-alerts):
+  // the suggestion stays on the card, but no deviation / critical / over-MAX
+  // alert and never a reason — mirrors the backend `_evaluate_submit_line`
+  // with alerts_enabled=False. Green when the order equals the suggestion,
+  // otherwise a neutral grey pill.
+  if (item.suggestion_alerts_enabled === false) {
+    if (
+      line.current_stock_qty_base !== "" &&
+      final === computeSuggestion(item, Number(line.current_stock_qty_base)).purchase
+    ) {
+      return { state: "green", messageKey: "state.match", requiresReason: false, deviationPct: 0 };
+    }
+    return {
+      state: "grey",
+      messageKey: "state.orderEntered",
+      requiresReason: false,
+      deviationPct: null,
+    };
+  }
+
   const hasReason =
     !!line.reason_code && (line.reason_code !== "OTHER" || !!line.captain_comment);
 

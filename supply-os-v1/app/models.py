@@ -72,6 +72,14 @@ class Supplier(BaseModel):
     # Tax id as printed on the supplier's invoices (digits only), migration 0017 —
     # the key that pairs an eBiuro purchase document with our supplier.
     nip: Optional[str] = None
+    # False = the Captain still sees the suggestion (target − stock, with its
+    # math) but gets no deviation alerts and never has to give a reason: the
+    # >25% deviation, critical under-order and uncounted over-MAX gates are all
+    # skipped for this supplier (pago-suggestion-no-alerts, migration 0022).
+    # Pago: the Captain orders a week of stock against day-scale targets, so
+    # every line tripped the gate. `bool = True`, NOT Optional: the column is
+    # NOT NULL DEFAULT true and _SUPPLIER_COLUMNS binds it on insert.
+    suggestion_alerts_enabled: bool = True
 
 
 class Location(BaseModel):
@@ -552,6 +560,9 @@ class CaptainOrderDetail(BaseModel):
     # Phase 7): a Transport finalize flips the status without writing
     # manager_final on every line, so manager_final 0 is NOT a zeroing there.
     sent_method: Optional[str] = None
+    # Mirrors Supplier.suggestion_alerts_enabled so the Captain edit screen
+    # renders the same no-alert cards as the new-order screen.
+    suggestion_alerts_enabled: bool = True
     editable: bool
     lines: list[ManagerOrderLineDetail] = Field(default_factory=list)
 

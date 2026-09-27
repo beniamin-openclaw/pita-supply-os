@@ -34,7 +34,10 @@ import type { ExtraItemRow } from "./lib/extraItems";
 import type { OrderLine } from "./types";
 
 /** Translate an enriched detail line into the shape ProductCard expects. */
-function lineToItem(line: ManagerOrderLineDetail): OrderableItem {
+function lineToItem(
+  line: ManagerOrderLineDetail,
+  suggestionAlertsEnabled: boolean,
+): OrderableItem {
   return {
     product_id: line.product_id,
     product_name_pl: line.product_name_pl,
@@ -53,6 +56,7 @@ function lineToItem(line: ManagerOrderLineDetail): OrderableItem {
     allow_over_max_due_to_packaging: line.allow_over_max_due_to_packaging,
     supplier_product_id: line.supplier_product_id,
     supplier_product_name: line.supplier_product_name,
+    suggestion_alerts_enabled: suggestionAlertsEnabled,
   };
 }
 
@@ -109,7 +113,8 @@ export function OrderEditPage() {
         }
         setLoadError(null);
         setOrder(data);
-        const builtItems = data.lines.map(lineToItem);
+        const alertsEnabled = data.suggestion_alerts_enabled !== false;
+        const builtItems = data.lines.map((ln) => lineToItem(ln, alertsEnabled));
         const builtLines: Record<string, OrderLine> = {};
         for (const dl of data.lines) {
           builtLines[dl.product_id] = lineToFormState(dl);

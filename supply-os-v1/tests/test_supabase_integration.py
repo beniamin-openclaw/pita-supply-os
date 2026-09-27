@@ -161,6 +161,12 @@ def _schema():
     # 0020 adds the order_events audit table (post-send edit log, Phase 6);
     # also listed in _ALL_TABLES (before orders) and _TXN_TABLES above.
     order_events = (MIGRATIONS_DIR / "0020_order_events.sql").read_text()
+    # 0022 adds suppliers.suggestion_alerts_enabled (NOT NULL DEFAULT true);
+    # _SUPPLIER_COLUMNS references it, so the suppliers insert below errors
+    # against a pre-0022 schema. 0021 belongs to another lane (transport-only).
+    suggestion_alerts = (
+        MIGRATIONS_DIR / "0022_supplier_suggestion_alerts.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -182,6 +188,7 @@ def _schema():
         conn.exec_driver_sql(reason_code)
         conn.exec_driver_sql(location_email)
         conn.exec_driver_sql(order_events)
+        conn.exec_driver_sql(suggestion_alerts)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
