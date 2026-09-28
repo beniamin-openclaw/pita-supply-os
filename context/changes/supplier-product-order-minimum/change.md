@@ -111,4 +111,4 @@ to true) — the code falls back to supplier_product_id order and the full-total
   `prod-sql-diff-before.md`. Audit: 14 positioned rows, 14 distinct positions 10..140,
   all SUP_BUKAT; excluded = SP_BUKAT_P011, SP_BUKAT_P012, SP_BUKAT_P014; SP_BUKAT_P135
   (inactive) has no position.
-- Pending: live check on prod (5.5), no order dispatched.
+- Live check 5.5 passed (operator, 2026-09-28); no order dispatched.
