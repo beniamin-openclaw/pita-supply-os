@@ -27,6 +27,7 @@ import { Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useT } from "../../i18n";
+import { compareProductOrder } from "../../lib/productOrder";
 import type { ManagerOrderDetail, ManagerOrderLineDetail, OrderingMethod } from "../../types";
 import {
   type DraftMap,
@@ -87,11 +88,12 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
     }
   }
 
-  // Plain-text list (Produkt | Ilość | kod) for portal/phone, draft qty > 0.
+  // Plain-text list (Produkt | Ilość | kod) for portal/phone, draft qty > 0,
+  // in the canonical supplier order (same as the e-mail and every screen).
   const listText = useMemo(() => {
     const rows = detail.lines
       .filter((ln) => effQty(ln) > 0)
-      .sort((a, b) => a.order_line_id.localeCompare(b.order_line_id))
+      .sort(compareProductOrder)
       .map((ln) => {
         const code = ln.supplier_product_name || "";
         return `${ln.product_name_pl} | ${effQty(ln)} ${ln.purchase_unit} | ${code}`.replace(/\s*\|\s*$/, "");

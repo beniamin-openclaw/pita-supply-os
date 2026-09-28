@@ -57,6 +57,7 @@ function lineToItem(
     supplier_product_id: line.supplier_product_id,
     supplier_product_name: line.supplier_product_name,
     suggestion_alerts_enabled: suggestionAlertsEnabled,
+    display_order: line.display_order ?? null,
   };
 }
 

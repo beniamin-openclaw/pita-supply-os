@@ -596,32 +596,32 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [x] 1.1 Backend pytest passes (model defaults + supabase binding test)
-- [x] 1.2 Ruff clean
-- [x] 1.3 Order key/comparator unit tests pass
-- [x] 1.4 Integration fixture applies 0023 and round-trip passes
-- [x] 1.5 Frontend build, lint, test green
+- [x] 1.1 Backend pytest passes (model defaults + supabase binding test) — f0fc1ed
+- [x] 1.2 Ruff clean — f0fc1ed
+- [x] 1.3 Order key/comparator unit tests pass — f0fc1ed
+- [x] 1.4 Integration fixture applies 0023 and round-trip passes — f0fc1ed
+- [x] 1.5 Frontend build, lint, test green — f0fc1ed
 
 #### Manual
 
-- [x] 1.6 Migration file free of the percent sign, 0022 conventions
-- [x] 1.7 prod-sql.sql ids match the operator list, scoped to SUP_BUKAT
+- [x] 1.6 Migration file free of the percent sign, 0022 conventions — f0fc1ed
+- [x] 1.7 prod-sql.sql ids match the operator list, scoped to SUP_BUKAT — f0fc1ed
 
 ### Phase 2: Canonical order on every per-supplier surface
 
 #### Automated
 
-- [ ] 2.1 Orderable list sorted by position then id
-- [ ] 2.2 Manager and Captain detail lines canonical; receipt lines canonical
-- [ ] 2.3 Transport aggregate canonical order
-- [ ] 2.4 gmail_url body numbered by position
-- [ ] 2.5 FE email, matrix and add-all options tests
-- [ ] 2.6 FE/BE e-mail twin order test on shared fixture
-- [ ] 2.7 Full suites, ruff, build, lint green
+- [x] 2.1 Orderable list sorted by position then id
+- [x] 2.2 Manager and Captain detail lines canonical; receipt lines canonical
+- [x] 2.3 Transport aggregate canonical order
+- [x] 2.4 gmail_url body numbered by position
+- [x] 2.5 FE email, matrix and add-all options tests
+- [x] 2.6 FE/BE e-mail twin order test on shared fixture
+- [x] 2.7 Full suites, ruff, build, lint green
 
 #### Manual
 
-- [ ] 2.8 Seed preview: Captain Bukat order matches operator list (+ Bombilla last); Blue Service unchanged
+- [x] 2.8 Seed preview: Captain Bukat order matches operator list (+ Bombilla last); Blue Service unchanged
 
 ### Phase 3: Minimum basis without excluded products
 

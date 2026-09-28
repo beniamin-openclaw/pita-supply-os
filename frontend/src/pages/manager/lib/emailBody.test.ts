@@ -285,3 +285,59 @@ describe("buildResendSubject — post-send dosyłka (week2-feedback-quantities P
     expect(url).toContain(`su=${encodeURIComponent("Dosyłka — Zamówienie Pita Bros Wola")}`);
   });
 });
+
+describe("buildEmailBody — canonical supplier order (supplier-product-order-minimum)", () => {
+  // Shared with supply-os-v1/tests/test_supplier_product_order.py
+  // (test_email_body_numbers_lines_by_position_not_line_id): stored line ids run
+  // Ogórek, Pomidor, Bombilla, then a manager-added Cebula; positions say
+  // Pomidor, Cebula, Ogórek, then the position-less Bombilla.
+  const mk = (
+    id: string,
+    spId: string,
+    name: string,
+    unit: string,
+    displayOrder: number | null,
+    captain: number,
+    manager = 0,
+  ): ManagerOrderLineDetail =>
+    ({
+      order_line_id: id,
+      product_id: spId.slice(-4),
+      product_name_pl: name,
+      supplier_product_id: spId,
+      supplier_product_name: name,
+      purchase_unit: unit,
+      display_order: displayOrder,
+      captain_final_qty_purchase: captain,
+      manager_final_qty_purchase: manager,
+    }) as ManagerOrderLineDetail;
+  const lines = [
+    mk("OL-ORD-001", "SP_BUKAT_P005", "Ogórek", "kg", 50, 2),
+    mk("OL-ORD-002", "SP_BUKAT_P006", "Pomidor", "kg", 10, 3),
+    mk("OL-ORD-003", "SP_BUKAT_P135", "Bombilla", "szt", null, 1),
+    mk("OL-ORD-M-a1b2c3", "SP_BUKAT_P016", "Cebula czerwona", "kg", 20, 0, 4),
+  ];
+  const eff = (l: ManagerOrderLineDetail): number =>
+    l.manager_final_qty_purchase > 0 ? l.manager_final_qty_purchase : l.captain_final_qty_purchase;
+
+  it("numbers lines by position, a manager-added line at its own position", () => {
+    const body = buildEmailBody(detail({ lines }), eff);
+    const table = body.split("\n").filter((l) => /^\d/.test(l));
+    expect(table).toEqual([
+      "1.  | Pomidor | 3 kg",
+      "2.  | Cebula czerwona | 4 kg",
+      "3.  | Ogórek | 2 kg",
+      "4.  | Bombilla | 1 szt",
+    ]);
+  });
+
+  it("does not reorder the detail's own line array", () => {
+    buildEmailBody(detail({ lines }), eff);
+    expect(lines.map((l) => l.order_line_id)).toEqual([
+      "OL-ORD-001",
+      "OL-ORD-002",
+      "OL-ORD-003",
+      "OL-ORD-M-a1b2c3",
+    ]);
+  });
+});

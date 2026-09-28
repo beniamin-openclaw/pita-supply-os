@@ -423,6 +423,10 @@ class ManagerOrderLineDetail(BaseModel):
     reason_code: Optional[ReasonCode] = None
     captain_comment: str = ""
     manager_comment: str = ""
+    # Position of the line's supplier_product (migration 0023) — the detail
+    # routes return lines sorted by it (app/product_order.py) and the FE
+    # document builders re-sort with the TS twin. None = no position.
+    display_order: Optional[int] = None
 
 
 class ManagerOrderReceiptLine(BaseModel):
@@ -1098,6 +1102,9 @@ class TransportAggregateLine(BaseModel):
     # filter (buildTransportPagoPrintDoc) — the aggregate itself stays
     # unfiltered here, same as the driver list / weight totals.
     warehouse_pickup: bool = False
+    # Position of the line's supplier_product (migration 0023); the aggregate
+    # is returned in canonical supplier order (app/product_order.py).
+    display_order: Optional[int] = None
 
 
 class TransportEligibleOrder(BaseModel):

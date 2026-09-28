@@ -115,6 +115,7 @@ from .models import (
     TransportRemoveOrderResponse,
     TransportSkippedOrder,
 )
+from .product_order import line_sort_key, supplier_product_sort_key
 from .suggestion import SuggestionInput, compute_suggestion, rounding_step
 
 log = logging.getLogger(__name__)
@@ -217,6 +218,7 @@ def _build_orderable_item(
         "supplier_product_name": sp.supplier_product_name,
         "order_note": sp.order_note,
         "suggestion_alerts_enabled": suggestion_alerts_enabled,
+        "display_order": sp.display_order,
     }
 
 
@@ -266,6 +268,10 @@ def _build_orderable_items(
         and sp.product_id in settings_by_pid
         and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
+    # Canonical supplier order (supplier-product-order-minimum): position, then
+    # supplier_product_id. The Captain order/edit screens, the Manager add-line
+    # picker and the Transport prefill line ids all follow this list.
+    sps.sort(key=lambda sp: supplier_product_sort_key(sp.display_order, sp.supplier_product_id))
     return [
         _build_orderable_item(
             sp, products_by_id, settings_by_pid, suggestion_alerts_enabled
@@ -1052,7 +1058,10 @@ def _load_order_receipts(
     out: list[ManagerOrderReceipt] = []
     for r in receipts:
         enriched: list[ManagerOrderReceiptLine] = []
-        for ln in lines_by_receipt.get(r.receipt_id, []):
+        # Same canonical supplier order as the order lines above.
+        for ln in sorted(
+            lines_by_receipt.get(r.receipt_id, []), key=line_sort_key(sps_by_id)
+        ):
             product = products_by_id.get(ln.product_id)
             sp = sps_by_id.get(ln.supplier_product_id)
             enriched.append(
@@ -1115,7 +1124,10 @@ def manager_order_detail(
     location = locations_by_id.get(order.location_id)
 
     enriched_lines: list[ManagerOrderLineDetail] = []
-    for line in order.lines:
+    # Canonical supplier order (supplier-product-order-minimum), applied at read
+    # time so historical orders render in it too; a manager-added line lands at
+    # its own position (operator decision), not at the end.
+    for line in sorted(order.lines, key=line_sort_key(sps_by_id)):
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
         setting = settings_by_pid.get(line.product_id)
@@ -1150,6 +1162,7 @@ def manager_order_detail(
                 reason_code=line.reason_code,
                 captain_comment=line.captain_comment,
                 manager_comment=line.manager_comment,
+                display_order=sp.display_order if sp else None,
             )
         )
 
@@ -1228,10 +1241,13 @@ def _enrich_lines_for_detail(
     ``settings_by_pid`` (location_product_settings keyed by product_id) supplies
     ``max_stock_qty_base`` + ``allow_over_max_due_to_packaging`` so the Captain
     edit screen can mirror the backend over-MAX gate. None/absent → 0/False.
+
+    Lines come back in the canonical supplier order (position, then
+    supplier_product_id — app/product_order.py), whatever their stored order.
     """
     settings_by_pid = settings_by_pid or {}
     enriched: list[ManagerOrderLineDetail] = []
-    for line in lines:
+    for line in sorted(lines, key=line_sort_key(sps_by_id)):
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
         setting = settings_by_pid.get(line.product_id)
@@ -1266,6 +1282,7 @@ def _enrich_lines_for_detail(
                 reason_code=line.reason_code,
                 manager_comment=line.manager_comment,
                 captain_comment=line.captain_comment,
+                display_order=sp.display_order if sp else None,
             )
         )
     return enriched
@@ -3689,7 +3706,8 @@ def captain_receipt_detail(
     location = locations_by_id.get(receipt.location_id)
 
     enriched: list[ReceiptDetailLine] = []
-    for line in receipt.lines:
+    # Canonical supplier order (supplier-product-order-minimum).
+    for line in sorted(receipt.lines, key=line_sort_key(sps_by_id)):
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
         enriched.append(
@@ -3905,8 +3923,11 @@ def _aggregate_transport_lines(
 
     Missing product / supplier_product / location master data falls back to
     the raw id in the display field (mirrors ``_aggregate_suggestion_review``
-    / ``manager_queue``), never raises. Output is sorted by
-    ``product_name_pl`` for a stable, copyable list.
+    / ``manager_queue``), never raises. Output is in the canonical supplier
+    order (``display_order``, then ``supplier_product_id`` —
+    app/product_order.py; supplier-product-order-minimum replaced the earlier
+    code-point name sort), so the driver list, Pago documents and the sent
+    view read like every other per-supplier list.
 
     ``warehouse_pickup`` (training-feedback-0901 Phase 4) is joined the same
     way as ``supplier_sku`` — False when the supplier_product is missing. This
@@ -3942,6 +3963,7 @@ def _aggregate_transport_lines(
                 "purchase_unit": sp.purchase_unit if sp else "",
                 "supplier_sku": sp.supplier_sku if sp else None,
                 "warehouse_pickup": sp.warehouse_pickup if sp else False,
+                "display_order": sp.display_order if sp else None,
                 "per_location": [],
             }
             groups[line.product_id] = group
@@ -3965,6 +3987,7 @@ def _aggregate_transport_lines(
             purchase_unit=g["purchase_unit"],
             supplier_sku=g["supplier_sku"],
             warehouse_pickup=g["warehouse_pickup"],
+            display_order=g["display_order"],
             total_qty_purchase=round(
                 sum(pl.qty_purchase for pl in g["per_location"]), 3
             ),
@@ -3972,7 +3995,9 @@ def _aggregate_transport_lines(
         )
         for g in groups.values()
     ]
-    items.sort(key=lambda it: it.product_name_pl)
+    items.sort(
+        key=lambda it: supplier_product_sort_key(it.display_order, it.supplier_product_id)
+    )
     return items
 
 
