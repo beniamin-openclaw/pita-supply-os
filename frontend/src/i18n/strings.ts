@@ -148,17 +148,32 @@ export const STRINGS = {
     pl: "Poniżej minimum: {min} {unit}",
     en: "Below minimum: {min} {unit}",
   },
+  "card.belowMinPacks": {
+    pl: "Poniżej minimum: {packs} ({min} {unit})",
+    en: "Below minimum: {packs} ({min} {unit})",
+  },
+
+  // Two-field pack stock input (pago-stock-packs-plus-kg) -------------------
+  "stock.fieldAria": { pl: "{label}, {unit}", en: "{label}, {unit}" },
+  "stock.reading": { pl: "= {split} ({total})", en: "= {split} ({total})" },
+  "stock.readingBase": { pl: "= {total}", en: "= {total}" },
+  "stock.didYouMean": {
+    pl: "Czy chodziło o {packs} ({total})?",
+    en: "Did you mean {packs} ({total})?",
+  },
+  "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
+  "stock.didYouMeanNo": { pl: "Nie", en: "No" },
 
   // ProductCard — pack-unit variants (units_per_purchase_unit > 1) ----------
   // Rendered as three no-wrap segments joined by " · " so a phone breaks the
   // line only between them, never inside "(5 zgrzewek)".
   "card.targetPart": {
-    pl: "Cel: {target} {inventoryUnit} ({packs})",
-    en: "Target: {target} {inventoryUnit} ({packs})",
+    pl: "Cel: {packs} ({target} {inventoryUnit})",
+    en: "Target: {packs} ({target} {inventoryUnit})",
   },
   "card.maxPart": {
-    pl: "Max: {max} {inventoryUnit} ({packs})",
-    en: "Max: {max} {inventoryUnit} ({packs})",
+    pl: "Max: {packs} ({max} {inventoryUnit})",
+    en: "Max: {packs} ({max} {inventoryUnit})",
   },
   "card.ratioPart": {
     pl: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",

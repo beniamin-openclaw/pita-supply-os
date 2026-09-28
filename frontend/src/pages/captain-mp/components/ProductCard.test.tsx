@@ -74,8 +74,8 @@ describe("ProductCard — pack-unit display (×24 SKU)", () => {
   it("shows Cel/Max pack hints, the stock hint, and the suggestion pack detail", () => {
     renderCard(makeItem(), makeLine({ current_stock_qty_base: 40 }));
 
-    expect(screen.getByText(/Cel: 120 szt \(5 zgrzewek\)/)).toBeInTheDocument();
-    expect(screen.getByText(/Max: 120 szt \(5 zgrzewek\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Cel: 5 zgrzewek \(120 szt\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Max: 5 zgrzewek \(120 szt\)/)).toBeInTheDocument();
     expect(screen.getByText("40 szt = 1,7 zgrzewki")).toBeInTheDocument();
     // Suggestion tile: three no-wrap segments ("brakuje 80 szt" / "= 3,3 zgrzewki" / "→ 4 zgrzewki").
     expect(screen.getByText("brakuje 80 szt")).toBeInTheDocument();

@@ -8,7 +8,7 @@ import {
   packHint,
   isPackBased,
 } from "./packUnits";
-import { PACK_UNIT_FORMS } from "../i18n/packUnits";
+import { PACK_UNIT_FORMS, packUnitLabel } from "../i18n/packUnits";
 
 describe("baseToPacks", () => {
   it("120 szt / 24 -> 5", () => {
@@ -144,5 +144,24 @@ describe("PACK_UNIT_FORMS integrity", () => {
         expect(forms.en[key], `${unit}.en.${key}`).toBeTruthy();
       }
     }
+  });
+});
+
+describe("packUnitLabel declension — blok / karton / opak", () => {
+  it.each([
+    ["blok", 1, "blok"],
+    ["blok", 3, "bloki"],
+    ["blok", 5, "bloków"],
+    ["blok", 2.5, "bloku"],
+    ["karton", 1, "karton"],
+    ["karton", 4, "kartony"],
+    ["karton", 5, "kartonów"],
+    ["karton", 1.5, "kartonu"],
+    ["opak", 1, "opak"],
+    ["opak", 3, "opak"],
+    ["opak", 5, "opak"],
+    ["opak", 4.5, "opak"],
+  ])("%s x %s -> %s", (unit, n, label) => {
+    expect(packUnitLabel(n as number, unit as string, "pl")).toBe(label);
   });
 });
