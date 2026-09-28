@@ -627,11 +627,11 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [x] 3.1 _minimum_basis_value unit tests
-- [x] 3.2 Queue, Manager detail, Captain detail carry the basis
-- [x] 3.3 No-gate test: below-basis order submits, claims, dispatches
-- [x] 3.4 MinimumOrderChip component tests
-- [x] 3.5 Full suites, ruff, build, lint green
+- [x] 3.1 _minimum_basis_value unit tests — c00557f
+- [x] 3.2 Queue, Manager detail, Captain detail carry the basis — c00557f
+- [x] 3.3 No-gate test: below-basis order submits, claims, dispatches — c00557f
+- [x] 3.4 MinimumOrderChip component tests — c00557f
+- [x] 3.5 Full suites, ruff, build, lint green — c00557f
 
 #### Manual
 
@@ -641,13 +641,13 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [ ] 4.1 Captain submit for SUP_INTERNAL returns 400, nothing persisted
-- [ ] 4.2 isOrderingSupplier unit tests
-- [ ] 4.3 Full suites, ruff, build, lint green
+- [x] 4.1 Captain submit for SUP_INTERNAL returns 400, nothing persisted
+- [x] 4.2 isOrderingSupplier unit tests
+- [x] 4.3 Full suites, ruff, build, lint green
 
 #### Manual
 
-- [ ] 4.4 Seed preview: no Pita Bros in the Captain picker; Produkcja still in the count grid
+- [x] 4.4 Seed preview: no Pita Bros in the Captain picker; Produkcja still in the count grid
 
 ### Phase 5: Release (operator-run, after approval)
 

@@ -631,6 +631,14 @@ def _evaluate_submit_line(
     return order_line, warning, line_value
 
 
+# On-site production ("Pita Bros (internal production)"): counted in inventory,
+# never ordered. It stays in master data for the inventory grid and
+# `_primary_supplier_product`; ordering screens hide it
+# (frontend/src/lib/orderingSuppliers.ts mirrors this id) and `captain_submit`
+# refuses it (supplier-product-order-minimum).
+_INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
+
+
 @app.post("/api/captain/submit", response_model=CaptainSubmitResponse)
 def captain_submit(
     req: CaptainSubmitRequest,
@@ -639,6 +647,8 @@ def captain_submit(
     """Validate + persist a captain-submitted order.
 
     Validation gates (deterministic):
+      - supplier_id must not be SUP_INTERNAL (on-site production is counted,
+        never ordered) -> 400 before anything is read or written.
       - supplier_id must be known.
       - every line's supplier_product_id must be orderable for this supplier.
       - every line's product_id must have a location_product_setting row at
@@ -658,6 +668,14 @@ def captain_submit(
         reason gates above fire and no warning is returned; the suggestion and
         deviation are still persisted (pago-suggestion-no-alerts).
     """
+    if req.supplier_id == _INTERNAL_SUPPLIER_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Supplier '{_INTERNAL_SUPPLIER_ID}' is internal production — "
+                f"it is counted in inventory, not ordered"
+            ),
+        )
     backend = _choose_backend()
     master = _resolve_master_data(backend, location_id, req.supplier_id)
 
@@ -2612,9 +2630,6 @@ def _log_inventory_event(
             event_type,
             exc_info=True,
         )
-
-
-_INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
 
 
 def _primary_supplier_product(

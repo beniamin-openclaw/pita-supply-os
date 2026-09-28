@@ -15,6 +15,7 @@ import { api, ApiError } from "../../apiClient";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { roundQty } from "../../components/ui/number";
 import { useT } from "../../i18n";
+import { isOrderingSupplier } from "../../lib/orderingSuppliers";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import {
   anyTransportDirty,
@@ -248,7 +249,8 @@ export function TransportPage() {
       .suppliers("manager")
       .then((data) => {
         if (cancelled) return;
-        const active = data.filter((s) => s.active);
+        // Active, and not on-site production (SUP_INTERNAL) — lib/orderingSuppliers.
+        const active = data.filter(isOrderingSupplier);
         setSuppliers(active);
         const pago = active.find((s) => s.supplier_id === "SUP_PAGO");
         const defaultId = pago ? pago.supplier_id : (active[0]?.supplier_id ?? "");
