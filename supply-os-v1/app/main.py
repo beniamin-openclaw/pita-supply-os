@@ -946,9 +946,18 @@ def manager_queue(
         location_name = location.location_name if location else order.location_id
         lines = lines_by_order.get(order.order_id, [])
 
-        deviation_count = sum(
-            1 for line in lines
-            if abs(line.delta_vs_suggestion_pct or 0.0) >= threshold
+        # A supplier with suggestion alerts off (Pago) still stores
+        # delta_vs_suggestion_pct as the learning record, but the queue shows
+        # no deviation chip for it — the Captain was never asked for a reason,
+        # so the chip would only be noise (pago-queue-deviation-chips).
+        alerts_enabled = supplier.suggestion_alerts_enabled if supplier else True
+        deviation_count = (
+            sum(
+                1 for line in lines
+                if abs(line.delta_vs_suggestion_pct or 0.0) >= threshold
+            )
+            if alerts_enabled
+            else 0
         )
         reason_count = sum(1 for line in lines if line.reason_code is not None)
 

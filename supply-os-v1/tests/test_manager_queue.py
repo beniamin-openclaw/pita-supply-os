@@ -309,6 +309,34 @@ def test_queue_deviation_threshold_is_25pct(mocker):
     assert payload[0]["line_count"] == 3
 
 
+def test_queue_hides_deviations_for_supplier_with_alerts_off(mocker):
+    """pago-queue-deviation-chips: a supplier with suggestion_alerts_enabled
+    off (Pago) never asks the Captain for a reason, so its orders carry no
+    deviation chip — while another supplier's orders keep theirs."""
+    orders = [
+        _order("ORD-PAGO"),
+        _order("ORD-BUKAT", supplier_id="SUP_BUKAT"),
+    ]
+    lines = [
+        _line("ORD-PAGO", "OL-1", delta_pct=3.0),
+        _line("ORD-PAGO", "OL-2", delta_pct=0.5, reason_code=ReasonCode.OTHER),
+        _line("ORD-BUKAT", "OL-3", delta_pct=0.5),
+    ]
+    suppliers = [
+        _supplier().model_copy(update={"suggestion_alerts_enabled": False}),
+        _supplier("SUP_BUKAT", "Bukat"),
+    ]
+    _enable_sheet_backend(mocker, orders=orders, lines=lines, suppliers=suppliers)
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {it["order_id"]: it for it in r.json()}
+    assert by_id["ORD-PAGO"]["deviation_count"] == 0
+    assert by_id["ORD-PAGO"]["reason_count"] == 1
+    assert by_id["ORD-PAGO"]["line_count"] == 2
+    assert by_id["ORD-BUKAT"]["deviation_count"] == 1
+
+
 def test_queue_computes_reason_count(mocker):
     orders = [_order("ORD-A")]
     lines = [
