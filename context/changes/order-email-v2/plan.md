@@ -548,22 +548,22 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Automated
 
-- [x] 2.1 Golden fixtures pass on both sides
-- [x] 2.2 Declension table parity test passes
-- [x] 2.3 Full backend + frontend suites, lint, build pass
+- [x] 2.1 Golden fixtures pass on both sides — 3f92fd1
+- [x] 2.2 Declension table parity test passes — 3f92fd1
+- [x] 2.3 Full backend + frontend suites, lint, build pass — 3f92fd1
 
 #### Manual
 
-- [x] 2.4 Rendered STOP examples match the fixtures
+- [x] 2.4 Rendered STOP examples match the fixtures — 3f92fd1
 
 ### Phase 3: Gmail draft delivery path
 
 #### Automated
 
-- [ ] 3.1 gmailDraft tests: Transport unchanged, new From/Cc/loginHint/cache cases
-- [ ] 3.2 orderEmailDraft tests: happy path and error paths
-- [ ] 3.3 DispatchPanel tests: transport branch, draft success/failure, no client ID
-- [ ] 3.4 Full frontend build + lint + test, backend green
+- [x] 3.1 gmailDraft tests: Transport unchanged, new From/Cc/loginHint/cache cases
+- [x] 3.2 orderEmailDraft tests: happy path and error paths
+- [x] 3.3 DispatchPanel tests: transport branch, draft success/failure, no client ID
+- [x] 3.4 Full frontend build + lint + test, backend green
 
 #### Manual
 

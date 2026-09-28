@@ -20,6 +20,7 @@ import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
 import { DispatchPanel, type DispatchOpts } from "./DispatchPanel";
+import { gmailDraftsUrl } from "./lib/orderEmailDraft";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
 import { ResendPanel } from "./ResendPanel";
@@ -45,6 +46,9 @@ interface OrderDetailPaneProps {
   cutoffIso?: string | null;
   /** Compose URL from a dispatch done this session — clickable on a sent order. */
   dispatchedEmailUrl?: string | null;
+  /** Mailbox holding the verified Gmail draft created this session for this
+   *  order (order-email-v2) — shows "Szkic w Gmailu (…) — Otwórz szkice". */
+  draftedMailbox?: string | null;
   /** Live per-line draft state (qty + comment), keyed by order_line_id. */
   drafts: DraftMap;
   /** Orderable products that can still be added to this order (claimed only). */
@@ -76,6 +80,7 @@ export function OrderDetailPane({
   busyId,
   cutoffIso,
   dispatchedEmailUrl,
+  draftedMailbox,
   drafts,
   availableToAdd,
   onAddLine,
@@ -309,16 +314,19 @@ export function OrderDetailPane({
            compose link (when this session just dispatched it) plus the
            "dosyłka" rebuild from the current quantities (Phase 6). */
         <>
-          {dispatchedEmailUrl && (
+          {(dispatchedEmailUrl || draftedMailbox) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-              <a
-                href={dispatchedEmailUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-green-400 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-              >
-                {t("manager.action.openEmail")}
-              </a>
+              {draftedMailbox && <DraftedLine mailbox={draftedMailbox} />}
+              {dispatchedEmailUrl && !draftedMailbox && (
+                <a
+                  href={dispatchedEmailUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-green-400 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                >
+                  {t("manager.action.openEmail")}
+                </a>
+              )}
             </div>
           )}
           <ResendPanel detail={detail} drafts={drafts} dirty={dirty} onToast={onToast} />
@@ -357,7 +365,9 @@ export function OrderDetailPane({
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-          {dispatchedEmailUrl ? (
+          {draftedMailbox ? (
+            <DraftedLine mailbox={draftedMailbox} />
+          ) : dispatchedEmailUrl ? (
             <a
               href={dispatchedEmailUrl}
               target="_blank"
@@ -380,5 +390,24 @@ export function OrderDetailPane({
         </div>
       )}
     </div>
+  );
+}
+
+/** "Szkic w Gmailu (biuro@…) — Otwórz szkice" on an order this session just
+ *  sent through a verified Gmail draft (order-email-v2). */
+function DraftedLine({ mailbox }: { mailbox: string }) {
+  const { t } = useT();
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2 text-sm text-green-800">
+      <span className="font-semibold">{t("manager.draft.sentLine", { mailbox })}</span>
+      <a
+        href={gmailDraftsUrl(mailbox)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded-lg border border-green-400 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+      >
+        {t("manager.draft.openDrafts")}
+      </a>
+    </span>
   );
 }

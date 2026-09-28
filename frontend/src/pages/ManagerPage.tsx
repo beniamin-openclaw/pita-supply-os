@@ -26,6 +26,7 @@ import type {
 } from "../types";
 import { ManagerFilterBar } from "./manager/ManagerFilterBar";
 import { ManagerQueue, type QueueLane } from "./manager/ManagerQueue";
+import type { DispatchOpts } from "./manager/DispatchPanel";
 import { OrderDetailPane } from "./manager/OrderDetailPane";
 import {
   type DraftMap,
@@ -76,6 +77,10 @@ export function ManagerPage() {
   // order_id — lets us show a clickable "Otwórz email" link on a manager_sent
   // detail (the queue/detail endpoints don't carry the compose URL).
   const [dispatchedLinks, setDispatchedLinks] = useState<Record<string, string>>({});
+  // Orders sent this session through a verified Gmail draft -> the mailbox
+  // holding the draft (order-email-v2). Session-only, like dispatchedLinks:
+  // the DispatchPanel unmounts once the order turns manager_sent.
+  const [draftedOrders, setDraftedOrders] = useState<Record<string, string>>({});
 
   const showToast = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -308,6 +313,7 @@ export function ManagerPage() {
       orderId: string,
       sentMethod: OrderingMethod,
       signerEmail?: string | null,
+      opts?: DispatchOpts,
     ) => {
       if (!detail) return;
       // Re-entry guard: a second trigger while one dispatch is in flight (e.g.
@@ -325,10 +331,16 @@ export function ManagerPage() {
         });
         // Non-email channels have no email artifact — "marked as ordered" is
         // the accurate confirmation there; email keeps the dispatched copy.
-        showToast(
-          t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
-          true,
-        );
+        if (opts?.draftMailbox) {
+          showToast(t("manager.draft.done", { mailbox: opts.draftMailbox }), true);
+          const mailbox = opts.draftMailbox;
+          setDraftedOrders((prev) => ({ ...prev, [orderId]: mailbox }));
+        } else {
+          showToast(
+            t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
+            true,
+          );
+        }
         // Keep any server-built compose URL so "Otwórz email" works on the sent
         // detail (email channel only; null for portal/phone/manual).
         if (resp.gmail_compose_url) {
@@ -337,7 +349,13 @@ export function ManagerPage() {
         refreshAll(orderId);
       } catch (e) {
         const detailMsg = e instanceof ApiError ? e.detail : String(e);
-        showToast(t("manager.actionError", { detail: detailMsg }), false);
+        // A verified draft already exists — say so, it is unsent and harmless.
+        showToast(
+          opts?.draftMailbox
+            ? t("manager.draft.dispatchFailed", { mailbox: opts.draftMailbox, detail: detailMsg })
+            : t("manager.actionError", { detail: detailMsg }),
+          false,
+        );
       } finally {
         setBusyId(null);
       }
@@ -577,6 +595,7 @@ export function ManagerPage() {
               busyId={busyId}
               cutoffIso={selectedCutoffIso}
               dispatchedEmailUrl={selectedId ? dispatchedLinks[selectedId] ?? null : null}
+              draftedMailbox={selectedId ? draftedOrders[selectedId] ?? null : null}
               drafts={drafts}
               availableToAdd={availableToAdd}
               onAddLine={handleAddLine}
