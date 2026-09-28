@@ -76,6 +76,7 @@ from .models import (
     Order,
     OrderEvent,
     OrderLine,
+    OrderEmailSigner,
     OrderLineSubmit,
     OrderingMethod,
     OrderStatus,
@@ -783,6 +784,30 @@ def _join_cc(*parts: Optional[str]) -> Optional[str]:
     return ",".join(kept) if kept else None
 
 
+def _order_sender_email(location: Optional[Location]) -> Optional[str]:
+    """From address of the supplier e-mail (order-email-v2): the location's
+    send-as alias when it carries an "@", else the order mailbox itself."""
+    alias = (location.sender_email or "").strip() if location else ""
+    if "@" in alias:
+        return alias
+    return settings.order_mailbox or None
+
+
+def _load_email_signers(backend) -> list[OrderEmailSigner]:
+    """Signers for the supplier e-mail from ``_meta.order_email_signers``.
+    Degrades to [] on ANY failure (seed has no ``load_meta``, sheets raises
+    RuntimeError without a sheet id, a missing table …) — mirrors
+    ``manager_transport_draft_config``; the e-mail then signs "Pita Bros"."""
+    try:
+        meta = backend.load_meta()
+        return gmail_url.parse_order_email_signers(meta.get("order_email_signers"))
+    except Exception:
+        log.warning(
+            "order e-mail signers unavailable — degrading to []", exc_info=True
+        )
+        return []
+
+
 def _deviation_threshold() -> float:
     return _DEVIATION_THRESHOLD
 
@@ -1230,6 +1255,11 @@ def manager_order_detail(
         supplier_email=supplier.email if supplier else None,
         cc_email=settings.order_cc_email or None,
         location_email=location.email if location else None,
+        sender_email=_order_sender_email(location),
+        order_mailbox=settings.order_mailbox or None,
+        location_phone=(location.phone or None) if location else None,
+        delivery_date_in_email=settings.order_email_delivery_date_enabled,
+        email_signers=_load_email_signers(backend),
         ordering_method=supplier.ordering_method if supplier else OrderingMethod.EMAIL,
         supplier_notes=supplier.notes if supplier else "",
         order_date=order.order_date,

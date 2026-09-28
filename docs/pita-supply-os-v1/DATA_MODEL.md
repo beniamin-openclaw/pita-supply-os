@@ -83,6 +83,8 @@ where multi-supplier consolidation lives.
 | `company_address`  | string?     | (0007)                                         |
 | `company_nip`      | string?     | (0007)                                         |
 | `email`            | string?     | Location mailbox, CC'd on dispatch (0019)      |
+| `sender_email`     | string?     | Send-as alias used as From on the order e-mail (0026) |
+| `phone`            | string?     | Location phone printed in the order e-mail (0026) |
 
 **Why this table:** the order header references it. In v0 only `WOLA` is
 active. In Phase 2 we add more locations and the Manager Dashboard

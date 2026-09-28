@@ -13,16 +13,62 @@ turns those into 4xx.
 """
 from __future__ import annotations
 
+import json
 import urllib.parse
 from typing import Optional
 
-from .models import Location, Order, OrderLine, Product, Supplier
+from .models import Location, Order, OrderEmailSigner, OrderLine, Product, Supplier
 from .order_qty import effective_ordered_qty
 from .product_order import line_sort_key
 
 
 GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/"
 MAX_GMAIL_URL_LENGTH = 8000
+
+
+def parse_order_email_signers(raw: Optional[str]) -> list[OrderEmailSigner]:
+    """Parse ``_meta.order_email_signers`` (a JSON list of ``{name, phone,
+    email}``) into signers, in configured order. Never raises: invalid JSON, a
+    non-list value, a non-object entry or one without a name is dropped."""
+    if not raw or not raw.strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[OrderEmailSigner] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        out.append(
+            OrderEmailSigner(
+                name=name,
+                phone=str(item.get("phone") or "").strip(),
+                email=str(item.get("email") or "").strip(),
+            )
+        )
+    return out
+
+
+def resolve_signer(
+    signers: list[OrderEmailSigner], email: Optional[str]
+) -> Optional[OrderEmailSigner]:
+    """The signer whose e-mail matches ``email`` (case-insensitive); the first
+    signer when ``email`` is None or unknown; None when none is configured.
+    Twin of the frontend ``resolveSigner`` (useOrderEmailSigner)."""
+    if not signers:
+        return None
+    wanted = (email or "").strip().lower()
+    if wanted:
+        for signer in signers:
+            if signer.email.strip().lower() == wanted:
+                return signer
+    return signers[0]
 
 
 def _effective_qty(line: OrderLine) -> float:

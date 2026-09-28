@@ -91,6 +91,17 @@ class Settings(BaseSettings):
     # ManagerOrderDetail.cc_email. Empty => no cc parameter at all; a value
     # without "@" is ignored by the builders (mirrors the recipient gate).
     order_cc_email: str = "biuro@pitabros.pl"
+    # Mailbox that hosts every location's send-as alias (order-email-v2). The
+    # per-order Gmail draft must be created in THIS mailbox, else Gmail drops
+    # the alias From; it is also the sender for a location without an alias
+    # (locations.sender_email NULL, e.g. WOLA).
+    order_mailbox: str = "biuro@pitabros.pl"
+    # Render requested_delivery_date in the supplier e-mail (subject + body).
+    # OFF until the delivery-calendar lane makes that date a real choice: today
+    # it is a computed "tomorrow" default, and a guess must not reach a
+    # supplier. The operator flips SUPPLY_OS_ORDER_EMAIL_DELIVERY_DATE_ENABLED
+    # on Railway after delivery-calendar is live.
+    order_email_delivery_date_enabled: bool = False
 
 
 settings = Settings()

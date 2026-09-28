@@ -535,10 +535,10 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Automated
 
-- [ ] 1.1 Backend lint + tests pass
-- [ ] 1.2 Integration suite applies 0026
-- [ ] 1.3 New unit tests for signer parsing/resolution, detail fields, degrade
-- [ ] 1.4 Frontend build + lint + tests pass
+- [x] 1.1 Backend lint + tests pass
+- [x] 1.2 Integration suite applies 0026
+- [x] 1.3 New unit tests for signer parsing/resolution, detail fields, degrade
+- [x] 1.4 Frontend build + lint + tests pass
 
 #### Manual
 

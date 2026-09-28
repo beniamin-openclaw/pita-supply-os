@@ -543,6 +543,15 @@ export interface ManagerOrderDetail {
   // cc_email by the dispatch panel (week2-feedback-quantities Phase 2). Optional:
   // Pydantic `Optional[str] = None`, null/absent => no extra DW address.
   location_email?: string | null;
+  // order-email-v2: From of the order e-mail (location send-as alias, else the
+  // order mailbox), the mailbox the Gmail draft must be created in, the
+  // location phone, whether the delivery date is printed, and the configured
+  // signers. All optional/defaulted on the backend.
+  sender_email?: string | null;
+  order_mailbox?: string | null;
+  location_phone?: string | null;
+  delivery_date_in_email?: boolean;
+  email_signers?: OrderEmailSigner[];
   // G3: channel routing + phone/notes for the dispatch panel.
   ordering_method: OrderingMethod;
   supplier_notes: string;
@@ -606,10 +615,20 @@ export interface OrderLineManagerFinal {
   manager_comment: string;
 }
 
+/** A manager who can sign the supplier order e-mail (order-email-v2). */
+export interface OrderEmailSigner {
+  name: string;
+  phone?: string;
+  email?: string;
+}
+
 export interface ManagerDispatchRequest {
   order_id: string;
   manager_finals: OrderLineManagerFinal[];
   sent_method?: string;
+  // E-mail of the chosen OrderEmailSigner, so the backend re-open URL carries
+  // the same signature as the client draft (order-email-v2).
+  signer_email?: string | null;
 }
 
 export interface ManagerDispatchResponse {
