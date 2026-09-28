@@ -65,3 +65,18 @@ describe("OrderLineTable — pack-unit hints (Stan + Cel)", () => {
     expect(screen.queryByText(/^\(.*\)$/)).not.toBeInTheDocument();
   });
 });
+
+describe("OrderLineTable — read-only row state (order-line-zero-qty)", () => {
+  it("strikes a line the Manager explicitly zeroed", () => {
+    renderTable([makeLine({ manager_final_set: true })]);
+    const row = screen.getByText("Coca-Cola Zero").closest("tr");
+    expect(row?.className).toContain("bg-amber-50");
+  });
+
+  it("leaves an untouched line (manager_final 0, flag off) neutral", () => {
+    renderTable([makeLine()]);
+    const row = screen.getByText("Coca-Cola Zero").closest("tr");
+    expect(row?.className).toContain("bg-white");
+    expect(row?.className).not.toContain("bg-amber-50");
+  });
+});

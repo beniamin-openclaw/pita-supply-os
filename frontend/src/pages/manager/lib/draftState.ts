@@ -1,5 +1,6 @@
 // Per-line manager edit draft state (Phase G2). Keyed by order_line_id.
-// A line's draft is seeded from the loaded detail (qty = manager_final if > 0
+// A line's draft is seeded from the loaded detail (qty = the effective ordered
+// qty from lib/orderQty.ts — manager_final once set, an explicit 0 included,
 // else captain_final; comment = manager_comment) and is "dirty" once qty or
 // comment differs from that loaded baseline. The PATCH save + dispatch payloads
 // are both built from the draft so the table, email, and save never disagree.

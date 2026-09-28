@@ -513,6 +513,25 @@ describe("seedTransportDrafts / anyTransportDirty / transportDirtySavePayloads",
     expect(drafts["ORD-1"]["OL-1"]).toEqual({ qty: 5, comment: "" });
   });
 
+  it("keeps a cell the Manager explicitly zeroed at 0 (order-line-zero-qty)", () => {
+    const orders: TransportBatchOrder[] = [
+      batchOrder({
+        order_id: "ORD-1",
+        lines: [
+          orderLine({
+            order_line_id: "OL-1",
+            captain_final_qty_purchase: 5,
+            manager_final_qty_purchase: 0,
+            manager_final_set: true,
+          }),
+        ],
+      }),
+    ];
+    const drafts = seedTransportDrafts(orders);
+    expect(drafts["ORD-1"]["OL-1"]).toEqual({ qty: 0, comment: "" });
+    expect(anyTransportDirty(orders, drafts)).toBe(false);
+  });
+
   it("is not dirty right after seeding", () => {
     const orders: TransportBatchOrder[] = [
       batchOrder({ order_id: "ORD-1", lines: [orderLine({ order_line_id: "OL-1" })] }),
