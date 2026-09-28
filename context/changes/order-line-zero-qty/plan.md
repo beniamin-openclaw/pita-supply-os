@@ -515,7 +515,7 @@ None: one boolean column read with rows already fetched; no new queries.
 
 #### Manual
 
-- [x] 1.5 Migration 0024 SQL reviewed by the operator
+- [x] 1.5 Migration 0024 SQL reviewed by the operator — ec1139f
 
 ### Phase 2: Frontend rule
 
@@ -540,7 +540,7 @@ None: one boolean column read with rows already fetched; no new queries.
 
 #### Manual
 
-- [x] 3.3 Operator applied 0024 on prod before merge; audit matches the pre-check
+- [x] 3.3 Operator applied 0024 on prod before merge; audit matches the pre-check — ec1139f
 - [ ] 3.4 New Vercel bundle and Railway commit confirmed live
 - [ ] 3.5 Prod smoke on a throwaway or nominated stale order: zero sticks, not in e-mail preview, never Wyślij
 - [ ] 3.6 Transport prod smoke only if a captain-origin draft exists
