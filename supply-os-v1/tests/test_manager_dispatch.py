@@ -522,6 +522,22 @@ def test_dispatch_transport_supplier_refused_409(mocker):
     mocks["update_order_lines"].assert_not_called()
 
 
+def test_dispatch_transport_supplier_with_alerts_off_refused_409(mocker):
+    """Prod SUP_PAGO shape: transport channel AND suggestion alerts off
+    (pago-suggestion-no-alerts). The alerts flag is a Captain-side switch and
+    must not reopen per-order dispatch."""
+    order = _captain_submitted_order()
+    supplier = _transport_supplier().model_copy(
+        update={"suggestion_alerts_enabled": False}
+    )
+    mocks = _activate_sheet_backend(mocker, order=order, supplier=supplier)
+    r = client.post("/api/manager/dispatch", json=_dispatch_body(order), headers=MANAGER_AUTH)
+    assert r.status_code == 409, r.text
+    assert "Transport screen" in r.json()["detail"]
+    mocks["update_order"].assert_not_called()
+    mocks["update_order_lines"].assert_not_called()
+
+
 def test_dispatch_transport_supplier_refused_even_with_trn_marker(mocker):
     """The guard is UNCONDITIONAL: a TRN- marker (legacy / sent / cancelled
     batch — here: no header row) must not wave the order through."""

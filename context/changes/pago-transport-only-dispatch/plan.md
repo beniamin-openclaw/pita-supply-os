@@ -58,8 +58,10 @@ that `/api/manager/order/{id}` for a Pago order reports `ordering_method: "trans
   `:1928`, `frontend/src/types.ts:22`, `DispatchPanel.tsx:64`, plus
   `ResendPanel.tsx:47` reading `=== "email"`. No exhaustive switch anywhere.
 - `supabase_backend.load_suppliers` is `SELECT *` and both `sheets` and `seed_loader` are
-  header-driven, so no column list changes. `_SUPPLIER_COLUMNS` is untouched, which also
-  removes the integration-fixture insert hazard.
+  header-driven, so no column list changes. `_SUPPLIER_COLUMNS` is untouched by this change,
+  which also removes the integration-fixture insert hazard. (Merge note, 2026-09-28: main's
+  PR #34 added `suggestion_alerts_enabled` to `_SUPPLIER_COLUMNS`, so the fixture now applies
+  0022 after 0021 before the `suppliers` insert.)
 - Migration `0016_reason_code_stock_until_next_delivery.sql` is the exact CHECK-widening
   template, including its ORDER OF OPERATIONS header.
 
@@ -373,9 +375,11 @@ Two caveats the guard cannot cover on its own. First, it is only as good as the 
 backend: the flag lives in whichever store `_choose_backend()` resolves, so if prod ever
 degrades to Sheets or seed, that supplier row still reads `email` and the guard silently stops
 firing. Second, `supply-os-v1/scripts/backfill_supabase.py:33` writes the `suppliers` table
-from the Sheet through `_SUPPLIER_COLUMNS`, so re-running it after the data pass would
-overwrite `transport` with whatever the Sheet holds. Mirror the value in the Sheet, or do not
-re-run that script against suppliers.
+from the Sheet through `_SUPPLIER_COLUMNS`, but it is insert-only (`ON CONFLICT DO NOTHING`,
+and it skips primary keys already in Postgres), so re-running it cannot revert `SUP_PAGO`.
+Mirror the value in the Sheet only so that a future full re-seed from the Sheet would not
+reintroduce `email`. (Corrected 2026-09-28; the first version said a re-run would overwrite
+the value.)
 
 ## References
 

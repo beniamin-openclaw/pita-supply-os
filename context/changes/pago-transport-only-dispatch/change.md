@@ -3,7 +3,7 @@ change_id: pago-transport-only-dispatch
 title: Transport-only suppliers cannot be dispatched from the per-order queue
 status: impl_reviewed
 created: 2026-09-21
-updated: 2026-09-21
+updated: 2026-09-28
 archived_at: null
 ---
 
@@ -92,3 +92,24 @@ raises a ValidationError and 500s every supplier-reading screen.
 **The three orders already sent per-order** (`ORD-20260906-BRO-PAGO-078562`,
 `ORD-20260907-WOL-PAGO-e92ac9`, `ORD-20260921-WOL-PAGO-bcdfe8`) keep their state and their
 receiving path. Their disposition with Lineage is an operator decision, not a code change.
+
+### Merge with main and business context, 2026-09-28
+
+**Stopgap done.** Step 1 above (`SUP_PAGO.ordering_method` `email` -> `manual`) was applied
+on prod on 2026-09-28, not 2026-09-21. Section B of `prod-sql.sql` therefore starts from
+`manual`; its guard still accepts `email` so a reverted stopgap cannot make it a silent no-op.
+
+**How Pago is ordered now.** Operator decision, 2026-09-28: Pago for every Warsaw location is
+sent from the Google Sheet "Ordering PB v5 prod", not from the app. In the app a Pago Transport
+batch is a record only (finalize = status change, no e-mail). The "correct Pago artifact"
+paragraph above describes the app's Transport e-mail as it was designed on 2026-09-21; it is
+not the sending path any more, and no Pago e-mail or draft is sent from the app. The purpose of
+this change is unchanged: no per-order Pago dispatch from the app.
+
+**Merged origin/main (PR #34, pago-suggestion-no-alerts, migration 0022).** The only conflict
+was the integration fixture; it now applies 0021 and 0022. The two migrations are independent
+(a CHECK vs a new column), so 0021 running on prod after 0022 is safe. Scoped review:
+`reviews/impl-review-merge-main.md`. Added tests pin the prod combination (`transport` channel
+plus alerts off): Captain orderable + submit still work, per-order dispatch still 409s, and the
+row round-trips on Postgres.
+

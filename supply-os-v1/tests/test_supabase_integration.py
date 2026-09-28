@@ -21,6 +21,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app import errors, supabase_backend
 from app.config import DataBackend, settings
@@ -32,6 +33,7 @@ from app.models import (
     LocationProductSetting,
     Order,
     OrderEvent,
+    OrderingMethod,
     OrderLine,
     OrderStatus,
     Product,
@@ -300,6 +302,37 @@ def test_master_data_roundtrip():
     # RLS deny-all is enabled on every table (migration 0002); a successful read
     # here proves the connection role (postgres) BYPASSES RLS.
     assert supabase_backend.load_locations()
+
+
+def test_supplier_transport_channel_with_alerts_off_roundtrip():
+    """The prod SUP_PAGO shape after pago-transport-only-dispatch: migration 0021
+    lets the CHECK accept 'transport', migration 0022 carries the alerts flag,
+    and both survive a write + load_suppliers. An unknown channel is still
+    refused by the CHECK."""
+    supabase_backend._insert(
+        "suppliers", supabase_backend._SUPPLIER_COLUMNS,
+        Supplier(
+            supplier_id="SUP_TRN", supplier_name="Transport only",
+            email="a@example.com,b@example.com",
+            ordering_method=OrderingMethod.TRANSPORT,
+            suggestion_alerts_enabled=False,
+        ),
+    )
+    try:
+        loaded = next(
+            s for s in supabase_backend.load_suppliers() if s.supplier_id == "SUP_TRN"
+        )
+        assert loaded.ordering_method == OrderingMethod.TRANSPORT
+        assert loaded.suggestion_alerts_enabled is False
+        with pytest.raises(IntegrityError):
+            with supabase_backend._get_engine().begin() as conn:
+                conn.exec_driver_sql(
+                    "UPDATE suppliers SET ordering_method = 'fax' "
+                    "WHERE supplier_id = 'SUP_TRN'"
+                )
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql("DELETE FROM suppliers WHERE supplier_id = 'SUP_TRN'")
 
 
 def test_order_append_get_roundtrip():

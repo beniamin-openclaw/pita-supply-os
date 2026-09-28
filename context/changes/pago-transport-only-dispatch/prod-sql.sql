@@ -23,12 +23,17 @@
 
 -- ---------- A. BEFORE diff (save this output — it is the rollback) ----------
 
-SELECT supplier_id, supplier_name, ordering_method, email, notes, active
+SELECT supplier_id, supplier_name, ordering_method, suggestion_alerts_enabled,
+       email,
+       (length(email) - length(replace(email, ',', '')) + 1)    AS recipient_count,
+       notes, active
   FROM suppliers
  WHERE supplier_id = 'SUP_PAGO';
 
--- Expected before section B: ordering_method = 'manual' (set by the stopgap on
--- 2026-09-21) or, if that stopgap was never run, still 'email'.
+-- Expected before section B: ordering_method = 'manual' (stopgap applied on
+-- prod 2026-09-28) and suggestion_alerts_enabled = false (pago-suggestion-no-
+-- alerts, 2026-09-27). 'email' would mean the stopgap was reverted; section B
+-- accepts it for that reason. Note recipient_count — C1 compares against it.
 
 
 -- ---------- B. APPLY — the data pass (only after step 2 above) ----------
@@ -49,16 +54,21 @@ UPDATE suppliers
 
 -- ---------- C. AUDIT after ----------
 
--- C1. Pago is on the transport channel and still carries its full recipient
---     list — the Transport Gmail draft reads its recipients from this column.
+-- C1. Pago is on the transport channel; section B touched nothing else on the
+--     row. The email column is left as it was for reference only: the app
+--     sends NO Pago e-mail. Since 2026-09-28 Pago for every Warsaw location is
+--     ordered from the "Ordering PB v5 prod" sheet, and an app Transport batch
+--     for Pago is a record only (finalize = status change, no e-mail).
 SELECT supplier_id,
        ordering_method,
        (ordering_method = 'transport')                          AS channel_ok,
+       suggestion_alerts_enabled,
        (position('@' in email) > 0)                             AS email_intact,
        (length(email) - length(replace(email, ',', '')) + 1)    AS recipient_count
   FROM suppliers
  WHERE supplier_id = 'SUP_PAGO';
--- expect: channel_ok = true, email_intact = true, recipient_count = 6
+-- expect: channel_ok = true, suggestion_alerts_enabled = false,
+--         email_intact = true, recipient_count = the value from section A
 
 -- C2. No other supplier changed channel.
 SELECT ordering_method, count(*) AS suppliers
@@ -68,8 +78,9 @@ SELECT ordering_method, count(*) AS suppliers
  ORDER BY 1;
 -- expect: exactly one row with ordering_method = 'transport'
 
--- C3. Pago orders still waiting. These now go through the Transport screen;
---     the queue will refuse to dispatch them.
+-- C3. Pago orders still waiting. The per-order queue now refuses to dispatch
+--     them (409). In the app they can only be recorded in a Transport batch,
+--     with no e-mail; the real Pago order goes out from the Ordering sheet.
 SELECT order_id, location_id, status, captain_submitted_at::date AS submitted,
        supplier_order_reference
   FROM orders
