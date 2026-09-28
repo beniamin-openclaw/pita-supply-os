@@ -1,10 +1,10 @@
 ---
 change_id: pago-queue-deviation-chips
 title: Manager queue shows no deviation chip for suppliers with suggestion alerts off
-status: implemented
+status: archived
 created: 2026-09-28
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T14:12:59Z
 ---
 
 ## Notes
@@ -33,3 +33,6 @@ Pago order. Operator request (2026-09-28): hide those chips for Pago.
 ### Deploy
 
 No migration. Merge → Railway auto-deploy; check the queue on prod.
+
+**Done 2026-09-28**: PR #35 merged as `057644f` (CI 9/9 green); Railway + Vercel
+deployments succeeded, `/health` ok; operator confirmed on prod that the Pago chips are gone.
