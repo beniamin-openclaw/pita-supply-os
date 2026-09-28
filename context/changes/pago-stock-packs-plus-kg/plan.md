@@ -525,7 +525,7 @@ the frontend PR; stored data is unaffected either way.
 
 #### Automated
 
-- [ ] 4.1 `/verify` passes
+- [x] 4.1 `/verify` passes
 - [ ] 4.2 Branch rebased on current `origin/main`; CI green on the PR
 
 #### Manual

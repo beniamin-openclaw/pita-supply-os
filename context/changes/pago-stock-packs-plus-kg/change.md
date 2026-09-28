@@ -1,7 +1,7 @@
 ---
 change_id: pago-stock-packs-plus-kg
 title: Stock input as packs plus loose base units for pack-based products
-status: implementing
+status: implemented
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null
