@@ -1,0 +1,13 @@
+rule_id,supplier_id,location_id,order_weekdays,lead_days,delivery_weekdays,order_deadline,active,notes
+DR-PAGO-WOLA,SUP_PAGO,WOLA,Mon,2,Wed,17:00,TRUE,Marek 28.09
+DR-PAGO-BRACKA,SUP_PAGO,BRACKA,Mon,2,Wed,17:00,TRUE,Marek 28.09
+DR-PAGO-NORBLIN,SUP_PAGO,NORBLIN,"Sun,Thu",2,"Tue,Sat",17:00,TRUE,Marek 28.09
+DR-PAGO-BROWARY,SUP_PAGO,BROWARY,"Sun,Thu",2,"Tue,Sat",17:00,TRUE,Marek 28.09
+DR-PAGO-KEN,SUP_PAGO,KEN,"Sun,Thu",2,"Tue,Sat",17:00,TRUE,Marek 28.09
+DR-FILBER-ALL,SUP_FILBER,,Wed,1,Thu,17:00,TRUE,Marek 28.09
+DR-BUKAT-ALL,SUP_BUKAT,,"Mon,Tue,Wed,Thu,Fri,Sat,Sun",1,"Mon,Tue,Wed,Thu,Fri,Sat",17:00,TRUE,Marek 28.09
+DR-INTERMLECZ-ALL,SUP_INTERMLECZ,,"Mon,Tue,Wed,Thu,Fri,Sat,Sun",1,"Mon,Tue,Wed,Thu,Fri,Sat",17:00,TRUE,Marek 28.09
+DR-KUCHNIE-ALL,SUP_KUCHNIE,,"Mon,Tue,Wed,Thu,Fri,Sat,Sun",1,"Mon,Tue,Wed,Thu,Fri,Sat",17:00,TRUE,operator 28.09
+DR-EUROFOOD-ALL,SUP_EUROFOOD,,"Mon,Tue,Wed,Thu,Fri,Sat,Sun",1,"Mon,Tue,Wed,Thu,Fri",17:00,TRUE,operator 28.09 (Go Gastro)
+DR-KAMINO-ALL,SUP_KAMINO,,"Mon,Tue,Wed,Thu,Fri,Sat,Sun",1,"Mon,Tue,Wed,Thu,Fri",17:00,TRUE,operator 28.09 (days); lead 1 assumed
+DR-BLUESERV-ALL,SUP_BLUESERV,,"Mon,Tue,Wed,Thu,Fri,Sat,Sun",2,"Mon,Tue,Wed,Thu,Fri",17:00,TRUE,operator 28.09

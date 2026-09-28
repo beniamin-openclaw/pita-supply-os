@@ -45,6 +45,9 @@ export interface Supplier {
   minimum_order_value_pln?: number;
   active: boolean;
   notes: string;
+  // Thursday "na 1 dzień / na 3 dni" prompt (delivery-calendar, migration
+  // 0025). Pydantic `bool = False` → optional here (lessons.md).
+  coverage_prompt_enabled?: boolean;
 }
 
 export interface Location {
@@ -109,6 +112,10 @@ export interface CaptainSubmitRequest {
   // Phase 1b). Backend default `str = ""` → optional here (lessons.md).
   extra_items?: string;
   captain_note?: string;
+  // Delivery calendar (delivery-calendar): the rule-based proposal on screen
+  // (never a fallback) and the optional Thursday coverage choice.
+  suggested_delivery_date?: string; // ISO date "YYYY-MM-DD"
+  coverage_days?: 1 | 3;
 }
 
 export interface CaptainSubmitResponse {
@@ -451,6 +458,10 @@ export interface ManagerQueueItem {
   // marker), absent for a normal per-order dispatch. Lets the queue show a
   // "TRN" chip instead of implying a real per-supplier email dispatch.
   supplier_order_reference?: string | null;
+  // Delivery calendar (delivery-calendar): the proposal stored at submit and
+  // the Thursday coverage choice. Pydantic Optional → optional here.
+  suggested_delivery_date?: string | null;
+  coverage_days?: 1 | 3 | null;
 }
 
 // Manager Order Detail -------------------------------------------------------
@@ -591,6 +602,9 @@ export interface ManagerOrderDetail {
   // batch member — the exact set the post-send save/add-line accept. Pydantic
   // `bool = False` → optional here; absent reads as false.
   editable_after_send?: boolean;
+  // Delivery calendar (delivery-calendar) — see ManagerQueueItem.
+  suggested_delivery_date?: string | null;
+  coverage_days?: 1 | 3 | null;
 }
 
 // One append-only row of an order's post-send edit log (week2-feedback-
@@ -1226,4 +1240,19 @@ export interface FinanceSyncResponse {
   unchanged: number;
   skipped: number;
   upserted: number;
+}
+
+// Delivery calendar (delivery-calendar) --------------------------------------
+
+/** GET /api/captain/delivery-proposal — mirrors models.DeliveryProposal.
+ * `source` "fallback" = no rule for this supplier/location: shown, never
+ * stored as `suggested_delivery_date`. `order_deadline` is an ISO instant. */
+export interface DeliveryProposal {
+  supplier_id: string;
+  location_id: string;
+  proposed_delivery_date: string; // ISO date "YYYY-MM-DD"
+  following_delivery_date?: string | null;
+  order_deadline: string; // ISO datetime (UTC)
+  source: "location" | "supplier" | "fallback";
+  coverage_prompt?: boolean;
 }

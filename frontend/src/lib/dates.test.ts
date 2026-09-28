@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { daysSince } from "./dates";
+import { addDaysIso, daysSince, isoWeekday, warsawTodayIso } from "./dates";
 
 describe("daysSince (Europe/Warsaw calendar days)", () => {
   it("is 0 on the same Warsaw day", () => {
@@ -31,5 +31,26 @@ describe("daysSince (Europe/Warsaw calendar days)", () => {
     expect(daysSince(null)).toBeNull();
     expect(daysSince(undefined)).toBeNull();
     expect(daysSince("not-a-date")).toBeNull();
+  });
+});
+
+describe("warsawTodayIso (delivery-calendar)", () => {
+  it("returns the Warsaw date in summer time (CEST) across UTC midnight", () => {
+    // 2026-09-30 22:30Z = 2026-10-01 00:30 CEST.
+    expect(warsawTodayIso(new Date("2026-09-30T22:30:00Z"))).toBe("2026-10-01");
+    expect(warsawTodayIso(new Date("2026-09-30T21:30:00Z"))).toBe("2026-09-30");
+  });
+
+  it("returns the Warsaw date in winter time (CET)", () => {
+    // 2026-11-10 23:30Z = 2026-11-11 00:30 CET; 22:30Z is still the 10th.
+    expect(warsawTodayIso(new Date("2026-11-10T23:30:00Z"))).toBe("2026-11-11");
+    expect(warsawTodayIso(new Date("2026-11-10T22:30:00Z"))).toBe("2026-11-10");
+  });
+
+  it("adds days and reads weekdays on plain ISO dates", () => {
+    expect(addDaysIso("2026-09-30", 2)).toBe("2026-10-02");
+    expect(addDaysIso("2026-12-31", 1)).toBe("2027-01-01");
+    expect(isoWeekday("2026-09-28")).toBe(1); // Monday
+    expect(isoWeekday("2026-10-04")).toBe(0); // Sunday
   });
 });

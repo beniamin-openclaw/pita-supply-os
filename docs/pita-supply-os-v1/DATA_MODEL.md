@@ -62,10 +62,32 @@ Master list of suppliers.
 | `active`               | boolean     |                                                        |
 | `notes`                | string      |                                                        |
 | `suggestion_alerts_enabled` | boolean | (0022) default true; false = Captain sees the suggestion but no deviation alert and never a reason (Pago) |
+| `coverage_prompt_enabled` | boolean | (0025) default false; true = on a Warsaw Thursday the Captain order screen shows the informational "na 1 dzień / na 3 dni" choice (Bukat, Intermlecz) |
 
 **Why this table:** the Manager Dashboard needs supplier-specific dispatch
 info (email + cutoff). In v0 only one supplier matters; in Phase 2 this is
 where multi-supplier consolidation lives.
+
+### 2a. `supplier_delivery_rules` (migration 0025, delivery-calendar)
+
+When a supplier can deliver, per supplier (shared row, `location_id` NULL) or
+per supplier + location (override). Read by `app/delivery_calendar.py` to
+propose the Captain's delivery date and the order-by moment.
+
+| Column              | Type        | Notes |
+| ------------------- | ----------- | ----- |
+| `rule_id`           | string (PK) | E.g. `DR-PAGO-WOLA`, `DR-BUKAT-ALL` |
+| `supplier_id`       | string (FK) | → `suppliers.supplier_id` |
+| `location_id`       | string (FK), nullable | → `locations.location_id`; NULL = shared rule for every location |
+| `order_weekdays`    | string      | Days an order counts, strict `Mon..Sun` comma list, e.g. `Sun,Thu` |
+| `lead_days`         | smallint    | 0..14; minimum calendar days from the order day to delivery |
+| `delivery_weekdays` | string      | Allowed delivery days, same format |
+| `order_deadline`    | string      | `HH:MM` Europe/Warsaw on the order day, default `17:00` |
+| `active`            | boolean     | Inactive rows are ignored |
+| `notes`             | string      | Source of the rule (e.g. `Marek 28.09`) |
+
+`UNIQUE NULLS NOT DISTINCT (supplier_id, location_id)`: at most one shared rule
+and one override per location per supplier.
 
 ---
 
@@ -150,7 +172,9 @@ Order header. One row per `(location, supplier, order_date)`.
 | `location_id`                | string (FK) | → `locations.location_id`                                      |
 | `supplier_id`                | string (FK) | → `suppliers.supplier_id`                                      |
 | `order_date`                 | date        | `YYYY-MM-DD`                                                   |
-| `requested_delivery_date`    | date        | Set by Captain or auto-suggested from `suppliers.delivery_days`|
+| `requested_delivery_date`    | date        | Chosen by the Captain; prefilled from the delivery calendar (0025) or, without a rule, from `suppliers.delivery_days` |
+| `suggested_delivery_date`    | date        | (0025) What the delivery calendar proposed at submit; NULL when no rule applied. The Manager marker shows only when it differs from `requested_delivery_date` |
+| `coverage_days`              | smallint    | (0025) Thursday choice, 1 or 3; NULL = not asked / not answered. Informational only |
 | `status`                     | enum        | `draft`, `captain_submitted`, `manager_sent`, `closed`, `cancelled` |
 | `captain_user`               | string      | Identifier of submitting Captain                               |
 | `captain_submitted_at`       | timestamp   | ISO 8601, `Europe/Warsaw`                                      |

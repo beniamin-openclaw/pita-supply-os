@@ -148,33 +148,36 @@ export const STRINGS = {
     pl: "Poniżej minimum: {min} {unit}",
     en: "Below minimum: {min} {unit}",
   },
+  "card.belowMinPacks": {
+    pl: "Poniżej minimum: {packs} ({min} {unit})",
+    en: "Below minimum: {packs} ({min} {unit})",
+  },
+
+  // Two-field pack stock input (pago-stock-packs-plus-kg) -------------------
+  "stock.fieldAria": { pl: "{label}, {unit}", en: "{label}, {unit}" },
+  "stock.reading": { pl: "= {split} ({total})", en: "= {split} ({total})" },
+  "stock.readingBase": { pl: "= {total}", en: "= {total}" },
+  "stock.didYouMean": {
+    pl: "Czy chodziło o {packs} ({total})?",
+    en: "Did you mean {packs} ({total})?",
+  },
+  "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
+  "stock.didYouMeanNo": { pl: "Nie", en: "No" },
 
   // ProductCard — pack-unit variants (units_per_purchase_unit > 1) ----------
   // Rendered as three no-wrap segments joined by " · " so a phone breaks the
   // line only between them, never inside "(5 zgrzewek)".
   "card.targetPart": {
-    pl: "Cel: {target} {inventoryUnit} ({packs})",
-    en: "Target: {target} {inventoryUnit} ({packs})",
+    pl: "Cel: {packs} ({target} {inventoryUnit})",
+    en: "Target: {packs} ({target} {inventoryUnit})",
   },
   "card.maxPart": {
-    pl: "Max: {max} {inventoryUnit} ({packs})",
-    en: "Max: {max} {inventoryUnit} ({packs})",
+    pl: "Max: {packs} ({max} {inventoryUnit})",
+    en: "Max: {packs} ({max} {inventoryUnit})",
   },
   "card.ratioPart": {
     pl: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
     en: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
-  },
-  "card.stockPacks": {
-    pl: "{base} {inventoryUnit} = {packs}",
-    en: "{base} {inventoryUnit} = {packs}",
-  },
-  "card.packsToStock": {
-    pl: "{packs} = {base} {inventoryUnit}",
-    en: "{packs} = {base} {inventoryUnit}",
-  },
-  "card.packInputToggle": {
-    pl: "wpisz w {unitLoc}",
-    en: "enter in {unitLoc}",
   },
   // Suggestion tile, pack variant: "brakuje 80 szt" / "= 3,3 zgrzewki" /
   // "→ 4 zgrzewki" as three no-wrap segments (the "=" / "→" parts are symbols
@@ -350,6 +353,58 @@ export const STRINGS = {
   "dates.delivery.one.days": { pl: "dostawa: {n} dzień", en: "delivery: {n} day" },
   "dates.delivery.few.days": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
   "dates.delivery.many.days": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
+
+  // Delivery calendar (delivery-calendar) -----------------------------------
+  "deliveryCalendar.dateLabel": { pl: "Data dostawy", en: "Delivery date" },
+  "deliveryCalendar.proposed": {
+    pl: "Proponowana wg kalendarza dostaw: {date}",
+    en: "Proposed by the delivery calendar: {date}",
+  },
+  "deliveryCalendar.changed": {
+    pl: "Zmieniono — kalendarz proponuje {date}",
+    en: "Changed — the calendar proposes {date}",
+  },
+  "deliveryCalendar.restore": { pl: "Przywróć", en: "Restore" },
+  "deliveryCalendar.fallback": {
+    pl: "Brak kalendarza dostaw dla tego dostawcy — sprawdź datę",
+    en: "No delivery calendar for this supplier — check the date",
+  },
+  "deliveryCalendar.deadlineToday": { pl: "Zamów do dziś {time}", en: "Order by {time} today" },
+  "deliveryCalendar.deadlineDay": { pl: "Zamów do {day} {time}", en: "Order by {day} {time}" },
+  "deliveryCalendar.stripDelivery": { pl: "dostawa {date}", en: "delivery {date}" },
+  "deliveryCalendar.dateMovedToast": {
+    pl: "Minął termin zamówienia — nowa data dostawy: {date}",
+    en: "The order deadline passed — new delivery date: {date}",
+  },
+  "deliveryCalendar.confirmDelivery": { pl: "Dostawa: {date}", en: "Delivery: {date}" },
+  "deliveryCalendar.confirmCoverage": { pl: "Zamówione na: {value}", en: "Ordered for: {value}" },
+  "coverage.reminder": { pl: "Pamiętaj o ilościach na 3 dni!", en: "Remember quantities for 3 days!" },
+  "coverage.question": { pl: "Na ile dni zamawiasz?", en: "How many days is this order for?" },
+  "coverage.oneDay": { pl: "na 1 dzień", en: "for 1 day" },
+  "coverage.threeDays": {
+    pl: "na 3 dni (do końca tygodnia)",
+    en: "for 3 days (until the end of the week)",
+  },
+  "coverage.weekendCheck": {
+    pl: "Czy ilości wystarczą do końca weekendu?",
+    en: "Will the quantities last until the end of the weekend?",
+  },
+  "coverage.value.1": { pl: "1 dzień", en: "1 day" },
+  "coverage.value.3": { pl: "3 dni", en: "3 days" },
+  "coverage.queue.1": { pl: "na 1 dzień", en: "for 1 day" },
+  "coverage.queue.3": { pl: "na 3 dni", en: "for 3 days" },
+  "manager.deliveryMarker.queue": {
+    pl: "dostawa {chosen} (propozycja {proposed})",
+    en: "delivery {chosen} (proposed {proposed})",
+  },
+  "manager.deliveryMarker.detail": {
+    pl: "inna niż proponowana ({proposed})",
+    en: "differs from the proposal ({proposed})",
+  },
+  "manager.deliveryMarker.title": {
+    pl: "Kapitan wybrał {chosen}, kalendarz dostaw proponował {proposed}",
+    en: "The Captain chose {chosen}; the delivery calendar proposed {proposed}",
+  },
 
   // AuthGate ---------------------------------------------------------------
   "auth.captainLabel": { pl: "Wpisz kod miejsca", en: "Enter location code" },
@@ -851,14 +906,13 @@ export const STRINGS = {
     pl: "1 {packUnit} = {upp} {unit}",
     en: "1 {packUnit} = {upp} {unit}",
   },
-  "inventory.packEquivalent": { pl: "≈ {packs}", en: "≈ {packs}" },
   "inventory.previousCount": {
     pl: "ostatnio {qty} · {date}",
     en: "last {qty} · {date}",
   },
   "inventory.checkUnitHint": {
-    pl: "sprawdź jednostkę — max to {max} {unit}",
-    en: "check the unit — max is {max} {unit}",
+    pl: "sprawdź jednostkę",
+    en: "check the unit",
   },
   "inventory.blankVsZeroHint": {
     pl: "Puste = nie policzone · 0 = brak na stanie",

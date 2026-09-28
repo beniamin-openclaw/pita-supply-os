@@ -1,27 +1,51 @@
 // Sub-header strip — supplier name + delivery + cutoff banner.
 // i18n-aware via useT().
+//
+// With a delivery-calendar proposal (delivery-calendar) the right side shows the
+// Captain's 17:00 order deadline ("Zamów do dziś 17:00" / "Zamów do pon.
+// 17:00") instead of the supplier cutoff, and a rule-based proposal names the
+// delivery date on the left. Without one it keeps the legacy rendering.
 
 import { Clock } from "lucide-react";
 import type { Supplier } from "../types";
+import type { DeliveryProposal } from "../../../types";
 import { useT } from "../../../i18n";
-import { getCutoffUrgency, parseDeliveryDays } from "../lib/dates";
+import { DELIVERY_DATE_FORMAT, warsawTodayIso } from "../../../lib/dates";
+import { getCutoffUrgency, getDeadlineUrgency, parseDeliveryDays } from "../lib/dates";
 
 interface ContextStripProps {
   supplier: Supplier | null;
+  proposal?: DeliveryProposal | null;
 }
 
-export function ContextStrip({ supplier }: ContextStripProps) {
-  const { t, tPlural } = useT();
+export function ContextStrip({ supplier, proposal = null }: ContextStripProps) {
+  const { t, tPlural, formatDateTime } = useT();
   if (!supplier) return null;
 
-  const urgency = getCutoffUrgency(supplier.cutoff_time);
-  const cutoffText = supplier.cutoff_time
+  let urgency = getCutoffUrgency(supplier.cutoff_time);
+  let cutoffText = supplier.cutoff_time
     ? t("dates.cutoff.value", { time: supplier.cutoff_time.trim() })
     : t("dates.cutoff.none");
+  if (proposal) {
+    const deadline = new Date(proposal.order_deadline);
+    const time = formatDateTime(deadline, { hour: "2-digit", minute: "2-digit" });
+    const sameDay = warsawTodayIso() === warsawTodayIso(deadline);
+    cutoffText = sameDay
+      ? t("deliveryCalendar.deadlineToday", { time })
+      : t("deliveryCalendar.deadlineDay", {
+          day: formatDateTime(deadline, { weekday: "short" }),
+          time,
+        });
+    urgency = getDeadlineUrgency(proposal.order_deadline);
+  }
 
   const parsed = parseDeliveryDays(supplier.delivery_days);
   let deliveryText: string;
-  if (!parsed) {
+  if (proposal && proposal.source !== "fallback") {
+    deliveryText = t("deliveryCalendar.stripDelivery", {
+      date: formatDateTime(proposal.proposed_delivery_date, DELIVERY_DATE_FORMAT),
+    });
+  } else if (!parsed) {
     deliveryText = t("dates.delivery.unsetText");
   } else if (parsed.kind === "days") {
     deliveryText = tPlural("dates.delivery", "days", parsed.n);
