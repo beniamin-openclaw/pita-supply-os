@@ -84,7 +84,7 @@ on `manual` alone would silently match zero rows if the stopgap had not been run
 dispatchable and the incident unfixed. The wider guard is correct from either starting point and
 still refuses to overwrite a deliberately different value.
 
-**Prod master-data batch — NOT YET APPLIED.** `prod-sql.sql` holds the before-diff, the guarded
+**Prod master-data batch — NOT YET APPLIED** (as of 2026-09-21; applied 2026-09-28, see below). `prod-sql.sql` holds the before-diff, the guarded
 data pass, the audit and the rollback. It must run only after migration 0021 is applied and both
 deployed builds are confirmed live; a `transport` value read by a build without the enum member
 raises a ValidationError and 500s every supplier-reading screen.
@@ -113,7 +113,7 @@ was the integration fixture; it now applies 0021 and 0022. The two migrations ar
 plus alerts off): Captain orderable + submit still work, per-order dispatch still 409s, and the
 row round-trips on Postgres.
 
-### Prod rollout, 2026-09-28 — steps (a)–(c) done, data pass pending
+### Prod rollout, 2026-09-28 — steps (a)–(d) done
 
 - **(a) Migration 0021 applied on prod** before the merge (MCP `apply_migration`, name
   `0021_supplier_ordering_method_transport`). Before: one CHECK
@@ -127,5 +127,29 @@ row round-trips on Postgres.
   Vercel deployment: success; production bundle `index-CMK7fQGJ.js` on
   pita-supply-os.vercel.app contains `manager.transportOnlyNote`, `manager.transportOnlyLink`
   and `manager.dispatch.transport`.
-- **(d) Data pass (`prod-sql.sql` section B): not yet run.** Code is inert until then.
+- **(d) Data pass applied**, after the build for the docs commit `7fac925` was also confirmed
+  (Railway success 11:11 UTC, `/health` ok).
+  - Section A (before, the rollback reference): SUP_PAGO `ordering_method = 'manual'`,
+    `suggestion_alerts_enabled = false`, 6 recipients, active.
+  - Section B: `UPDATE ... SET ordering_method = 'transport' WHERE supplier_id = 'SUP_PAGO'
+    AND ordering_method IN ('manual', 'email')` returned exactly one row (SUP_PAGO,
+    `transport`).
+  - Audit C1: `channel_ok = true`, `suggestion_alerts_enabled = false`,
+    `email_intact = true`, `recipient_count = 6` (equal to section A).
+  - Audit C2 (active suppliers): email 7, manual 2, phone 1, portal 1, transport 1; exactly
+    one `transport` row.
+  - Audit C3: 15 Pago orders waiting. One `captain_submitted`
+    (`ORD-20260928-WOL-PAGO-e4ce78`, no marker) and 14 `manager_claimed`. Of those 14,
+    eight carry a Transport marker: `TRN-20260925-PAGO-2d5342` (WESTFIELD, NORBLIN, KEN, ELEKTROWNIA, BROWARY) and
+    `TRN-20260902-PAGO-aa283f` (ELEKTROWNIA, BROWARY, BRACKA); six have no marker:
+    `ORD-20260927-KEN-PAGO-81f35f`, `ORD-20260914-KEN-PAGO-9ec6c9`,
+    `ORD-20260914-WOL-PAGO-61280b`, `ORD-20260907-BRA-PAGO-ffdb4f`,
+    `ORD-20260907-KEN-PAGO-63620f`, `ORD-20260904-KEN-PAGO-626d49`. None of these can be
+    dispatched from the queue any more; their disposition (fold into a batch, or cancel the
+    stale ones) is an operator decision.
+  - Rollback, if ever needed: `UPDATE suppliers SET ordering_method = 'manual' WHERE
+    supplier_id = 'SUP_PAGO';` (section D).
+- **Still open:** plan Progress 3.6 / 3.7, the Manager-screen checks on prod (a Pago order
+  shows the Transport notice instead of dispatch controls; a Bukat order still dispatches).
+  Not run by the agent: they need the Manager token.
 
