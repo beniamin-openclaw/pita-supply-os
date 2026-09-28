@@ -145,6 +145,38 @@ def test_receipt_submit_happy_path(mocker):
     assert ol1.variance_qty_purchase == 0
 
 
+def test_receipt_submit_explicit_manager_zero_records_ordered_zero(mocker):
+    """order-line-zero-qty: a line the Manager explicitly zeroed was NOT ordered,
+    so the receipt snapshots ordered 0 — delivering it anyway shows as a
+    positive variance instead of a false "everything arrived"."""
+    _patch_sheet_backend(mocker)
+    order = _fake_order()
+    zeroed = order.lines[0].model_copy(update={"manager_final_set": True})
+    order = order.model_copy(update={"lines": [zeroed, order.lines[1]]})
+    mocker.patch.object(sheets, "get_order", return_value=order)
+    mocker.patch.object(sheets, "append_receipt")
+    appended_lines = mocker.patch.object(sheets, "append_receipt_lines")
+    mocker.patch.object(sheets, "update_order")
+
+    body = {
+        "order_id": ORDER_ID,
+        "received_by": RECEIVED_BY,
+        "lines": [
+            {"order_line_id": "OL-1", "received_qty_purchase": 0},
+            {"order_line_id": "OL-2", "received_qty_purchase": 6},
+        ],
+    }
+    r = client.post("/api/captain/receipt/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["discrepancy_count"] == 0
+
+    ol1 = next(
+        ln for ln in appended_lines.call_args[0][0] if ln.order_line_id == "OL-1"
+    )
+    assert ol1.ordered_qty_purchase == 0
+    assert ol1.variance_qty_purchase == 0
+
+
 # ---------- Phase 7 (week2-feedback-quantities): receipt notes ----------
 
 def test_receipt_submit_persists_notes(mocker):

@@ -129,6 +129,7 @@ _ORDER_LINE_COLUMNS = [
     "suggested_qty_purchase", "captain_final_qty_purchase", "captain_final_qty_base",
     "manager_final_qty_purchase", "manager_final_qty_base", "delta_vs_suggestion_pct",
     "reason_code", "captain_comment", "manager_comment",
+    "manager_final_set",  # migration 0024 (order-line-zero-qty)
 ]
 _INVENTORY_COUNT_COLUMNS = [
     "count_id", "location_id", "count_date", "count_user", "count_submitted_at",

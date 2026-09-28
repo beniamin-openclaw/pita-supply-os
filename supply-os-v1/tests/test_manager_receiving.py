@@ -490,3 +490,28 @@ def test_detail_events_newest_first(mocker):
     assert r.status_code == 200, r.text
     assert [e["event_id"] for e in r.json()["events"]] == ["OEV-2", "OEV-1"]
     assert r.json()["events"][1]["details"] == "Souvlaki Kurczak: 5 → 3"
+
+
+# ---------- order-line-zero-qty: normalized manager_final_set on detail ----------
+
+def test_detail_exposes_normalized_manager_final_set(mocker):
+    """The detail line carries manager_final_set = stored flag OR a positive
+    manager_final, so the frontend can tell an explicit 0 from "not set" and a
+    legacy positive value still reads as set without the backfill."""
+    order_id = "ORD-ZERO-1"
+    zeroed = _line(order_id, "OL-1").model_copy(
+        update={"manager_final_qty_purchase": 0, "manager_final_set": True}
+    )
+    legacy = _line(order_id, "OL-2").model_copy(
+        update={"manager_final_qty_purchase": 3, "manager_final_set": False}
+    )
+    untouched = _line(order_id, "OL-3")
+    order = _order(order_id, status=OrderStatus.MANAGER_CLAIMED).model_copy(
+        update={"lines": [zeroed, legacy, untouched]}
+    )
+    _enable(mocker, orders=[order], get_order_return=order)
+
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    flags = {ln["order_line_id"]: ln["manager_final_set"] for ln in r.json()["lines"]}
+    assert flags == {"OL-1": True, "OL-2": True, "OL-3": False}

@@ -328,6 +328,73 @@ def test_save_total_uses_effective_qty_for_untouched_lines(mocker):
     assert r.json()["lines_updated"] == 1
 
 
+# ---------- order-line-zero-qty: an explicit Manager 0 is durable ----------
+
+
+def _zeroed_ol001_order(status: OrderStatus = OrderStatus.MANAGER_CLAIMED) -> Order:
+    """OL-001 was saved earlier as an explicit 0 (manager_final_set); OL-002 was
+    never touched by the Manager."""
+    return _claimed_order(
+        status=status,
+        lines=[
+            OrderLine(
+                order_line_id="OL-001",
+                order_id=ORDER_ID,
+                product_id="P027",
+                supplier_product_id="SP_PAGO_P027",
+                captain_final_qty_purchase=5,
+                captain_final_qty_base=25,
+                manager_final_qty_purchase=0,
+                manager_final_set=True,
+            ),
+            OrderLine(
+                order_line_id="OL-002",
+                order_id=ORDER_ID,
+                product_id="P026",
+                supplier_product_id="SP_PAGO_P026",
+                captain_final_qty_purchase=5,
+                captain_final_qty_base=25,
+            ),
+        ],
+    )
+
+
+def test_save_zero_marks_line_manager_final_set(mocker):
+    """Zeroing a captain line writes qty 0 AND manager_final_set=True, so the
+    next reload reads it as 0 instead of falling back to the Captain's 5; the
+    total leaves it out."""
+    mocks = _activate(mocker, _claimed_order())
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 0}]})
+    assert r.status_code == 200, r.text
+    _, updates = mocks["update_order_lines"].call_args.args
+    assert updates["OL-001"]["manager_final_qty_purchase"] == 0
+    assert updates["OL-001"]["manager_final_set"] is True
+    assert "OL-002" not in updates
+    # OL-001 → 0; OL-002 untouched → captain 5 * 94 = 470
+    assert r.json()["total_value_estimate_pln"] == pytest.approx(470.0)
+
+
+def test_save_later_save_keeps_explicit_zero_out_of_total(mocker):
+    """The bug Marek reported ("wartość się nie poprawia"): a later save that
+    touches another line must not bring the zeroed line back at the Captain's
+    qty in the recomputed total."""
+    _activate(mocker, _zeroed_ol001_order())
+    r = _patch({"manager_finals": [{"order_line_id": "OL-002", "manager_final_qty_purchase": 3}]})
+    assert r.status_code == 200, r.text
+    # OL-001 explicit 0 → 0; OL-002 → 3 * 94 = 282 (the old rule gave 5*145 + 282)
+    assert r.json()["total_value_estimate_pln"] == pytest.approx(282.0)
+
+
+def test_save_post_send_event_diffs_against_explicit_zero(mocker):
+    """Restoring an explicitly zeroed line on a sent order logs "0 → 5", not
+    "no change" (the old rule read the saved 0 as the Captain's 5)."""
+    mocks = _activate(mocker, _zeroed_ol001_order(status=OrderStatus.MANAGER_SENT))
+    r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 5}]})
+    assert r.status_code == 200, r.text
+    event = mocks["append_order_event"].call_args.args[0]
+    assert event.details == "Souvlaki Kurczak: 0 → 5"
+
+
 def test_save_503_seed_mode(mocker):
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SEED)
     r = _patch({"manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 1}]})

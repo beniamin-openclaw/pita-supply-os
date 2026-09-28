@@ -366,7 +366,8 @@ export function buildTransportAddAllOptions(
 export type TransportDraftMap = Record<string, DraftMap>;
 
 /** Seed every member order's draft map from its own loaded lines (effective
- * qty = manager_final if > 0 else captain_final; comment = manager_comment) —
+ * qty = manager_final once the Manager set it — an explicit 0 included — else
+ * captain_final, see lib/orderQty.ts; comment = manager_comment) —
  * the per-order equivalent of draftState.ts's `seedDrafts`. */
 export function seedTransportDrafts(orders: TransportBatchOrder[]): TransportDraftMap {
   const out: TransportDraftMap = {};

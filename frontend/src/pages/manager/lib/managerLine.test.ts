@@ -8,6 +8,7 @@ function line(
   captain: number,
   managerFinal: number,
   price = 10,
+  managerSet = false,
 ): ManagerOrderLineDetail {
   return {
     order_line_id: "OL-1",
@@ -33,38 +34,42 @@ function line(
     reason_code: null,
     captain_comment: "",
     manager_comment: "",
+    manager_final_set: managerSet,
   } as ManagerOrderLineDetail;
 }
 
-describe("lineVisualState — status-aware cancelled (Bug 2)", () => {
-  it("undispatched: manager_final 0 with captain > 0 is neutral, NOT cancelled", () => {
-    // The bug: a freshly-opened captain_submitted order showed every line struck.
-    expect(lineVisualState(line(1, 0), false)).toBe("neutral");
+describe("lineVisualState — effective-qty based (order-line-zero-qty)", () => {
+  it("untouched line (manager_final 0, flag off) is neutral, NOT cancelled", () => {
+    // Bug 2: a freshly-opened order showed every line struck. The same holds
+    // for an untouched line of a Transport-sent order (finalize never writes
+    // manager_final).
+    expect(lineVisualState(line(1, 0))).toBe("neutral");
   });
 
-  it("dispatched: manager_final 0 with captain > 0 is cancelled (line dropped)", () => {
-    expect(lineVisualState(line(1, 0), true)).toBe("cancelled");
+  it("a line the Manager explicitly zeroed is cancelled, whatever the status", () => {
+    expect(lineVisualState(line(1, 0, 10, true))).toBe("cancelled");
   });
 
-  it("manager_final differing and nonzero is 'changed' regardless of dispatch", () => {
-    expect(lineVisualState(line(2, 5), false)).toBe("changed");
-    expect(lineVisualState(line(2, 5), true)).toBe("changed");
+  it("manager_final differing and nonzero is 'changed'", () => {
+    expect(lineVisualState(line(2, 5))).toBe("changed");
   });
 
   it("manager agrees with captain is neutral", () => {
-    expect(lineVisualState(line(3, 3), true)).toBe("neutral");
+    expect(lineVisualState(line(3, 3, 10, true))).toBe("neutral");
   });
 });
 
-describe("managerSummary — persisted, status-aware", () => {
-  it("undispatched untouched order reports zero changes", () => {
+describe("managerSummary — persisted lines", () => {
+  it("untouched order reports zero changes", () => {
     const lines = [line(1, 0), line(2, 0)];
-    expect(managerSummary(lines, undefined, false).changeCount).toBe(0);
+    expect(managerSummary(lines).changeCount).toBe(0);
   });
 
-  it("dispatched order with zeroed lines counts them as changes", () => {
-    const lines = [line(1, 0), line(2, 0)];
-    expect(managerSummary(lines, undefined, true).changeCount).toBe(2);
+  it("explicitly zeroed lines count as changes with a negative PLN swing", () => {
+    const lines = [line(1, 0, 10, true), line(2, 0, 10, true), line(3, 0)];
+    const summary = managerSummary(lines);
+    expect(summary.changeCount).toBe(2);
+    expect(summary.valueDeltaPln).toBe(-30);
   });
 });
 
