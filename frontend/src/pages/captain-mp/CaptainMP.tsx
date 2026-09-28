@@ -766,6 +766,15 @@ export function CaptainMP() {
     return { [activeSupplierId]: orderableItems.length };
   }, [activeSupplierId, orderableItems.length]);
 
+  // Newest snapshot's counts, keyed by product — the plausibility reference for
+  // the two-field pack stock input (pago-stock-packs-plus-kg). No extra fetch.
+  const newestSnapshotStock = useMemo(() => {
+    const map: Record<string, number> = {};
+    const detail = snapshotDetails[availableSnapshots[0]?.count_id ?? ""];
+    for (const l of detail?.lines ?? []) map[l.product_id] = l.current_stock_qty_base;
+    return map;
+  }, [snapshotDetails, availableSnapshots]);
+
   // ---- Pre-fill control: visibility + selected-snapshot naming ---------------
   const selectedSummary = useMemo(
     () => availableSnapshots.find((s) => s.count_id === selectedSnapshotId) ?? null,
@@ -973,6 +982,7 @@ export function CaptainMP() {
                   }
                 }
                 onChange={handleLineChange}
+                previousStock={newestSnapshotStock[item.product_id] ?? null}
               />
             ))}
           </>

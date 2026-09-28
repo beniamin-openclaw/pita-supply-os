@@ -11,7 +11,6 @@
 // - Touch: inputs py-3 (≥44px)
 // - Visual: card wash via bg-{color}-50, transition-colors
 
-import { useState } from "react";
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lucide-react";
 import type { OrderableItem, CardState } from "../types";
 import type { OrderLine } from "../types";
@@ -19,14 +18,16 @@ import { computeRowState, computeSuggestion } from "../lib/compute";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
-import { packUnitLocative } from "../../../i18n/packUnits";
-import { baseToPacks, formatPacks, isPackBased, packsToBase } from "../../../lib/packUnits";
-import { roundQty } from "../../../components/ui/number";
+import { baseToPacks, formatPacks, isPackBased } from "../../../lib/packUnits";
+import { PackStockInput } from "./PackStockInput";
 
 interface ProductCardProps {
   item: OrderableItem;
   line: OrderLine;
   onChange: (line: OrderLine) => void;
+  /** Newest inventory snapshot's count for this product (base units) — the
+   *  plausibility reference for the pack stock input's "did you mean" prompt. */
+  previousStock?: number | null;
 }
 
 const STATE_STYLES: Record<
@@ -80,7 +81,7 @@ function StateIcon({ state }: { state: CardState }) {
   }
 }
 
-export function ProductCard({ item, line, onChange }: ProductCardProps) {
+export function ProductCard({ item, line, onChange, previousStock }: ProductCardProps) {
   const { t, lang } = useT();
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
@@ -103,25 +104,11 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
   // purchase unit actually packs multiple inventory units (e.g. a "zgrzewka"
   // of 24 szt). A ×1 SKU renders exactly as before this change.
   const packBased = isPackBased(item.units_per_purchase_unit);
-  const [inPacks, setInPacks] = useState(false);
   const upp = item.units_per_purchase_unit;
 
   const handleCurrentChange = (v: number | "") => {
     onChange({ ...line, current_stock_qty_base: v });
   };
-  // Stock input while the "wpisz w …" toggle is on: the field shows/accepts
-  // pack (purchase-unit) values, but `onChange` still stores base units —
-  // state and the API contract never leave inventory units.
-  const handlePacksChange = (v: number | "") => {
-    onChange({ ...line, current_stock_qty_base: v === "" ? "" : packsToBase(v, upp) });
-  };
-  // Pack-unit hint under the stock input — same underlying quantity
-  // (`currentVal`, base units) whichever mode the toggle is in; only the
-  // template (base=packs vs packs=base) differs.
-  const currentPacksLabel =
-    packBased && line.current_stock_qty_base !== ""
-      ? formatPacks(baseToPacks(currentVal, upp), item.purchase_unit, lang)
-      : null;
   // Suggestion-tile pack detail: when the exact quotient already lands on the
   // rounded suggestion (e.g. 72 szt / 24 = 3 zgrzewki exactly), showing
   // "= 3 zgrzewki → 3 zgrzewki" would be redundant — use the "Exact" template.
@@ -142,6 +129,7 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
   const cardId = `card-${item.product_id}`;
   const currentInputId = `current-${item.product_id}`;
   const currentUnitId = `current-unit-${item.product_id}`;
+  const currentLabelId = `current-label-${item.product_id}`;
   const finalInputId = `final-${item.product_id}`;
   const finalUnitId = `final-unit-${item.product_id}`;
   const suggestId = `suggest-${item.product_id}`;
@@ -223,18 +211,51 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
             {belowMin && (
               <div className="flex items-center gap-1 text-xs font-semibold text-red-700">
                 <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
-                {t("card.belowMin", {
-                  min: item.min_stock_qty_base,
-                  unit: item.inventory_unit,
-                })}
+                {packBased
+                  ? t("card.belowMinPacks", {
+                      packs: formatPacks(
+                        baseToPacks(item.min_stock_qty_base, upp),
+                        item.purchase_unit,
+                        lang,
+                      ),
+                      min: item.min_stock_qty_base,
+                      unit: item.inventory_unit,
+                    })
+                  : t("card.belowMin", {
+                      min: item.min_stock_qty_base,
+                      unit: item.inventory_unit,
+                    })}
               </div>
             )}
           </div>
         )}
 
-        {/* 3-column grid: Current / Suggested / Order */}
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          {/* Current stock */}
+        {/* Pack-based: full-width two-field stock block above a 2-column grid
+            (Suggestion | Order) — too narrow for two inputs in a 3-col grid at
+            375 px. ×1: the original 3-column grid with a single field. */}
+        {packBased && (
+          <div className="mb-3" role="group" aria-labelledby={currentLabelId}>
+            <div
+              id={currentLabelId}
+              className="block text-[10px] font-semibold text-slate-700 uppercase tracking-wider mb-1"
+            >
+              {t("card.currentStock")}
+            </div>
+            <PackStockInput
+              idPrefix={currentInputId}
+              value={line.current_stock_qty_base}
+              onChange={handleCurrentChange}
+              unitsPerPack={upp}
+              packUnit={item.purchase_unit}
+              baseUnit={item.inventory_unit}
+              label={t("card.currentStock")}
+              references={[previousStock, item.target_stock_qty_base]}
+            />
+          </div>
+        )}
+        <div className={`grid ${packBased ? "grid-cols-2" : "grid-cols-3"} gap-3 mb-3`}>
+          {/* Current stock (×1 only) */}
+          {!packBased && (
           <div>
             <label
               htmlFor={currentInputId}
@@ -246,14 +267,8 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
               <DecimalInput
                 id={currentInputId}
                 inputMode="decimal"
-                value={
-                  packBased && inPacks
-                    ? line.current_stock_qty_base === ""
-                      ? ""
-                      : roundQty(line.current_stock_qty_base / upp)
-                    : line.current_stock_qty_base
-                }
-                onChange={packBased && inPacks ? handlePacksChange : handleCurrentChange}
+                value={line.current_stock_qty_base}
+                onChange={handleCurrentChange}
                 aria-describedby={currentUnitId}
                 className="w-full bg-white border border-gray-300 rounded-lg py-3 px-2 text-right text-[16px] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-500"
                 placeholder="0"
@@ -266,24 +281,10 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
               id={currentUnitId}
               className="mt-0.5 text-[10px] leading-tight text-right text-slate-500"
             >
-              {packBased && inPacks ? item.purchase_unit : item.inventory_unit}
+              {item.inventory_unit}
             </div>
-            {currentPacksLabel && (
-              <div className="mt-1 text-[11px] leading-tight text-slate-600" aria-live="polite">
-                {inPacks
-                  ? t("card.packsToStock", {
-                      packs: currentPacksLabel,
-                      base: line.current_stock_qty_base,
-                      inventoryUnit: item.inventory_unit,
-                    })
-                  : t("card.stockPacks", {
-                      base: line.current_stock_qty_base,
-                      inventoryUnit: item.inventory_unit,
-                      packs: currentPacksLabel,
-                    })}
-              </div>
-            )}
           </div>
+          )}
 
           {/* Suggested — tap to auto-fill into "Zamawiasz" */}
           <button
@@ -400,24 +401,6 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
             <StateIcon state={state} />
             {message}
           </div>
-
-          {/* "wpisz w …" toggle — switch the stock input between inventory and
-              purchase (pack) units. Session-local only; not persisted in the draft.
-              Right-aligned on the pill row so the state pill keeps its place. */}
-          {packBased && (
-            <button
-              type="button"
-              aria-pressed={inPacks}
-              onClick={() => setInPacks((v) => !v)}
-              className={`ml-auto inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                inPacks
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-600 border-slate-300"
-              }`}
-            >
-              {t("card.packInputToggle", { unitLoc: packUnitLocative(item.purchase_unit, lang) })}
-            </button>
-          )}
         </div>
 
         {requiresReason && (
