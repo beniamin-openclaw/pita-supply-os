@@ -1,10 +1,10 @@
 ---
 change_id: week2-feedback-quantities
 title: Week 2 captain/manager feedback — inventory vs order quantities, unit clarity, list usability, info-only signals
-status: deployed
+status: archived
 created: 2026-09-17
-updated: 2026-09-20
-archived_at: null
+updated: 2026-09-28
+archived_at: 2026-09-28T11:08:12Z
 ---
 
 ## Notes
