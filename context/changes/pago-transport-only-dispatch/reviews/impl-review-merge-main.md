@@ -48,7 +48,8 @@ lint` clean; `npm run test` 464 passed.
   implying the app sends them.
 - **Fix**: Section A now also selects `suggestion_alerts_enabled` and `recipient_count` with the
   correct date; C1 checks the channel, the alerts flag and an intact email against section A's
-  count; C3 states the app only records Pago in a batch.
+  count; C1/C3 describe the sheet as the temporary sending path. (Wording softened 2026-09-28
+  after the operator said the Transport draft stays.)
 - **Decision**: FIXED
 
 ### F2 — change.md does not record the stopgap date or the new sending path
@@ -106,9 +107,9 @@ lint` clean; `npm run test` 464 passed.
 
 - **Transport screen still offers a Gmail draft for a Pago batch**
   (`frontend/src/pages/manager/TransportPage.tsx`, `lib/transport.ts`). Pre-existing on main;
-  the plan's "Not touching the Transport flow" covers it. It only creates a draft, never sends,
-  but it contradicts the 2026-09-28 decision that no Pago e-mail comes from the app. Needs an
-  operator decision; raised to the user.
+  the plan's "Not touching the Transport flow" covers it. It only creates a draft, never sends.
+  Raised to the operator, who decided (2026-09-28) it stays: the sheet path is temporary and
+  nothing is disconnected.
 - **ResendPanel** renders the copy-list "dosyłka" panel for a Pago order dispatched per-order
   before the flip. No e-mail; recorded in the plan's "Not changing ResendPanel".
 - **`frontend/src/types.ts` `Supplier`** does not mirror `suggestion_alerts_enabled` / `nip`
