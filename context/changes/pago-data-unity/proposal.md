@@ -8,7 +8,7 @@
   - Magazyn (Mory) items, including Rolki do kasy, travel with the driver on the Pago run, so they belong on the same list.
   - WOLA and BRACKA move to one Pago delivery a week: order Monday, pickup Wednesday.
 - Revised 2026-09-28 after PR #33 (`SUP_PAGO` → `transport`).
-- **Operator decision 28.09:** the cleanup direction below is approved. It is prepared as `prod-sql.sql` (exact diff in `cleanup-diff.md`) and has **not** been run. Nothing in this document has been executed.
+- **Operator decision 28.09:** the cleanup direction below is approved. It was prepared as `prod-sql.sql` (exact diff in `cleanup-diff.md`). **Groups A, B and C were applied to prod on 28.09** (audit 13/13 ok; before and after states in `cleanup-diff-before.md` / `cleanup-diff-after.md`). Nothing else in this document has been executed.
 
 ## Facts the proposal relies on (checked in code on `origin/main` and in prod, 2026-09-28)
 
