@@ -1,10 +1,10 @@
 ---
 change_id: supplier-product-order-minimum
 title: Per-supplier product display order and logistic-minimum exclusions
-status: impl_reviewed
+status: archived
 created: 2026-09-28
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T14:23:36Z
 ---
 
 ## Notes
