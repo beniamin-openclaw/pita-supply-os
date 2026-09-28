@@ -3,7 +3,7 @@ change_id: pago-suggestion-no-alerts
 title: Pago keeps the suggestion but shows no deviation alerts and never asks for a reason
 status: implemented
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 archived_at: null
 ---
 
@@ -59,6 +59,12 @@ and for Gyros 15 KG at NORBLIN, and every Pago row at the not-yet-active locatio
    **Done 2026-09-27** (MCP `apply_migration`): column present, `NOT NULL DEFAULT true`;
    diff before = all 14 suppliers `true`, SUP_PAGO included.
 2. `prod-sql.sql` in this folder: diff before, flip SUP_PAGO, audit after.
+   **Done 2026-09-28**: `UPDATE … RETURNING` → SUP_PAGO `false`; audit = SUP_PAGO is the
+   only supplier with alerts off.
 3. Merge the PR (Railway + Vercel auto-deploy), confirm the new bundle is live.
+   **Done 2026-09-28**: PR #34 merged as `ec22891` (CI 9/9 green); Railway + Vercel
+   deployments for `ec22891` succeeded; Railway `/health` ok; production bundle
+   `index-Drg2QWDg.js` on pita-supply-os.vercel.app contains `suggestion_alerts_enabled`
+   and "Ilość wpisana".
 4. Live check on WOLA x Pago with auth on: +300 % line, no reason picker, submit enabled;
    back the order out before any dispatch.
