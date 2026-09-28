@@ -1,7 +1,7 @@
 ---
 change_id: supplier-product-order-minimum
 title: Per-supplier product display order and logistic-minimum exclusions
-status: implementing
+status: impl_reviewed
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null
@@ -65,3 +65,39 @@ applied from this lane; this lane merges first on Tuesday, then 0024.
   default sort) — after 1.10.
 - Pago list display order once Magazyn Mory products join the Pago run (needs a
   cross-supplier key for the combined document).
+
+## Deploy order
+
+Nothing below runs without the operator's explicit go.
+
+1. Apply migration `supply-os-v1/migrations/0023_supplier_product_display_order_minimum.sql` on
+   prod Supabase (`lpzhphufjwrndfogkfub`). Additive: two columns with safe defaults, so
+   the old code keeps working against it.
+2. Merge the PR (this lane merges first; 0024 follows).
+3. Confirm live: Railway `/health`, new Vercel production bundle for the merge commit.
+4. Run `prod-sql.sql` after approval: save the diff-before, apply, audit returns 14
+   positions / 3 exclusions. Touches only `display_order` and `counts_toward_minimum`.
+5. Live check on prod (Captain Bukat screen, Manager Bukat detail, basis chip). No
+   order is dispatched as part of the check.
+
+Rollback: set the two columns back from the saved diff (positions to NULL, exclusions
+to true) — the code falls back to supplier_product_id order and the full-total chip.
+
+## Behaviour notes (impl-review)
+
+- The Transport matrix keeps manager-added rows pinned to the bottom (v5.1), so its
+  row order can differ from the supplier documents while a batch is being edited. The
+  documents, e-mail and driver list follow the canonical order. Deliberate.
+- The legacy `/captain` page now also hides inactive suppliers (it shares
+  `isOrderingSupplier` with `/captain-v2`). Inactive suppliers had no orderable rows
+  there anyway.
+- `SUP_INTERNAL` is refused by Captain submit and by Transport create (400); it stays
+  active in data for the inventory grid.
+- The Manager queue now reads `supplier_products` once per poll for the basis
+  (TTL-cached on Sheets, one indexed query on Supabase) — same pattern as the detail
+  routes.
+- Known basis drifts, accepted: a line the Manager zeroed is valued at its captain
+  quantity (the chip warns more, never less); a later price edit moves the basis but
+  not the stored total.
+- Side fix: the seed CSV row for `SP_PAGO_P024` had an unquoted comma in `notes`; it
+  is now quoted so the row parses as one record.

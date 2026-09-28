@@ -596,42 +596,42 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [x] 1.1 Backend pytest passes (model defaults + supabase binding test) — f0fc1ed
-- [x] 1.2 Ruff clean — f0fc1ed
-- [x] 1.3 Order key/comparator unit tests pass — f0fc1ed
-- [x] 1.4 Integration fixture applies 0023 and round-trip passes — f0fc1ed
-- [x] 1.5 Frontend build, lint, test green — f0fc1ed
+- [x] 1.1 Backend pytest passes (model defaults + supabase binding test) — 421bd1b
+- [x] 1.2 Ruff clean — 421bd1b
+- [x] 1.3 Order key/comparator unit tests pass — 421bd1b
+- [x] 1.4 Integration fixture applies 0023 and round-trip passes — 421bd1b
+- [x] 1.5 Frontend build, lint, test green — 421bd1b
 
 #### Manual
 
-- [x] 1.6 Migration file free of the percent sign, 0022 conventions — f0fc1ed
-- [x] 1.7 prod-sql.sql ids match the operator list, scoped to SUP_BUKAT — f0fc1ed
+- [x] 1.6 Migration file free of the percent sign, 0022 conventions — 421bd1b
+- [x] 1.7 prod-sql.sql ids match the operator list, scoped to SUP_BUKAT — 421bd1b
 
 ### Phase 2: Canonical order on every per-supplier surface
 
 #### Automated
 
-- [x] 2.1 Orderable list sorted by position then id — a46b2a0
-- [x] 2.2 Manager and Captain detail lines canonical; receipt lines canonical — a46b2a0
-- [x] 2.3 Transport aggregate canonical order — a46b2a0
-- [x] 2.4 gmail_url body numbered by position — a46b2a0
-- [x] 2.5 FE email, matrix and add-all options tests — a46b2a0
-- [x] 2.6 FE/BE e-mail twin order test on shared fixture — a46b2a0
-- [x] 2.7 Full suites, ruff, build, lint green — a46b2a0
+- [x] 2.1 Orderable list sorted by position then id — f1fdd00
+- [x] 2.2 Manager and Captain detail lines canonical; receipt lines canonical — f1fdd00
+- [x] 2.3 Transport aggregate canonical order — f1fdd00
+- [x] 2.4 gmail_url body numbered by position — f1fdd00
+- [x] 2.5 FE email, matrix and add-all options tests — f1fdd00
+- [x] 2.6 FE/BE e-mail twin order test on shared fixture — f1fdd00
+- [x] 2.7 Full suites, ruff, build, lint green — f1fdd00
 
 #### Manual
 
-- [x] 2.8 Seed preview: Captain Bukat order matches operator list (+ Bombilla last); Blue Service unchanged — a46b2a0
+- [x] 2.8 Seed preview: Captain Bukat order matches operator list (+ Bombilla last); Blue Service unchanged — f1fdd00
 
 ### Phase 3: Minimum basis without excluded products
 
 #### Automated
 
-- [x] 3.1 _minimum_basis_value unit tests — c00557f
-- [x] 3.2 Queue, Manager detail, Captain detail carry the basis — c00557f
-- [x] 3.3 No-gate test: below-basis order submits, claims, dispatches — c00557f
-- [x] 3.4 MinimumOrderChip component tests — c00557f
-- [x] 3.5 Full suites, ruff, build, lint green — c00557f
+- [x] 3.1 _minimum_basis_value unit tests — 8a17042
+- [x] 3.2 Queue, Manager detail, Captain detail carry the basis — 8a17042
+- [x] 3.3 No-gate test: below-basis order submits, claims, dispatches — 8a17042
+- [x] 3.4 MinimumOrderChip component tests — 8a17042
+- [x] 3.5 Full suites, ruff, build, lint green — 8a17042
 
 #### Manual
 
@@ -641,13 +641,13 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [x] 4.1 Captain submit for SUP_INTERNAL returns 400, nothing persisted — 10259f2
-- [x] 4.2 isOrderingSupplier unit tests — 10259f2
-- [x] 4.3 Full suites, ruff, build, lint green — 10259f2
+- [x] 4.1 Captain submit for SUP_INTERNAL returns 400, nothing persisted — 77d4c1e
+- [x] 4.2 isOrderingSupplier unit tests — 77d4c1e
+- [x] 4.3 Full suites, ruff, build, lint green — 77d4c1e
 
 #### Manual
 
-- [x] 4.4 Seed preview: no Pita Bros in the Captain picker; Produkcja still in the count grid — 10259f2
+- [x] 4.4 Seed preview: no Pita Bros in the Captain picker; Produkcja still in the count grid — 77d4c1e
 
 ### Phase 5: Release (operator-run, after approval)
 

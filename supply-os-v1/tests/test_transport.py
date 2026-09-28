@@ -802,6 +802,21 @@ def test_create_unknown_supplier_400(mocker):
     assert "SUP_GHOST" in r.json()["detail"]
 
 
+def test_create_internal_production_400_before_any_write(mocker):
+    """supplier-product-order-minimum: SUP_INTERNAL is counted, never ordered —
+    it cannot start a Transport batch either."""
+    mocks = _enable_sheet_backend_for_create(mocker, orders=[])
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_INTERNAL", "order_ids": []},
+    )
+    assert r.status_code == 400
+    assert "SUP_INTERNAL" in r.json()["detail"]
+    mocks["append_transport_batch"].assert_not_called()
+    mocks["update_order"].assert_not_called()
+
+
 def test_create_rejects_captain_token(mocker):
     _enable_sheet_backend_for_create(mocker, orders=[])
     r = client.post(

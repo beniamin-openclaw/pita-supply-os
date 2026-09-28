@@ -634,8 +634,8 @@ def _evaluate_submit_line(
 # On-site production ("Pita Bros (internal production)"): counted in inventory,
 # never ordered. It stays in master data for the inventory grid and
 # `_primary_supplier_product`; ordering screens hide it
-# (frontend/src/lib/orderingSuppliers.ts mirrors this id) and `captain_submit`
-# refuses it (supplier-product-order-minimum).
+# (frontend/src/lib/orderingSuppliers.ts mirrors this id); `captain_submit` and
+# `manager_transport_create` refuse it (supplier-product-order-minimum).
 _INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
 
 
@@ -4569,8 +4569,18 @@ def manager_transport_create(
 
     Seed mode -> 503 (mirrors every other manager write route). A missing
     'transport_batches' worksheet (append_to lookup, or the header append)
-    -> 503.
+    -> 503. ``SUP_INTERNAL`` -> 400 before anything is read or written: on-site
+    production is never ordered, so it never starts a batch (and add-location
+    takes its supplier from the batch header, so this is the only gate needed).
     """
+    if req.supplier_id == _INTERNAL_SUPPLIER_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Supplier '{_INTERNAL_SUPPLIER_ID}' is internal production — "
+                f"it cannot be ordered via Transport"
+            ),
+        )
     backend = _choose_backend()
     if not _is_persistent(backend):
         raise HTTPException(
