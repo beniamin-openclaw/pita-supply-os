@@ -599,21 +599,21 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Automated
 
-- [x] 2.1 Backend lint passes
-- [x] 2.2 test_delivery_calendar.py passes (all rule shapes, boundary, DST, resolution, Thursday)
-- [x] 2.3 test_delivery_proposal.py passes (auth, 404, degrade, clock-patched proposals)
-- [x] 2.4 Submit tests pass (fields persisted, coverage 2 → 422, edit preserves)
-- [x] 2.5 Manager queue and detail tests pass (fields exposed)
-- [x] 2.6 Full backend suite passes
+- [x] 2.1 Backend lint passes — 200c321
+- [x] 2.2 test_delivery_calendar.py passes (all rule shapes, boundary, DST, resolution, Thursday) — 200c321
+- [x] 2.3 test_delivery_proposal.py passes (auth, 404, degrade, clock-patched proposals) — 200c321
+- [x] 2.4 Submit tests pass (fields persisted, coverage 2 → 422, edit preserves) — 200c321
+- [x] 2.5 Manager queue and detail tests pass (fields exposed) — 200c321
+- [x] 2.6 Full backend suite passes — 200c321
 
 ### Phase 3: Captain order screen
 
 #### Automated
 
-- [ ] 3.1 Frontend build passes
-- [ ] 3.2 Frontend lint passes
-- [ ] 3.3 New helper and component tests pass
-- [ ] 3.4 Full frontend suite passes
+- [x] 3.1 Frontend build passes
+- [x] 3.2 Frontend lint passes
+- [x] 3.3 New helper and component tests pass
+- [x] 3.4 Full frontend suite passes
 
 #### Manual
 

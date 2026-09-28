@@ -351,6 +351,58 @@ export const STRINGS = {
   "dates.delivery.few.days": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
   "dates.delivery.many.days": { pl: "dostawa: {n} dni", en: "delivery: {n} days" },
 
+  // Delivery calendar (delivery-calendar) -----------------------------------
+  "deliveryCalendar.dateLabel": { pl: "Data dostawy", en: "Delivery date" },
+  "deliveryCalendar.proposed": {
+    pl: "Proponowana wg kalendarza dostaw: {date}",
+    en: "Proposed by the delivery calendar: {date}",
+  },
+  "deliveryCalendar.changed": {
+    pl: "Zmieniono — kalendarz proponuje {date}",
+    en: "Changed — the calendar proposes {date}",
+  },
+  "deliveryCalendar.restore": { pl: "Przywróć", en: "Restore" },
+  "deliveryCalendar.fallback": {
+    pl: "Brak kalendarza dostaw dla tego dostawcy — sprawdź datę",
+    en: "No delivery calendar for this supplier — check the date",
+  },
+  "deliveryCalendar.deadlineToday": { pl: "Zamów do dziś {time}", en: "Order by {time} today" },
+  "deliveryCalendar.deadlineDay": { pl: "Zamów do {day} {time}", en: "Order by {day} {time}" },
+  "deliveryCalendar.stripDelivery": { pl: "dostawa {date}", en: "delivery {date}" },
+  "deliveryCalendar.dateMovedToast": {
+    pl: "Minął termin zamówienia — nowa data dostawy: {date}",
+    en: "The order deadline passed — new delivery date: {date}",
+  },
+  "deliveryCalendar.confirmDelivery": { pl: "Dostawa: {date}", en: "Delivery: {date}" },
+  "deliveryCalendar.confirmCoverage": { pl: "Zamówione na: {value}", en: "Ordered for: {value}" },
+  "coverage.reminder": { pl: "Pamiętaj o ilościach na 3 dni!", en: "Remember quantities for 3 days!" },
+  "coverage.question": { pl: "Na ile dni zamawiasz?", en: "How many days is this order for?" },
+  "coverage.oneDay": { pl: "na 1 dzień", en: "for 1 day" },
+  "coverage.threeDays": {
+    pl: "na 3 dni (do końca tygodnia)",
+    en: "for 3 days (until the end of the week)",
+  },
+  "coverage.weekendCheck": {
+    pl: "Czy ilości wystarczą do końca weekendu?",
+    en: "Will the quantities last until the end of the weekend?",
+  },
+  "coverage.value.1": { pl: "1 dzień", en: "1 day" },
+  "coverage.value.3": { pl: "3 dni", en: "3 days" },
+  "coverage.queue.1": { pl: "na 1 dzień", en: "for 1 day" },
+  "coverage.queue.3": { pl: "na 3 dni", en: "for 3 days" },
+  "manager.deliveryMarker.queue": {
+    pl: "dostawa {chosen} (propozycja {proposed})",
+    en: "delivery {chosen} (proposed {proposed})",
+  },
+  "manager.deliveryMarker.detail": {
+    pl: "inna niż proponowana ({proposed})",
+    en: "differs from the proposal ({proposed})",
+  },
+  "manager.deliveryMarker.title": {
+    pl: "Kapitan wybrał {chosen}, kalendarz dostaw proponował {proposed}",
+    en: "The Captain chose {chosen}; the delivery calendar proposed {proposed}",
+  },
+
   // AuthGate ---------------------------------------------------------------
   "auth.captainLabel": { pl: "Wpisz kod miejsca", en: "Enter location code" },
   "auth.captainHint": {

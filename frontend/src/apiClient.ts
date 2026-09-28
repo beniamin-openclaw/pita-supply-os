@@ -15,6 +15,7 @@ import type {
   CaptainOrderListItem,
   CaptainSubmitRequest,
   CaptainSubmitResponse,
+  DeliveryProposal,
   FinanceAliasRequest,
   FinanceOverview,
   FinanceReceiptDetail,
@@ -362,6 +363,12 @@ export const api = {
   // Captain
   orderable: (supplier_id: string) =>
     apiGet<OrderableItem[]>(`/api/captain/orderable?supplier_id=${encodeURIComponent(supplier_id)}`, "captain"),
+  // Delivery calendar: the proposed delivery date for the token's location.
+  captainDeliveryProposal: (supplier_id: string) =>
+    apiGet<DeliveryProposal>(
+      `/api/captain/delivery-proposal?supplier_id=${encodeURIComponent(supplier_id)}`,
+      "captain",
+    ),
   captainSubmit: (req: CaptainSubmitRequest) =>
     apiPost<CaptainSubmitResponse>("/api/captain/submit", req, "captain"),
   captainOrders: (params?: { status?: OrderStatus; limit?: number }) => {

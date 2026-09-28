@@ -2,6 +2,8 @@
 // (returning Dates / ISO strings / urgency enums) — UI text is composed at the
 // component level via the i18n hook.
 
+import { addDaysIso, isoWeekday, warsawTodayIso } from "../../../lib/dates";
+
 const WEEKDAY_MAP: Record<string, number> = {
   sun: 0, sunday: 0, ndz: 0, niedziela: 0,
   mon: 1, monday: 1, pn: 1, poniedzialek: 1, poniedziałek: 1,
@@ -13,38 +15,30 @@ const WEEKDAY_MAP: Record<string, number> = {
 };
 
 /** Parse Supplier.delivery_days into the next concrete delivery date (Europe/Warsaw,
- * ISO YYYY-MM-DD). On null / unparseable input falls back to today + 1 day. */
-export function getRequestedDeliveryDate(deliveryDays: string | null | undefined): string {
-  const today = new Date();
-  let nextDate = new Date(today);
-
-  if (!deliveryDays || deliveryDays.trim() === "") {
-    nextDate.setDate(today.getDate() + 1);
-  } else {
-    const trimmed = deliveryDays.trim();
-    const asNum = Number(trimmed);
-    if (Number.isFinite(asNum) && asNum > 0) {
-      nextDate.setDate(today.getDate() + Math.floor(asNum));
-    } else {
-      const targets = trimmed
-        .split(/[,;\s]+/)
-        .map((s) => WEEKDAY_MAP[s.toLowerCase()])
-        .filter((d): d is number => typeof d === "number");
-      if (targets.length === 0) {
-        nextDate.setDate(today.getDate() + 1);
-      } else {
-        for (let offset = 1; offset <= 14; offset += 1) {
-          const candidate = new Date(today);
-          candidate.setDate(today.getDate() + offset);
-          if (targets.includes(candidate.getDay())) {
-            nextDate = candidate;
-            break;
-          }
-        }
-      }
-    }
+ * ISO YYYY-MM-DD). On null / unparseable input falls back to today + 1 day.
+ *
+ * Counts from the Warsaw calendar date (delivery-calendar): the old browser-local
+ * date + `toISOString()` produced the UTC date, a day early between 00:00 and
+ * 02:00 Warsaw. Now only the fallback when the delivery-proposal request fails. */
+export function getRequestedDeliveryDate(
+  deliveryDays: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  const today = warsawTodayIso(now);
+  if (!deliveryDays || deliveryDays.trim() === "") return addDaysIso(today, 1);
+  const trimmed = deliveryDays.trim();
+  const asNum = Number(trimmed);
+  if (Number.isFinite(asNum) && asNum > 0) return addDaysIso(today, Math.floor(asNum));
+  const targets = trimmed
+    .split(/[,;\s]+/)
+    .map((s) => WEEKDAY_MAP[s.toLowerCase()])
+    .filter((d): d is number => typeof d === "number");
+  if (targets.length === 0) return addDaysIso(today, 1);
+  for (let offset = 1; offset <= 14; offset += 1) {
+    const candidate = addDaysIso(today, offset);
+    if (targets.includes(isoWeekday(candidate))) return candidate;
   }
-  return nextDate.toISOString().split("T")[0];
+  return addDaysIso(today, 1);
 }
 
 export type CutoffUrgency = "danger" | "warn" | "ok";
@@ -81,4 +75,19 @@ export function parseDeliveryDays(
   }
   // Anything else (e.g., "Tue,Fri") — UI shows literal value as-is.
   return { kind: "weekdays", literal: trimmed };
+}
+
+/** Urgency of the delivery-calendar order deadline (an ISO instant):
+ *  under 1 h (or passed) → danger, under 6 h → warn, else ok. */
+export function getDeadlineUrgency(
+  deadlineIso: string | null | undefined,
+  now: Date = new Date(),
+): CutoffUrgency {
+  if (!deadlineIso) return "ok";
+  const deadline = new Date(deadlineIso).getTime();
+  if (Number.isNaN(deadline)) return "ok";
+  const diffH = (deadline - now.getTime()) / 3_600_000;
+  if (diffH < 1) return "danger";
+  if (diffH < 6) return "warn";
+  return "ok";
 }
