@@ -76,6 +76,10 @@ export interface OrderableItem {
   // data (e.g. "1 karton = 6 szt (18 kg)"), shown on the product card. Absent on
   // the edit screen (rebuilt from order lines, which don't carry it).
   order_note?: string | null;
+  // Supplier-level switch (pago-suggestion-no-alerts): false = the card still
+  // shows the suggestion but no deviation alert, no reason prompt and no
+  // below-minimum warning. Absent = true (older backend / manager screens).
+  suggestion_alerts_enabled?: boolean;
 }
 
 // Captain Submit -------------------------------------------------------------
@@ -322,6 +326,9 @@ export interface CaptainOrderDetail {
   last_edited_at?: string | null;
   // email|portal|phone|manual|transport; null before dispatch (Phase 7 banner gate).
   sent_method?: string | null;
+  // Mirrors the supplier's suggestion_alerts_enabled for the edit screen
+  // (pago-suggestion-no-alerts). Absent = true.
+  suggestion_alerts_enabled?: boolean;
   total_value_estimate_pln?: number | null;
   // Supplier's configured minimum order value (display-only; training-
   // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.

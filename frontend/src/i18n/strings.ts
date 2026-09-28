@@ -204,6 +204,12 @@ export const STRINGS = {
     pl: "Powyżej MAX — powód podany",
     en: "Above MAX — reason provided",
   },
+  // Supplier with suggestion alerts off (Pago): a neutral pill — the quantity
+  // is the Captain's call, nothing to justify (pago-suggestion-no-alerts).
+  "state.orderEntered": {
+    pl: "Ilość wpisana",
+    en: "Quantity entered",
+  },
   "state.smallAdjNoStock": {
     pl: "Zamówienie bez stanu",
     en: "Order without current stock",

@@ -192,8 +192,13 @@ def _build_orderable_item(
     sp: SupplierProduct,
     products_by_id: dict[str, Product],
     settings_by_pid: dict[str, LocationProductSetting],
+    suggestion_alerts_enabled: bool = True,
 ) -> dict:
-    """Compose one line for the Captain Submit screen."""
+    """Compose one line for the Captain Submit screen.
+
+    ``suggestion_alerts_enabled`` is the supplier's flag (see
+    ``Supplier.suggestion_alerts_enabled``) — the card keeps the suggestion but
+    drops every alert and reason prompt when it is False."""
     product = products_by_id[sp.product_id]
     setting = settings_by_pid[sp.product_id]
     return {
@@ -211,11 +216,15 @@ def _build_orderable_item(
         "supplier_product_id": sp.supplier_product_id,
         "supplier_product_name": sp.supplier_product_name,
         "order_note": sp.order_note,
+        "suggestion_alerts_enabled": suggestion_alerts_enabled,
     }
 
 
 def _build_orderable_items(
-    backend, location_id: str, supplier_id: str
+    backend,
+    location_id: str,
+    supplier_id: str,
+    suggestion_alerts_enabled: bool = True,
 ) -> list[dict]:
     """Orderable line dicts for one location + supplier (shared by the Captain
     and Manager orderable routes).
@@ -257,7 +266,19 @@ def _build_orderable_items(
         and sp.product_id in settings_by_pid
         and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
-    return [_build_orderable_item(sp, products_by_id, settings_by_pid) for sp in sps]
+    return [
+        _build_orderable_item(
+            sp, products_by_id, settings_by_pid, suggestion_alerts_enabled
+        )
+        for sp in sps
+    ]
+
+
+def _supplier_alerts_enabled(suppliers: list[Supplier], supplier_id: str) -> bool:
+    """The supplier's ``suggestion_alerts_enabled`` flag; True (alerts on, the
+    historical behaviour) when the supplier is unknown."""
+    supplier = next((s for s in suppliers if s.supplier_id == supplier_id), None)
+    return supplier.suggestion_alerts_enabled if supplier is not None else True
 
 
 @app.get("/api/captain/orderable")
@@ -274,8 +295,17 @@ def captain_orderable(
     droplet's seed CSVs are a stale fallback, so the order screen silently
     dropped any product missing from the old `location_product_settings` snapshot
     (e.g. whole suppliers showed zero products) while sheet-backed screens were
-    complete."""
-    return _build_orderable_items(_choose_backend(), location_id, supplier_id)
+    complete.
+
+    Each item carries the supplier's ``suggestion_alerts_enabled`` so the card
+    knows whether to show deviation alerts (pago-suggestion-no-alerts)."""
+    backend = _choose_backend()
+    return _build_orderable_items(
+        backend,
+        location_id,
+        supplier_id,
+        _supplier_alerts_enabled(backend.load_suppliers(), supplier_id),
+    )
 
 
 @app.get("/api/manager/orderable")
@@ -443,6 +473,7 @@ def _evaluate_submit_line(
     product: Product,
     order_line_id: str,
     order_id: str,
+    alerts_enabled: bool = True,
 ) -> tuple[OrderLine, Optional[str], float]:
     """Validate one captain-submitted line and build its persisted OrderLine.
 
@@ -471,6 +502,12 @@ def _evaluate_submit_line(
     - **Counted, below target** (a value was given and the suggestion is > 0):
       the existing critical-under and >25% deviation gates apply
       byte-identically.
+
+    ``alerts_enabled=False`` (the supplier's ``suggestion_alerts_enabled``,
+    pago-suggestion-no-alerts): the suggestion is still computed and every
+    column persists exactly as above (incl. ``delta_vs_suggestion_pct``, the
+    learning record), but NO gate raises and NO warning is returned — the
+    Captain never has to give a reason for this supplier.
     """
     is_critical = setting.is_critical_for_location or product.is_critical
     stock = line.current_stock_qty_base
@@ -499,7 +536,7 @@ def _evaluate_submit_line(
             and not setting.allow_over_max_due_to_packaging
             and order_base > setting.max_stock_qty_base
         )
-        if over_max and line.reason_code is None:
+        if alerts_enabled and over_max and line.reason_code is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -534,7 +571,8 @@ def _evaluate_submit_line(
         ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
 
         if (
-            is_critical
+            alerts_enabled
+            and is_critical
             and line.captain_final_qty_purchase < suggested_qty_purchase
             and line.reason_code is None
         ):
@@ -545,7 +583,7 @@ def _evaluate_submit_line(
                     f"without reason_code"
                 ),
             )
-        if delta_pct > 0.25 and line.reason_code is None:
+        if alerts_enabled and delta_pct > 0.25 and line.reason_code is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -559,6 +597,9 @@ def _evaluate_submit_line(
                 f"reason: {line.reason_code.value}"
             )
         stored_stock = stock
+
+    if not alerts_enabled:
+        warning = None
 
     line_value = (
         line.captain_final_qty_purchase * sp.price_estimate_pln
@@ -607,6 +648,9 @@ def captain_submit(
         400: no reason is required, delta_vs_suggestion_pct is stored as None,
         and an "(info)" warning names the ordered quantity when it is > 0
         (week2-feedback-quantities Phase 1). See `_evaluate_submit_line`.
+      - supplier with `suggestion_alerts_enabled = False` (Pago) -> none of the
+        reason gates above fire and no warning is returned; the suggestion and
+        deviation are still persisted (pago-suggestion-no-alerts).
     """
     backend = _choose_backend()
     master = _resolve_master_data(backend, location_id, req.supplier_id)
@@ -659,6 +703,7 @@ def captain_submit(
             product,
             order_line_id=f"OL-{order_id}-{idx:03d}",
             order_id=order_id,
+            alerts_enabled=master.supplier.suggestion_alerts_enabled,
         )
         if warning is not None:
             warnings.append(warning)
@@ -1349,6 +1394,9 @@ def captain_order_detail(
         extra_items=order.extra_items,
         captain_note=order.captain_note,
         sent_method=order.sent_method,
+        suggestion_alerts_enabled=(
+            supplier.suggestion_alerts_enabled if supplier else True
+        ),
         editable=(order.status == OrderStatus.CAPTAIN_SUBMITTED),
         lines=enriched_lines,
     )
@@ -1456,6 +1504,7 @@ def captain_order_edit(
             product,
             order_line_id=f"OL-{order_id}-{idx:03d}",
             order_id=order_id,
+            alerts_enabled=master.supplier.suggestion_alerts_enabled,
         )
         if warning is not None:
             warnings.append(warning)

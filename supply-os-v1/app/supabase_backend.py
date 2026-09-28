@@ -98,6 +98,7 @@ _PRODUCT_COLUMNS = [
 _SUPPLIER_COLUMNS = [
     "supplier_id", "supplier_name", "email", "ordering_method", "delivery_days",
     "cutoff_time", "minimum_order_value_pln", "active", "notes",
+    "suggestion_alerts_enabled",
 ]
 _LOCATION_COLUMNS = [
     "location_id", "location_name", "delivery_address", "city", "active", "notes",

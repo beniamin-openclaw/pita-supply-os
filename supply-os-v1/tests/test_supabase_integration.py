@@ -166,6 +166,12 @@ def _schema():
     ordering_transport = (
         MIGRATIONS_DIR / "0021_supplier_ordering_method_transport.sql"
     ).read_text()
+    # 0022 adds suppliers.suggestion_alerts_enabled (NOT NULL DEFAULT true);
+    # _SUPPLIER_COLUMNS references it, so the suppliers insert below errors
+    # against a pre-0022 schema.
+    suggestion_alerts = (
+        MIGRATIONS_DIR / "0022_supplier_suggestion_alerts.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -188,6 +194,7 @@ def _schema():
         conn.exec_driver_sql(location_email)
         conn.exec_driver_sql(order_events)
         conn.exec_driver_sql(ordering_transport)
+        conn.exec_driver_sql(suggestion_alerts)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

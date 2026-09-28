@@ -572,6 +572,8 @@ export function CaptainMP() {
       orderableItems
         .filter((item) => {
           if (!item.is_critical) return false;
+          // No alerts for a supplier that switched them off (Pago).
+          if (item.suggestion_alerts_enabled === false) return false;
           const final = lines[item.product_id]?.captain_final_qty_purchase;
           return final === "" || final === undefined || Number(final) === 0;
         })
