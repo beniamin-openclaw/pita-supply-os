@@ -29,7 +29,9 @@
 -- it, so without the column every order_lines INSERT (captain submit, captain
 -- edit, Manager add-line, Transport add-location) and every Manager save /
 -- dispatch UPDATE fails.
--- Applied on prod: not yet.
+-- Applied on prod: 2026-09-28 via Supabase apply_migration, before the
+-- backend deploy (pre-check 1363 positive lines of 1687; audit flagged 1363,
+-- zero_flagged 0).
 --
 -- Rollback (revert the code first):
 --   ALTER TABLE order_lines DROP COLUMN IF EXISTS manager_final_set;

@@ -22,3 +22,7 @@ Impl-review decisions (reviews/impl-review.md):
 - Backfill marks only positive manager_final, so no existing line changes its effective quantity; the migration is re-runnable.
 - A release back to captain_submitted (Odrzuć do poprawy, Transport remove-order / cancel / empty-column auto-remove at finalize) clears the flag on the Manager's zeros, so the order reads at the Captain's quantities again, as before this change. Positive Manager values keep today's behaviour.
 - Dispatch: a line missing from a partial payload keeps its effective quantity (a saved explicit 0 stays 0; a legacy positive manager_final now wins over the Captain's). The UI always sends every line, so no visible effect.
+
+Prod 2026-09-28 (operator request in chat, before merge): 0024 applied on Supabase lpzhphufjwrndfogkfub via apply_migration.
+- Pre-check A: column absent; expected_flagged 1363 of 1687 order_lines; A3 dispatched zero with captain > 0 = 0; open lines with manager_final 0: manager_claimed 16, captain_submitted 25 (stay unflagged). 0023 already on prod.
+- Audit C: boolean NOT NULL DEFAULT false; flagged 1363; zero_flagged 0; positive unflagged 0; total 1687 unchanged.
