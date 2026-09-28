@@ -62,6 +62,7 @@ from .models import (
     Receipt,
     ReceiptLine,
     Supplier,
+    SupplierDeliveryRule,
     SupplierProduct,
     TransportBatch,
     TransportEvent,
@@ -98,7 +99,7 @@ _PRODUCT_COLUMNS = [
 _SUPPLIER_COLUMNS = [
     "supplier_id", "supplier_name", "email", "ordering_method", "delivery_days",
     "cutoff_time", "minimum_order_value_pln", "active", "notes",
-    "suggestion_alerts_enabled",
+    "suggestion_alerts_enabled", "coverage_prompt_enabled",
 ]
 _LOCATION_COLUMNS = [
     "location_id", "location_name", "delivery_address", "city", "active", "notes",
@@ -121,7 +122,7 @@ _ORDER_COLUMNS = [
     "manager_user", "manager_sent_at", "sent_method", "supplier_order_reference",
     "total_value_estimate_pln", "ordered_by", "last_edited_at",
     "cancelled_at", "cancelled_by", "cancel_reason", "notes",
-    "extra_items", "captain_note",
+    "extra_items", "captain_note", "suggested_delivery_date", "coverage_days",
 ]
 _ORDER_LINE_COLUMNS = [
     "order_line_id", "order_id", "product_id", "supplier_product_id",
@@ -162,6 +163,10 @@ _TRANSPORT_EVENT_COLUMNS = [
 _ORDER_EVENT_COLUMNS = [
     "event_id", "order_id", "event_type", "actor", "at", "details",
 ]
+_SUPPLIER_DELIVERY_RULE_COLUMNS = [
+    "rule_id", "supplier_id", "location_id", "order_weekdays", "lead_days",
+    "delivery_weekdays", "order_deadline", "active", "notes",
+]
 
 # Temporal columns get an explicit cast in INSERT/UPDATE so a value bound as an
 # ISO string (e.g. dispatch passes ``manager_sent_at`` as ``.isoformat()``) is
@@ -169,7 +174,8 @@ _ORDER_EVENT_COLUMNS = [
 # unique across tables, so a single global set per type is unambiguous.
 _DATE_COLS = frozenset(
     {
-        "order_date", "requested_delivery_date", "count_date", "receipt_date",
+        "order_date", "requested_delivery_date", "suggested_delivery_date",
+        "count_date", "receipt_date",
         "pickup_date", "issue_date", "sell_date", "payment_deadline",
     }
 )
@@ -328,6 +334,15 @@ def load_location_product_settings() -> list[LocationProductSetting]:
     return _fetch_all(
         "SELECT * FROM location_product_settings ORDER BY setting_id",
         LocationProductSetting,
+    )
+
+
+def load_supplier_delivery_rules() -> list[SupplierDeliveryRule]:
+    """Delivery-calendar rules (migration 0025). Raises when the table is absent
+    (code ahead of the migration); ``main._load_delivery_rules_safe`` degrades
+    that to "no rules"."""
+    return _fetch_all(
+        "SELECT * FROM supplier_delivery_rules ORDER BY rule_id", SupplierDeliveryRule
     )
 
 

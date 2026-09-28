@@ -16,6 +16,7 @@ from .models import (
     LocationProductSetting,
     Product,
     Supplier,
+    SupplierDeliveryRule,
     SupplierProduct,
 )
 
@@ -94,6 +95,15 @@ def load_location_product_settings() -> list[LocationProductSetting]:
         settings.seed_dir / "location_product_settings.csv",
         LocationProductSetting,
     )
+
+
+def load_supplier_delivery_rules() -> list[SupplierDeliveryRule]:
+    """Delivery-calendar rules from the optional seed CSV; ``[]`` when the file
+    is absent (every proposal then uses the fallback)."""
+    path = settings.seed_dir / "supplier_delivery_rules.csv"
+    if not path.exists():
+        return []
+    return _read_cached(path, SupplierDeliveryRule)
 
 
 # ---------- Order post-send edit log (week2-feedback-quantities Phase 6) ----------
