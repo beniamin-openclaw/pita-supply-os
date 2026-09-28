@@ -72,6 +72,12 @@ export const STRINGS = {
     pl: "Poniżej progu zamówienia (min. {minimum} PLN)",
     en: "Below order minimum (min. {minimum} PLN)",
   },
+  // Same chip when some lines don't count toward the minimum
+  // (supplier-product-order-minimum; Bukat: Tzatzyki, Hot Feta, Feta).
+  "minOrder.belowBasis": {
+    pl: "Poniżej progu zamówienia (min. {minimum} PLN) — do progu liczy się {basis} PLN",
+    en: "Below order minimum (min. {minimum} PLN) — {basis} PLN counts toward it",
+  },
 
   // Toast / global messages -------------------------------------------------
   "toast.close": { pl: "Zamknij powiadomienie", en: "Close notification" },

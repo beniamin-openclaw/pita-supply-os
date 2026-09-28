@@ -912,6 +912,9 @@ def manager_queue(
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    # For the minimum basis (supplier-product-order-minimum): which lines count
+    # toward the supplier minimum. One master-data read per request.
+    sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
     now_utc = datetime.now(timezone.utc)
     threshold = _deviation_threshold()
 
@@ -986,6 +989,9 @@ def manager_queue(
                 total_value_estimate_pln=order.total_value_estimate_pln,
                 minimum_order_value_pln=(
                     supplier.minimum_order_value_pln if supplier else None
+                ),
+                minimum_basis_value_pln=_minimum_basis_value(
+                    order.total_value_estimate_pln, lines, sps_by_id
                 ),
                 deviation_count=deviation_count,
                 reason_count=reason_count,
@@ -1216,6 +1222,9 @@ def manager_order_detail(
         manager_sent_at=order.manager_sent_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
         minimum_order_value_pln=supplier.minimum_order_value_pln if supplier else None,
+        minimum_basis_value_pln=_minimum_basis_value(
+            order.total_value_estimate_pln, order.lines, sps_by_id
+        ),
         notes=order.notes,
         extra_items=order.extra_items,
         captain_note=order.captain_note,
@@ -1416,6 +1425,9 @@ def captain_order_detail(
         last_edited_at=order.last_edited_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
         minimum_order_value_pln=supplier.minimum_order_value_pln if supplier else None,
+        minimum_basis_value_pln=_minimum_basis_value(
+            order.total_value_estimate_pln, order.lines, sps_by_id
+        ),
         notes=order.notes,
         extra_items=order.extra_items,
         captain_note=order.captain_note,
@@ -3464,6 +3476,44 @@ def _effective_ordered_qty(line: OrderLine) -> float:
     if line.manager_final_qty_purchase and line.manager_final_qty_purchase > 0:
         return line.manager_final_qty_purchase
     return line.captain_final_qty_purchase
+
+
+def _minimum_basis_value(
+    total: Optional[float],
+    lines: list[OrderLine],
+    sps_by_id: dict[str, SupplierProduct],
+) -> Optional[float]:
+    """The part of an order's estimated total that counts toward the supplier's
+    logistic minimum (supplier-product-order-minimum).
+
+    Some products ride on a supplier's delivery without counting toward its
+    minimum (Bukat's 500 PLN excludes Tzatzyki, Hot Feta and Feta —
+    ``supplier_products.counts_toward_minimum = false``). The basis is the
+    stored total minus the value of those lines: effective quantity
+    (``_effective_ordered_qty``) × ``price_estimate_pln`` (a missing price
+    contributes 0), floored at 0 and rounded to grosze.
+
+    Returns ``None`` when ``total`` is ``None`` or no line's supplier_product is
+    excluded — the chip then compares the total exactly as before.
+    Display-only: nothing gates on it, and it is never persisted.
+
+    Two known drifts, both accepted: a line the Manager zeroed (stored
+    ``manager_final = 0``) is valued at its ``captain_final``, so an excluded
+    zeroed line LOWERS the basis — the chip warns more, never less; and a later
+    master-data price edit moves the basis but not the stored total."""
+    if total is None:
+        return None
+    excluded_value = 0.0
+    any_excluded = False
+    for line in lines:
+        sp = sps_by_id.get(line.supplier_product_id)
+        if sp is None or sp.counts_toward_minimum:
+            continue
+        any_excluded = True
+        excluded_value += _effective_ordered_qty(line) * (sp.price_estimate_pln or 0.0)
+    if not any_excluded:
+        return None
+    return round(max(0.0, total - excluded_value), 2)
 
 
 @app.post("/api/captain/receipt/submit", response_model=ReceiptSubmitResponse)

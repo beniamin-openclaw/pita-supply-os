@@ -611,27 +611,27 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [x] 2.1 Orderable list sorted by position then id
-- [x] 2.2 Manager and Captain detail lines canonical; receipt lines canonical
-- [x] 2.3 Transport aggregate canonical order
-- [x] 2.4 gmail_url body numbered by position
-- [x] 2.5 FE email, matrix and add-all options tests
-- [x] 2.6 FE/BE e-mail twin order test on shared fixture
-- [x] 2.7 Full suites, ruff, build, lint green
+- [x] 2.1 Orderable list sorted by position then id — a46b2a0
+- [x] 2.2 Manager and Captain detail lines canonical; receipt lines canonical — a46b2a0
+- [x] 2.3 Transport aggregate canonical order — a46b2a0
+- [x] 2.4 gmail_url body numbered by position — a46b2a0
+- [x] 2.5 FE email, matrix and add-all options tests — a46b2a0
+- [x] 2.6 FE/BE e-mail twin order test on shared fixture — a46b2a0
+- [x] 2.7 Full suites, ruff, build, lint green — a46b2a0
 
 #### Manual
 
-- [x] 2.8 Seed preview: Captain Bukat order matches operator list (+ Bombilla last); Blue Service unchanged
+- [x] 2.8 Seed preview: Captain Bukat order matches operator list (+ Bombilla last); Blue Service unchanged — a46b2a0
 
 ### Phase 3: Minimum basis without excluded products
 
 #### Automated
 
-- [ ] 3.1 _minimum_basis_value unit tests
-- [ ] 3.2 Queue, Manager detail, Captain detail carry the basis
-- [ ] 3.3 No-gate test: below-basis order submits, claims, dispatches
-- [ ] 3.4 MinimumOrderChip component tests
-- [ ] 3.5 Full suites, ruff, build, lint green
+- [x] 3.1 _minimum_basis_value unit tests
+- [x] 3.2 Queue, Manager detail, Captain detail carry the basis
+- [x] 3.3 No-gate test: below-basis order submits, claims, dispatches
+- [x] 3.4 MinimumOrderChip component tests
+- [x] 3.5 Full suites, ruff, build, lint green
 
 #### Manual
 

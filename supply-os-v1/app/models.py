@@ -369,6 +369,13 @@ class ManagerQueueItem(BaseModel):
     # consumes this: "engine suggests, never blocks" — the below-minimum
     # warning/400-fallback is a frontend concern.
     minimum_order_value_pln: Optional[float] = None
+    # The part of the total that counts toward that minimum
+    # (supplier-product-order-minimum): the total minus the lines whose
+    # supplier_product has counts_toward_minimum = false (Bukat: Tzatzyki, Hot
+    # Feta, Feta). None when the order has no such line — the chip then compares
+    # the total, as before. Display-only, like the minimum; see
+    # main._minimum_basis_value.
+    minimum_basis_value_pln: Optional[float] = None
     deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.25
     reason_count: int  # lines z non-null reason_code
     last_edited_at: Optional[datetime] = None  # set if captain edited after submit
@@ -506,6 +513,8 @@ class ManagerOrderDetail(BaseModel):
     # via the route's existing suppliers_by_id map. No server-side reader/gate
     # consumes this — see ManagerQueueItem.minimum_order_value_pln.
     minimum_order_value_pln: Optional[float] = None
+    # See ManagerQueueItem.minimum_basis_value_pln.
+    minimum_basis_value_pln: Optional[float] = None
     notes: str = ""
     # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
     # Phase 1b), read-only on this screen — see Order.extra_items /
@@ -572,6 +581,8 @@ class CaptainOrderDetail(BaseModel):
     # Supplier's configured minimum order value (display-only; training-
     # feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
     minimum_order_value_pln: Optional[float] = None
+    # See ManagerQueueItem.minimum_basis_value_pln.
+    minimum_basis_value_pln: Optional[float] = None
     notes: str = ""
     # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
     # Phase 1b) — see Order.extra_items / Order.captain_note.

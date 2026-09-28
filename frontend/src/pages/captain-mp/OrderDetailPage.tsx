@@ -220,6 +220,7 @@ export function OrderDetailPage() {
                   <MinimumOrderChip
                     total={order.total_value_estimate_pln}
                     minimum={order.minimum_order_value_pln}
+                    basis={order.minimum_basis_value_pln}
                   />
                 </div>
                 {order.requested_delivery_date && (
