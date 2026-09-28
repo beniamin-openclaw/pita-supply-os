@@ -1,10 +1,10 @@
 ---
 change_id: pago-suggestion-no-alerts
 title: Pago keeps the suggestion but shows no deviation alerts and never asks for a reason
-status: implemented
+status: archived
 created: 2026-09-27
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T13:05:33Z
 ---
 
 ## Notes
@@ -68,3 +68,4 @@ and for Gyros 15 KG at NORBLIN, and every Pago row at the not-yet-active locatio
    and "Ilość wpisana".
 4. Live check on WOLA x Pago with auth on: +300 % line, no reason picker, submit enabled;
    back the order out before any dispatch.
+   **Done 2026-09-28**: operator confirmed on prod that it works.

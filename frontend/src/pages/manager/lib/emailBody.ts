@@ -7,6 +7,7 @@
 // the URL exceeds MAX_GMAIL_URL_LENGTH the UI must hide "Otwórz w Gmail" and
 // fall back to clipboard. Keep this in sync with the Python original.
 
+import { compareProductOrder } from "../../../lib/productOrder";
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types";
 import { splitRecipients } from "./transport";
 
@@ -51,7 +52,9 @@ export function buildResendSubject(detail: ManagerOrderDetail): string {
 
 /**
  * Plaintext Polish body (mirrors gmail_url._build_body). Lines whose effective
- * qty is 0 are skipped; visible lines are sorted by order_line_id.
+ * qty is 0 are skipped; visible lines are in the canonical supplier order —
+ * display_order, then supplier_product_id (lib/productOrder.ts, twin of
+ * app/product_order.py), so a manager-added line lands at its own position.
  *
  * `effectiveQtyFor` returns the DRAFT effective purchase qty for a line so the
  * email matches the table.
@@ -76,7 +79,7 @@ export function buildEmailBody(
 
   const visible = detail.lines
     .filter((ln) => effectiveQtyFor(ln) > 0)
-    .sort((a, b) => a.order_line_id.localeCompare(b.order_line_id));
+    .sort(compareProductOrder);
 
   visible.forEach((line, idx) => {
     const qty = effectiveQtyFor(line);

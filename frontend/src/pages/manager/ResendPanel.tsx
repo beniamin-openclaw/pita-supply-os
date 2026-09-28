@@ -11,6 +11,7 @@
 import { useMemo } from "react";
 
 import { useT } from "../../i18n";
+import { compareProductOrder } from "../../lib/productOrder";
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../types";
 import { type DraftMap, draftQty } from "./lib/draftState";
 import {
@@ -57,11 +58,12 @@ export function ResendPanel({ detail, drafts, dirty, onToast }: ResendPanelProps
   });
   const canOpenGmail = isEmail && !noEmail && !tooLong && !dirty;
 
-  // Plain-text list (Produkt | Ilość | kod), qty > 0 — mirrors DispatchPanel.
+  // Plain-text list (Produkt | Ilość | kod), qty > 0 — mirrors DispatchPanel
+  // (canonical supplier order).
   const listText = useMemo(() => {
     const rows = detail.lines
       .filter((ln) => effQty(ln) > 0)
-      .sort((a, b) => a.order_line_id.localeCompare(b.order_line_id))
+      .sort(compareProductOrder)
       .map((ln) => {
         const code = ln.supplier_product_name || "";
         return `${ln.product_name_pl} | ${effQty(ln)} ${ln.purchase_unit} | ${code}`.replace(

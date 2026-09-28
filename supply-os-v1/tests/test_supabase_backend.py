@@ -219,6 +219,23 @@ def test_supplier_product_warehouse_pickup_defaults_false_and_binds(mocker):
     assert params["warehouse_pickup"] is False  # bound, not skipped or None
 
 
+def test_supplier_product_display_order_and_minimum_flag_bind(mocker):
+    """Migration 0023 binding guard: counts_toward_minimum is `bool = True`
+    (NOT NULL DEFAULT true) and binds True when unset; display_order is
+    nullable and binds None when unset."""
+    conn = _fake_engine(mocker)
+    sp = SupplierProduct(
+        supplier_product_id="SP1", supplier_id="SUP_X", product_id="P1",
+        supplier_product_name="Pita", purchase_unit="szt", units_per_purchase_unit=1.0,
+    )
+    supabase_backend._insert(
+        "supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS, sp
+    )
+    _sql, params = _executed(conn)[0]
+    assert params["counts_toward_minimum"] is True
+    assert params["display_order"] is None
+
+
 def test_append_order_lines_rejects_mixed_order_ids(mocker):
     _fake_engine(mocker)
     lines = [

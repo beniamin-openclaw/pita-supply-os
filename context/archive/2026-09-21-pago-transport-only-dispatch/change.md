@@ -1,10 +1,10 @@
 ---
 change_id: pago-transport-only-dispatch
 title: Transport-only suppliers cannot be dispatched from the per-order queue
-status: impl_reviewed
+status: archived
 created: 2026-09-21
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T13:08:29Z
 ---
 
 ## Notes
@@ -152,4 +152,20 @@ row round-trips on Postgres.
 - **Still open:** plan Progress 3.6 / 3.7, the Manager-screen checks on prod (a Pago order
   shows the Transport notice instead of dispatch controls; a Bukat order still dispatches).
   Not run by the agent: they need the Manager token.
+
+### Carried over to the operator at archive, 2026-09-28
+
+Operator decision (relayed by the coordinator session, 2026-09-28): archive now, carry the two
+manual prod checks over.
+
+- **3.6** Pago order on the Manager screen shows the Transport notice instead of dispatch
+  controls. Not run: it needs the Manager token. Read-only evidence: prod SUP_PAGO
+  `ordering_method = 'transport'`; live Railway `/openapi.json` carries the value; the Vercel
+  bundle carries the notice keys; `test_dispatch_transport_*` and `DispatchPanel.test.tsx`
+  cover the guard and the panel.
+- **3.7** A Bukat order still dispatches by e-mail. Not run (it would dispatch). Read-only
+  evidence: SUP_BUKAT unchanged (`ordering_method = 'email'`, address present); the existing
+  e-mail dispatch tests pass.
+- No Pago or Bukat order was dispatched between the deploy (11:05 UTC) and the archive.
+- The 15 waiting Pago orders listed above belong to the "Uporządkuj dane Pago" lane.
 

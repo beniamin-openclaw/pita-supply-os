@@ -107,6 +107,8 @@ where the **unit conversion** lives.
 | `price_estimate_pln`         | number      | Optional in v0, populated when known                                  |
 | `active`                     | boolean     |                                                                       |
 | `notes`                      | string      | E.g., `1 karton = 36 szt = 9 kg`                                      |
+| `display_order`              | integer     | Optional position in the supplier's list (migration 0023). Every per-supplier screen and document sorts by it, then by `supplier_product_id`; empty = no position (keeps id order, after positioned rows) |
+| `counts_toward_minimum`      | boolean     | Default `true`. `false` = excluded from the basis the informational minimum-order chip compares with `suppliers.minimum_order_value_pln` (Bukat: Tzatzyki, Tirokafteri, Feta). Never a gate (migration 0023) |
 
 **Why this table:** suggestion calculation requires this. Without
 `units_per_purchase_unit`, you cannot translate "need 9.5 kg" into "order 1
