@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../apiClient";
 import { clearToken } from "../auth";
+import { isOrderingSupplier } from "../lib/orderingSuppliers";
 import type { OrderableItem, Supplier } from "../types";
 
 export function CaptainPage() {
@@ -19,7 +20,10 @@ export function CaptainPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.suppliers().then(setSuppliers).catch((e: ApiError) => setError(e.detail));
+    api
+      .suppliers()
+      .then((data) => setSuppliers(data.filter(isOrderingSupplier)))
+      .catch((e: ApiError) => setError(e.detail));
   }, []);
 
   useEffect(() => {

@@ -146,6 +146,18 @@ class SupplierProduct(BaseModel):
     # Only the pickup document (frontend transport.ts) filters on this value —
     # the Pago order email and order PDF still cover the whole batch.
     warehouse_pickup: bool = False
+    # Position of this product in its supplier's list (migration 0023,
+    # supplier-product-order-minimum). Every per-supplier screen and document
+    # sorts by it, then by supplier_product_id (app/product_order.py). None =
+    # no position: the row keeps the supplier_product_id order, after the
+    # positioned rows.
+    display_order: Optional[int] = None
+    # False = the product does not count toward the supplier's logistic minimum
+    # (Bukat: Tzatzyki, Tirokafteri, Feta blok) — the informational chip
+    # compares the order total minus these lines. Never a gate. `bool = True`,
+    # NOT Optional: the column is NOT NULL DEFAULT true and _insert binds every
+    # column in _SUPPLIER_PRODUCT_COLUMNS (same reason as warehouse_pickup).
+    counts_toward_minimum: bool = True
 
 
 class LocationProductSetting(BaseModel):
@@ -357,6 +369,13 @@ class ManagerQueueItem(BaseModel):
     # consumes this: "engine suggests, never blocks" — the below-minimum
     # warning/400-fallback is a frontend concern.
     minimum_order_value_pln: Optional[float] = None
+    # The part of the total that counts toward that minimum
+    # (supplier-product-order-minimum): the total minus the lines whose
+    # supplier_product has counts_toward_minimum = false (Bukat: Tzatzyki, Hot
+    # Feta, Feta). None when the order has no such line — the chip then compares
+    # the total, as before. Display-only, like the minimum; see
+    # main._minimum_basis_value.
+    minimum_basis_value_pln: Optional[float] = None
     deviation_count: int  # lines z delta_vs_suggestion_pct >= 0.25
     reason_count: int  # lines z non-null reason_code
     last_edited_at: Optional[datetime] = None  # set if captain edited after submit
@@ -411,6 +430,10 @@ class ManagerOrderLineDetail(BaseModel):
     reason_code: Optional[ReasonCode] = None
     captain_comment: str = ""
     manager_comment: str = ""
+    # Position of the line's supplier_product (migration 0023) — the detail
+    # routes return lines sorted by it (app/product_order.py) and the FE
+    # document builders re-sort with the TS twin. None = no position.
+    display_order: Optional[int] = None
 
 
 class ManagerOrderReceiptLine(BaseModel):
@@ -490,6 +513,8 @@ class ManagerOrderDetail(BaseModel):
     # via the route's existing suppliers_by_id map. No server-side reader/gate
     # consumes this — see ManagerQueueItem.minimum_order_value_pln.
     minimum_order_value_pln: Optional[float] = None
+    # See ManagerQueueItem.minimum_basis_value_pln.
+    minimum_basis_value_pln: Optional[float] = None
     notes: str = ""
     # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
     # Phase 1b), read-only on this screen — see Order.extra_items /
@@ -556,6 +581,8 @@ class CaptainOrderDetail(BaseModel):
     # Supplier's configured minimum order value (display-only; training-
     # feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
     minimum_order_value_pln: Optional[float] = None
+    # See ManagerQueueItem.minimum_basis_value_pln.
+    minimum_basis_value_pln: Optional[float] = None
     notes: str = ""
     # Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
     # Phase 1b) — see Order.extra_items / Order.captain_note.
@@ -1086,6 +1113,9 @@ class TransportAggregateLine(BaseModel):
     # filter (buildTransportPagoPrintDoc) — the aggregate itself stays
     # unfiltered here, same as the driver list / weight totals.
     warehouse_pickup: bool = False
+    # Position of the line's supplier_product (migration 0023); the aggregate
+    # is returned in canonical supplier order (app/product_order.py).
+    display_order: Optional[int] = None
 
 
 class TransportEligibleOrder(BaseModel):

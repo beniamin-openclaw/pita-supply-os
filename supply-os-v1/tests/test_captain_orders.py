@@ -627,6 +627,49 @@ def test_order_detail_minimum_order_value_none_when_supplier_has_none(mocker):
     assert r.json()["minimum_order_value_pln"] is None
 
 
+# ---------- supplier-product-order-minimum: minimum_basis_value_pln (display-only) ----------
+
+
+def test_order_detail_exposes_minimum_basis(mocker):
+    excluded = SupplierProduct(
+        supplier_product_id="SP_PAGO_P014",
+        supplier_id="SUP_PAGO",
+        product_id="P014",
+        supplier_product_name="Feta blok",
+        purchase_unit="szt",
+        price_estimate_pln=40.0,
+        counts_toward_minimum=False,
+    )
+    order = _order("ORD-A", location_id="WOLA", supplier_id="SUP_PAGO", total=500.0)
+    order = order.model_copy(
+        update={
+            "lines": [
+                _line("ORD-A", "OL-1"),
+                _line("ORD-A", "OL-2", product_id="P014", sp_id="SP_PAGO_P014", captain_qty=2.0),
+            ]
+        }
+    )
+    _enable_sheet(mocker, orders=[order], get_order_return=order)
+    mocker.patch.object(
+        sheets, "load_supplier_products", return_value=[_supplier_product(), excluded]
+    )
+
+    r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    # 500 − 2 × 40
+    assert r.json()["minimum_basis_value_pln"] == 420.0
+
+
+def test_order_detail_minimum_basis_none_without_excluded_lines(mocker):
+    order = _order("ORD-A", location_id="WOLA", supplier_id="SUP_PAGO")
+    order = order.model_copy(update={"lines": [_line("ORD-A", "OL-1")]})
+    _enable_sheet(mocker, orders=[order], get_order_return=order)
+
+    r = client.get("/api/captain/order/ORD-A", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["minimum_basis_value_pln"] is None
+
+
 # ---------- Suggestion 0 is information (week2-feedback-quantities Phase 1) ----------
 
 

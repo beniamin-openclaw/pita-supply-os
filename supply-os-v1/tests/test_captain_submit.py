@@ -778,3 +778,35 @@ def test_submit_stock_below_target_200pct_deviation_no_reason_still_400():
     r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
     assert r.status_code == 400
     assert "deviates 200%" in r.json()["detail"]
+
+
+# ---------- SUP_INTERNAL is not an ordering supplier (supplier-product-order-minimum) ----------
+
+
+def test_submit_internal_production_is_rejected_before_any_write(mocker):
+    """On-site production (SUP_INTERNAL) is counted in inventory, never
+    ordered: even in sheet mode with a valid line, the submit 400s and nothing
+    is appended."""
+    mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
+    mocker.patch.object(sheets, "is_configured", return_value=True)
+    append_order = mocker.patch.object(sheets, "append_order")
+    append_lines = mocker.patch.object(sheets, "append_order_lines")
+    load_suppliers = mocker.patch.object(sheets, "load_suppliers")
+
+    body = {
+        "supplier_id": "SUP_INTERNAL",
+        "ordered_by": "Jan Kowalski",
+        "lines": [
+            {
+                "product_id": "P029",
+                "supplier_product_id": "SP_INTERNAL_P029",
+                "captain_final_qty_purchase": 1,
+            }
+        ],
+    }
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "internal production" in r.json()["detail"]
+    append_order.assert_not_called()
+    append_lines.assert_not_called()
+    load_suppliers.assert_not_called()

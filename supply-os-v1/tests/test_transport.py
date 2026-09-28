@@ -311,18 +311,35 @@ def test_aggregate_multi_order_same_location_kept_separate_summed():
     assert all(pl.location_id == "WOLA" for pl in line.per_location)
 
 
-def test_aggregate_sorted_by_product_name():
+def test_aggregate_in_canonical_supplier_order():
+    """supplier-product-order-minimum: position first, then supplier_product_id —
+    never the product name (names below are deliberately in reverse)."""
     orders = [_order("ORD-1")]
     lines = [
-        _line("ORD-1", "OL-1", product_id="P_ZZZ", sp_id="SP_ZZZ", captain_qty=1.0),
-        _line("ORD-1", "OL-2", product_id="P_AAA", sp_id="SP_AAA", captain_qty=1.0),
+        _line("ORD-1", "OL-1", product_id="P_A", sp_id="SP_A", captain_qty=1.0),
+        _line("ORD-1", "OL-2", product_id="P_B", sp_id="SP_B", captain_qty=1.0),
+        _line("ORD-1", "OL-3", product_id="P_C", sp_id="SP_C", captain_qty=1.0),
+        _line("ORD-1", "OL-4", product_id="P_D", sp_id="SP_D", captain_qty=1.0),
     ]
     products = {
-        "P_ZZZ": _product("P_ZZZ", "Żubrówka"),
-        "P_AAA": _product("P_AAA", "Ananas"),
+        "P_A": _product("P_A", "Żubrówka"),
+        "P_B": _product("P_B", "Pomidor"),
+        "P_C": _product("P_C", "Cebula"),
+        "P_D": _product("P_D", "Ananas"),
     }
-    items = _aggregate_transport_lines(orders, lines, products, {}, {})
-    assert [it.product_id for it in items] == ["P_AAA", "P_ZZZ"]
+    sps = {
+        "SP_C": _supplier_product("SP_C", product_id="P_C").model_copy(
+            update={"display_order": 10}
+        ),
+        "SP_B": _supplier_product("SP_B", product_id="P_B").model_copy(
+            update={"display_order": 20}
+        ),
+    }
+    items = _aggregate_transport_lines(orders, lines, products, sps, {})
+    # Positioned C(10), B(20); then unpositioned A, D by supplier_product_id
+    # (D has no sp at all and still sorts by its id).
+    assert [it.product_id for it in items] == ["P_C", "P_B", "P_A", "P_D"]
+    assert [it.display_order for it in items] == [10, 20, None, None]
 
 
 def test_aggregate_missing_master_data_falls_back_to_ids():
@@ -783,6 +800,21 @@ def test_create_unknown_supplier_400(mocker):
     )
     assert r.status_code == 400
     assert "SUP_GHOST" in r.json()["detail"]
+
+
+def test_create_internal_production_400_before_any_write(mocker):
+    """supplier-product-order-minimum: SUP_INTERNAL is counted, never ordered —
+    it cannot start a Transport batch either."""
+    mocks = _enable_sheet_backend_for_create(mocker, orders=[])
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_INTERNAL", "order_ids": []},
+    )
+    assert r.status_code == 400
+    assert "SUP_INTERNAL" in r.json()["detail"]
+    mocks["append_transport_batch"].assert_not_called()
+    mocks["update_order"].assert_not_called()
 
 
 def test_create_rejects_captain_token(mocker):

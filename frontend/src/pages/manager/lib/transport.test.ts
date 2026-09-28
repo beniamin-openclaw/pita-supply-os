@@ -5,6 +5,7 @@ import type { StringKey } from "../../../i18n/strings";
 import type {
   Location,
   ManagerOrderLineDetail,
+  OrderableItem,
   Supplier,
   TransportBatchDetail,
   TransportBatchOrder,
@@ -18,6 +19,7 @@ import {
   buildTransportDriverText,
   buildTransportEmailBody,
   buildTransportEmailSubject,
+  buildTransportAddAllOptions,
   buildTransportGmailUrl,
   buildTransportMatrix,
   buildLogisticsOptions,
@@ -447,57 +449,106 @@ describe("buildTransportMatrix", () => {
     expect(p2.linesByOrderId["ORD-2"].order_line_id).toBe("OL-3");
   });
 
-  it("sorts rows by product_name_pl", () => {
+  it("orders rows canonically: display_order first, then supplier_product_id", () => {
+    // Name order would be Cebula, Czosnek, Pomidory, Ziemniaki. Positions put
+    // Ziemniaki (10) before Cebula (20); the unpositioned rows follow in
+    // supplier_product_id order (SP_A before SP_B), not by name.
     const orders: TransportBatchOrder[] = [
       batchOrder({
         lines: [
-          orderLine({ order_line_id: "OL-1", product_id: "P1", product_name_pl: "Ziemniaki" }),
-          orderLine({ order_line_id: "OL-2", product_id: "P2", product_name_pl: "Cebula" }),
+          orderLine({ order_line_id: "OL-1", product_id: "P1", product_name_pl: "Pomidory", supplier_product_id: "SP_A", display_order: null }),
+          orderLine({ order_line_id: "OL-2", product_id: "P2", product_name_pl: "Cebula", supplier_product_id: "SP_Z", display_order: 20 }),
+          orderLine({ order_line_id: "OL-3", product_id: "P3", product_name_pl: "Czosnek", supplier_product_id: "SP_B" }),
+          orderLine({ order_line_id: "OL-4", product_id: "P4", product_name_pl: "Ziemniaki", supplier_product_id: "SP_Y", display_order: 10 }),
         ],
       }),
     ];
     const matrix = buildTransportMatrix(orders);
-    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Cebula", "Ziemniaki"]);
+    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Ziemniaki", "Cebula", "Pomidory", "Czosnek"]);
+    expect(matrix.map((r) => r.display_order)).toEqual([10, 20, null, null]);
+    expect(matrix.map((r) => r.supplier_product_id)).toEqual(["SP_Y", "SP_Z", "SP_A", "SP_B"]);
   });
 
   it("pins manager-added rows (all lines -M-) to the bottom in add order", () => {
-    // Base rows alphabetize; "Agrest" and "Bób" are manager-added (every line
-    // an OL-...-M-... id) so despite sorting FIRST alphabetically they render
-    // BELOW the base rows, in first-encounter (add) order (v5.1 feedback).
+    // Base rows follow the canonical order; "Agrest" and "Bób" are
+    // manager-added (every line an OL-...-M-... id) so despite sorting FIRST
+    // they render BELOW the base rows, in first-encounter (add) order (v5.1
+    // feedback) — this pin is specific to the Transport editor.
     const orders: TransportBatchOrder[] = [
       batchOrder({
         lines: [
-          orderLine({ order_line_id: "OL-ORD-1-001", product_id: "P1", product_name_pl: "Ziemniaki" }),
-          orderLine({ order_line_id: "OL-ORD-1-002", product_id: "P2", product_name_pl: "Cebula" }),
-          orderLine({ order_line_id: "OL-ORD-1-M-aa11", product_id: "P3", product_name_pl: "Bób" }),
-          orderLine({ order_line_id: "OL-ORD-1-M-bb22", product_id: "P4", product_name_pl: "Agrest" }),
+          orderLine({ order_line_id: "OL-ORD-1-001", product_id: "P1", product_name_pl: "Ziemniaki", supplier_product_id: "SP_20", display_order: 20 }),
+          orderLine({ order_line_id: "OL-ORD-1-002", product_id: "P2", product_name_pl: "Cebula", supplier_product_id: "SP_30", display_order: 30 }),
+          orderLine({ order_line_id: "OL-ORD-1-M-aa11", product_id: "P3", product_name_pl: "Bób", supplier_product_id: "SP_90", display_order: 90 }),
+          orderLine({ order_line_id: "OL-ORD-1-M-bb22", product_id: "P4", product_name_pl: "Agrest", supplier_product_id: "SP_10", display_order: 10 }),
         ],
       }),
     ];
     const matrix = buildTransportMatrix(orders);
-    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Cebula", "Ziemniaki", "Bób", "Agrest"]);
+    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Ziemniaki", "Cebula", "Bób", "Agrest"]);
   });
 
-  it("keeps a manager-filled cell of a captain-origin product row alphabetized", () => {
+  it("keeps a manager-filled cell of a captain-origin product row in the base section", () => {
     // P1 exists via a captain line on ORD-1 AND a manager-added line on ORD-2:
-    // the row is NOT manager-only, so it stays in the alphabetical base section.
+    // the row is NOT manager-only, so it stays in the canonically ordered base.
     const orders: TransportBatchOrder[] = [
       batchOrder({
         order_id: "ORD-1",
-        lines: [orderLine({ order_line_id: "OL-ORD-1-001", product_id: "P1", product_name_pl: "Pomidory" })],
+        lines: [orderLine({ order_line_id: "OL-ORD-1-001", product_id: "P1", product_name_pl: "Pomidory", supplier_product_id: "SP_P1", display_order: 10 })],
       }),
       batchOrder({
         order_id: "ORD-2",
         location_id: "BRACKA",
         location_name: "Pita Bros Bracka",
         lines: [
-          orderLine({ order_line_id: "OL-ORD-2-M-cc33", product_id: "P1", product_name_pl: "Pomidory" }),
-          orderLine({ order_line_id: "OL-ORD-2-001", product_id: "P2", product_name_pl: "Cebula" }),
+          orderLine({ order_line_id: "OL-ORD-2-M-cc33", product_id: "P1", product_name_pl: "Pomidory", supplier_product_id: "SP_P1", display_order: 10 }),
+          orderLine({ order_line_id: "OL-ORD-2-001", product_id: "P2", product_name_pl: "Cebula", supplier_product_id: "SP_P2", display_order: 20 }),
         ],
       }),
     ];
     const matrix = buildTransportMatrix(orders);
-    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Cebula", "Pomidory"]);
+    expect(matrix.map((r) => r.product_name_pl)).toEqual(["Pomidory", "Cebula"]);
+  });
+});
+
+function orderable(overrides: Partial<OrderableItem> = {}): OrderableItem {
+  return {
+    product_id: "P1",
+    product_name_pl: "Pomidory",
+    inventory_unit: "kg",
+    is_critical: false,
+    purchase_unit: "kg",
+    units_per_purchase_unit: 1,
+    rounding_rule: "full_only",
+    min_stock_qty_base: 0,
+    max_stock_qty_base: 20,
+    target_stock_qty_base: 10,
+    allow_over_max_due_to_packaging: false,
+    supplier_product_id: "SP1",
+    supplier_product_name: "Pomidory malinowe",
+    ...overrides,
+  };
+}
+
+describe("buildTransportAddAllOptions", () => {
+  it("lists products missing from any order in the canonical supplier order", () => {
+    const orders: TransportBatchOrder[] = [
+      batchOrder({
+        order_id: "ORD-1",
+        lines: [orderLine({ order_line_id: "OL-1", product_id: "P1" })],
+      }),
+    ];
+    const orderableByOrderId: Record<string, OrderableItem[]> = {
+      "ORD-1": [
+        orderable({ product_id: "P1", supplier_product_id: "SP_P1", display_order: 10 }),
+        orderable({ product_id: "P2", product_name_pl: "Awokado", supplier_product_id: "SP_P2" }),
+        orderable({ product_id: "P3", product_name_pl: "Rukola", supplier_product_id: "SP_P3", display_order: 30 }),
+        orderable({ product_id: "P4", product_name_pl: "Cebula", supplier_product_id: "SP_P4", display_order: 20 }),
+      ],
+    };
+    const options = buildTransportAddAllOptions(orders, orderableByOrderId);
+    // P1 is already on the only order; the rest follow position, then id.
+    expect(options.map((o) => o.product_id)).toEqual(["P4", "P3", "P2"]);
   });
 });
 
