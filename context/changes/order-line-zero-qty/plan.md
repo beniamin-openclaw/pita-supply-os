@@ -523,7 +523,7 @@ None: one boolean column read with rows already fetched; no new queries.
 - [x] 2.1 Frontend build passes — f9dc080
 - [x] 2.2 Frontend lint passes — f9dc080
 - [x] 2.3 Frontend tests pass — f9dc080
-- [x] 2.4 /verify passes end to end
+- [x] 2.4 /verify passes end to end — 3c351fe
 
 #### Manual
 
@@ -534,7 +534,7 @@ None: one boolean column read with rows already fetched; no new queries.
 
 #### Automated
 
-- [x] 3.1 prod-sql.sql dry-run on local demo Postgres with ROLLBACK
+- [x] 3.1 prod-sql.sql dry-run on local demo Postgres with ROLLBACK — c0700b5
 - [ ] 3.2 CI green on the PR
 
 #### Manual
