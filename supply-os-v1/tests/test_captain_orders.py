@@ -721,3 +721,35 @@ def test_orders_suggestion_zero_line_does_not_count_as_deviation(mocker):
     payload = r.json()
     assert payload[0]["line_count"] == 2
     assert payload[0]["deviation_count"] == 1
+
+
+def test_edit_leaves_delivery_calendar_fields_untouched(mocker):
+    """delivery-calendar: the captain edit never names suggested_delivery_date
+    or coverage_days in its order update, so both keep their submitted values
+    (the edit screen has no control for them)."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED).model_copy(
+        update={"suggested_delivery_date": date(2026, 5, 24), "coverage_days": 3}
+    )
+    patches = _enable_sheet(
+        mocker, orders=[order], get_order_return=order, delete_lines_return=1
+    )
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "current_stock_qty_base": 3.0,
+                    "captain_final_qty_purchase": 4.0,
+                }
+            ],
+            "suggested_delivery_date": "2026-06-01",
+            "coverage_days": 1,
+        },
+    )
+    assert r.status_code == 200, r.text
+    update_kwargs = patches["update_order"].call_args.kwargs
+    assert "suggested_delivery_date" not in update_kwargs
+    assert "coverage_days" not in update_kwargs

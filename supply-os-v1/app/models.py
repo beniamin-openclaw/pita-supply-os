@@ -1,7 +1,7 @@
 """Pydantic models matching docs/pita-supply-os-v1/DATA_MODEL.md."""
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -83,6 +83,31 @@ class Supplier(BaseModel):
     # every line tripped the gate. `bool = True`, NOT Optional: the column is
     # NOT NULL DEFAULT true and _SUPPLIER_COLUMNS binds it on insert.
     suggestion_alerts_enabled: bool = True
+    # True = on a Warsaw Thursday the Captain order screen shows the
+    # informational "na 1 dzień / na 3 dni" choice for this supplier
+    # (delivery-calendar, migration 0025). Never changes the suggestion math.
+    # `bool = False`, NOT Optional: the column is NOT NULL DEFAULT false and
+    # _SUPPLIER_COLUMNS binds it on insert.
+    coverage_prompt_enabled: bool = False
+
+
+class SupplierDeliveryRule(BaseModel):
+    """One delivery-calendar rule (`supplier_delivery_rules`, migration 0025).
+
+    ``location_id`` None = the supplier's shared rule for every location; a row
+    with a location overrides it there. Weekday columns are strict comma lists
+    of ``Mon..Sun``; ``lead_days`` is the minimum number of calendar days from
+    the order day to the delivery; ``order_deadline`` is "HH:MM" Europe/Warsaw
+    on the order day. See ``app/delivery_calendar.py``."""
+    rule_id: str
+    supplier_id: str
+    location_id: Optional[str] = None
+    order_weekdays: str
+    lead_days: int
+    delivery_weekdays: str
+    order_deadline: str = "17:00"
+    active: bool = True
+    notes: str = ""
 
 
 class Location(BaseModel):
@@ -245,6 +270,14 @@ class Order(BaseModel):
     # captain_order_edit save, so reusing it would silently destroy the
     # Captain's text. Same NOT NULL DEFAULT '' contract as extra_items.
     captain_note: str = ""
+    # What the delivery calendar proposed when the Captain submitted
+    # (delivery-calendar, migration 0025); requested_delivery_date is the
+    # Captain's choice. None = no rule-based proposal (legacy rows, suppliers
+    # without a rule) — the Manager marker stays silent then.
+    suggested_delivery_date: Optional[date] = None
+    # Thursday "na 1 dzień / na 3 dni" choice (1 or 3); None = not asked or
+    # not answered. Informational only.
+    coverage_days: Optional[int] = None
     lines: list[OrderLine] = Field(default_factory=list)
 
 
@@ -294,6 +327,12 @@ class CaptainSubmitRequest(BaseModel):
     # rationale (must stay `str = ""`, never `Optional[str] = None`).
     extra_items: str = ""
     captain_note: str = ""
+    # Delivery calendar (delivery-calendar): the rule-based proposal the
+    # Captain saw (sent only for a rule-based proposal, never for the
+    # fallback) and the optional Thursday coverage choice. Stored as sent —
+    # the backend does not recompute the proposal.
+    suggested_delivery_date: Optional[date] = None
+    coverage_days: Optional[Literal[1, 3]] = None
 
 
 class CaptainSubmitResponse(BaseModel):
@@ -406,6 +445,11 @@ class ManagerQueueItem(BaseModel):
     # (a "TRN-…" marker), None for a normal per-order dispatch. Lets the queue
     # show a "TRN" chip instead of implying a real per-supplier email dispatch.
     supplier_order_reference: str | None = None
+    # Delivery calendar (delivery-calendar): the proposal stored at submit and
+    # the Thursday coverage choice — the queue row shows a marker only when
+    # both dates exist and differ.
+    suggested_delivery_date: Optional[date] = None
+    coverage_days: Optional[int] = None
 
 
 class ManagerOrderLineDetail(BaseModel):
@@ -550,6 +594,9 @@ class ManagerOrderDetail(BaseModel):
     # NOT a Transport batch member (a "TRN-" marker) — the exact set the post-send
     # save/add-line routes accept. `closed` (first receipt) is never editable.
     editable_after_send: bool = False
+    # Delivery calendar (delivery-calendar) — see ManagerQueueItem.
+    suggested_delivery_date: Optional[date] = None
+    coverage_days: Optional[int] = None
 
 
 # ---------- Captain own-orders view + edit (Phase E3) ----------
@@ -1684,3 +1731,25 @@ class FinanceSyncResponse(BaseModel):
     unchanged: int
     skipped: int
     upserted: int
+
+
+# ---------- Delivery calendar (delivery-calendar) ----------
+
+
+class DeliveryProposal(BaseModel):
+    """Response for GET /api/captain/delivery-proposal — the delivery date the
+    calendar proposes for the Captain's location and a supplier.
+
+    ``source``: "location" (a per-location rule), "supplier" (the supplier's
+    shared rule) or "fallback" (no rule — built from ``suppliers.delivery_days``,
+    shown to the Captain but never stored). ``order_deadline`` is the instant
+    (UTC-aware) by which the order must be sent for ``proposed_delivery_date``.
+    ``coverage_prompt`` = the supplier is flagged AND today is a Warsaw
+    Thursday."""
+    supplier_id: str
+    location_id: str
+    proposed_delivery_date: date
+    following_delivery_date: Optional[date] = None
+    order_deadline: datetime
+    source: Literal["location", "supplier", "fallback"]
+    coverage_prompt: bool = False

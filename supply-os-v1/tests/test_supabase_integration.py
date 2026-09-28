@@ -41,6 +41,7 @@ from app.models import (
     Receipt,
     ReceiptLine,
     Supplier,
+    SupplierDeliveryRule,
     SupplierProduct,
 )
 
@@ -55,6 +56,7 @@ _ALL_TABLES = [
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
     "order_lines", "order_events", "orders", "transport_events", "transport_batches",
+    "supplier_delivery_rules",
     "location_product_settings", "supplier_products", "locations", "suppliers",
     "products", "_meta",
 ]
@@ -187,6 +189,15 @@ def _schema():
     manager_final_set = (
         MIGRATIONS_DIR / "0024_order_line_manager_final_set.sql"
     ).read_text()
+    # 0025 adds orders.suggested_delivery_date + coverage_days,
+    # suppliers.coverage_prompt_enabled and the supplier_delivery_rules table
+    # (delivery-calendar); _ORDER_COLUMNS and _SUPPLIER_COLUMNS reference the
+    # new columns, so both inserts error against a pre-0025 schema.
+    # supplier_delivery_rules is master data: listed in _ALL_TABLES (before
+    # location_product_settings), not in _TXN_TABLES.
+    delivery_calendar = (
+        MIGRATIONS_DIR / "0025_delivery_calendar.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -212,6 +223,7 @@ def _schema():
         conn.exec_driver_sql(suggestion_alerts)
         conn.exec_driver_sql(display_order_minimum)
         conn.exec_driver_sql(manager_final_set)
+        conn.exec_driver_sql(delivery_calendar)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -692,6 +704,111 @@ def test_order_event_roundtrip():
     assert events["OEV-IT-1"].actor == "manager-default"
     assert events["OEV-IT-2"].details == ""
     assert supabase_backend.load_order_events_for("ORD-IT-NOPE") == []
+
+
+# ---------- delivery calendar (migration 0025) ----------
+
+
+def _clear_delivery_rules() -> None:
+    """supplier_delivery_rules is master data (not in _TXN_TABLES), so each
+    delivery-calendar test cleans up its own rows."""
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql("DELETE FROM supplier_delivery_rules")
+
+
+def test_order_delivery_calendar_fields_roundtrip():
+    """suggested_delivery_date + coverage_days bind on insert, survive a read
+    and are writable through update_order (both are in _ORDER_COLUMNS; the
+    date column goes through the _DATE_COLS cast, so an ISO string binds)."""
+    supabase_backend.append_order(
+        Order(
+            order_id="ORD-IT-DC", location_id="WOLA", supplier_id="SUP_X",
+            order_date=date(2026, 9, 29), status=OrderStatus.CAPTAIN_SUBMITTED,
+            requested_delivery_date=date(2026, 10, 2),
+            suggested_delivery_date=date(2026, 9, 30), coverage_days=3,
+        )
+    )
+    got = supabase_backend.get_order("ORD-IT-DC")
+    assert got is not None
+    assert got.requested_delivery_date == date(2026, 10, 2)
+    assert got.suggested_delivery_date == date(2026, 9, 30)
+    assert got.coverage_days == 3
+    supabase_backend.update_order(
+        "ORD-IT-DC", suggested_delivery_date="2026-10-01", coverage_days=1
+    )
+    got = supabase_backend.get_order("ORD-IT-DC")
+    assert got.suggested_delivery_date == date(2026, 10, 1)
+    assert got.coverage_days == 1
+    # A legacy-shaped order (no new kwargs) stores NULLs.
+    oid = _make_order(order_id="ORD-IT-DC-LEGACY")
+    legacy = supabase_backend.get_order(oid)
+    assert legacy.suggested_delivery_date is None and legacy.coverage_days is None
+
+
+def test_order_coverage_days_check_rejects_2():
+    with pytest.raises(IntegrityError):
+        supabase_backend.append_order(
+            Order(
+                order_id="ORD-IT-DC2", location_id="WOLA", supplier_id="SUP_X",
+                order_date=date(2026, 9, 29), coverage_days=2,
+            )
+        )
+
+
+def test_supplier_coverage_prompt_default_binds():
+    """The fixture's Supplier(...) never passes coverage_prompt_enabled, so the
+    model default (`bool = False`) bound cleanly against the NOT NULL column."""
+    sup = next(s for s in supabase_backend.load_suppliers() if s.supplier_id == "SUP_X")
+    assert sup.coverage_prompt_enabled is False
+
+
+def test_supplier_delivery_rules_roundtrip_and_unique():
+    _clear_delivery_rules()
+    try:
+        cols = supabase_backend._SUPPLIER_DELIVERY_RULE_COLUMNS
+        supabase_backend._insert(
+            "supplier_delivery_rules", cols,
+            SupplierDeliveryRule(
+                rule_id="DR-X-ALL", supplier_id="SUP_X", order_weekdays="Mon,Tue",
+                lead_days=1, delivery_weekdays="Tue,Wed",
+            ),
+        )
+        # Weekday text must be a strict Mon..Sun comma list (checked before the
+        # WOLA row exists, so only the CHECK can reject it).
+        with pytest.raises(IntegrityError):
+            supabase_backend._insert(
+                "supplier_delivery_rules", cols,
+                SupplierDeliveryRule(
+                    rule_id="DR-X-BAD", supplier_id="SUP_X", location_id="WOLA",
+                    order_weekdays="Mon, Tue", lead_days=1, delivery_weekdays="Wed",
+                ),
+            )
+        supabase_backend._insert(
+            "supplier_delivery_rules", cols,
+            SupplierDeliveryRule(
+                rule_id="DR-X-WOLA", supplier_id="SUP_X", location_id="WOLA",
+                order_weekdays="Mon", lead_days=2, delivery_weekdays="Wed",
+                notes="Marek 28.09",
+            ),
+        )
+        rules = {r.rule_id: r for r in supabase_backend.load_supplier_delivery_rules()}
+        assert set(rules) == {"DR-X-ALL", "DR-X-WOLA"}
+        assert rules["DR-X-ALL"].location_id is None
+        assert rules["DR-X-ALL"].order_deadline == "17:00"
+        assert rules["DR-X-ALL"].active is True
+        assert rules["DR-X-WOLA"].lead_days == 2
+        # A second SHARED rule for the same supplier violates
+        # UNIQUE NULLS NOT DISTINCT (supplier_id, location_id).
+        with pytest.raises(IntegrityError):
+            supabase_backend._insert(
+                "supplier_delivery_rules", cols,
+                SupplierDeliveryRule(
+                    rule_id="DR-X-ALL-2", supplier_id="SUP_X", order_weekdays="Fri",
+                    lead_days=1, delivery_weekdays="Sat",
+                ),
+            )
+    finally:
+        _clear_delivery_rules()
 
 
 def test_save_after_send_guard_on_real_row():

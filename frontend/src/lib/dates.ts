@@ -36,3 +36,31 @@ export function daysSince(
   if (Number.isNaN(then.getTime())) return null;
   return Math.round((warsawDayEpoch(now) - warsawDayEpoch(then)) / MS_PER_DAY);
 }
+
+/** Today's calendar date in Europe/Warsaw as "YYYY-MM-DD" (delivery-calendar).
+ *  Independent of the browser's timezone — `toISOString()` would return the
+ *  UTC date, one day early between 00:00 and 02:00 Warsaw. */
+export function warsawTodayIso(now: Date = new Date()): string {
+  return ymdFormatter.format(now);
+}
+
+/** "YYYY-MM-DD" + n calendar days → "YYYY-MM-DD" (pure date arithmetic, no
+ *  timezone involved). */
+export function addDaysIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** Weekday of a "YYYY-MM-DD" date, 0 = Sunday (JS `getDay` convention). */
+export function isoWeekday(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** Delivery-date display format for `useT().formatDateTime` (delivery-calendar):
+ *  weekday + day + month, e.g. "śr., 07.10". Never combined with `dateStyle`. */
+export const DELIVERY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  weekday: "short",
+  day: "2-digit",
+  month: "2-digit",
+};

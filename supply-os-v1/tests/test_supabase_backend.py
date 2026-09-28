@@ -236,6 +236,73 @@ def test_supplier_product_display_order_and_minimum_flag_bind(mocker):
     assert params["display_order"] is None
 
 
+def test_order_delivery_calendar_columns_bind(mocker):
+    """Migration 0025 binding guard: suggested_delivery_date + coverage_days are
+    real order columns (a key missing from _ORDER_COLUMNS would be silently
+    dropped by update_order) and the date goes through the explicit cast."""
+    conn = _fake_engine(mocker)
+    supabase_backend.append_order(
+        Order(
+            order_id="ORD-1", location_id="WOLA", supplier_id="SUP_X",
+            order_date=date(2026, 9, 29), requested_delivery_date=date(2026, 10, 1),
+            suggested_delivery_date=date(2026, 9, 30), coverage_days=3,
+        )
+    )
+    sql, params = _executed(conn)[0]
+    assert params["suggested_delivery_date"] == date(2026, 9, 30)
+    assert params["coverage_days"] == 3
+    assert "CAST(:suggested_delivery_date AS date)" in sql
+    assert "suggested_delivery_date" in supabase_backend._DATE_COLS
+
+
+def test_order_delivery_calendar_columns_default_none(mocker):
+    conn = _fake_engine(mocker)
+    supabase_backend.append_order(
+        Order(order_id="ORD-1", location_id="WOLA", supplier_id="SUP_X",
+              order_date=date(2026, 9, 29))
+    )
+    _sql, params = _executed(conn)[0]
+    assert params["suggested_delivery_date"] is None
+    assert params["coverage_days"] is None
+
+
+def test_supplier_coverage_prompt_enabled_defaults_false_and_binds(mocker):
+    """suppliers.coverage_prompt_enabled is NOT NULL DEFAULT false: the model
+    field must be `bool = False` so an unset value binds False, not NULL."""
+    conn = _fake_engine(mocker)
+    sup = Supplier(supplier_id="SUP_X", supplier_name="X")
+    assert sup.coverage_prompt_enabled is False
+    supabase_backend._insert("suppliers", supabase_backend._SUPPLIER_COLUMNS, sup)
+    _sql, params = _executed(conn)[0]
+    assert params["coverage_prompt_enabled"] is False
+
+
+def test_load_supplier_delivery_rules_maps_rows(mocker):
+    conn = _fake_engine(
+        mocker,
+        mappings=[
+            {
+                "rule_id": "DR-PAGO-WOLA", "supplier_id": "SUP_PAGO",
+                "location_id": "WOLA", "order_weekdays": "Mon", "lead_days": 2,
+                "delivery_weekdays": "Wed", "order_deadline": "17:00",
+                "active": True, "notes": "Marek 28.09",
+            },
+            {
+                "rule_id": "DR-BUKAT-ALL", "supplier_id": "SUP_BUKAT",
+                "location_id": None, "order_weekdays": "Mon,Tue", "lead_days": 1,
+                "delivery_weekdays": "Tue,Wed", "order_deadline": "17:00",
+                "active": True, "notes": "",
+            },
+        ],
+    )
+    rules = supabase_backend.load_supplier_delivery_rules()
+    assert [r.rule_id for r in rules] == ["DR-PAGO-WOLA", "DR-BUKAT-ALL"]
+    assert rules[1].location_id is None
+    assert rules[0].lead_days == 2
+    sql, _params = _executed(conn)[0]
+    assert "FROM supplier_delivery_rules" in sql
+
+
 def test_append_order_lines_rejects_mixed_order_ids(mocker):
     _fake_engine(mocker)
     lines = [

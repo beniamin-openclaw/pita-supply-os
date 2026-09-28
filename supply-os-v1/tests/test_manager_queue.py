@@ -900,3 +900,31 @@ def test_queue_last_received_at_null_on_submitted_lane(mocker):
     assert r.status_code == 200, r.text
     assert r.json()[0]["last_received_at"] is None
     scan.assert_not_called()
+
+
+# ---------- delivery calendar (delivery-calendar) ----------
+
+def test_queue_and_detail_expose_delivery_calendar_fields(mocker):
+    order = _order("ORD-DC").model_copy(
+        update={"suggested_delivery_date": date(2026, 5, 24), "coverage_days": 3}
+    )
+    _enable_sheet_backend(mocker, orders=[order], get_order_return=order)
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    item = r.json()[0]
+    assert item["requested_delivery_date"] == "2026-05-25"
+    assert item["suggested_delivery_date"] == "2026-05-24"
+    assert item["coverage_days"] == 3
+
+    r = client.get("/api/manager/order/ORD-DC", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["suggested_delivery_date"] == "2026-05-24"
+    assert r.json()["coverage_days"] == 3
+
+
+def test_queue_legacy_order_has_null_delivery_calendar_fields(mocker):
+    _enable_sheet_backend(mocker, orders=[_order("ORD-OLD")])
+    item = client.get("/api/manager/queue", headers=MANAGER_AUTH).json()[0]
+    assert item["suggested_delivery_date"] is None
+    assert item["coverage_days"] is None

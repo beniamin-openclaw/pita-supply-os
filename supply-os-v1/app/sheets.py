@@ -47,6 +47,7 @@ from .models import (
     Receipt,
     ReceiptLine,
     Supplier,
+    SupplierDeliveryRule,
     SupplierProduct,
     TransportBatch,
     TransportEvent,
@@ -276,6 +277,13 @@ def load_supplier_products() -> list[SupplierProduct]:
 
 def load_location_product_settings() -> list[LocationProductSetting]:
     return _read_with_ttl("location_product_settings", LocationProductSetting)
+
+
+def load_supplier_delivery_rules() -> list[SupplierDeliveryRule]:
+    """Delivery-calendar rules (delivery-calendar). Raises ``WorksheetNotFound``
+    when the tab hasn't been created; ``main._load_delivery_rules_safe``
+    degrades that to "no rules" (fallback proposals only)."""
+    return _read_with_ttl("supplier_delivery_rules", SupplierDeliveryRule)
 
 
 def load_meta(ttl_seconds: int = DEFAULT_TTL_SECONDS) -> dict:

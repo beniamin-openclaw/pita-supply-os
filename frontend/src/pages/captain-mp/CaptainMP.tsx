@@ -29,6 +29,9 @@ import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
 import { ExtraItemsControl } from "./components/ExtraItemsControl";
 import { OrderCommentField } from "./components/OrderCommentField";
+import { DeliveryDateField } from "./components/DeliveryDateField";
+import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
+import { CoveragePrompt, type CoverageDays } from "./components/CoveragePrompt";
 
 import { computeRowState } from "./lib/compute";
 import { overruleAll } from "./lib/overruleAll";
@@ -38,13 +41,31 @@ import { serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
 
 import type { Supplier, OrderableItem, OrderLine, DraftState, ReasonCode } from "./types";
-import type { InventoryCountSummary, InventoryLatestResponse } from "../../types";
+import type {
+  DeliveryProposal,
+  InventoryCountSummary,
+  InventoryLatestResponse,
+} from "../../types";
+
+/** Per-supplier delivery choices for this session (delivery-calendar). Not in
+ * the localStorage draft on purpose: a restored draft can never carry a stale
+ * date. `date` absent = follow the proposal. */
+interface DeliveryChoice {
+  date?: string;
+  coverage?: CoverageDays;
+}
 
 // Pilot supplier for the Wola×Bukat round-trip (S-01). The order screen defaults
 // to this supplier on load instead of suppliers[0] (the first CSV row,
 // SUP_BLUESERV — 0 orderable lines at Wola). Retargeting the pilot later is a
 // one-line edit; no env var needed (same value in dev and prod).
 const PILOT_SUPPLIER_ID = "SUP_BUKAT";
+// Delivery calendar: proposal refetch backoff when the browser clock is
+// already past the order deadline the server returned.
+const DEADLINE_RETRY_MS = 30_000;
+// At most this many back-to-back retries (5 min); after that the strip keeps
+// the last proposal until the Captain switches supplier or reloads.
+const DEADLINE_RETRY_MAX = 10;
 
 /** True when the screen carries anything worth persisting as a draft. Freshly
  * initialized (all-blank) states must not overwrite or create drafts.
@@ -114,6 +135,24 @@ export function CaptainMP() {
     Record<string, InventoryLatestResponse | null>
   >({});
   const [prefillConfirm, setPrefillConfirm] = useState<"overwrite" | "clear" | null>(null);
+  // Delivery calendar: the proposal fetched for `supplierId` (a different id
+  // than the active supplier = still loading), the per-supplier session
+  // choices, and a counter that forces a refetch when the order deadline passes.
+  const [proposalFor, setProposalFor] = useState<{
+    supplierId: string;
+    proposal: DeliveryProposal | null;
+  } | null>(null);
+  const [deliveryChoices, setDeliveryChoices] = useState<Record<string, DeliveryChoice>>({});
+  const [proposalReload, setProposalReload] = useState(0);
+  const deliveryChoicesRef = useRef<Record<string, DeliveryChoice>>({});
+  useEffect(() => {
+    deliveryChoicesRef.current = deliveryChoices;
+  }, [deliveryChoices]);
+  const deadlineRetriesRef = useRef<number>(0);
+  const proposalForRef = useRef<typeof proposalFor>(null);
+  useEffect(() => {
+    proposalForRef.current = proposalFor;
+  }, [proposalFor]);
 
   const token = getToken("captain") || "";
 
@@ -284,6 +323,80 @@ export function CaptainMP() {
       cancelled = true;
     };
   }, [activeSupplierId, showToast, t]);
+
+  // ---- Delivery proposal (delivery-calendar) --------------------------------
+  // Fetched per supplier with the same `cancelled` guard as the orderable
+  // effect, so a slow response for a previous supplier never lands on the
+  // current one. A failure leaves `proposal: null` → the legacy fallback date.
+  // A refetch (deadline passed) that moves the date of an untouched field
+  // announces the new date in a toast.
+  useEffect(() => {
+    if (!activeSupplierId) return;
+    let cancelled = false;
+    const sid = activeSupplierId;
+    api
+      .captainDeliveryProposal(sid)
+      .then((proposal) => {
+        if (cancelled) return;
+        // Read the previous proposal from a ref, not inside a state updater:
+        // updaters must stay pure (StrictMode runs them twice → double toast).
+        const prev = proposalForRef.current;
+        const before = prev?.supplierId === sid ? prev.proposal : null;
+        if (
+          before &&
+          before.proposed_delivery_date !== proposal.proposed_delivery_date &&
+          !deliveryChoicesRef.current[sid]?.date
+        ) {
+          showToast(
+            t("deliveryCalendar.dateMovedToast", {
+              date: formatDateTime(proposal.proposed_delivery_date, DELIVERY_DATE_FORMAT),
+            }),
+            "success",
+          );
+        }
+        setProposalFor({ supplierId: sid, proposal });
+      })
+      .catch(() => {
+        // Optional: the order screen keeps working with the legacy date.
+        if (!cancelled) setProposalFor({ supplierId: sid, proposal: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSupplierId, proposalReload, showToast, t, formatDateTime]);
+
+  const activeProposal =
+    proposalFor && proposalFor.supplierId === activeSupplierId ? proposalFor.proposal : null;
+  const isProposalLoading =
+    !!activeSupplierId && proposalFor?.supplierId !== activeSupplierId;
+
+  // Refetch one second after the order deadline: the backend treats that
+  // instant as late (strict `>`), so the refetch returns a later deadline.
+  // A deadline already in the past by the browser clock means the phone runs
+  // ahead of the server — retry after a short backoff instead of giving up.
+  useEffect(() => {
+    if (!activeProposal) return;
+    const ms = new Date(activeProposal.order_deadline).getTime() + 1000 - Date.now();
+    if (!Number.isFinite(ms)) return;
+    if (ms > 0) {
+      deadlineRetriesRef.current = 0;
+    } else if (deadlineRetriesRef.current >= DEADLINE_RETRY_MAX) {
+      return;
+    } else {
+      deadlineRetriesRef.current += 1;
+    }
+    const delay = ms > 0 ? ms : DEADLINE_RETRY_MS;
+    const id = window.setTimeout(() => setProposalReload((k) => k + 1), delay);
+    return () => window.clearTimeout(id);
+  }, [activeProposal]);
+
+  const setDeliveryChoice = useCallback((supplierId: string, patch: DeliveryChoice) => {
+    setDeliveryChoices((prev) => {
+      const next: DeliveryChoice = { ...prev[supplierId], ...patch };
+      if (!next.date) delete next.date;
+      return { ...prev, [supplierId]: next };
+    });
+  }, []);
 
   // ---- Draft auto-save (debounced) ------------------------------------------
   // All-blank line sets are never saved: they'd overwrite a real draft (e.g.
@@ -514,10 +627,22 @@ export function CaptainMP() {
       return;
     }
     setIsSubmitting(true);
+    // Delivery calendar: the date on screen (chosen, else proposed, else the
+    // legacy fallback); the proposal is stored only when it is rule-based.
+    const choice = deliveryChoices[activeSupplierId] ?? {};
+    const proposal =
+      proposalFor?.supplierId === activeSupplierId ? proposalFor.proposal : null;
+    const ruleBased = proposal !== null && proposal.source !== "fallback";
+    const requestedDate =
+      choice.date ??
+      proposal?.proposed_delivery_date ??
+      getRequestedDeliveryDate(supplier.delivery_days);
     try {
       await api.captainSubmit({
         supplier_id: activeSupplierId,
-        requested_delivery_date: getRequestedDeliveryDate(supplier.delivery_days),
+        requested_delivery_date: requestedDate,
+        suggested_delivery_date: ruleBased ? proposal.proposed_delivery_date : undefined,
+        coverage_days: choice.coverage,
         lines: payloadLines,
         ordered_by: orderedBy.trim(),
         notes: "",
@@ -538,6 +663,11 @@ export function CaptainMP() {
       setLines({});
       setExtraItemRows([]);
       setCaptainNote("");
+      setDeliveryChoices((prev) => {
+        const next = { ...prev };
+        delete next[activeSupplierId];
+        return next;
+      });
       setSentSuppliers((prev) => new Set(prev).add(activeSupplierId));
 
       // Move to next un-submitted supplier if any.
@@ -560,6 +690,8 @@ export function CaptainMP() {
     orderedBy,
     extraItemRows,
     captainNote,
+    deliveryChoices,
+    proposalFor,
     sentSuppliers,
     suppliers,
     showToast,
@@ -589,6 +721,14 @@ export function CaptainMP() {
   // ---- Derived state ---------------------------------------------------------
   const activeSupplier =
     suppliers.find((s) => s.supplier_id === activeSupplierId) || null;
+
+  // Delivery calendar: what the date field shows and what submit sends.
+  const activeChoice: DeliveryChoice =
+    (activeSupplierId && deliveryChoices[activeSupplierId]) || {};
+  const displayedDeliveryDate =
+    activeChoice.date ??
+    activeProposal?.proposed_delivery_date ??
+    (activeSupplier ? getRequestedDeliveryDate(activeSupplier.delivery_days) : "");
 
   const stats = useMemo(() => {
     let deviationCount = 0;
@@ -713,7 +853,7 @@ export function CaptainMP() {
         />
       )}
 
-      <ContextStrip supplier={activeSupplier} />
+      <ContextStrip supplier={activeSupplier} proposal={activeProposal} />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
         {/* Order-history link — mirrors the Remanent screen's "Historia →"
@@ -759,6 +899,20 @@ export function CaptainMP() {
           </datalist>
           <p className="mt-1 text-[11px] text-slate-500">{t("captain.orderedByRequired")}</p>
         </div>
+        {activeSupplierId && !isProposalLoading && (
+          <DeliveryDateField
+            value={displayedDeliveryDate}
+            proposal={activeProposal}
+            onChange={(date) => setDeliveryChoice(activeSupplierId, { date })}
+            onRestore={() => setDeliveryChoice(activeSupplierId, { date: undefined })}
+          />
+        )}
+        {activeSupplierId && activeProposal?.coverage_prompt && (
+          <CoveragePrompt
+            value={activeChoice.coverage ?? null}
+            onChange={(coverage) => setDeliveryChoice(activeSupplierId, { coverage })}
+          />
+        )}
         {draftBanner && (
           <div
             role="dialog"
@@ -869,6 +1023,8 @@ export function CaptainMP() {
         deviationCount={stats.deviationCount}
         reasonCount={stats.reasonCount}
         criticalMissing={criticalMissing}
+        deliveryDate={displayedDeliveryDate || undefined}
+        coverageDays={activeChoice.coverage ?? null}
         onConfirm={handleSubmit}
         onCancel={cancelConfirm}
         isSubmitting={isSubmitting}

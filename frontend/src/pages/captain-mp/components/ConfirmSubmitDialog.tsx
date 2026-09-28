@@ -14,6 +14,7 @@
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { useT } from "../../../i18n";
+import { DELIVERY_DATE_FORMAT } from "../../../lib/dates";
 
 interface ConfirmSubmitDialogProps {
   open: boolean;
@@ -25,6 +26,10 @@ interface ConfirmSubmitDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  /** Delivery calendar: the date being sent ("YYYY-MM-DD") and the optional
+   *  Thursday coverage choice — one summary line when present. */
+  deliveryDate?: string;
+  coverageDays?: 1 | 3 | null;
 }
 
 export function ConfirmSubmitDialog({
@@ -36,8 +41,10 @@ export function ConfirmSubmitDialog({
   onConfirm,
   onCancel,
   isSubmitting = false,
+  deliveryDate,
+  coverageDays = null,
 }: ConfirmSubmitDialogProps) {
-  const { t, tPlural } = useT();
+  const { t, tPlural, formatDateTime } = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -150,6 +157,17 @@ export function ConfirmSubmitDialog({
           <p id="confirm-submit-summary" className="text-sm text-slate-700">
             {t("confirm.summary", { summary })}
           </p>
+          {deliveryDate && (
+            <p className="mt-2 text-sm font-semibold text-slate-800" data-testid="confirm-delivery">
+              {t("deliveryCalendar.confirmDelivery", {
+                date: formatDateTime(deliveryDate, DELIVERY_DATE_FORMAT),
+              })}
+              {coverageDays !== null &&
+                ` · ${t("deliveryCalendar.confirmCoverage", {
+                  value: t(coverageDays === 3 ? "coverage.value.3" : "coverage.value.1"),
+                })}`}
+            </p>
+          )}
 
           {hasCriticalWarning && (
             <div
