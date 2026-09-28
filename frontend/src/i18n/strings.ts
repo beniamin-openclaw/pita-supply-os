@@ -1020,6 +1020,8 @@ export const STRINGS = {
   "productList.groupBy.category": { pl: "Kategoria", en: "Category" },
   "productList.groupBy.supplier": { pl: "Dostawca", en: "Supplier" },
   "productList.sortLabel": { pl: "Sortuj", en: "Sort" },
+  "productList.sort.card": { pl: "Karta inwentaryzacji", en: "Inventory card" },
+  "productList.sort.supplier": { pl: "Kolejność zamawiania", en: "Ordering order" },
   "productList.sort.name": { pl: "Nazwa A→Z", en: "Name A→Z" },
   "productList.sort.stock": { pl: "Stan rosnąco", en: "Stock ascending" },
   "productList.sort.delta": { pl: "Największy brak", en: "Largest deficit" },

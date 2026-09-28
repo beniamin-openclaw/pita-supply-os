@@ -675,17 +675,17 @@ cleared overrides included.
 
 #### Automated
 
-- [x] 1.1 Backend suite passes: `cd supply-os-v1 && python -m pytest -q`
-- [x] 1.2 Lint passes: `cd supply-os-v1 && ruff check .`
-- [x] 1.3 Integration suite passes on a local Postgres 16 with 0027 applied: `python -m pytest -m integration -q`
+- [x] 1.1 Backend suite passes: `cd supply-os-v1 && python -m pytest -q` — 217c68b
+- [x] 1.2 Lint passes: `cd supply-os-v1 && ruff check .` — 217c68b
+- [x] 1.3 Integration suite passes on a local Postgres 16 with 0027 applied: `python -m pytest -m integration -q` — 217c68b
 
 ### Phase 2: Manager view sorts
 
 #### Automated
 
-- [ ] 2.1 Frontend tests pass: `cd frontend && npm run test`
-- [ ] 2.2 Frontend build passes: `cd frontend && npm run build`
-- [ ] 2.3 Frontend lint passes: `cd frontend && npm run lint`
+- [x] 2.1 Frontend tests pass: `cd frontend && npm run test`
+- [x] 2.2 Frontend build passes: `cd frontend && npm run build`
+- [x] 2.3 Frontend lint passes: `cd frontend && npm run lint`
 
 ### Phase 3: Prod data SQL and docs
 
