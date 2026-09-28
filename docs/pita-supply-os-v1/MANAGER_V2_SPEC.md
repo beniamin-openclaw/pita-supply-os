@@ -217,8 +217,10 @@ visible at once.
 ## 5. Dispatch panel — channel-aware
 
 The panel renders differently based on `supplier.ordering_method`
-(`email | portal | phone | manual`). The dashboard must **never** offer an email
-send for a portal/phone supplier — that was the v0 footgun.
+(`email | portal | phone | manual | transport`). The dashboard must **never** offer an email
+send for a portal/phone supplier — that was the v0 footgun. A `transport` supplier
+(migration 0021) is never dispatched per order at all: `manager_dispatch` returns 409
+and the order leaves only through a Manager Transport batch.
 
 `ordering_method` is on the `Supplier` model (`models.py:60`) and in `types.ts`,
 but is **not** currently returned by `GET /api/manager/order/{id}`
@@ -237,6 +239,7 @@ explicit mapping the UI must apply when building the dispatch payload:
 | `portal` | `"portal"` |
 | `phone` | `"phone"` |
 | `manual` | `"manual"` |
+| `transport` | — (no per-order `sent_method`: the channel never dispatches per order; the batch finalize writes `sent_method="transport"` instead) |
 
 `sent_method` is the **transport actually used** and is persisted to
 `orders.sent_method` for audit. The legacy `"gmail"` default and F3's hardcoded

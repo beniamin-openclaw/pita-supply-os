@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app import seed_loader, sheets
 from app.config import DataBackend
 from app.main import app
+from app.models import OrderingMethod
 
 from .test_captain_orders import _enable_sheet, _order, _supplier
 
@@ -143,6 +144,36 @@ def test_orderable_carries_the_flag(sheet_seed):
     r = client.get("/api/captain/orderable?supplier_id=SUP_BUKAT", headers=WOLA_AUTH)
     assert r.status_code == 200, r.text
     assert all(it["suggestion_alerts_enabled"] is True for it in r.json())
+
+
+def test_transport_only_supplier_keeps_the_captain_flow(sheet_seed, mocker):
+    """Prod SUP_PAGO after pago-transport-only-dispatch: ordering_method
+    'transport' AND alerts off. The transport channel only closes per-order
+    dispatch (test_manager_dispatch.py); the Captain still lists the products
+    and submits a +300% line with no reason and no warning."""
+    mocker.patch.object(
+        sheets,
+        "load_suppliers",
+        return_value=[
+            s.model_copy(update={"ordering_method": OrderingMethod.TRANSPORT})
+            if s.supplier_id == "SUP_PAGO"
+            else s
+            for s in _pago_without_alerts()
+        ],
+    )
+
+    r = client.get("/api/captain/orderable?supplier_id=SUP_PAGO", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()
+    assert all(it["suggestion_alerts_enabled"] is False for it in r.json())
+
+    r = client.post(
+        "/api/captain/submit",
+        json=_body(current_stock_qty_base=7, captain_final_qty_purchase=4),
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["warnings"] == []
 
 
 def test_captain_edit_skips_gates_and_detail_carries_flag(mocker):

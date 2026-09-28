@@ -9,13 +9,22 @@
 //   phone  → number from supplier_notes (tel: link if parseable), copy list,
 //            "Oznacz jako zamówione ✓".
 //   manual → info note + "Oznacz jako zamówione ✓".
+//   transport → NO control at all: an amber notice + a link to the Transport
+//            screen. Such a supplier (Pago) is ordered only as part of a
+//            Manager Transport batch. The branch must never render an e-mail
+//            composer, because the Gmail link opens a prefilled compose window
+//            BEFORE the dispatch API call — a server-side 409 cannot recall a
+//            mail already open in the operator's browser.
 //
 // Dispatch payload is ALWAYS built from the current draft effective quantities
 // (full line set, non-empty) by the parent. sent_method maps 1:1 from
-// ordering_method. Dispatch is blocked when every effective line qty is 0.
+// ordering_method for the four dispatchable channels; `transport` has no
+// per-order sent_method because its branch never calls onDispatch. Dispatch is
+// blocked when every effective line qty is 0.
 
 import { useMemo, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { useT } from "../../i18n";
 import type { ManagerOrderDetail, ManagerOrderLineDetail, OrderingMethod } from "../../types";
@@ -128,6 +137,7 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
       portal: "manager.dispatch.portal",
       phone: "manager.dispatch.phone",
       manual: "manager.dispatch.manual",
+      transport: "manager.dispatch.transport",
     } as const
   )[method];
 
@@ -173,6 +183,20 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
           <p className="text-slate-700">{t("manager.manualNote")}</p>
           <div className="flex flex-wrap items-center gap-2">{markOrderedButton}</div>
           {emptyNote}
+        </div>
+      )}
+
+      {method === "transport" && (
+        <div className="space-y-3 text-sm">
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            {t("manager.transportOnlyNote", { supplier: detail.supplier_name })}
+          </p>
+          <Link
+            to="/manager/transport"
+            className="inline-block rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
+            {t("manager.transportOnlyLink")}
+          </Link>
         </div>
       )}
     </div>
