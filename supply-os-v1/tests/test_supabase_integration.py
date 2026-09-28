@@ -415,11 +415,11 @@ def test_manager_final_set_roundtrip():
     assert got.captain_final_qty_purchase == 8  # captain history untouched
 
 
-def test_migration_0024_backfill_marks_existing_manager_finals():
-    """Re-running 0024 over existing rows is the backfill story: a positive
-    manager_final is marked set; every line of a non-Transport manager_sent /
-    closed order is marked set (dispatch wrote all of them); a Transport
-    member and a claimed order keep the flag off. The migration is idempotent."""
+def test_migration_0024_backfill_never_changes_an_effective_quantity():
+    """Re-running 0024 over existing rows is the backfill story: only a positive
+    manager_final is marked set, so no existing line changes its effective
+    quantity — a dispatched line with manager_final 0 keeps reading at the
+    Captain's quantity, as it did before. The migration is re-runnable."""
     claimed = _make_order(status=OrderStatus.MANAGER_CLAIMED, order_id="ORD-BF-CLAIMED")
     sent = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-BF-SENT")
     trn = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-BF-TRN")
@@ -435,7 +435,10 @@ def test_migration_0024_backfill_marks_existing_manager_finals():
             "UPDATE order_lines SET manager_final_qty_purchase = 3 "
             "WHERE order_id = 'ORD-BF-POS'"
         )
-        conn.exec_driver_sql("UPDATE order_lines SET manager_final_set = false")
+        conn.exec_driver_sql(
+            "UPDATE order_lines SET manager_final_set = false WHERE order_id IN "
+            "('ORD-BF-CLAIMED', 'ORD-BF-SENT', 'ORD-BF-TRN', 'ORD-BF-POS')"
+        )
         conn.exec_driver_sql(
             (MIGRATIONS_DIR / "0024_order_line_manager_final_set.sql").read_text()
         )
@@ -444,7 +447,7 @@ def test_migration_0024_backfill_marks_existing_manager_finals():
         return supabase_backend.get_order(order_id).lines[0].manager_final_set
 
     assert flag(claimed) is False
-    assert flag(sent) is True
+    assert flag(sent) is False
     assert flag(trn) is False
     assert flag(raised) is True
 

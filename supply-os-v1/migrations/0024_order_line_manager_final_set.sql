@@ -15,18 +15,20 @@
 --   effective = manager_final if set, else captain_final
 -- so every row the backfill leaves false behaves exactly as before.
 --
--- Backfill: true where the Manager demonstrably committed a value — a
--- positive manager_final, or any line of an order dispatched outside
--- Transport (the Manager dispatch writes every line). Transport finalize
--- writes no line, so untouched lines of transport-sent orders stay false
--- (they shipped at the Captain's quantity). On 2026-09-28 no dispatched
--- non-transport line had manager_final 0 with captain_final above 0.
+-- Backfill: true only where manager_final is positive. Under both rules such
+-- a line reads at manager_final, so the backfill never changes an existing
+-- line's effective quantity. A line with manager_final 0 keeps the flag off
+-- and keeps reading at the Captain's quantity, exactly as before; the flag
+-- only starts to matter for zeros the Manager saves after this deploy. The
+-- statement is re-runnable at any time (it only ever marks positive values).
 --
 -- Numbered 0024 (confirmed across lanes on 2026-09-28: 0023 display order,
 -- 0025 delivery calendar, 0026 order e-mail v2). Keep this file free of the
 -- percent sign (integration fixture applies it via psycopg2 exec_driver_sql).
--- Apply on prod BEFORE the backend that reads it (_ORDER_LINE_COLUMNS lists
--- it, so every order_lines INSERT binds the column).
+-- Apply on prod BEFORE the backend that reads it: _ORDER_LINE_COLUMNS lists
+-- it, so without the column every order_lines INSERT (captain submit, captain
+-- edit, Manager add-line, Transport add-location) and every Manager save /
+-- dispatch UPDATE fails.
 -- Applied on prod: not yet.
 --
 -- Rollback (revert the code first):
@@ -40,12 +42,3 @@ UPDATE order_lines
    SET manager_final_set = true
  WHERE manager_final_set = false
    AND manager_final_qty_purchase > 0;
-
-UPDATE order_lines AS l
-   SET manager_final_set = true
-  FROM orders AS o
- WHERE l.order_id = o.order_id
-   AND l.manager_final_set = false
-   AND o.status IN ('manager_sent', 'closed')
-   AND coalesce(o.sent_method, '') <> 'transport'
-   AND left(coalesce(o.supplier_order_reference, ''), 4) <> 'TRN-';

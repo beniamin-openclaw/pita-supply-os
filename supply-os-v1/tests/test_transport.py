@@ -1535,6 +1535,7 @@ def test_finalize_releases_captain_origin_order_the_manager_zeroed_out(mocker):
     patches = _enable_sheet_backend_for_write(
         mocker, orders=orders, lines=lines, transport_batches=[header]
     )
+    lines_mock = mocker.patch.object(sheets, "update_order_lines", return_value=None)
 
     r = client.post(
         "/api/manager/transport/finalize",
@@ -1551,6 +1552,15 @@ def test_finalize_releases_captain_origin_order_the_manager_zeroed_out(mocker):
     )
     assert remove_call.kwargs["status"] == "captain_submitted"
     assert remove_call.kwargs["supplier_order_reference"] is None
+    # Released = the Captain's order again: the Manager's zeros are forgotten,
+    # so the order does not loop back into the queue at a zero total.
+    lines_mock.assert_called_once_with(
+        "ORD-B",
+        {
+            "OL-B-1": {"manager_final_set": False},
+            "OL-B-2": {"manager_final_set": False},
+        },
+    )
 
 
 def test_finalize_remove_conflict_skips(mocker):
@@ -1795,6 +1805,40 @@ def test_remove_order_release_path(mocker):
     assert kwargs["supplier_order_reference"] is None
     assert kwargs["status"] == "captain_submitted"
     assert kwargs["expected_status"] == "manager_claimed"
+
+
+def test_remove_order_release_clears_manager_zeros(mocker):
+    """order-line-zero-qty: releasing a member forgets the Manager's zeros, so
+    the order reads exactly as if it had never joined the batch."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order(
+            "ORD-A",
+            location_id="WOLA",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference="TRN-X",
+        )
+    ]
+    lines = [
+        _line("ORD-A", "OL-1", captain_qty=3.0, manager_qty=0.0, manager_set=True),
+        _line(
+            "ORD-A", "OL-2", product_id="P026", sp_id="SP_PAGO_P026",
+            captain_qty=2.0, manager_qty=4.0, manager_set=True,
+        ),
+    ]
+    _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+    lines_mock = mocker.patch.object(sheets, "update_order_lines", return_value=None)
+
+    r = client.post(
+        "/api/manager/transport/remove-order",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "order_id": "ORD-A"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["action"] == "released"
+    lines_mock.assert_called_once_with("ORD-A", {"OL-1": {"manager_final_set": False}})
 
 
 def test_remove_order_cancel_path_manager_created_empty(mocker):
@@ -2860,9 +2904,9 @@ def test_batch_detail_received_counts_degrade_on_missing_worksheet(mocker):
 
 def test_receiving_manager_created_skeleton_uses_manager_final_as_ordered(mocker):
     """A manager-created transport skeleton (captain_final=0, manager_final>0)
-    must receive against the MANAGER quantity — the same `_effective_ordered_qty`
+    must receive against the MANAGER quantity — the same `effective_ordered_qty`
     rule every other order follows (v3 Phase 8 verification)."""
-    from app.main import _effective_ordered_qty
+    from app.order_qty import effective_ordered_qty
 
     line = OrderLine(
         order_line_id="OL-1",
@@ -2872,7 +2916,7 @@ def test_receiving_manager_created_skeleton_uses_manager_final_as_ordered(mocker
         captain_final_qty_purchase=0,
         manager_final_qty_purchase=8,
     )
-    assert _effective_ordered_qty(line) == 8
+    assert effective_ordered_qty(line) == 8
 
 
 def test_receiving_submit_against_transport_manager_created_order(mocker):

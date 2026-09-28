@@ -14,8 +14,9 @@ import { effectiveOrderedQtyPurchase } from "../../../lib/orderQty";
 /**
  * Effective "Manager zamawia" quantity (purchase units) FROM THE PERSISTED LINE.
  * Delegates to the shared `effectiveOrderedQtyPurchase` (manager_final once
- * the Manager set it — an explicit 0 included — else captain_final) — kept under this name because the helpers below
- * (`deltaVsCaptain`, `lineVisualState`, `managerSummary`) reference it. Use this
+ * the Manager set it — an explicit 0 included — else captain_final) — kept
+ * under this name because the helpers below (`deltaVsCaptain`,
+ * `lineVisualState`, `managerSummary`) reference it. Use this
  * only when there is no live draft; the edit table passes the draft value into
  * the `*WithQty` helpers below.
  */

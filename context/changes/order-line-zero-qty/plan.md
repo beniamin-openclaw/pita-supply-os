@@ -507,10 +507,10 @@ None: one boolean column read with rows already fetched; no new queries.
 
 #### Automated
 
-- [x] 1.1 Backend lint passes
-- [x] 1.2 Backend unit tests pass
-- [x] 1.3 Integration tests pass on a local Postgres with 0024 applied
-- [x] 1.4 Old rule remains only in order_qty.py
+- [x] 1.1 Backend lint passes — 434dfc6
+- [x] 1.2 Backend unit tests pass — 434dfc6
+- [x] 1.3 Integration tests pass on a local Postgres with 0024 applied — 434dfc6
+- [x] 1.4 Old rule remains only in order_qty.py — 434dfc6
 
 #### Manual
 
@@ -520,15 +520,15 @@ None: one boolean column read with rows already fetched; no new queries.
 
 #### Automated
 
-- [x] 2.1 Frontend build passes
-- [x] 2.2 Frontend lint passes
-- [x] 2.3 Frontend tests pass
+- [x] 2.1 Frontend build passes — f9dc080
+- [x] 2.2 Frontend lint passes — f9dc080
+- [x] 2.3 Frontend tests pass — f9dc080
 - [ ] 2.4 /verify passes end to end
 
 #### Manual
 
-- [x] 2.5 Local E2E: claimed order zero sticks after Zapisz and reload, not in e-mail preview
-- [x] 2.6 Local E2E: Transport captain-origin cell zero sticks after save and reload
+- [x] 2.5 Local E2E: claimed order zero sticks after Zapisz and reload, not in e-mail preview — f9dc080
+- [x] 2.6 Local E2E: Transport captain-origin cell zero sticks after save and reload — f9dc080
 
 ### Phase 3: Rollout (operator-gated)
 

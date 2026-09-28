@@ -1773,6 +1773,34 @@ def _load_order_events_safe(backend, order_id: str) -> list[OrderEvent]:
     return events[:100]
 
 
+def _clear_manager_zeros_best_effort(
+    backend, order_id: str, lines: list[OrderLine]
+) -> None:
+    """Forget the Manager's explicit zeros when an order goes back to
+    ``captain_submitted`` (release, Transport remove / cancel / empty-column
+    auto-remove). A released order is the Captain's again, so a line the
+    Manager zeroed reads at the Captain's quantity — exactly as before
+    ``manager_final_set`` existed (order-line-zero-qty). Positive Manager
+    values are left alone (unchanged behaviour). Best-effort: the status write
+    already happened, so a failure here only logs."""
+    updates = {
+        ln.order_line_id: {"manager_final_set": False}
+        for ln in lines
+        if ln.manager_final_set and ln.manager_final_qty_purchase <= 0
+    }
+    if not updates:
+        return
+    try:
+        backend.update_order_lines(order_id, updates)
+    except Exception:
+        log.warning(
+            "Order %s released but clearing the Manager zeros failed — the "
+            "zeroed lines keep reading as 0",
+            order_id,
+            exc_info=True,
+        )
+
+
 def _has_receipts(backend, order_id: str) -> bool:
     """True when at least one goods-receipt exists for ``order_id``. A missing
     'receipts' worksheet reads as "no receipts" (mirrors ``manager_queue``)."""
@@ -1890,6 +1918,7 @@ def manager_release(
                 f"(expected manager_claimed)"
             ),
         )
+    _clear_manager_zeros_best_effort(backend, order_id, order.lines)
     return ManagerReleaseResponse(
         order_id=order_id, status=OrderStatus.CAPTAIN_SUBMITTED
     )
@@ -3440,14 +3469,6 @@ def _persist_receipt(backend, receipt: Receipt, lines: list[ReceiptLine]) -> boo
     return True
 
 
-def _effective_ordered_qty(line: OrderLine) -> float:
-    """Effective ordered purchase qty (receiving, Transport aggregate, finalize
-    guard): the Manager's final once set — including an explicit 0 — else the
-    Captain's. Thin alias of ``order_qty.effective_ordered_qty``, the same rule
-    ``gmail_url._effective_qty`` uses; kept under this name for its callers."""
-    return effective_ordered_qty(line)
-
-
 @app.post("/api/captain/receipt/submit", response_model=ReceiptSubmitResponse)
 def captain_receipt_submit(
     req: ReceiptSubmitRequest,
@@ -3514,7 +3535,7 @@ def captain_receipt_submit(
                     f"order {req.order_id}"
                 ),
             )
-        ordered = _effective_ordered_qty(order_line)
+        ordered = effective_ordered_qty(order_line)
         variance = line.received_qty_purchase - ordered
         if variance != 0:
             discrepancy_count += 1
@@ -3885,7 +3906,7 @@ def _aggregate_transport_lines(
     Transport aggregate: per-product totals plus the per-product x
     per-location breakdown (the private driver list / zużycie usage record).
 
-    Effective quantity per line is ``_effective_ordered_qty`` (the Manager's
+    Effective quantity per line is ``effective_ordered_qty`` (the Manager's
     final once set, incl. an explicit 0, else the Captain's —
     ``app/order_qty.py``, the same rule ``gmail_url._effective_qty`` and the
     goods-receiving path use; not reinvented here). A zero effective
@@ -3922,7 +3943,7 @@ def _aggregate_transport_lines(
         order = orders_by_id.get(line.order_id)
         if order is None:
             continue
-        qty = _effective_ordered_qty(line)
+        qty = effective_ordered_qty(line)
         if qty <= 0:
             continue
 
@@ -4692,7 +4713,7 @@ def manager_transport_finalize(
     never aborts the rest of the batch.
 
     Empty-column guard (v4 feedback): BEFORE any transition, every
-    ``manager_claimed`` member's effective total (``_effective_ordered_qty``
+    ``manager_claimed`` member's effective total (``effective_ordered_qty``
     summed over its lines — the same rule the aggregate/driver-list/email use)
     is computed. A member with zero effective total is never sent — it is
     auto-REMOVED from the batch exactly like ``remove-order`` (a
@@ -4741,7 +4762,7 @@ def manager_transport_finalize(
         lines_by_order.setdefault(ln.order_id, []).append(ln)
     totals_by_order = {
         o.order_id: sum(
-            _effective_ordered_qty(ln) for ln in lines_by_order.get(o.order_id, [])
+            effective_ordered_qty(ln) for ln in lines_by_order.get(o.order_id, [])
         )
         for o in claimed
     }
@@ -4811,6 +4832,10 @@ def manager_transport_finalize(
                     )
                 )
                 continue
+            if not manager_created:
+                _clear_manager_zeros_best_effort(
+                    backend, order.order_id, lines_by_order.get(order.order_id, [])
+                )
             skipped.append(
                 TransportSkippedOrder(
                     order_id=order.order_id, reason="empty — removed"
@@ -5115,6 +5140,7 @@ def manager_transport_remove_order(
                 status_code=409,
                 detail=f"Order {req.order_id} was changed concurrently",
             )
+        _clear_manager_zeros_best_effort(backend, req.order_id, order.lines)
         action = "released"
 
     _log_transport_event(
@@ -5301,6 +5327,9 @@ def manager_transport_cancel(
                     supplier_order_reference=None,
                     status=OrderStatus.CAPTAIN_SUBMITTED.value,
                     expected_status=OrderStatus.MANAGER_CLAIMED.value,
+                )
+                _clear_manager_zeros_best_effort(
+                    backend, order.order_id, lines_by_order.get(order.order_id, [])
                 )
                 released.append(order.order_id)
         except errors.OrderStatusConflictError:
