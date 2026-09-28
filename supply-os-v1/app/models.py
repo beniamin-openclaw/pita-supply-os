@@ -191,6 +191,15 @@ class OrderLine(BaseModel):
     reason_code: Optional[ReasonCode] = None
     captain_comment: str = ""
     manager_comment: str = ""
+    # True once the Manager committed a quantity for this line — including 0
+    # (order-line-zero-qty, migration 0024). manager_final_qty_purchase alone
+    # cannot say it: 0 is also the "not set yet" default, and every reader fell
+    # back to captain_final, so a line the Manager zeroed came back at the
+    # Captain's quantity. Written by manager_order_save / manager_dispatch only;
+    # read through app/order_qty.py. `bool = False`, NOT Optional: the column is
+    # NOT NULL DEFAULT false and supabase_backend binds every _ORDER_LINE_COLUMNS
+    # entry on insert (same trap as SupplierProduct.warehouse_pickup).
+    manager_final_set: bool = False
 
 
 class Order(BaseModel):
@@ -430,6 +439,10 @@ class ManagerOrderLineDetail(BaseModel):
     reason_code: Optional[ReasonCode] = None
     captain_comment: str = ""
     manager_comment: str = ""
+    # Normalized "the Manager has set this line" (order_qty.is_manager_final_set:
+    # the stored flag OR a positive manager_final). The frontend's
+    # effectiveOrderedQtyPurchase reads it so an explicit 0 survives a reload.
+    manager_final_set: bool = False
     # Position of the line's supplier_product (migration 0023) — the detail
     # routes return lines sorted by it (app/product_order.py) and the FE
     # document builders re-sort with the TS twin. None = no position.
@@ -938,7 +951,8 @@ class SuggestionReviewItem(BaseModel):
 class ReceiptLine(BaseModel):
     """One delivered line within a goods-receipt — delivered vs. ordered for a
     single order line. ``ordered_qty_purchase`` is the effective ordered qty
-    snapshotted at confirm (manager_final if > 0 else captain_final);
+    snapshotted at confirm (``order_qty.effective_ordered_qty``: the Manager's
+    final once set, else the Captain's);
     ``variance_qty_purchase`` = received − ordered."""
     receipt_line_id: str
     receipt_id: str

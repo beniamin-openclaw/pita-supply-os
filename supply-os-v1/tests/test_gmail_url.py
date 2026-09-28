@@ -329,6 +329,38 @@ def test_build_url_uses_manager_final_if_present_else_captain_final():
     assert "Gyros | 3 karton" in body
 
 
+def test_build_url_skips_line_the_manager_explicitly_zeroed():
+    """order-line-zero-qty: manager_final 0 WITH manager_final_set is the
+    Manager's decision "do not order" — the line is dropped, not revived at the
+    Captain's qty. The unset 0 (test above) still falls back."""
+    zeroed = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=5, manager_qty=0)
+    zeroed = zeroed.model_copy(update={"manager_final_set": True})
+    kept = _make_line("OL-002", "P026", "SP_PAGO_P026", captain_qty=3, manager_qty=0)
+    lines = [zeroed, kept]
+    order = _make_order(lines=lines)
+    products = {
+        "P027": _make_product("P027", "Souvlaki"),
+        "P026": _make_product("P026", "Gyros"),
+    }
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027", "karton", name="Souvlaki")
+    products["SP_PAGO_P026"] = _make_sp("SP_PAGO_P026", "SUP_PAGO", "P026", "karton", name="Gyros")
+
+    url = build_draft_url(order, _make_supplier(), lines, products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "Souvlaki" not in body
+    # The remaining line is renumbered from 1.
+    assert "1.  | Gyros | 3 karton" in body
+
+
+def test_build_url_raises_when_every_line_explicitly_zeroed():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=5, manager_qty=0)
+    line = line.model_copy(update={"manager_final_set": True})
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    with pytest.raises(ValueError, match="all qty are zero"):
+        build_draft_url(_make_order(lines=[line]), _make_supplier(), [line], products, None)
+
+
 def test_build_url_shows_fixed_delivery_window():
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     products = {"P027": _make_product("P027", "Souvlaki")}

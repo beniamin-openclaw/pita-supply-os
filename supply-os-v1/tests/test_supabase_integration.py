@@ -181,6 +181,12 @@ def _schema():
     display_order_minimum = (
         MIGRATIONS_DIR / "0023_supplier_product_display_order_minimum.sql"
     ).read_text()
+    # 0024 adds order_lines.manager_final_set (NOT NULL DEFAULT false);
+    # _ORDER_LINE_COLUMNS references it, so every order_lines insert errors
+    # against a pre-0024 schema.
+    manager_final_set = (
+        MIGRATIONS_DIR / "0024_order_line_manager_final_set.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -205,6 +211,7 @@ def _schema():
         conn.exec_driver_sql(ordering_transport)
         conn.exec_driver_sql(suggestion_alerts)
         conn.exec_driver_sql(display_order_minimum)
+        conn.exec_driver_sql(manager_final_set)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -422,6 +429,65 @@ def test_update_order_lines_and_delete():
     assert got.lines[0].manager_comment == "cut"
     assert supabase_backend.delete_order_lines(oid) == 1
     assert supabase_backend.get_order(oid).lines == []
+
+
+def test_manager_final_set_roundtrip():
+    """order-line-zero-qty (migration 0024): a line inserted without the flag
+    reads back False (NOT NULL DEFAULT false, bound from the model default);
+    update_order_lines can write an explicit 0 together with the flag."""
+    oid = _make_order()
+    line_id = f"{oid}-OL-1"
+    assert supabase_backend.get_order(oid).lines[0].manager_final_set is False
+    supabase_backend.update_order_lines(
+        oid,
+        {line_id: {
+            "manager_final_qty_purchase": 0,
+            "manager_final_qty_base": 0,
+            "manager_comment": "",
+            "manager_final_set": True,
+        }},
+    )
+    got = supabase_backend.get_order(oid).lines[0]
+    assert got.manager_final_qty_purchase == 0
+    assert got.manager_final_set is True
+    assert got.captain_final_qty_purchase == 8  # captain history untouched
+
+
+def test_migration_0024_backfill_never_changes_an_effective_quantity():
+    """Re-running 0024 over existing rows is the backfill story: only a positive
+    manager_final is marked set, so no existing line changes its effective
+    quantity — a dispatched line with manager_final 0 keeps reading at the
+    Captain's quantity, as it did before. The migration is re-runnable."""
+    claimed = _make_order(status=OrderStatus.MANAGER_CLAIMED, order_id="ORD-BF-CLAIMED")
+    sent = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-BF-SENT")
+    trn = _make_order(status=OrderStatus.MANAGER_SENT, order_id="ORD-BF-TRN")
+    raised = _make_order(status=OrderStatus.MANAGER_CLAIMED, order_id="ORD-BF-POS")
+    supabase_backend.update_order(
+        sent, sent_method="email", supplier_order_reference=None
+    )
+    supabase_backend.update_order(
+        trn, sent_method="transport", supplier_order_reference="TRN-20260916-X-abc123"
+    )
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(
+            "UPDATE order_lines SET manager_final_qty_purchase = 3 "
+            "WHERE order_id = 'ORD-BF-POS'"
+        )
+        conn.exec_driver_sql(
+            "UPDATE order_lines SET manager_final_set = false WHERE order_id IN "
+            "('ORD-BF-CLAIMED', 'ORD-BF-SENT', 'ORD-BF-TRN', 'ORD-BF-POS')"
+        )
+        conn.exec_driver_sql(
+            (MIGRATIONS_DIR / "0024_order_line_manager_final_set.sql").read_text()
+        )
+
+    def flag(order_id: str) -> bool:
+        return supabase_backend.get_order(order_id).lines[0].manager_final_set
+
+    assert flag(claimed) is False
+    assert flag(sent) is False
+    assert flag(trn) is False
+    assert flag(raised) is True
 
 
 def test_load_order_lines_for_orders_targeted():

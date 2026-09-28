@@ -17,7 +17,7 @@ import {
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
-import { effectiveOrderedQtyPurchase } from "../../lib/orderQty";
+import { effectiveOrderedQtyPurchase, isManagerFinalSet } from "../../lib/orderQty";
 import { roundQty } from "../../components/ui/number";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import type {
@@ -30,26 +30,16 @@ import type {
 import { statusVisual } from "./lib/orderStatus";
 
 // "Manager changed this line" (Phase 7, week2-feedback-quantities): the
-// manager's final differs from the captain's — including the case where the
-// manager ZEROED a line the captain ordered (manager_final 0 is otherwise the
-// "not touched" default, so that branch only counts once the order is
-// dispatched/closed — the Pago 14.09 case). Drives both the per-line hint and
-// the order-level count banner, so they can never disagree.
-//
-// NOT for a Transport batch (`sent_method === "transport"`): finalize flips
-// the status without writing manager_final on every line and the backend
-// ships such a line at the captain quantity (`_effective_ordered_qty`), so a
-// 0 there is "untouched", not "zeroed" — reading it as a change would flag
-// every line of every Pago order (impl-review Phase 7 F1).
-function managerChangedLine(
-  line: ManagerOrderLineDetail,
-  order: Pick<CaptainOrderDetail, "status" | "sent_method">,
-): boolean {
-  const manager = line.manager_final_qty_purchase;
-  const captain = line.captain_final_qty_purchase;
-  if (manager > 0) return manager !== captain;
-  if (order.sent_method === "transport") return false;
-  return (order.status === "manager_sent" || order.status === "closed") && captain > 0;
+// Manager set the line (lib/orderQty.ts isManagerFinalSet — an explicit 0
+// included, order-line-zero-qty) and the result differs from the captain's
+// quantity. Drives both the per-line hint and the order-level count banner, so
+// they can never disagree. An untouched line — e.g. on a Transport-sent order,
+// where finalize never writes manager_final — is never a change.
+function managerChangedLine(line: ManagerOrderLineDetail): boolean {
+  return (
+    isManagerFinalSet(line) &&
+    effectiveOrderedQtyPurchase(line) !== line.captain_final_qty_purchase
+  );
 }
 
 export function OrderDetailPage() {
@@ -168,7 +158,7 @@ export function OrderDetailPage() {
             {(order.status === "manager_sent" || order.status === "closed") &&
               (() => {
                 const changed = order.lines.filter((l) =>
-                  managerChangedLine(l, order),
+                  managerChangedLine(l),
                 ).length;
                 return changed > 0 ? (
                   <div
@@ -337,7 +327,7 @@ export function OrderDetailPage() {
                               captain's (incl. zeroed on a sent/closed order) —
                               the big number above already shows the effective
                               qty; equal/unset → no hint. */}
-                          {managerChangedLine(line, order) && (
+                          {managerChangedLine(line) && (
                             <div className="text-[11px] text-slate-500 mt-0.5">
                               {t("orders.detail.managerChanged", {
                                 value: line.captain_final_qty_purchase,

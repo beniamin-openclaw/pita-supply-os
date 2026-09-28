@@ -2,8 +2,9 @@
 // to-ordering-pago ADDENDUM v2). Columns = member orders (one per location);
 // rows = the union of products across every order's full lines
 // (lib/transport.ts's buildTransportMatrix). A cell shows the order's
-// effective qty for that product (manager_final if > 0 else captain_final)
-// and is editable via DecimalInput — editing sets the draft's manager_final,
+// effective qty for that product (manager_final once the Manager set it, an
+// explicit 0 included, else captain_final — lib/orderQty.ts) and is editable
+// via DecimalInput — editing sets the draft's manager_final,
 // saved later through the existing managerSave read-modify-write contract
 // (one call per dirty order, built by transportDirtySavePayloads).
 //

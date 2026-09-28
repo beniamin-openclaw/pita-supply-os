@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app import sheets
 from app.config import DataBackend
 from app.main import app
-from app.models import Order, OrderStatus
+from app.models import Order, OrderLine, OrderStatus
 
 client = TestClient(app)
 MANAGER_AUTH = {"Authorization": "Bearer test_manager_token"}
@@ -88,6 +88,54 @@ def test_release_happy_path(mocker):
     kwargs = patches["update_order"].call_args.kwargs
     assert kwargs["status"] == "captain_submitted"
     assert kwargs["notes"] == "Za dużo gyrosa — popraw na 2 kartony"
+
+
+def _line(line_id: str, captain: float, manager: float, manager_set: bool) -> OrderLine:
+    return OrderLine(
+        order_line_id=line_id,
+        order_id="ORD-A",
+        product_id="P027",
+        supplier_product_id="SP_PAGO_P027",
+        captain_final_qty_purchase=captain,
+        manager_final_qty_purchase=manager,
+        manager_final_set=manager_set,
+    )
+
+
+def test_release_clears_manager_zeros(mocker):
+    """order-line-zero-qty: a released order is the Captain's again — a line the
+    Manager zeroed reads at the Captain's quantity, as before the flag existed.
+    Positive Manager values and untouched lines are not written."""
+    order = _order(status=OrderStatus.MANAGER_CLAIMED).model_copy(
+        update={
+            "lines": [
+                _line("OL-1", 5, 0, True),
+                _line("OL-2", 5, 3, True),
+                _line("OL-3", 5, 0, False),
+            ]
+        }
+    )
+    _enable_sheet(mocker, order)
+    lines_mock = mocker.patch.object(sheets, "update_order_lines", return_value=None)
+    r = client.post(
+        "/api/manager/release/ORD-A", headers=MANAGER_AUTH, json={"reason": "popraw"}
+    )
+    assert r.status_code == 200, r.text
+    lines_mock.assert_called_once_with("ORD-A", {"OL-1": {"manager_final_set": False}})
+
+
+def test_release_survives_zero_clearing_failure(mocker):
+    """The status write already happened — a failure clearing the flags only logs."""
+    order = _order(status=OrderStatus.MANAGER_CLAIMED).model_copy(
+        update={"lines": [_line("OL-1", 5, 0, True)]}
+    )
+    _enable_sheet(mocker, order)
+    mocker.patch.object(sheets, "update_order_lines", side_effect=RuntimeError("down"))
+    r = client.post(
+        "/api/manager/release/ORD-A", headers=MANAGER_AUTH, json={"reason": "popraw"}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "captain_submitted"
 
 
 def test_release_rejects_non_claimed(mocker):

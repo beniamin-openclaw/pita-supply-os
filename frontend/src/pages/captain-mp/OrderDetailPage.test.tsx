@@ -105,11 +105,12 @@ describe("OrderDetailPage — manager-changed banner", () => {
     expect(screen.getAllByText(/zmienione przez menedżera/)).toHaveLength(2);
   });
 
-  it("counts a line the manager zeroed (manager_final 0, captain > 0)", async () => {
+  it("counts a line the manager zeroed (manager_final 0 + manager_final_set)", async () => {
     renderPage(
       makeOrder("closed", [
-        makeLine("OL-1", 4, 4),
-        makeLine("OL-2", 2, 0), // the Pago 14.09 case
+        makeLine("OL-1", 4, 4, { manager_final_set: true }),
+        // the Pago 14.09 case — an explicit 0 (order-line-zero-qty)
+        makeLine("OL-2", 2, 0, { manager_final_set: true }),
       ]),
     );
     const banner = await screen.findByTestId("manager-changed-banner");
@@ -127,6 +128,15 @@ describe("OrderDetailPage — manager-changed banner", () => {
     await waitFor(() => expect(screen.getByText("Pozycje zamówienia")).toBeInTheDocument());
     expect(screen.queryByTestId("manager-changed-banner")).not.toBeInTheDocument();
     expect(screen.queryByText(/zmienione przez menedżera/)).not.toBeInTheDocument();
+  });
+
+  it("an untouched 0 (flag off) on a sent e-mail order is not a zeroing", async () => {
+    // Without the flag the line shipped at the captain's quantity; the status
+    // no longer stands in for "was this 0 deliberate?".
+    renderPage(makeOrder("manager_sent", [makeLine("OL-1", 4, 0), makeLine("OL-2", 2, 3)]));
+    const banner = await screen.findByTestId("manager-changed-banner");
+    expect(banner).toHaveTextContent("Menedżer zmienił ilość w 1 pozycji");
+    expect(screen.getAllByText(/zmienione przez menedżera/)).toHaveLength(1);
   });
 
   it("does not show the banner when no quantity differs", async () => {
