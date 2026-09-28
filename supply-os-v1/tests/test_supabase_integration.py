@@ -198,6 +198,11 @@ def _schema():
     delivery_calendar = (
         MIGRATIONS_DIR / "0025_delivery_calendar.sql"
     ).read_text()
+    # 0027 adds products.inventory_order + location_product_settings.
+    # inventory_order (inventory-card-order); _PRODUCT_COLUMNS and
+    # _LOCATION_PRODUCT_SETTING_COLUMNS reference them, so the master-data
+    # inserts below error against a pre-0027 schema.
+    inventory_order = (MIGRATIONS_DIR / "0027_inventory_order.sql").read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -224,6 +229,7 @@ def _schema():
         conn.exec_driver_sql(display_order_minimum)
         conn.exec_driver_sql(manager_final_set)
         conn.exec_driver_sql(delivery_calendar)
+        conn.exec_driver_sql(inventory_order)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -330,9 +336,41 @@ def test_master_data_roundtrip():
     # fields, so their Pydantic defaults bind against the real columns.
     assert sps[0].display_order is None
     assert sps[0].counts_toward_minimum is True
+    # Migration 0027 (inventory-card-order): neither fixture insert passes
+    # inventory_order, so the nullable default binds on both tables.
+    p1 = next(p for p in products if p.product_id == "P1")
+    assert p1.inventory_order is None
+    s1 = next(
+        s for s in supabase_backend.load_location_product_settings()
+        if s.setting_id == "S1"
+    )
+    assert s1.inventory_order is None
     # RLS deny-all is enabled on every table (migration 0002); a successful read
     # here proves the connection role (postgres) BYPASSES RLS.
     assert supabase_backend.load_locations()
+
+
+def test_inventory_order_roundtrip():
+    """Migration 0027: a template position on a product and an override on a
+    setting survive a write + load (inventory-card-order)."""
+    supabase_backend._insert(
+        "products", supabase_backend._PRODUCT_COLUMNS,
+        Product(
+            product_id="P_POS", product_name_pl="Positioned", product_category="B",
+            inventory_unit="szt", inventory_order=120,
+        ),
+    )
+    supabase_backend._insert(
+        "location_product_settings", supabase_backend._LOCATION_PRODUCT_SETTING_COLUMNS,
+        LocationProductSetting(
+            setting_id="S_POS", location_id="WOLA", product_id="P_POS",
+            inventory_order=15,
+        ),
+    )
+    by_pid = {p.product_id: p for p in supabase_backend.load_products()}
+    assert by_pid["P_POS"].inventory_order == 120
+    by_sid = {s.setting_id: s for s in supabase_backend.load_location_product_settings()}
+    assert by_sid["S_POS"].inventory_order == 15
 
 
 def test_supplier_product_display_order_and_minimum_flag_roundtrip():

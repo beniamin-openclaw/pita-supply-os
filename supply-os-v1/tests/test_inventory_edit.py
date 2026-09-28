@@ -414,6 +414,13 @@ def test_captain_detail_by_id_returns_last_edited_at_and_events(mocker):
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "get_inventory_count", return_value=existing)
+    # inventory-card-order: the detail route sorts lines by card position.
+    mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(
+        sheets,
+        "load_location_product_settings",
+        side_effect=seed_loader.load_location_product_settings,
+    )
     from app.models import InventoryCountEvent
 
     mocker.patch.object(
@@ -442,6 +449,13 @@ def test_captain_detail_by_id_events_missing_worksheet_degrades_to_empty(mocker)
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "get_inventory_count", return_value=existing)
+    # inventory-card-order: the detail route sorts lines by card position.
+    mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(
+        sheets,
+        "load_location_product_settings",
+        side_effect=seed_loader.load_location_product_settings,
+    )
     mocker.patch.object(
         sheets, "load_inventory_count_events_for", side_effect=sheets.WorksheetNotFound
     )

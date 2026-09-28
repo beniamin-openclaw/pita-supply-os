@@ -1,0 +1,84 @@
+import openpyxl, sys, json
+SUP={"Blue Service","Pago","Bukat","Intermlecz","Selgros","Kuchnie Świata","Kuchnie Swiata","Coca Cola Hub","Eurofood","Filber Wyspy Piwne","Kamino","Pita Bros","Allegro","Spec Food","Pepsi","Frutis"}
+def is_hdr(v): return v in ("Dostawca",None)
+def card_rows(ws):
+    rows=[list(r) for r in ws.iter_rows(values_only=True)]
+    # find column blocks: a block starts at col c where some row has supplier in c and product in c+1
+    blocks=set()
+    for r in rows:
+        for c in range(len(r)-1):
+            if isinstance(r[c],str) and r[c].strip() in SUP and isinstance(r[c+1],str): blocks.add(c)
+    out=[]
+    for c in sorted(blocks):
+        sect=None
+        for r in rows:
+            a=r[c] if c<len(r) else None; b=r[c+1] if c+1<len(r) else None
+            if a is None and isinstance(b,str) and b.strip() and not b.strip().endswith(":") and (c+2>=len(r) or r[c+2] in (None,'Magazyn','Magazyn/ Lodówka')):
+                # section title
+                if b.strip() not in ("Lokal:","Data:","Godzina:","Imię i Nazwisko","Podpis"): sect=b.strip()
+                continue
+            if isinstance(a,str) and a.strip() in SUP and isinstance(b,str):
+                out.append((sect,a.strip(),b.strip()))
+    return out
+f=sys.argv[1]
+wb=openpyxl.load_workbook(f,data_only=True)
+res=[]
+for n in wb.sheetnames:
+    if "DRUK" in n: res+=card_rows(wb[n])
+print(json.dumps(res,ensure_ascii=False))
+import json,unicodedata,re,glob,collections
+def norm(s):
+    s=unicodedata.normalize("NFKD",s.lower().replace("ł","l")); s="".join(c for c in s if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+"," ",s).strip()
+P=json.load(open("products.json"))
+by=collections.defaultdict(list)
+for p in P: by[norm(p["product_name_pl"])].append(p["product_id"])
+ALIAS={}
+try: ALIAS={norm(k):v for k,v in json.load(open("alias.json")).items()}
+except FileNotFoundError: pass
+def resolve(name):
+    n=norm(name)
+    if n in ALIAS: return ALIAS[n]
+    if n in by and len(by[n])==1: return [by[n][0]]
+    return None
+def _old(name):
+    n=norm(name)
+    if n in by and len(by[n])==1: return by[n][0]
+    return None
+if __name__=="__main__":
+    un=collections.Counter()
+    for f in sorted(glob.glob("card_*.json")):
+        loc=f[5:-5]; d=json.load(open(f))
+        miss=[x for x in d if resolve(x[2]) is None]
+        for x in miss: un[(x[1],x[2])]+=1
+        print(loc,len(d),"unmatched",len(miss))
+    for (s,n),c in sorted(un.items(),key=lambda t:-t[1]): print(c,s,"|",n)
+"""Build per-location inventory card order from the downloaded 'Inwentaryzacja' workbooks."""
+import json, openpyxl
+from match import resolve, P
+ns={}; exec(open("cards.py").read().split("f=sys.argv[1]")[0], ns); card_rows=ns["card_rows"]
+LOC={"wolska":"WOLA","bracka":"BRACKA","ken":"KEN","norblin":"NORBLIN","browary":"BROWARY",
+     "elektrownia":"ELEKTROWNIA","forum":"FORUM","kulinarna_kamienica":"KAMIENICA",
+     "slony_spichlerz":"SLONY","stary_browar":"STARY_BROWAR","supersam":"SUPERSAM","westfield":"WESTFIELD"}
+cat={p["product_id"]:p["product_category"] for p in P}
+FOOD={"Chłodnia","Mrożonki","Produkcja","Spożywcze","Wino","Napoje"}
+out={}; unmatched={}
+for f,loc in LOC.items():
+    wb=openpyxl.load_workbook(f"sheets/{f}.xlsx",data_only=True)
+    druk=[n for n in wb.sheetnames if "DRUK" in n]
+    rows=[]
+    for n in druk: rows+= [(n,)+r for r in card_rows(wb[n])]
+    source=list(druk)
+    if not any(("Spożywcze" in n or "napoje" in n.lower()) for n in druk):
+        # no food card: take food rows from the newest dated count tab (first dated tab in order)
+        dated=[n for n in wb.sheetnames if n.isdigit()][0]
+        food=[(dated,)+r for r in card_rows(wb[dated]) if (resolve(r[2]) or [None])[0] and cat.get(resolve(r[2])[0]) in FOOD]
+        rows=food+rows; source=[dated+" (food rows)"]+source
+    seq=[]; miss=[]
+    for tab,sect,sup,name in rows:
+        ids=resolve(name)
+        if not ids: miss.append(f"{sup} | {name}"); continue
+        seq.append({"name":name,"supplier":sup,"section":sect,"product_ids":ids})
+    out[loc]={"workbook":f,"tabs":source,"rows":seq}; unmatched[loc]=miss
+json.dump({"locations":out,"unmatched":unmatched},open("card_order.json","w"),ensure_ascii=False,indent=1)
+for l,v in out.items(): print(l,len(v["rows"]),"unmatched:",unmatched[l], v["tabs"])

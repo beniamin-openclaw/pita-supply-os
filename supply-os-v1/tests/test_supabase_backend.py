@@ -236,6 +236,31 @@ def test_supplier_product_display_order_and_minimum_flag_bind(mocker):
     assert params["display_order"] is None
 
 
+def test_inventory_order_binds_on_product_and_setting(mocker):
+    """Migration 0027 binding guard (inventory-card-order): inventory_order is a
+    real column on products and location_product_settings, nullable, and binds
+    None when unset and the value when set."""
+    conn = _fake_engine(mocker)
+    supabase_backend._insert(
+        "products", supabase_backend._PRODUCT_COLUMNS,
+        Product(
+            product_id="P1", product_name_pl="Pita", product_category="B",
+            inventory_unit="szt",
+        ),
+    )
+    supabase_backend._insert(
+        "location_product_settings", supabase_backend._LOCATION_PRODUCT_SETTING_COLUMNS,
+        LocationProductSetting(
+            setting_id="S1", location_id="WOLA", product_id="P1", inventory_order=25,
+        ),
+    )
+    (prod_sql, prod_params), (set_sql, set_params) = _executed(conn)[:2]
+    assert prod_sql.startswith("INSERT INTO products (")
+    assert "inventory_order" in prod_params and prod_params["inventory_order"] is None
+    assert set_sql.startswith("INSERT INTO location_product_settings (")
+    assert set_params["inventory_order"] == 25
+
+
 def test_order_delivery_calendar_columns_bind(mocker):
     """Migration 0025 binding guard: suggested_delivery_date + coverage_days are
     real order columns (a key missing from _ORDER_COLUMNS would be silently
