@@ -635,7 +635,7 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Manual
 
-- [ ] 3.6 Prod: Bukat order with excluded products shows the basis chip; others unchanged
+- [x] 3.6 Prod: Bukat order with excluded products shows the basis chip; others unchanged (covered by operator check 5.5, 2026-09-28)
 
 ### Phase 4: SUP_INTERNAL is not an ordering supplier
 
