@@ -142,3 +142,28 @@ describe("ManagerQueue — closed lane archive split", () => {
     expect(screen.getByRole("button", { name: /Zakończone/ })).toHaveTextContent("1");
   });
 });
+
+describe("ManagerQueue — delivery calendar marker", () => {
+  it("shows the marker and coverage when the chosen date differs", () => {
+    renderQueue({
+      submitted: [
+        makeItem({
+          requested_delivery_date: "2026-10-02",
+          suggested_delivery_date: "2026-09-30",
+          coverage_days: 3,
+        }),
+      ],
+    });
+    const marker = screen.getByTestId("delivery-date-marker");
+    expect(marker).toHaveTextContent("02.10");
+    expect(marker).toHaveTextContent("propozycja");
+    expect(marker).toHaveTextContent("30.09");
+    expect(screen.getByTestId("coverage-days")).toHaveTextContent("na 3 dni");
+  });
+
+  it("shows nothing extra for a legacy item", () => {
+    renderQueue({ submitted: [makeItem({ requested_delivery_date: "2026-10-02" })] });
+    expect(screen.queryByTestId("delivery-date-marker")).toBeNull();
+    expect(screen.queryByTestId("coverage-days")).toBeNull();
+  });
+});

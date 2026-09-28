@@ -16,6 +16,7 @@ import type { StringKey } from "../../i18n/strings";
 import type { ManagerQueueItem } from "../../types";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { inQueueDays, splitClosedLane } from "./lib/queueAge";
+import { DeliveryDateMarker } from "./DeliveryDateMarker";
 
 /** The queue lanes (one status group each). `cancelled` exists only for the
  *  archive page's filter bar — the live queue never renders it. */
@@ -301,6 +302,18 @@ export function QueueCard({ item, selected, onSelect, showQueueAge = false }: Qu
           )}
           {item.ordered_by && (
             <span>{t("manager.orderedBy", { value: item.ordered_by })}</span>
+          )}
+          {/* Delivery calendar: amber only when the Captain's date differs
+              from the stored proposal; the Thursday coverage choice in slate. */}
+          <DeliveryDateMarker
+            requested={item.requested_delivery_date}
+            suggested={item.suggested_delivery_date}
+            variant="queue"
+          />
+          {(item.coverage_days === 1 || item.coverage_days === 3) && (
+            <span className="text-slate-600" data-testid="coverage-days">
+              {t(item.coverage_days === 3 ? "coverage.queue.3" : "coverage.queue.1")}
+            </span>
           )}
         </div>
       </button>

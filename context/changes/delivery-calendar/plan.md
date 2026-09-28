@@ -610,10 +610,10 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Automated
 
-- [x] 3.1 Frontend build passes
-- [x] 3.2 Frontend lint passes
-- [x] 3.3 New helper and component tests pass
-- [x] 3.4 Full frontend suite passes
+- [x] 3.1 Frontend build passes — e7b4b01
+- [x] 3.2 Frontend lint passes — e7b4b01
+- [x] 3.3 New helper and component tests pass — e7b4b01
+- [x] 3.4 Full frontend suite passes — e7b4b01
 
 #### Manual
 
@@ -624,9 +624,9 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Automated
 
-- [ ] 4.1 Frontend build and lint pass
-- [ ] 4.2 DeliveryDateMarker and ManagerQueue tests pass
-- [ ] 4.3 Full frontend suite passes
+- [x] 4.1 Frontend build and lint pass
+- [x] 4.2 DeliveryDateMarker and ManagerQueue tests pass
+- [x] 4.3 Full frontend suite passes
 
 #### Manual
 

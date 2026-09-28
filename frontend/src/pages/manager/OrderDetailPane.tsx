@@ -19,6 +19,8 @@ import { AddProductPicker } from "../../components/ui/AddProductPicker";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
+import { DeliveryDateMarker } from "./DeliveryDateMarker";
+import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
 import { DispatchPanel } from "./DispatchPanel";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
@@ -160,8 +162,22 @@ export function OrderDetailPane({
             </span>
           )}
           {detail.requested_delivery_date && (
-            <span>
-              {t("manager.detail.delivery", { value: detail.requested_delivery_date })}
+            <span className="inline-flex flex-wrap items-center gap-x-2">
+              {t("manager.detail.delivery", {
+                value: formatDateTime(detail.requested_delivery_date, DELIVERY_DATE_FORMAT),
+              })}
+              <DeliveryDateMarker
+                requested={detail.requested_delivery_date}
+                suggested={detail.suggested_delivery_date}
+                variant="detail"
+              />
+            </span>
+          )}
+          {(detail.coverage_days === 1 || detail.coverage_days === 3) && (
+            <span data-testid="coverage-days">
+              {t("deliveryCalendar.confirmCoverage", {
+                value: t(detail.coverage_days === 3 ? "coverage.value.3" : "coverage.value.1"),
+              })}
             </span>
           )}
         </div>
