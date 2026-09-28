@@ -138,4 +138,17 @@ describe("ProductCard — suggestion 0 is information (week2-feedback-quantities
 
     expect(screen.getByText("Wybierz powód odchylenia")).toBeInTheDocument();
   });
+
+  it("supplier with alerts off: suggestion shown, no reason, no below-minimum warning", () => {
+    // Same +100% line as above, plus stock 40 < min 60 — both would alert.
+    renderCard(
+      makeItem({ suggestion_alerts_enabled: false, min_stock_qty_base: 60 }),
+      makeLine({ current_stock_qty_base: 40, captain_final_qty_purchase: 8 }),
+    );
+
+    expect(screen.queryByText("Wybierz powód odchylenia")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Poniżej minimum/)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Ilość wpisana");
+    expect(document.getElementById("suggest-P1")).toHaveTextContent("4");
+  });
 });

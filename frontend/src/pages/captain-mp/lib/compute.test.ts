@@ -317,3 +317,61 @@ describe("computeRowState — suggestion 0 is information (week2-feedback-quanti
     expect(requiresReason).toBe(false);
   });
 });
+
+describe("computeRowState — supplier with suggestion alerts off (Pago)", () => {
+  // pago-suggestion-no-alerts: suggestion stays, no alert and never a reason.
+  const noAlerts = (o: Partial<OrderableItem> = {}): OrderableItem =>
+    makeItem({ suggestion_alerts_enabled: false, ...o });
+
+  it("big deviation is neutral grey, no reason", () => {
+    // target 50, stock 40 → suggestion 1 karton; ordering 5 is +400%
+    const r = computeRowState(
+      noAlerts(),
+      makeLine({ current_stock_qty_base: 40, captain_final_qty_purchase: 5 }),
+    );
+    expect(r.state).toBe("grey");
+    expect(r.messageKey).toBe("state.orderEntered");
+    expect(r.requiresReason).toBe(false);
+  });
+
+  it("critical under-order needs no reason", () => {
+    const r = computeRowState(
+      noAlerts({ is_critical: true }),
+      makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 0 }),
+    );
+    expect(r.requiresReason).toBe(false);
+    expect(r.state).not.toBe("red");
+  });
+
+  it("uncounted over-MAX needs no reason", () => {
+    const r = computeRowState(
+      noAlerts(),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 20 }),
+    );
+    expect(r.requiresReason).toBe(false);
+    expect(r.state).toBe("grey");
+  });
+
+  it("order equal to the suggestion is green", () => {
+    const r = computeRowState(
+      noAlerts(),
+      makeLine({ current_stock_qty_base: 20, captain_final_qty_purchase: 3 }),
+    );
+    expect(r.state).toBe("green");
+    expect(r.messageKey).toBe("state.match");
+  });
+
+  it("blank order stays the empty state", () => {
+    const r = computeRowState(noAlerts(), makeLine({ current_stock_qty_base: 20 }));
+    expect(r.messageKey).toBe("state.empty");
+  });
+
+  it("flag absent keeps the gate (regression guard)", () => {
+    const r = computeRowState(
+      makeItem(),
+      makeLine({ current_stock_qty_base: 40, captain_final_qty_purchase: 5 }),
+    );
+    expect(r.state).toBe("red");
+    expect(r.requiresReason).toBe(true);
+  });
+});

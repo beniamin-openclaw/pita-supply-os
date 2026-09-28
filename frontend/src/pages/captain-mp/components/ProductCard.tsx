@@ -88,7 +88,9 @@ export function ProductCard({ item, line, onChange }: ProductCardProps) {
   const currentVal = Number(line.current_stock_qty_base) || 0;
   // Informational "below minimum" signal — does NOT gate submit or feed the
   // suggestion (min is otherwise unused). Only meaningful once stock is typed.
+  // Hidden for a supplier with suggestion alerts off (pago-suggestion-no-alerts).
   const belowMin =
+    item.suggestion_alerts_enabled !== false &&
     line.current_stock_qty_base !== "" &&
     item.min_stock_qty_base > 0 &&
     currentVal < item.min_stock_qty_base;

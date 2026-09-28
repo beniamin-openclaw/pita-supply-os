@@ -61,6 +61,7 @@ Master list of suppliers.
 | `minimum_order_value_pln` | number   | For warning when order is below                        |
 | `active`               | boolean     |                                                        |
 | `notes`                | string      |                                                        |
+| `suggestion_alerts_enabled` | boolean | (0022) default true; false = Captain sees the suggestion but no deviation alert and never a reason (Pago) |
 
 **Why this table:** the Manager Dashboard needs supplier-specific dispatch
 info (email + cutoff). In v0 only one supplier matters; in Phase 2 this is
