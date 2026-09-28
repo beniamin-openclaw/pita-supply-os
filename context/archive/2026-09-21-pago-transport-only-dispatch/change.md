@@ -1,10 +1,10 @@
 ---
 change_id: pago-transport-only-dispatch
 title: Transport-only suppliers cannot be dispatched from the per-order queue
-status: impl_reviewed
+status: archived
 created: 2026-09-21
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T13:08:29Z
 ---
 
 ## Notes
