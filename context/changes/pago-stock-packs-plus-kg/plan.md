@@ -496,9 +496,9 @@ the frontend PR; stored data is unaffected either way.
 
 #### Automated
 
-- [x] 2.1 `npm run test` passes, including PackStockInput and updated ProductCard tests
-- [x] 2.2 `npm run build` passes
-- [x] 2.3 `npm run lint` passes
+- [x] 2.1 `npm run test` passes, including PackStockInput and updated ProductCard tests — c2290a9
+- [x] 2.2 `npm run build` passes — c2290a9
+- [x] 2.3 `npm run lint` passes — c2290a9
 
 #### Manual
 
@@ -511,9 +511,9 @@ the frontend PR; stored data is unaffected either way.
 
 #### Automated
 
-- [ ] 3.1 `npm run test` passes, including updated InventoryCountGrid tests
-- [ ] 3.2 `npm run build` passes
-- [ ] 3.3 `npm run lint` passes
+- [x] 3.1 `npm run test` passes, including updated InventoryCountGrid tests
+- [x] 3.2 `npm run build` passes
+- [x] 3.3 `npm run lint` passes
 
 #### Manual
 

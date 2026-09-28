@@ -792,14 +792,13 @@ export const STRINGS = {
     pl: "1 {packUnit} = {upp} {unit}",
     en: "1 {packUnit} = {upp} {unit}",
   },
-  "inventory.packEquivalent": { pl: "≈ {packs}", en: "≈ {packs}" },
   "inventory.previousCount": {
     pl: "ostatnio {qty} · {date}",
     en: "last {qty} · {date}",
   },
   "inventory.checkUnitHint": {
-    pl: "sprawdź jednostkę — max to {max} {unit}",
-    en: "check the unit — max is {max} {unit}",
+    pl: "sprawdź jednostkę",
+    en: "check the unit",
   },
   "inventory.blankVsZeroHint": {
     pl: "Puste = nie policzone · 0 = brak na stanie",

@@ -13,7 +13,7 @@ import { ProductListToolbar } from "../../../components/ui/ProductListToolbar";
 import { useT } from "../../../i18n";
 import { categoryLabel } from "../../../i18n/categoryLabels";
 import { packUnitLabel } from "../../../i18n/packUnits";
-import { isPackBased, packHint } from "../../../lib/packUnits";
+import { isPackBased } from "../../../lib/packUnits";
 import {
   DEFAULT_PRODUCT_LIST_VIEW,
   filterProductRows,
@@ -21,6 +21,7 @@ import {
 } from "../../../lib/productListFilter";
 import type { InventoryProduct } from "../../../types";
 import { groupProductsByCategory, type InventoryProductGroup } from "../lib/inventoryGrouping";
+import { PackStockInput } from "./PackStockInput";
 import { blankInventoryLine, type InventoryLineInput } from "../lib/inventoryLines";
 
 /** Typed stock above this multiple of the location max shows the yellow
@@ -184,10 +185,6 @@ export function InventoryCountGrid({
                   const stock: number | "" = line.current_stock_qty_base;
                   const stockNum: number | null =
                     stock === "" || stock === undefined ? null : Number(stock);
-                  const packEquivalent: string | null =
-                    showPack && stockNum !== null && stockNum > 0
-                      ? packHint(stockNum, upp, packUnit, lang)
-                      : null;
                   const maxBase: number = p.max_stock_qty_base ?? 0;
                   const checkUnit: boolean =
                     maxBase > 0 && stockNum !== null && stockNum > CHECK_UNIT_FACTOR * maxBase;
@@ -197,7 +194,13 @@ export function InventoryCountGrid({
                       key={p.product_id}
                       className="bg-white border border-gray-200 rounded-xl p-3"
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      {/* Pack-based rows (pago-stock-packs-plus-kg): name on its own line,
+                          then [packs] + [loose] below; ×1 rows keep name + one field side by side. */}
+                      <div
+                        className={
+                          showPack ? "space-y-2" : "flex items-center justify-between gap-3"
+                        }
+                      >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 break-words">
@@ -211,18 +214,31 @@ export function InventoryCountGrid({
                           </div>
                           <div className="text-xs text-slate-500">{p.inventory_unit}</div>
                         </div>
-                        <div className="shrink-0">
-                          <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
-                            {t("inventory.qtyLabel")}
-                          </label>
-                          <DecimalInput
-                            id={`stock-${p.product_id}`}
-                            inputMode="decimal"
+                        {showPack ? (
+                          <PackStockInput
+                            idPrefix={`stock-${p.product_id}`}
+                            label={t("inventory.qtyLabel")}
                             value={line.current_stock_qty_base}
                             onChange={(v) => onStockChange(p.product_id, v)}
-                            className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            unitsPerPack={upp}
+                            packUnit={packUnit}
+                            baseUnit={p.inventory_unit}
+                            references={[previous?.qty, p.target_stock_qty_base]}
                           />
-                        </div>
+                        ) : (
+                          <div className="shrink-0">
+                            <label className="sr-only" htmlFor={`stock-${p.product_id}`}>
+                              {t("inventory.qtyLabel")}
+                            </label>
+                            <DecimalInput
+                              id={`stock-${p.product_id}`}
+                              inputMode="decimal"
+                              value={line.current_stock_qty_base}
+                              onChange={(v) => onStockChange(p.product_id, v)}
+                              className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        )}
                       </div>
                       {/* Information layer (Phase 3): pack hint, master-data note,
                           previous count, 3 x max unit warning. Never blocks. */}
@@ -235,11 +251,6 @@ export function InventoryCountGrid({
                                 upp,
                                 unit: p.inventory_unit,
                               })}
-                              {packEquivalent && (
-                                <span className="ml-1 text-slate-400">
-                                  {t("inventory.packEquivalent", { packs: packEquivalent })}
-                                </span>
-                              )}
                             </div>
                           )}
                           {p.order_note && (
@@ -264,10 +275,7 @@ export function InventoryCountGrid({
                             >
                               <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
                               <span className="break-words">
-                                {t("inventory.checkUnitHint", {
-                                  max: maxBase,
-                                  unit: p.inventory_unit,
-                                })}
+                                {t("inventory.checkUnitHint")}
                               </span>
                             </div>
                           )}
