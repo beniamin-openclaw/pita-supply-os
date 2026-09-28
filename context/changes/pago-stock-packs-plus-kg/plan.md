@@ -502,24 +502,24 @@ the frontend PR; stored data is unaffected either way.
 
 #### Manual
 
-- [ ] 2.4 Local preview: Gyros 15 card two fields, reading, suggestion, prompt + fix
+- [x] 2.4 Local preview: Gyros 15 card two fields, reading, suggestion, prompt + fix
 - [ ] 2.5 Coca-Cola and ×1 cards correct; supplier switch and draft restore re-seed
-- [ ] 2.6 375 px: no clipping, no horizontal scroll, touch targets ≥ 44 px
+- [x] 2.6 375 px: no clipping, no horizontal scroll, touch targets ≥ 44 px
 - [ ] 2.7 Order edit page shows the same input and threshold wording
 
 ### Phase 3: Two-field input on the inventory grid
 
 #### Automated
 
-- [x] 3.1 `npm run test` passes, including updated InventoryCountGrid tests
-- [x] 3.2 `npm run build` passes
-- [x] 3.3 `npm run lint` passes
+- [x] 3.1 `npm run test` passes, including updated InventoryCountGrid tests — 86c864b
+- [x] 3.2 `npm run build` passes — 86c864b
+- [x] 3.3 `npm run lint` passes — 86c864b
 
 #### Manual
 
 - [ ] 3.4 Count page: pack rows two fields; blank vs 0 semantics; draft save/resume
 - [ ] 3.5 Count edit page: 20 kg opens as 1 blok / 5 kg; unchanged save keeps 20
-- [ ] 3.6 375 px: rows wrap, no clipping or horizontal scroll
+- [x] 3.6 375 px: rows wrap, no clipping or horizontal scroll
 
 ### Phase 4: Verification, PR and deploy gate
 

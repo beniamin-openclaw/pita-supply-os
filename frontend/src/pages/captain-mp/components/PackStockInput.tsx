@@ -36,7 +36,7 @@ interface Pair {
 }
 
 function seed(value: number | "", upp: number): Pair {
-  if (value === "") return { packs: "", loose: "" };
+  if (typeof value !== "number") return { packs: "", loose: "" };
   return splitPackStock(value, upp);
 }
 
@@ -57,6 +57,8 @@ export function PackStockInput({
   const [pair, setPair] = useState<Pair>(() => seed(value, upp));
   const [syncedValue, setSyncedValue] = useState<number | "">(value);
   const [focused, setFocused] = useState(false);
+  // The prompt only follows the Captain's own typing — never old data on mount.
+  const [touched, setTouched] = useState(false);
   const [dismissedLoose, setDismissedLoose] = useState<number | "" | null>(null);
 
   // Re-seed on an EXTERNAL value change only (draft restore, supplier switch,
@@ -69,7 +71,7 @@ export function PackStockInput({
     }
   }
 
-  const emit = (next: Pair) => {
+  const emit = (next: Pair): void => {
     setPair(next);
     const combined = combinePackStock(next.packs, next.loose, upp);
     setSyncedValue(combined);
@@ -99,14 +101,14 @@ export function PackStockInput({
     upp,
     references,
   });
-  const showPrompt = suggested !== null && !focused && dismissedLoose !== pair.loose;
+  const showPrompt = suggested !== null && touched && !focused && dismissedLoose !== pair.loose;
 
   // Only focus inside the two FIELDS suppresses the prompt — focusing the
   // prompt's own buttons must not unmount it before the click lands.
-  const handleFocus = (e: FocusEvent<HTMLDivElement>) => {
+  const handleFocus = (e: FocusEvent<HTMLDivElement>): void => {
     if (e.target instanceof HTMLInputElement) setFocused(true);
   };
-  const handleBlur = (e: FocusEvent<HTMLDivElement>) => {
+  const handleBlur = (e: FocusEvent<HTMLDivElement>): void => {
     const next = e.relatedTarget;
     if (next instanceof HTMLInputElement && e.currentTarget.contains(next)) return;
     setFocused(false);
@@ -120,8 +122,11 @@ export function PackStockInput({
             id={packsId}
             inputMode="decimal"
             value={pair.packs}
-            onChange={(v) => emit({ ...pair, packs: v })}
-            aria-label={t("stock.fieldAria", { label, unit: packUnit })}
+            onChange={(v) => {
+              setTouched(true);
+              emit({ ...pair, packs: v });
+            }}
+            aria-label={t("stock.fieldAria", { label, unit: packUnitLabel(1, packUnit, lang) })}
             aria-describedby={readingId}
             className={FIELD_CLASS}
             placeholder="0"
@@ -138,8 +143,11 @@ export function PackStockInput({
             id={looseId}
             inputMode="decimal"
             value={pair.loose}
-            onChange={(v) => emit({ ...pair, loose: v })}
-            aria-label={t("stock.fieldAria", { label, unit: baseUnit })}
+            onChange={(v) => {
+              setTouched(true);
+              emit({ ...pair, loose: v });
+            }}
+            aria-label={t("stock.fieldAria", { label, unit: packUnitLabel(1, baseUnit, lang) })}
             aria-describedby={readingId}
             className={FIELD_CLASS}
             placeholder="0"

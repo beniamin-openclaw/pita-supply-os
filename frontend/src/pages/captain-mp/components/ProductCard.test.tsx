@@ -70,6 +70,13 @@ function renderCard(item: OrderableItem, initialLine: OrderLine) {
   return { onChangeSpy };
 }
 
+function retype(el: HTMLElement, v: string): void {
+  fireEvent.focus(el);
+  fireEvent.change(el, { target: { value: "" } });
+  fireEvent.change(el, { target: { value: v } });
+  fireEvent.blur(el);
+}
+
 describe("ProductCard — pack-unit display (×24 SKU)", () => {
   it("shows packs-first Cel/Max, the two-field stock reading, and the suggestion pack detail", () => {
     renderCard(makeItem(), makeLine({ current_stock_qty_base: 40 }));
@@ -115,6 +122,7 @@ describe("ProductCard — pack-unit display (×24 SKU)", () => {
         />
       </LangProvider>,
     );
+    retype(document.getElementById("current-P1-loose")!, "5");
     expect(screen.getByText(/Czy chodziło o 5 zgrzewek \(120 szt\)\?/)).toBeInTheDocument();
   });
 });

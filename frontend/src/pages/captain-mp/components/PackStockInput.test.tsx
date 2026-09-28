@@ -37,6 +37,15 @@ function Controlled({
   );
 }
 
+// Simulates the Captain re-typing a field and leaving it (the prompt only
+// follows the Captain's own typing, never an untouched value).
+function retype(el: HTMLElement, v: string): void {
+  fireEvent.focus(el);
+  fireEvent.change(el, { target: { value: "" } });
+  fireEvent.change(el, { target: { value: v } });
+  fireEvent.blur(el);
+}
+
 function setup(initial: number | "" = "", references?: Array<number | null | undefined>) {
   const spy = vi.fn();
   render(
@@ -113,8 +122,14 @@ describe("PackStockInput", () => {
     expect(screen.queryByText(/Czy chodziło/)).not.toBeInTheDocument();
   });
 
-  it("prompt: 'Nie' hides it", () => {
+  it("no prompt on mount for an untouched value", () => {
     setup(6, [90]);
+    expect(screen.queryByText(/Czy chodziło/)).not.toBeInTheDocument();
+  });
+
+  it("prompt: 'Nie' hides it", () => {
+    const { loose } = setup(6, [90]);
+    retype(loose(), "6");
     expect(screen.getByText(/Czy chodziło/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Nie" }));
     expect(screen.queryByText(/Czy chodziło/)).not.toBeInTheDocument();
@@ -134,7 +149,7 @@ describe("PackStockInput", () => {
       clear: () => {},
     });
     setup(20);
-    expect(screen.getByLabelText("Obecny stan, blok")).toBeInTheDocument();
+    expect(screen.getByLabelText("Obecny stan, block")).toBeInTheDocument();
     expect(screen.getByText("= 1 block + 5 kg (20 kg)")).toBeInTheDocument();
   });
 });

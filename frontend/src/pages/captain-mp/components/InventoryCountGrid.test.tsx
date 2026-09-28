@@ -72,6 +72,14 @@ const line = (stock: number | ""): InventoryLineInput => ({
   count_comment: "",
 });
 
+// The prompt follows the Captain's own typing only — re-type and leave the field.
+function retype(el: HTMLElement, v: string): void {
+  fireEvent.focus(el);
+  fireEvent.change(el, { target: { value: "" } });
+  fireEvent.change(el, { target: { value: v } });
+  fireEvent.blur(el);
+}
+
 describe("InventoryCountGrid information layer", () => {
   it("renders the pack hint for upp 12 and nothing for upp 1", () => {
     renderGrid({});
@@ -115,6 +123,7 @@ describe("InventoryCountGrid information layer", () => {
 
   it("prompts 'did you mean packs' from the target (no previous)", () => {
     renderGrid({ P170: line(3) });
+    retype(document.getElementById("stock-P170-loose")!, "3");
     expect(screen.getByRole("button", { name: /tak/i })).toBeInTheDocument();
   });
 
@@ -137,8 +146,7 @@ describe("InventoryCountGrid information layer", () => {
     expect(screen.queryByRole("button", { name: /tak/i })).not.toBeInTheDocument();
     rerender(tree({ P170: { qty: 36, date: "13.09.2026" } }));
     const loose = document.getElementById("stock-P170-loose")!;
-    fireEvent.focus(loose);
-    fireEvent.blur(loose);
+    retype(loose, "3");
     expect(screen.getByRole("button", { name: /tak/i })).toBeInTheDocument();
   });
 
