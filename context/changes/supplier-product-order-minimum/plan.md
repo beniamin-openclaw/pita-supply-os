@@ -657,7 +657,7 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Manual
 
-- [ ] 5.2 Migration 0023 applied on prod after approval
-- [ ] 5.3 PR merged; Railway and Vercel builds confirmed live
-- [ ] 5.4 prod-sql.sql run after approval; audit 14 positions / 3 exclusions
+- [x] 5.2 Migration 0023 applied on prod after approval (20260928140705, before the merge)
+- [x] 5.3 PR merged; Railway and Vercel builds confirmed live (PR #37 → 2641da3; Vercel READY c5812a1; Railway openapi exposes minimum_basis_value_pln)
+- [x] 5.4 prod-sql.sql run after approval; audit 14 positions / 3 exclusions (diff in prod-sql-diff-before.md)
 - [ ] 5.5 Live check on prod, no order dispatched

@@ -101,3 +101,14 @@ to true) — the code falls back to supplier_product_id order and the full-total
   not the stored total.
 - Side fix: the seed CSV row for `SP_PAGO_P024` had an unquoted comma in `notes`; it
   is now quoted so the row parses as one record.
+
+## Release log (2026-09-28)
+
+- Migration 0023 on prod: `20260928140705`, before the merge of PR #37 (2641da3).
+- Live: Vercel production READY on c5812a1 (contains PR #37); Railway `/health` ok and
+  its OpenAPI exposes `minimum_basis_value_pln` / `display_order`.
+- `prod-sql.sql` run after operator approval, in one transaction. Diff before saved in
+  `prod-sql-diff-before.md`. Audit: 14 positioned rows, 14 distinct positions 10..140,
+  all SUP_BUKAT; excluded = SP_BUKAT_P011, SP_BUKAT_P012, SP_BUKAT_P014; SP_BUKAT_P135
+  (inactive) has no position.
+- Pending: live check on prod (5.5), no order dispatched.
