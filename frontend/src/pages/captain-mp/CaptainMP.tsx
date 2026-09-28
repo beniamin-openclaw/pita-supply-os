@@ -13,6 +13,7 @@ import { api, ApiError } from "../../apiClient";
 import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
 import { useT } from "../../i18n";
 import { getNameSuggestions, addNameSuggestion } from "../../lib/nameSuggestions";
+import { isOrderingSupplier } from "../../lib/orderingSuppliers";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
@@ -126,7 +127,8 @@ export function CaptainMP() {
     api
       .suppliers()
       .then((data) => {
-        if (!cancelled) setSuppliers(data.filter((s) => s.active));
+        // Active, and not on-site production (SUP_INTERNAL) — lib/orderingSuppliers.
+        if (!cancelled) setSuppliers(data.filter(isOrderingSupplier));
       })
       .catch((err: ApiError) => {
         if (cancelled) return;

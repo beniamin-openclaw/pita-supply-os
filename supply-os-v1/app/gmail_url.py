@@ -18,6 +18,7 @@ from typing import Optional
 
 from .models import Location, Order, OrderLine, Product, Supplier
 from .order_qty import effective_ordered_qty
+from .product_order import line_sort_key
 
 
 GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/"
@@ -73,7 +74,11 @@ def _build_body(
     body_lines.append("")
     body_lines.append("Lp. | Produkt | Ilosc")
 
-    # Sort by order_line_id for stable output
+    # Canonical supplier order (supplier-product-order-minimum): position, then
+    # supplier_product_id — app/product_order.py. `products_by_id` carries the
+    # SupplierProduct entries keyed by supplier_product_id (see below), which is
+    # where display_order comes from. Mirrors the TS twin (emailBody.ts,
+    # compareProductOrder) — keep both in sync.
     # NOTE (training-feedback-0901 Phase 4, hardening G7): this order-dispatch
     # email covers the WHOLE order regardless of supplier_products.warehouse_pickup.
     # SUP_PAGO is a purchasing channel, not a warehouse — the self-pickup run
@@ -82,7 +87,7 @@ def _build_body(
     # warehouse_pickup; never add that filter to this builder or its TS twin
     # (emailBody.ts) — that asymmetry is deliberate, not an oversight.
     visible = [ln for ln in lines if _effective_qty(ln) > 0]
-    visible.sort(key=lambda ln: ln.order_line_id)
+    visible.sort(key=line_sort_key(products_by_id))
 
     # `products_by_id` carries BOTH Product entries (keyed by product_id) and
     # SupplierProduct entries (keyed by supplier_product_id) — the dispatch

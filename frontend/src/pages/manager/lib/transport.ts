@@ -26,6 +26,7 @@ import type {
   TransportBatchSummary,
   TransportEvent,
 } from "../../../types";
+import { compareProductOrder } from "../../../lib/productOrder";
 import { buildGmailComposeUrl } from "./emailBody";
 import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
 import { effectiveManagerQtyPurchase } from "./managerLine";
@@ -280,6 +281,10 @@ export interface TransportMatrixRow {
   product_id: string;
   product_name_pl: string;
   purchase_unit: string;
+  // Sort key (supplier-product-order-minimum), taken from the row's first
+  // line: a batch is single-supplier, so every line of a product shares it.
+  supplier_product_id: string;
+  display_order?: number | null;
   linesByOrderId: Record<string, ManagerOrderLineDetail>;
 }
 
@@ -287,18 +292,21 @@ export interface TransportMatrixRow {
  * add-line route mints `OL-{order}-M-{hex}` ids; captain lines are numeric,
  * grid-prefill lines are `-P-`). Such a row was hand-added to a draft after
  * creation, so it renders at the BOTTOM of the matrix in add order instead of
- * being alphabetized into the base list (operator feedback v5.1: "powinien
- * dodawać się od dołu"). */
+ * being sorted into the base list (operator feedback v5.1: "powinien
+ * dodawać się od dołu"). The pin is specific to this editor — the Manager
+ * order table and every document place a manager-added line at its own
+ * position (supplier-product-order-minimum). */
 function isManagerAddedRow(row: TransportMatrixRow): boolean {
   const lines = Object.values(row.linesByOrderId);
   return lines.length > 0 && lines.every((l) => l.order_line_id.includes("-M-"));
 }
 
 /** Union of products across every member order's lines, one row per product.
- * Base rows (captain-submitted / grid-prefilled) sort by product_name_pl
- * (pl collation) for a stable, scannable table; rows added by the manager
- * via "+ Dodaj produkt" append BELOW them in first-encounter (i.e. add)
- * order — see `isManagerAddedRow`. */
+ * Base rows (captain-submitted / grid-prefilled) are in the canonical supplier
+ * order (display_order, then supplier_product_id — lib/productOrder.ts), the
+ * same order as the Captain screen, the e-mail and the Transport documents;
+ * rows added by the manager via "+ Dodaj produkt" append BELOW them in
+ * first-encounter (i.e. add) order — see `isManagerAddedRow`. */
 export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMatrixRow[] {
   const byProduct = new Map<string, TransportMatrixRow>();
   for (const order of orders) {
@@ -309,6 +317,8 @@ export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMa
           product_id: line.product_id,
           product_name_pl: line.product_name_pl,
           purchase_unit: line.purchase_unit,
+          supplier_product_id: line.supplier_product_id,
+          display_order: line.display_order ?? null,
           linesByOrderId: {},
         };
         byProduct.set(line.product_id, row);
@@ -319,12 +329,13 @@ export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMa
   const rows = [...byProduct.values()];
   const base = rows.filter((r) => !isManagerAddedRow(r));
   const managerAdded = rows.filter(isManagerAddedRow); // keeps Map insertion (= add) order
-  base.sort((a, b) => a.product_name_pl.localeCompare(b.product_name_pl, "pl"));
+  base.sort(compareProductOrder);
   return [...base, ...managerAdded];
 }
 
 /** Union, across every member order, of products orderable-but-not-yet-present
- * on that order — one row per product, sorted by name (pl collation), feeding
+ * on that order — one row per product, in the canonical supplier order
+ * (lib/productOrder.ts, same as the Captain order screen), feeding
  * the SINGLE matrix-wide "+ Dodaj produkt" picker (feature 4, v4 feedback
  * round 2) that replaced the old per-location pickers. Each entry is the
  * FIRST matching order's `OrderableItem` verbatim (so it slots straight into
@@ -345,9 +356,7 @@ export function buildTransportAddAllOptions(
       byProduct.set(item.product_id, item);
     }
   }
-  return [...byProduct.values()].sort((a, b) =>
-    a.product_name_pl.localeCompare(b.product_name_pl, "pl"),
-  );
+  return [...byProduct.values()].sort(compareProductOrder);
 }
 
 /** Per-order draft state for a draft batch — one `DraftMap` (order_line_id ->

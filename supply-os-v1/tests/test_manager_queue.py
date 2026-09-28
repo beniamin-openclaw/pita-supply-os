@@ -309,6 +309,34 @@ def test_queue_deviation_threshold_is_25pct(mocker):
     assert payload[0]["line_count"] == 3
 
 
+def test_queue_hides_deviations_for_supplier_with_alerts_off(mocker):
+    """pago-queue-deviation-chips: a supplier with suggestion_alerts_enabled
+    off (Pago) never asks the Captain for a reason, so its orders carry no
+    deviation chip — while another supplier's orders keep theirs."""
+    orders = [
+        _order("ORD-PAGO"),
+        _order("ORD-BUKAT", supplier_id="SUP_BUKAT"),
+    ]
+    lines = [
+        _line("ORD-PAGO", "OL-1", delta_pct=3.0),
+        _line("ORD-PAGO", "OL-2", delta_pct=0.5, reason_code=ReasonCode.OTHER),
+        _line("ORD-BUKAT", "OL-3", delta_pct=0.5),
+    ]
+    suppliers = [
+        _supplier().model_copy(update={"suggestion_alerts_enabled": False}),
+        _supplier("SUP_BUKAT", "Bukat"),
+    ]
+    _enable_sheet_backend(mocker, orders=orders, lines=lines, suppliers=suppliers)
+
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    by_id = {it["order_id"]: it for it in r.json()}
+    assert by_id["ORD-PAGO"]["deviation_count"] == 0
+    assert by_id["ORD-PAGO"]["reason_count"] == 1
+    assert by_id["ORD-PAGO"]["line_count"] == 2
+    assert by_id["ORD-BUKAT"]["deviation_count"] == 1
+
+
 def test_queue_computes_reason_count(mocker):
     orders = [_order("ORD-A")]
     lines = [
@@ -707,6 +735,86 @@ def test_order_detail_minimum_order_value_none_when_supplier_has_none(mocker):
     r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
     assert r.json()["minimum_order_value_pln"] is None
+
+
+# ---------- supplier-product-order-minimum: minimum_basis_value_pln (display-only) ----------
+
+
+def _excluded_sp() -> SupplierProduct:
+    """A Bukat-style product that rides on the delivery without counting toward
+    the supplier minimum (counts_toward_minimum = false)."""
+    return _supplier_product(
+        sp_id="SP_PAGO_P014", product_id="P014", name="Feta blok", price=50.0
+    ).model_copy(update={"counts_toward_minimum": False})
+
+
+def test_queue_minimum_basis_excludes_flagged_lines(mocker):
+    # total 668 = 4 × 145 (counted) + 2 × 44 (stale price, doesn't matter);
+    # the excluded line is valued at the CURRENT price: 2 × 50 = 100 → 568.
+    orders = [_order("ORD-A", supplier_id="SUP_PAGO", total=668.0)]
+    lines = [
+        _line("ORD-A", "OL-A-001", captain_qty=4.0),
+        _line("ORD-A", "OL-A-002", product_id="P014", sp_id="SP_PAGO_P014", captain_qty=2.0),
+    ]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        lines=lines,
+        suppliers=[_supplier(supplier_id="SUP_PAGO", minimum_order_value_pln=500.0)],
+        supplier_products=[_supplier_product(), _excluded_sp()],
+    )
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    item = r.json()[0]
+    assert item["total_value_estimate_pln"] == 668.0
+    assert item["minimum_basis_value_pln"] == 568.0
+
+
+def test_queue_minimum_basis_none_without_excluded_lines(mocker):
+    orders = [_order("ORD-A", supplier_id="SUP_PAGO")]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        lines=[_line("ORD-A", "OL-A-001")],
+        supplier_products=[_supplier_product(), _excluded_sp()],
+    )
+    r = client.get("/api/manager/queue", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()[0]["minimum_basis_value_pln"] is None
+
+
+def test_order_detail_minimum_basis(mocker):
+    order_id = "ORD-BASIS"
+    order = _order(order_id, supplier_id="SUP_PAGO", total=300.0).model_copy(
+        update={
+            "lines": [
+                _line(order_id, "OL-1", captain_qty=1.0),
+                _line(order_id, "OL-2", product_id="P014", sp_id="SP_PAGO_P014", captain_qty=3.0),
+            ]
+        }
+    )
+    _enable_sheet_backend(
+        mocker,
+        orders=[order],
+        get_order_return=order,
+        products=[_product(), _product("P014", "Feta blok")],
+        supplier_products=[_supplier_product(), _excluded_sp()],
+    )
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    # 300 − 3 × 50
+    assert r.json()["minimum_basis_value_pln"] == 150.0
+
+
+def test_order_detail_minimum_basis_none_without_excluded_lines(mocker):
+    order_id = "ORD-BASIS-2"
+    order = _order(order_id, supplier_id="SUP_PAGO").model_copy(
+        update={"lines": [_line(order_id, "OL-1")]}
+    )
+    _enable_sheet_backend(mocker, orders=[order], get_order_return=order)
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["minimum_basis_value_pln"] is None
 
 
 # ---------- training-feedback-0901 Phase 1b: ad-hoc items + captain note (read-only here) ----------

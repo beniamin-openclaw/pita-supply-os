@@ -257,6 +257,7 @@ export function OrderDetailPane({
             <MinimumOrderChip
               total={detail.total_value_estimate_pln}
               minimum={detail.minimum_order_value_pln}
+              basis={detail.minimum_basis_value_pln}
             />
           </div>
         )}

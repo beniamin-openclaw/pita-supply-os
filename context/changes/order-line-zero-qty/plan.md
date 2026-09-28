@@ -523,7 +523,7 @@ None: one boolean column read with rows already fetched; no new queries.
 - [x] 2.1 Frontend build passes — f9dc080
 - [x] 2.2 Frontend lint passes — f9dc080
 - [x] 2.3 Frontend tests pass — f9dc080
-- [ ] 2.4 /verify passes end to end
+- [x] 2.4 /verify passes end to end
 
 #### Manual
 

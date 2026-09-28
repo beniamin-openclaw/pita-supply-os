@@ -242,6 +242,7 @@ export function QueueCard({ item, selected, onSelect, showQueueAge = false }: Qu
           <MinimumOrderChip
             total={item.total_value_estimate_pln}
             minimum={item.minimum_order_value_pln}
+            basis={item.minimum_basis_value_pln}
           />
           {item.deviation_count > 0 && (
             <span

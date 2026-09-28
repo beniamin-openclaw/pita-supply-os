@@ -80,6 +80,9 @@ export interface OrderableItem {
   // shows the suggestion but no deviation alert, no reason prompt and no
   // below-minimum warning. Absent = true (older backend / manager screens).
   suggestion_alerts_enabled?: boolean;
+  // Position in the supplier's list (migration 0023); the backend already
+  // returns orderables in canonical order (lib/productOrder.ts). null = none.
+  display_order?: number | null;
 }
 
 // Captain Submit -------------------------------------------------------------
@@ -333,6 +336,11 @@ export interface CaptainOrderDetail {
   // Supplier's configured minimum order value (display-only; training-
   // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
   minimum_order_value_pln?: number;
+  // Order total minus the lines that don't count toward the supplier minimum
+  // (supplier_products.counts_toward_minimum = false, migration 0023). null
+  // when the order has no such line — the chip then compares the total.
+  // Informational only, like the minimum itself.
+  minimum_basis_value_pln?: number | null;
   notes: string;
   // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
   // Phase 1b) — see Order.extra_items / Order.captain_note (backend) for why
@@ -420,6 +428,11 @@ export interface ManagerQueueItem {
   // frontend never needs a per-screen supplier fetch (hardening.md G4). No
   // server-side reader/gate consumes this — see lib/minimumOrder.ts.
   minimum_order_value_pln?: number;
+  // Order total minus the lines that don't count toward the supplier minimum
+  // (supplier_products.counts_toward_minimum = false, migration 0023). null
+  // when the order has no such line — the chip then compares the total.
+  // Informational only, like the minimum itself.
+  minimum_basis_value_pln?: number | null;
   deviation_count: number;
   reason_count: number;
   last_edited_at?: string | null;
@@ -475,6 +488,9 @@ export interface ManagerOrderLineDetail {
   // OR a positive manager_final). Optional: absent from an older backend, where
   // the lib/orderQty.ts rule falls back to "manager_final > 0".
   manager_final_set?: boolean;
+  // Position of the line's supplier product (migration 0023) — document
+  // builders sort with lib/productOrder.ts compareProductOrder. null = none.
+  display_order?: number | null;
 }
 
 export interface ManagerOrderReceiptLine {
@@ -542,6 +558,11 @@ export interface ManagerOrderDetail {
   // Supplier's configured minimum order value (display-only; training-
   // feedback-0901 Phase 1c) — see ManagerQueueItem.minimum_order_value_pln.
   minimum_order_value_pln?: number;
+  // Order total minus the lines that don't count toward the supplier minimum
+  // (supplier_products.counts_toward_minimum = false, migration 0023). null
+  // when the order has no such line — the chip then compares the total.
+  // Informational only, like the minimum itself.
+  minimum_basis_value_pln?: number | null;
   notes: string;
   // Ad-hoc off-catalogue items + order-level comment (training-feedback-0901
   // Phase 1b), read-only here — see CaptainOrderDetail for the same fields.
@@ -746,6 +767,9 @@ export interface TransportAggregateLine {
   // meat with till rolls and napkins. ONLY the self-pickup document filters on
   // this — the order email and order PDF still cover the whole batch.
   warehouse_pickup?: boolean;
+  // Position of the product's supplier product (migration 0023); the backend
+  // returns the aggregate in canonical order. null = none.
+  display_order?: number | null;
 }
 
 /** One row on the Transport "orders to combine" picker. */

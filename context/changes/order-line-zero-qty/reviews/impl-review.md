@@ -108,3 +108,7 @@ Every old-rule reader goes through app/order_qty.py / lib/orderQty.ts; backend a
 - **Detail**: Two names for one rule in the same file.
 - **Fix**: Replace the alias call sites with effective_ordered_qty and remove the alias.
 - **Decision**: FIXED
+
+## Post-triage
+
+All nine findings fixed in c0700b5. Merging origin/main (0023 supplier-product-order-minimum, PR #37) brought a new `_minimum_basis_value` that called the old-rule `_effective_ordered_qty` alias; it now uses `order_qty.effective_ordered_qty`, its "zeroed line valued at captain_final" drift note is gone, and `tests/test_minimum_basis.py` covers untouched vs explicitly zeroed lines. /verify after the merge: ruff clean, pytest 782 passed, integration 27 passed (fresh local Postgres, 0023 + 0024), frontend build + lint clean, vitest 495 passed.

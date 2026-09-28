@@ -116,6 +116,7 @@ from .models import (
     TransportRemoveOrderResponse,
     TransportSkippedOrder,
 )
+from .product_order import line_sort_key, supplier_product_sort_key
 from .suggestion import SuggestionInput, compute_suggestion, rounding_step
 
 log = logging.getLogger(__name__)
@@ -218,6 +219,7 @@ def _build_orderable_item(
         "supplier_product_name": sp.supplier_product_name,
         "order_note": sp.order_note,
         "suggestion_alerts_enabled": suggestion_alerts_enabled,
+        "display_order": sp.display_order,
     }
 
 
@@ -267,6 +269,10 @@ def _build_orderable_items(
         and sp.product_id in settings_by_pid
         and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
+    # Canonical supplier order (supplier-product-order-minimum): position, then
+    # supplier_product_id. The Captain order/edit screens, the Manager add-line
+    # picker and the Transport prefill line ids all follow this list.
+    sps.sort(key=lambda sp: supplier_product_sort_key(sp.display_order, sp.supplier_product_id))
     return [
         _build_orderable_item(
             sp, products_by_id, settings_by_pid, suggestion_alerts_enabled
@@ -626,6 +632,14 @@ def _evaluate_submit_line(
     return order_line, warning, line_value
 
 
+# On-site production ("Pita Bros (internal production)"): counted in inventory,
+# never ordered. It stays in master data for the inventory grid and
+# `_primary_supplier_product`; ordering screens hide it
+# (frontend/src/lib/orderingSuppliers.ts mirrors this id); `captain_submit` and
+# `manager_transport_create` refuse it (supplier-product-order-minimum).
+_INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
+
+
 @app.post("/api/captain/submit", response_model=CaptainSubmitResponse)
 def captain_submit(
     req: CaptainSubmitRequest,
@@ -634,6 +648,8 @@ def captain_submit(
     """Validate + persist a captain-submitted order.
 
     Validation gates (deterministic):
+      - supplier_id must not be SUP_INTERNAL (on-site production is counted,
+        never ordered) -> 400 before anything is read or written.
       - supplier_id must be known.
       - every line's supplier_product_id must be orderable for this supplier.
       - every line's product_id must have a location_product_setting row at
@@ -653,6 +669,14 @@ def captain_submit(
         reason gates above fire and no warning is returned; the suggestion and
         deviation are still persisted (pago-suggestion-no-alerts).
     """
+    if req.supplier_id == _INTERNAL_SUPPLIER_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Supplier '{_INTERNAL_SUPPLIER_ID}' is internal production — "
+                f"it is counted in inventory, not ordered"
+            ),
+        )
     backend = _choose_backend()
     master = _resolve_master_data(backend, location_id, req.supplier_id)
 
@@ -907,6 +931,9 @@ def manager_queue(
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+    # For the minimum basis (supplier-product-order-minimum): which lines count
+    # toward the supplier minimum. One master-data read per request.
+    sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
     now_utc = datetime.now(timezone.utc)
     threshold = _deviation_threshold()
 
@@ -947,9 +974,18 @@ def manager_queue(
         location_name = location.location_name if location else order.location_id
         lines = lines_by_order.get(order.order_id, [])
 
-        deviation_count = sum(
-            1 for line in lines
-            if abs(line.delta_vs_suggestion_pct or 0.0) >= threshold
+        # A supplier with suggestion alerts off (Pago) still stores
+        # delta_vs_suggestion_pct as the learning record, but the queue shows
+        # no deviation chip for it — the Captain was never asked for a reason,
+        # so the chip would only be noise (pago-queue-deviation-chips).
+        alerts_enabled = supplier.suggestion_alerts_enabled if supplier else True
+        deviation_count = (
+            sum(
+                1 for line in lines
+                if abs(line.delta_vs_suggestion_pct or 0.0) >= threshold
+            )
+            if alerts_enabled
+            else 0
         )
         reason_count = sum(1 for line in lines if line.reason_code is not None)
 
@@ -972,6 +1008,9 @@ def manager_queue(
                 total_value_estimate_pln=order.total_value_estimate_pln,
                 minimum_order_value_pln=(
                     supplier.minimum_order_value_pln if supplier else None
+                ),
+                minimum_basis_value_pln=_minimum_basis_value(
+                    order.total_value_estimate_pln, lines, sps_by_id
                 ),
                 deviation_count=deviation_count,
                 reason_count=reason_count,
@@ -1044,7 +1083,10 @@ def _load_order_receipts(
     out: list[ManagerOrderReceipt] = []
     for r in receipts:
         enriched: list[ManagerOrderReceiptLine] = []
-        for ln in lines_by_receipt.get(r.receipt_id, []):
+        # Same canonical supplier order as the order lines above.
+        for ln in sorted(
+            lines_by_receipt.get(r.receipt_id, []), key=line_sort_key(sps_by_id)
+        ):
             product = products_by_id.get(ln.product_id)
             sp = sps_by_id.get(ln.supplier_product_id)
             enriched.append(
@@ -1107,7 +1149,10 @@ def manager_order_detail(
     location = locations_by_id.get(order.location_id)
 
     enriched_lines: list[ManagerOrderLineDetail] = []
-    for line in order.lines:
+    # Canonical supplier order (supplier-product-order-minimum), applied at read
+    # time so historical orders render in it too; a manager-added line lands at
+    # its own position (operator decision), not at the end.
+    for line in sorted(order.lines, key=line_sort_key(sps_by_id)):
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
         setting = settings_by_pid.get(line.product_id)
@@ -1143,6 +1188,7 @@ def manager_order_detail(
                 captain_comment=line.captain_comment,
                 manager_comment=line.manager_comment,
                 manager_final_set=is_manager_final_set(line),
+                display_order=sp.display_order if sp else None,
             )
         )
 
@@ -1196,6 +1242,9 @@ def manager_order_detail(
         manager_sent_at=order.manager_sent_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
         minimum_order_value_pln=supplier.minimum_order_value_pln if supplier else None,
+        minimum_basis_value_pln=_minimum_basis_value(
+            order.total_value_estimate_pln, order.lines, sps_by_id
+        ),
         notes=order.notes,
         extra_items=order.extra_items,
         captain_note=order.captain_note,
@@ -1221,10 +1270,13 @@ def _enrich_lines_for_detail(
     ``settings_by_pid`` (location_product_settings keyed by product_id) supplies
     ``max_stock_qty_base`` + ``allow_over_max_due_to_packaging`` so the Captain
     edit screen can mirror the backend over-MAX gate. None/absent → 0/False.
+
+    Lines come back in the canonical supplier order (position, then
+    supplier_product_id — app/product_order.py), whatever their stored order.
     """
     settings_by_pid = settings_by_pid or {}
     enriched: list[ManagerOrderLineDetail] = []
-    for line in lines:
+    for line in sorted(lines, key=line_sort_key(sps_by_id)):
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
         setting = settings_by_pid.get(line.product_id)
@@ -1260,6 +1312,7 @@ def _enrich_lines_for_detail(
                 manager_comment=line.manager_comment,
                 captain_comment=line.captain_comment,
                 manager_final_set=is_manager_final_set(line),
+                display_order=sp.display_order if sp else None,
             )
         )
     return enriched
@@ -1393,6 +1446,9 @@ def captain_order_detail(
         last_edited_at=order.last_edited_at,
         total_value_estimate_pln=order.total_value_estimate_pln,
         minimum_order_value_pln=supplier.minimum_order_value_pln if supplier else None,
+        minimum_basis_value_pln=_minimum_basis_value(
+            order.total_value_estimate_pln, order.lines, sps_by_id
+        ),
         notes=order.notes,
         extra_items=order.extra_items,
         captain_note=order.captain_note,
@@ -2614,9 +2670,6 @@ def _log_inventory_event(
         )
 
 
-_INTERNAL_SUPPLIER_ID = "SUP_INTERNAL"
-
-
 def _primary_supplier_product(
     product_id: str,
     sps: list[SupplierProduct],
@@ -3469,6 +3522,43 @@ def _persist_receipt(backend, receipt: Receipt, lines: list[ReceiptLine]) -> boo
     return True
 
 
+def _minimum_basis_value(
+    total: Optional[float],
+    lines: list[OrderLine],
+    sps_by_id: dict[str, SupplierProduct],
+) -> Optional[float]:
+    """The part of an order's estimated total that counts toward the supplier's
+    logistic minimum (supplier-product-order-minimum).
+
+    Some products ride on a supplier's delivery without counting toward its
+    minimum (Bukat's 500 PLN excludes Tzatzyki, Hot Feta and Feta —
+    ``supplier_products.counts_toward_minimum = false``). The basis is the
+    stored total minus the value of those lines: effective quantity
+    (``order_qty.effective_ordered_qty``) × ``price_estimate_pln`` (a missing price
+    contributes 0), floored at 0 and rounded to grosze.
+
+    Returns ``None`` when ``total`` is ``None`` or no line's supplier_product is
+    excluded — the chip then compares the total exactly as before.
+    Display-only: nothing gates on it, and it is never persisted.
+
+    Known drift, accepted: a later master-data price edit moves the basis but
+    not the stored total. (A line the Manager zeroed is valued at 0 since
+    order-line-zero-qty, so it no longer lowers the basis.)"""
+    if total is None:
+        return None
+    excluded_value = 0.0
+    any_excluded = False
+    for line in lines:
+        sp = sps_by_id.get(line.supplier_product_id)
+        if sp is None or sp.counts_toward_minimum:
+            continue
+        any_excluded = True
+        excluded_value += effective_ordered_qty(line) * (sp.price_estimate_pln or 0.0)
+    if not any_excluded:
+        return None
+    return round(max(0.0, total - excluded_value), 2)
+
+
 @app.post("/api/captain/receipt/submit", response_model=ReceiptSubmitResponse)
 def captain_receipt_submit(
     req: ReceiptSubmitRequest,
@@ -3709,7 +3799,8 @@ def captain_receipt_detail(
     location = locations_by_id.get(receipt.location_id)
 
     enriched: list[ReceiptDetailLine] = []
-    for line in receipt.lines:
+    # Canonical supplier order (supplier-product-order-minimum).
+    for line in sorted(receipt.lines, key=line_sort_key(sps_by_id)):
         product = products_by_id.get(line.product_id)
         sp = sps_by_id.get(line.supplier_product_id)
         enriched.append(
@@ -3926,8 +4017,11 @@ def _aggregate_transport_lines(
 
     Missing product / supplier_product / location master data falls back to
     the raw id in the display field (mirrors ``_aggregate_suggestion_review``
-    / ``manager_queue``), never raises. Output is sorted by
-    ``product_name_pl`` for a stable, copyable list.
+    / ``manager_queue``), never raises. Output is in the canonical supplier
+    order (``display_order``, then ``supplier_product_id`` —
+    app/product_order.py; supplier-product-order-minimum replaced the earlier
+    code-point name sort), so the driver list, Pago documents and the sent
+    view read like every other per-supplier list.
 
     ``warehouse_pickup`` (training-feedback-0901 Phase 4) is joined the same
     way as ``supplier_sku`` — False when the supplier_product is missing. This
@@ -3963,6 +4057,7 @@ def _aggregate_transport_lines(
                 "purchase_unit": sp.purchase_unit if sp else "",
                 "supplier_sku": sp.supplier_sku if sp else None,
                 "warehouse_pickup": sp.warehouse_pickup if sp else False,
+                "display_order": sp.display_order if sp else None,
                 "per_location": [],
             }
             groups[line.product_id] = group
@@ -3986,6 +4081,7 @@ def _aggregate_transport_lines(
             purchase_unit=g["purchase_unit"],
             supplier_sku=g["supplier_sku"],
             warehouse_pickup=g["warehouse_pickup"],
+            display_order=g["display_order"],
             total_qty_purchase=round(
                 sum(pl.qty_purchase for pl in g["per_location"]), 3
             ),
@@ -3993,7 +4089,9 @@ def _aggregate_transport_lines(
         )
         for g in groups.values()
     ]
-    items.sort(key=lambda it: it.product_name_pl)
+    items.sort(
+        key=lambda it: supplier_product_sort_key(it.display_order, it.supplier_product_id)
+    )
     return items
 
 
@@ -4500,8 +4598,18 @@ def manager_transport_create(
 
     Seed mode -> 503 (mirrors every other manager write route). A missing
     'transport_batches' worksheet (append_to lookup, or the header append)
-    -> 503.
+    -> 503. ``SUP_INTERNAL`` -> 400 before anything is read or written: on-site
+    production is never ordered, so it never starts a batch (and add-location
+    takes its supplier from the batch header, so this is the only gate needed).
     """
+    if req.supplier_id == _INTERNAL_SUPPLIER_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Supplier '{_INTERNAL_SUPPLIER_ID}' is internal production — "
+                f"it cannot be ordered via Transport"
+            ),
+        )
     backend = _choose_backend()
     if not _is_persistent(backend):
         raise HTTPException(

@@ -174,9 +174,16 @@ def _schema():
     suggestion_alerts = (
         MIGRATIONS_DIR / "0022_supplier_suggestion_alerts.sql"
     ).read_text()
+    # 0023 adds supplier_products.display_order + counts_toward_minimum
+    # (supplier-product-order-minimum); _SUPPLIER_PRODUCT_COLUMNS references
+    # both, so the supplier_products insert below errors against a pre-0023
+    # schema. Lesson: wire every new migration in here.
+    display_order_minimum = (
+        MIGRATIONS_DIR / "0023_supplier_product_display_order_minimum.sql"
+    ).read_text()
     # 0024 adds order_lines.manager_final_set (NOT NULL DEFAULT false);
     # _ORDER_LINE_COLUMNS references it, so every order_lines insert errors
-    # against a pre-0024 schema. 0023 belongs to the display-order lane.
+    # against a pre-0024 schema.
     manager_final_set = (
         MIGRATIONS_DIR / "0024_order_line_manager_final_set.sql"
     ).read_text()
@@ -203,6 +210,7 @@ def _schema():
         conn.exec_driver_sql(order_events)
         conn.exec_driver_sql(ordering_transport)
         conn.exec_driver_sql(suggestion_alerts)
+        conn.exec_driver_sql(display_order_minimum)
         conn.exec_driver_sql(manager_final_set)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
@@ -306,9 +314,39 @@ def test_master_data_roundtrip():
     # `Optional[bool] = None`, the fixture's _insert would already have raised
     # IntegrityError before this test ever ran.
     assert sps[0].warehouse_pickup is False
+    # Same guard for migration 0023: the fixture never passes the two new
+    # fields, so their Pydantic defaults bind against the real columns.
+    assert sps[0].display_order is None
+    assert sps[0].counts_toward_minimum is True
     # RLS deny-all is enabled on every table (migration 0002); a successful read
     # here proves the connection role (postgres) BYPASSES RLS.
     assert supabase_backend.load_locations()
+
+
+def test_supplier_product_display_order_and_minimum_flag_roundtrip():
+    """Migration 0023: a set position and a cleared minimum flag survive a write
+    + load_supplier_products (supplier-product-order-minimum)."""
+    supabase_backend._insert(
+        "supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS,
+        SupplierProduct(
+            supplier_product_id="SP_POS", supplier_id="SUP_X", product_id="P1",
+            supplier_product_name="Pita (positioned)", purchase_unit="szt",
+            units_per_purchase_unit=1.0, display_order=10,
+            counts_toward_minimum=False,
+        ),
+    )
+    try:
+        loaded = next(
+            sp for sp in supabase_backend.load_supplier_products()
+            if sp.supplier_product_id == "SP_POS"
+        )
+        assert loaded.display_order == 10
+        assert loaded.counts_toward_minimum is False
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM supplier_products WHERE supplier_product_id = 'SP_POS'"
+            )
 
 
 def test_supplier_transport_channel_with_alerts_off_roundtrip():
