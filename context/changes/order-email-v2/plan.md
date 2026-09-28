@@ -560,10 +560,10 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Automated
 
-- [x] 3.1 gmailDraft tests: Transport unchanged, new From/Cc/loginHint/cache cases
-- [x] 3.2 orderEmailDraft tests: happy path and error paths
-- [x] 3.3 DispatchPanel tests: transport branch, draft success/failure, no client ID
-- [x] 3.4 Full frontend build + lint + test, backend green
+- [x] 3.1 gmailDraft tests: Transport unchanged, new From/Cc/loginHint/cache cases — 1a68bc1
+- [x] 3.2 orderEmailDraft tests: happy path and error paths — 1a68bc1
+- [x] 3.3 DispatchPanel tests: transport branch, draft success/failure, no client ID — 1a68bc1
+- [x] 3.4 Full frontend build + lint + test, backend green — 1a68bc1
 
 #### Manual
 

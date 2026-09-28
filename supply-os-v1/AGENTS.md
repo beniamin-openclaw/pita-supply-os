@@ -13,7 +13,7 @@ Every endpoint and data-layer boundary takes and returns Pydantic models from @.
 
 ## Build, test, run
 - Run: `uvicorn app.main:app` (see @./Procfile).
-- Test: `python -m pytest` (782 tests, seed backend forced by `tests/conftest.py`); `python -m pytest -m integration` runs 27 tests against a real Postgres named by `SUPPLY_OS_DATABASE_URL` (skips without it). Lint: `ruff check .`.
+- Test: `python -m pytest` (819 tests, seed backend forced by `tests/conftest.py`); `python -m pytest -m integration` runs 28 tests against a real Postgres named by `SUPPLY_OS_DATABASE_URL` (skips without it). Lint: `ruff check .`.
 
 ## Layout & naming
 Modules sit flat in `app/`: route wiring in @./app/main.py, domain models in `models.py`, the suggestion engine in `suggestion.py`, auth in `auth.py`, settings in `config.py`. snake_case modules and functions.
