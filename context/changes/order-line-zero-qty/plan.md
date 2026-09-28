@@ -108,10 +108,11 @@ Additive flag, one rule, both sides:
 - New column `order_lines.manager_final_set boolean NOT NULL DEFAULT false`
   (migration **0024**, confirmed by the coordinator on 2026-09-28: 0021 applied
   via merged PR #33, 0022 applied, 0023 display order, 0025 delivery calendar,
-  0026 order e-mail v2). The migration backfills `true` where the Manager
-  demonstrably committed a value: `manager_final_qty_purchase > 0`, or any line of
-  a `manager_sent`/`closed` order with `sent_method <> 'transport'` (the Manager UI
-  dispatch writes every line).
+  0026 order e-mail v2). The migration backfills `true` only where
+  `manager_final_qty_purchase > 0`, so no existing line changes its effective
+  quantity. (Amended after impl-review F2: the plan first also flagged every line
+  of a dispatched non-transport order; that was the only statement able to flip
+  an existing row, so it was dropped.)
 - The rule, identical on both sides:
   `set = manager_final_set OR manager_final_qty_purchase > 0`;
   `effective = set ? manager_final_qty_purchase : captain_final_qty_purchase`.
@@ -167,8 +168,8 @@ the backend deploy" line, `-- Rollback:` statement).
 
 **Contract**: `ALTER TABLE order_lines ADD COLUMN IF NOT EXISTS manager_final_set
 boolean NOT NULL DEFAULT false;` then an idempotent `UPDATE … SET
-manager_final_set = true` for (a) `manager_final_qty_purchase > 0`, (b) lines whose
-order is `manager_sent`/`closed` with `coalesce(sent_method, '') <> 'transport'`.
+manager_final_set = true` for `manager_final_qty_purchase > 0` (impl-review F2
+dropped a second clause for dispatched non-transport orders).
 Rollback: `ALTER TABLE order_lines DROP COLUMN IF EXISTS manager_final_set;`.
 
 #### 2. Integration fixture

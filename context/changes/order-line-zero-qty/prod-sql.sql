@@ -10,7 +10,7 @@
 -- Section A  read-only pre-check   — save the output, it is the diff.
 -- Section B  the only write        — identical to migrations/0024;
 --            re-runnable, it only ever marks positive manager_final.
--- Section C  read-only audit       — must match A.
+-- Section C  read-only audit, after COMMIT — must match A.
 --
 -- Rollback (revert the code first, then):
 --   ALTER TABLE order_lines DROP COLUMN IF EXISTS manager_final_set;
@@ -65,11 +65,12 @@ UPDATE order_lines
  WHERE manager_final_set = false
    AND manager_final_qty_purchase > 0;
 
--- Run section C inside this transaction, then COMMIT (or ROLLBACK if C disagrees with A).
--- COMMIT;
+COMMIT;
 
 
--- ---------- C. AUDIT (read-only) ----------
+-- ---------- C. AUDIT (read-only, run after COMMIT) ----------
+-- If C disagrees with A, the column is additive and unread by the old code:
+-- drop it with the rollback statement in the header and investigate.
 
 -- C1. Column exists, boolean, NOT NULL, default false.
 SELECT column_name, data_type, is_nullable, column_default
