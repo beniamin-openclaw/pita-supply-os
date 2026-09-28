@@ -593,7 +593,7 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Manual
 
-- [ ] 1.4 Operator reviews 0025_delivery_calendar.sql before applying it on prod
+- [x] 1.4 Operator reviews 0025_delivery_calendar.sql before applying it on prod — applied on prod 2026-09-28 at the operator's request (see prod-sql-audit.md)
 
 ### Phase 2: Engine, proposal endpoint, persistence
 
@@ -640,5 +640,5 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Manual
 
-- [ ] 5.2 Operator runs prod-sql.sql steps 1–4 and the audit matches the seeded rules
+- [x] 5.2 Operator runs prod-sql.sql steps 1–4 and the audit matches the seeded rules — run 2026-09-28 at the operator's request; audit in prod-sql-audit.md
 - [ ] 5.3 Post-deploy prod check on live bundle and backend, test order cancelled
