@@ -1,7 +1,7 @@
 ---
 change_id: order-email-v2
 title: Supplier order e-mail v2 — location send-as alias, Gmail draft, manager signature, location phone, delivery date
-status: implementing
+status: implemented
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null

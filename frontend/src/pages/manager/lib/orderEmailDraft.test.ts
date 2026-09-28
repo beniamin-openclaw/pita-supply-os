@@ -13,6 +13,7 @@ vi.mock("./gmailDraft", async (importOriginal) => {
     getGmailDraftFrom: vi.fn(async () => '"Pita Bros Bracka" <bracka@pitabros.pl>'),
     deleteGmailDraft: vi.fn(async () => undefined),
     clearGmailTokenCache: vi.fn(),
+    rememberGmailToken: vi.fn(),
   };
 });
 
@@ -59,6 +60,8 @@ describe("createVerifiedOrderDraft", () => {
     expect(mime).toContain("To: biuro@bukat.com");
     expect(mime).toContain("Cc: pitabrosbracka@gmail.com");
     expect(gmail.deleteGmailDraft).not.toHaveBeenCalled();
+    // Remembered for reuse only after the profile check passed.
+    expect(gmail.rememberGmailToken).toHaveBeenCalledWith("biuro@pitabros.pl", "tok");
   });
 
   it("wrong mailbox: no draft is created, the token is forgotten", async () => {
@@ -68,6 +71,7 @@ describe("createVerifiedOrderDraft", () => {
     expect((err as WrongMailboxError).actual).toBe("beniamin@pitabros.pl");
     expect(gmail.createGmailDraft).not.toHaveBeenCalled();
     expect(gmail.clearGmailTokenCache).toHaveBeenCalledWith("biuro@pitabros.pl");
+    expect(gmail.rememberGmailToken).not.toHaveBeenCalled();
   });
 
   it("mailbox comparison is case-insensitive", async () => {
@@ -104,6 +108,13 @@ describe("describeDraftError / addressFromHeader", () => {
       "Sesja Google wygasła — kliknij ponownie.",
     );
     expect(describeDraftError(new Error("popup_blocked"), t, ctx)).toContain("zablokowała");
+    expect(describeDraftError(new Error("Google sign-in timed out"), t, ctx)).toContain(
+      "90 sekund",
+    );
+    expect(describeDraftError(new Error("No access token returned"), t, ctx)).toContain(
+      "nie dał dostępu",
+    );
+    expect(describeDraftError(new Error("access_denied"), t, ctx)).toContain("nie dał dostępu");
     expect(describeDraftError(new Error("Gmail API error 500: x"), t, ctx)).toContain(
       "Gmail API error 500",
     );

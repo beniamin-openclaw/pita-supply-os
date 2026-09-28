@@ -40,9 +40,17 @@ interface ResendPanelProps {
   /** Unsaved edits exist — hide the link until the manager saves. */
   dirty: boolean;
   onToast: (msg: string, ok: boolean) => void;
+  /** Reports a draft in progress so the page locks other actions meanwhile. */
+  onDraftingChange?: (drafting: boolean) => void;
 }
 
-export function ResendPanel({ detail, drafts, dirty, onToast }: ResendPanelProps) {
+export function ResendPanel({
+  detail,
+  drafts,
+  dirty,
+  onToast,
+  onDraftingChange,
+}: ResendPanelProps) {
   const { t } = useT();
   const effQty = useMemo(
     () => (line: ManagerOrderLineDetail) => draftQty(drafts, line),
@@ -85,6 +93,7 @@ export function ResendPanel({ detail, drafts, dirty, onToast }: ResendPanelProps
     if (!canDraft) return;
     setDraftResult(null);
     setDrafting(true);
+    onDraftingChange?.(true);
     try {
       // First call of the handler — it opens the Google popup synchronously.
       await createVerifiedOrderDraft({
@@ -101,6 +110,7 @@ export function ResendPanel({ detail, drafts, dirty, onToast }: ResendPanelProps
       setDraftResult({ ok: false, msg: describeDraftError(e, t, { mailbox, sender }) });
     } finally {
       setDrafting(false);
+      onDraftingChange?.(false);
     }
   };
 

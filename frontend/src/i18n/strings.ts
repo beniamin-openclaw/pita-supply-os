@@ -598,6 +598,22 @@ export const STRINGS = {
     pl: "Przeglądarka zablokowała okienko Google — zezwól na wyskakujące okna dla tej strony i kliknij ponownie.",
     en: "The browser blocked the Google window — allow pop-ups for this site and click again.",
   },
+  "manager.draft.errSignInTimeout": {
+    pl: "Logowanie Google nie zakończyło się w ciągu 90 sekund — kliknij ponownie i dokończ logowanie w okienku.",
+    en: "Google sign-in did not finish within 90 seconds — click again and complete the sign-in window.",
+  },
+  "manager.draft.errNoToken": {
+    pl: "Google nie dał dostępu do Gmaila (logowanie przerwane albo brak zgody) — kliknij ponownie.",
+    en: "Google did not grant Gmail access (sign-in cancelled or consent refused) — click again.",
+  },
+  "manager.draft.pageLocked": {
+    pl: "Trwa tworzenie szkicu w Gmailu — poczekaj, aż się skończy.",
+    en: "A Gmail draft is being created — wait until it finishes.",
+  },
+  "manager.draft.orderChanged": {
+    pl: "w trakcie trwała inna akcja na zamówieniu. Odśwież stronę; jeśli zamówienie nadal nie jest wysłane, usuń zbędny szkic w Gmailu przed ponownym kliknięciem",
+    en: "another action on the order was running meanwhile. Reload the page; if the order is still not sent, delete the extra Gmail draft before clicking again",
+  },
   "manager.draft.errGeneric": {
     pl: "Nie udało się utworzyć szkicu: {detail}",
     en: "Could not create the draft: {detail}",

@@ -6,7 +6,8 @@
 // that account is silently replaced by the primary address. So this flow
 // VERIFIES both, within the gmail.compose scope:
 //   1. token (popup pre-selecting the mailbox; reused ~50 min),
-//   2. users.getProfile must be the mailbox — else no draft at all,
+//   2. users.getProfile must be the mailbox — else no draft at all; only a
+//      token that passed this check is remembered for reuse,
 //   3. drafts.create,
 //   4. drafts.get From must be the alias — else the draft is deleted.
 // Only a verified draft is returned; the caller dispatches after that. The app
@@ -22,6 +23,7 @@ import {
   getGmailProfileEmail,
   GmailAuthExpiredError,
   type MimeFrom,
+  rememberGmailToken,
   requestGmailAccessToken,
   toBase64Url,
 } from "./gmailDraft";
@@ -92,6 +94,7 @@ export async function createVerifiedOrderDraft(
     clearGmailTokenCache(args.mailbox);
     throw new WrongMailboxError(actual);
   }
+  rememberGmailToken(args.mailbox, token);
   const mime = buildMimeMessage({
     from: args.from,
     to: args.to,
@@ -129,6 +132,11 @@ export function describeDraftError(
   if (e instanceof GmailAuthExpiredError) return t("manager.draft.errSessionExpired");
   const msg = e instanceof Error && e.message ? e.message : String(e);
   if (msg === "popup_blocked") return t("manager.draft.errPopupBlocked");
+  // Raw English messages from requestGmailAccessToken (shared with Transport).
+  if (msg === "Google sign-in timed out") return t("manager.draft.errSignInTimeout");
+  if (msg === "No access token returned" || msg === "access_denied") {
+    return t("manager.draft.errNoToken");
+  }
   return t("manager.draft.errGeneric", { detail: msg });
 }
 

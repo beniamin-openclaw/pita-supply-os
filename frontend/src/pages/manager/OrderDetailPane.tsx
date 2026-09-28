@@ -42,6 +42,9 @@ interface OrderDetailPaneProps {
   loading: boolean;
   /** Order id currently running an action (claim/release/dispatch/save), or null. */
   busyId: string | null;
+  /** Order id with a Gmail draft in progress (order-email-v2), or null — every
+   *  other action on it stays disabled until the draft settles. */
+  draftingId?: string | null;
   /** cutoff_iso from the selected queue item — not carried by ManagerOrderDetail. */
   cutoffIso?: string | null;
   /** Compose URL from a dispatch done this session — clickable on a sent order. */
@@ -71,6 +74,8 @@ interface OrderDetailPaneProps {
   onQtyChange: (orderLineId: string, qty: number) => void;
   onCommentChange: (orderLineId: string, comment: string) => void;
   onToast: (msg: string, ok: boolean) => void;
+  /** A Gmail draft started/settled for this order (page lock, order-email-v2). */
+  onDraftingChange?: (orderId: string, drafting: boolean) => void;
 }
 
 export function OrderDetailPane({
@@ -78,6 +83,7 @@ export function OrderDetailPane({
   detail,
   loading,
   busyId,
+  draftingId,
   cutoffIso,
   dispatchedEmailUrl,
   draftedMailbox,
@@ -92,6 +98,7 @@ export function OrderDetailPane({
   onQtyChange,
   onCommentChange,
   onToast,
+  onDraftingChange,
 }: OrderDetailPaneProps) {
   const { t, formatDateTime } = useT();
 
@@ -128,6 +135,8 @@ export function OrderDetailPane({
     : managerSummary(detail.lines);
   const dirty = editable && hasDirtyDrafts(drafts, detail.lines);
   const busy = busyId === detail.order_id;
+  // Disabled-but-not-spinning while a Gmail draft is being created.
+  const locked = busy || draftingId === detail.order_id;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -212,7 +221,7 @@ export function OrderDetailPane({
           <div className="mt-3">
             <AddProductPicker
               items={availableToAdd}
-              disabled={busy}
+              disabled={locked}
               onSelect={(item) =>
                 onAddLine(detail.order_id, item.product_id, item.supplier_product_id)
               }
@@ -237,7 +246,7 @@ export function OrderDetailPane({
           {editable && dirty && (
             <button
               type="button"
-              disabled={busy}
+              disabled={locked}
               onClick={() => onSave(detail.order_id)}
               className="sticky bottom-4 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
@@ -329,7 +338,13 @@ export function OrderDetailPane({
               )}
             </div>
           )}
-          <ResendPanel detail={detail} drafts={drafts} dirty={dirty} onToast={onToast} />
+          <ResendPanel
+            detail={detail}
+            drafts={drafts}
+            dirty={dirty}
+            onToast={onToast}
+            onDraftingChange={(on) => onDraftingChange?.(detail.order_id, on)}
+          />
         </>
       ) : editable ? (
         <>
@@ -337,7 +352,7 @@ export function OrderDetailPane({
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
             <button
               type="button"
-              disabled={busy}
+              disabled={locked}
               onClick={() => onRelease(detail.order_id)}
               className="rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
             >
@@ -345,7 +360,7 @@ export function OrderDetailPane({
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={locked}
               onClick={() => onCancel(detail.order_id)}
               className="rounded-lg border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
             >
@@ -361,6 +376,7 @@ export function OrderDetailPane({
               onDispatch(detail.order_id, sentMethod, signerEmail, opts)
             }
             onToast={onToast}
+            onDraftingChange={(on) => onDraftingChange?.(detail.order_id, on)}
           />
         </>
       ) : (

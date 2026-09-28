@@ -10,11 +10,13 @@
 -- Lessons "Master-data ops: diff before, audit after". The agent never runs
 -- B or C against prod.
 --
--- OPEN (confirm at the STOP before applying B/C):
---   * alias spelling for every location below (brief 2026-09-28)
---   * WOLA: biuro@ (NULL here) or the wolskamalpa@ alias from July notes
---   * KULINARNA vs KAMIENICA: which location gets kulinarna@
---   * Marek's signature e-mail: marek@ (brief) or manager@ (July notes)
+-- Confirmed by the operator 2026-09-28:
+--   * WOLA sends from biuro@ itself -> sender_email NULL
+--   * kulinarna@ goes to KULINARNA (the "Kulinarna Kamienica" location);
+--     the separate inactive KAMIENICA row gets no alias
+--   * Marek's signature e-mail: marek@pitabros.pl
+--   * Marek and Sławek can both sign in as biuro@ in their Chrome
+-- Still open (non-blocking):
 --   * BROWARY / WESTFIELD phone: unknown -> left NULL (no phone line)
 --
 -- Rollback:
@@ -49,14 +51,14 @@ UPDATE locations SET sender_email = 'forum@pitabros.pl'                         
 UPDATE locations SET sender_email = 'poznan@pitabros.pl'                             WHERE location_id = 'STARY_BROWAR';
 UPDATE locations SET sender_email = 'slony@pitabros.pl'                              WHERE location_id = 'SLONY';
 UPDATE locations SET sender_email = 'supersam@pitabros.pl'                           WHERE location_id = 'SUPERSAM';
--- OPEN: KULINARNA or KAMIENICA — keep exactly one of the two lines.
+-- "Kulinarna Kamienica" is KULINARNA (operator 2026-09-28).
 UPDATE locations SET sender_email = 'kulinarna@pitabros.pl'                          WHERE location_id = 'KULINARNA';
 
 COMMIT;
 
 
 -- ---------- C. signers ----------
--- First entry = default signer. OPEN: Marek's e-mail (marek@ vs manager@).
+-- First entry = default signer (Marek, marek@ confirmed 2026-09-28).
 INSERT INTO _meta (key, value) VALUES (
   'order_email_signers',
   '[{"name": "Marek Złotopolski", "phone": "+48 662 184 258", "email": "marek@pitabros.pl"},

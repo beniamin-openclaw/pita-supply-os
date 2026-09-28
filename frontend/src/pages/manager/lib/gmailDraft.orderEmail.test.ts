@@ -13,6 +13,7 @@ import {
   GmailAuthExpiredError,
   hasCachedGmailToken,
   OAUTH_BROADCAST_CHANNEL,
+  rememberGmailToken,
   requestGmailAccessToken,
   TOKEN_CACHE_MS,
 } from "./gmailDraft";
@@ -87,9 +88,12 @@ describe("requestGmailAccessToken — token cache", () => {
     return pending;
   }
 
-  it("reuses a token for the same account without a popup", async () => {
+  it("reuses a remembered token for the same account without a popup", async () => {
     expect(await signIn("tok-1", { loginHint: "biuro@pitabros.pl", reuse: true })).toBe("tok-1");
     expect(openSpy).toHaveBeenCalledTimes(1);
+    // The request alone never caches: the caller remembers a VERIFIED token.
+    expect(hasCachedGmailToken("biuro@pitabros.pl")).toBe(false);
+    rememberGmailToken("biuro@pitabros.pl", "tok-1");
     expect(new URL(openSpy.mock.calls[0][0] as string).searchParams.get("login_hint")).toBe(
       "biuro@pitabros.pl",
     );
@@ -107,19 +111,19 @@ describe("requestGmailAccessToken — token cache", () => {
   it("expires after TOKEN_CACHE_MS and can be cleared", async () => {
     const now = Date.now();
     const clock = vi.spyOn(Date, "now").mockReturnValue(now);
-    await signIn("tok-3", { loginHint: "biuro@pitabros.pl", reuse: true });
+    rememberGmailToken("biuro@pitabros.pl", "tok-3");
     expect(hasCachedGmailToken("biuro@pitabros.pl")).toBe(true);
     clock.mockReturnValue(now + TOKEN_CACHE_MS + 1);
     expect(hasCachedGmailToken("biuro@pitabros.pl")).toBe(false);
 
     clock.mockReturnValue(now);
-    await signIn("tok-4", { loginHint: "biuro@pitabros.pl", reuse: true });
+    rememberGmailToken("biuro@pitabros.pl", "tok-4");
     clearGmailTokenCache("biuro@pitabros.pl");
     expect(hasCachedGmailToken("biuro@pitabros.pl")).toBe(false);
   });
 
   it("a 401 from the Gmail API clears the cache", async () => {
-    await signIn("tok-5", { loginHint: "biuro@pitabros.pl", reuse: true });
+    rememberGmailToken("biuro@pitabros.pl", "tok-5");
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 401 })));
     await expect(getGmailProfileEmail("tok-5")).rejects.toBeInstanceOf(GmailAuthExpiredError);
     expect(hasCachedGmailToken("biuro@pitabros.pl")).toBe(false);
@@ -142,6 +146,6 @@ describe("Gmail API reads", () => {
     vi.stubGlobal("fetch", fetchMock);
     expect(await getGmailProfileEmail("t")).toBe("biuro@pitabros.pl");
     expect(await getGmailDraftFrom("t", "r-1")).toBe("X <bracka@pitabros.pl>");
-    expect(fetchMock.mock.calls[1][0]).toContain("drafts/r-1?format=metadata&metadataHeaders=From");
+    expect(fetchMock.mock.calls[1][0]).toMatch(/drafts\/r-1\?format=metadata$/);
   });
 });

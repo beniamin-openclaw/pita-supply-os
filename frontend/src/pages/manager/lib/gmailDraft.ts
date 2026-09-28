@@ -339,8 +339,10 @@ export interface GmailTokenMessage {
 export interface RequestTokenOptions {
   /** Pre-select this Google account in the popup (`login_hint`). */
   loginHint?: string;
-  /** Reuse a token obtained within TOKEN_CACHE_MS for the same loginHint
-   *  instead of opening the popup again. Transport keeps per-click popups. */
+  /** Reuse a token remembered (rememberGmailToken) within TOKEN_CACHE_MS for
+   *  the same loginHint instead of opening the popup again. Transport keeps
+   *  per-click popups. The caller remembers a token only after it verified the
+   *  account (order-email-v2), so an unverified token is never reused. */
   reuse?: boolean;
 }
 
@@ -365,7 +367,9 @@ function readCachedToken(loginHint?: string): string | null {
   return hit.token;
 }
 
-function writeCachedToken(loginHint: string | undefined, token: string): void {
+/** Remember a token for `loginHint` for TOKEN_CACHE_MS. Call it only after the
+ * token was verified to belong to that account (users.getProfile). */
+export function rememberGmailToken(loginHint: string | undefined, token: string): void {
   tokenCache.set(cacheKey(loginHint), { token, expiresAt: Date.now() + TOKEN_CACHE_MS });
 }
 
@@ -431,7 +435,6 @@ export async function requestGmailAccessToken(
         return;
       }
       const token = data.accessToken;
-      if (opts.reuse) writeCachedToken(opts.loginHint, token);
       settle(() => resolve(token));
     };
 
@@ -523,7 +526,9 @@ export async function getGmailProfileEmail(accessToken: string): Promise<string>
  * a From that is not a send-as alias of the mailbox, so this is the check. */
 export async function getGmailDraftFrom(accessToken: string, draftId: string): Promise<string> {
   const resp = await fetch(
-    `${GMAIL_API}/drafts/${encodeURIComponent(draftId)}?format=metadata&metadataHeaders=From`,
+    // format=metadata returns every header; `metadataHeaders` is documented
+    // for messages.get only, so it is not relied on here.
+    `${GMAIL_API}/drafts/${encodeURIComponent(draftId)}?format=metadata`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
   await throwIfNotOk(resp);

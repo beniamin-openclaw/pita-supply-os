@@ -69,11 +69,22 @@ function makeDetail(overrides: Partial<ManagerOrderDetail> = {}): ManagerOrderDe
   } as ManagerOrderDetail;
 }
 
-function renderPanel(detail: ManagerOrderDetail, onDispatch = vi.fn()) {
+function renderPanel(
+  detail: ManagerOrderDetail,
+  onDispatch = vi.fn(),
+  extra: { busy?: boolean; onDraftingChange?: (drafting: boolean) => void } = {},
+) {
   render(
     <MemoryRouter>
       <LangProvider>
-        <DispatchPanel detail={detail} drafts={{}} busy={false} onDispatch={onDispatch} onToast={() => {}} />
+        <DispatchPanel
+          detail={detail}
+          drafts={{}}
+          busy={extra.busy ?? false}
+          onDispatch={onDispatch}
+          onToast={() => {}}
+          onDraftingChange={extra.onDraftingChange}
+        />
       </LangProvider>
     </MemoryRouter>,
   );
@@ -147,6 +158,29 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
     expect(onDispatch).not.toHaveBeenCalled();
     await act(async () => finish({ draftId: "r-1" }));
     expect(onDispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports drafting start and end to the page lock (success and failure)", async () => {
+    const onDraftingChange = vi.fn();
+    renderPanel(makeDetail(), vi.fn(), { onDraftingChange });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+    });
+    expect(onDraftingChange.mock.calls).toEqual([[true], [false]]);
+
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockRejectedValue(new Error("x"));
+    onDraftingChange.mockClear();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+    });
+    expect(onDraftingChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("while a dispatch is in flight the fallback link is inert too", () => {
+    const onDispatch = renderPanel(makeDetail(), vi.fn(), { busy: true });
+    expect(screen.queryByRole("link", { name: "Otwórz w Gmail" })).toBeNull();
+    fireEvent.click(screen.getByText("Otwórz w Gmail"));
+    expect(onDispatch).not.toHaveBeenCalled();
   });
 
   it("without a client id: no draft button, the link still works", () => {

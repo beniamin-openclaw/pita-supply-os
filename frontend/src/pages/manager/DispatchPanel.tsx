@@ -78,6 +78,9 @@ interface DispatchPanelProps {
   onDispatch: DispatchHandler;
   /** Surface a toast (copy success/failure). */
   onToast: (msg: string, ok: boolean) => void;
+  /** Reports a Gmail draft in progress so the page locks every other action
+   *  (queue selection, save, release, cancel) until it settles. */
+  onDraftingChange?: (drafting: boolean) => void;
 }
 
 // Best-effort phone extraction from free-text supplier_notes for a tel: link.
@@ -97,7 +100,14 @@ function parsePortalUrl(notes: string): string | null {
   return m[0].replace(/[.,;"'\]}]+$/, "");
 }
 
-export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: DispatchPanelProps) {
+export function DispatchPanel({
+  detail,
+  drafts,
+  busy,
+  onDispatch,
+  onToast,
+  onDraftingChange,
+}: DispatchPanelProps) {
   const { t } = useT();
   const method = detail.ordering_method;
 
@@ -183,6 +193,7 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
           busy={busy}
           onDispatch={onDispatch}
           onCopy={copy}
+          onDraftingChange={onDraftingChange}
         />
       )}
 
@@ -242,6 +253,7 @@ interface EmailDispatchProps {
   busy: boolean;
   onDispatch: DispatchHandler;
   onCopy: (text: string) => void;
+  onDraftingChange?: (drafting: boolean) => void;
 }
 
 function EmailDispatch({
@@ -251,6 +263,7 @@ function EmailDispatch({
   busy,
   onDispatch,
   onCopy,
+  onDraftingChange,
 }: EmailDispatchProps) {
   const { t } = useT();
   const { signer, setSignerEmail } = useOrderEmailSigner(detail.email_signers);
@@ -299,6 +312,7 @@ function EmailDispatch({
     if (!canDraft) return;
     setDraftError(null);
     setDrafting(true);
+    onDraftingChange?.(true);
     try {
       // First call of the handler — it opens the Google popup synchronously.
       await createVerifiedOrderDraft({
@@ -316,6 +330,7 @@ function EmailDispatch({
       setDraftError(describeDraftError(e, t, { mailbox, sender }));
     } finally {
       setDrafting(false);
+      onDraftingChange?.(false);
     }
   };
 
@@ -435,9 +450,10 @@ function EmailDispatch({
         {/* Real <a> — clicking opens Gmail AND fires the dispatch state-write.
             We do NOT preventDefault so the browser navigates the link normally;
             window.open is deliberately avoided (popup blockers). While a draft
-            is being created it is inert (no href), so it cannot dispatch twice. */}
+            is being created or a dispatch is in flight it is inert (no href),
+            so it cannot open a stray compose window or dispatch twice. */}
         {canOpenGmail &&
-          (drafting ? (
+          (drafting || busy ? (
             <span
               aria-disabled="true"
               className="cursor-not-allowed rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-400"
