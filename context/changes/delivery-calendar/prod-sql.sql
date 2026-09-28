@@ -80,7 +80,14 @@ FROM v
 WHERE EXISTS (SELECT 1 FROM suppliers s WHERE s.supplier_id = v.supplier_id)
   AND (v.location_id IS NULL
        OR EXISTS (SELECT 1 FROM locations l WHERE l.location_id = v.location_id))
-ON CONFLICT DO NOTHING;
+-- Re-runnable: a corrected value in a later run overwrites the existing row.
+ON CONFLICT (rule_id) DO UPDATE SET
+    order_weekdays    = EXCLUDED.order_weekdays,
+    lead_days         = EXCLUDED.lead_days,
+    delivery_weekdays = EXCLUDED.delivery_weekdays,
+    order_deadline    = EXCLUDED.order_deadline,
+    active            = EXCLUDED.active,
+    notes             = EXCLUDED.notes;
 
 UPDATE suppliers
 SET coverage_prompt_enabled = true

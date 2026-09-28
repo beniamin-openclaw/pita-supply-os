@@ -60,6 +60,9 @@ interface DeliveryChoice {
 // SUP_BLUESERV — 0 orderable lines at Wola). Retargeting the pilot later is a
 // one-line edit; no env var needed (same value in dev and prod).
 const PILOT_SUPPLIER_ID = "SUP_BUKAT";
+// Delivery calendar: proposal refetch backoff when the browser clock is
+// already past the order deadline the server returned.
+const DEADLINE_RETRY_MS = 30_000;
 
 /** True when the screen carries anything worth persisting as a draft. Freshly
  * initialized (all-blank) states must not overwrite or create drafts.
@@ -142,6 +145,10 @@ export function CaptainMP() {
   useEffect(() => {
     deliveryChoicesRef.current = deliveryChoices;
   }, [deliveryChoices]);
+  const proposalForRef = useRef<typeof proposalFor>(null);
+  useEffect(() => {
+    proposalForRef.current = proposalFor;
+  }, [proposalFor]);
 
   const token = getToken("captain") || "";
 
@@ -327,22 +334,23 @@ export function CaptainMP() {
       .captainDeliveryProposal(sid)
       .then((proposal) => {
         if (cancelled) return;
-        setProposalFor((prev) => {
-          const before = prev?.supplierId === sid ? prev.proposal : null;
-          if (
-            before &&
-            before.proposed_delivery_date !== proposal.proposed_delivery_date &&
-            !deliveryChoicesRef.current[sid]?.date
-          ) {
-            showToast(
-              t("deliveryCalendar.dateMovedToast", {
-                date: formatDateTime(proposal.proposed_delivery_date, DELIVERY_DATE_FORMAT),
-              }),
-              "success",
-            );
-          }
-          return { supplierId: sid, proposal };
-        });
+        // Read the previous proposal from a ref, not inside a state updater:
+        // updaters must stay pure (StrictMode runs them twice → double toast).
+        const prev = proposalForRef.current;
+        const before = prev?.supplierId === sid ? prev.proposal : null;
+        if (
+          before &&
+          before.proposed_delivery_date !== proposal.proposed_delivery_date &&
+          !deliveryChoicesRef.current[sid]?.date
+        ) {
+          showToast(
+            t("deliveryCalendar.dateMovedToast", {
+              date: formatDateTime(proposal.proposed_delivery_date, DELIVERY_DATE_FORMAT),
+            }),
+            "success",
+          );
+        }
+        setProposalFor({ supplierId: sid, proposal });
       })
       .catch(() => {
         // Optional: the order screen keeps working with the legacy date.
@@ -359,13 +367,15 @@ export function CaptainMP() {
     !!activeSupplierId && proposalFor?.supplierId !== activeSupplierId;
 
   // Refetch one second after the order deadline: the backend treats that
-  // instant as late (strict `>`), so the refetch always returns a later
-  // deadline. Never armed for a deadline that is not in the future.
+  // instant as late (strict `>`), so the refetch returns a later deadline.
+  // A deadline already in the past by the browser clock means the phone runs
+  // ahead of the server — retry after a short backoff instead of giving up.
   useEffect(() => {
     if (!activeProposal) return;
     const ms = new Date(activeProposal.order_deadline).getTime() + 1000 - Date.now();
-    if (!Number.isFinite(ms) || ms <= 0) return;
-    const id = window.setTimeout(() => setProposalReload((k) => k + 1), ms);
+    if (!Number.isFinite(ms)) return;
+    const delay = ms > 0 ? ms : DEADLINE_RETRY_MS;
+    const id = window.setTimeout(() => setProposalReload((k) => k + 1), delay);
     return () => window.clearTimeout(id);
   }, [activeProposal]);
 

@@ -1,7 +1,7 @@
 ---
 change_id: delivery-calendar
 title: Delivery calendar — proposed delivery date, 17:00 deadline and Thursday coverage prompt
-status: implementing
+status: impl_reviewed
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null

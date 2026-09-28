@@ -636,7 +636,7 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Automated
 
-- [x] 5.1 /verify passes
+- [x] 5.1 /verify passes — 58ab763
 
 #### Manual
 
