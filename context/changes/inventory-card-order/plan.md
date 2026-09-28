@@ -41,8 +41,8 @@ the new locations start on 1.10.
   `data/gen_positions.py.txt`).
 - With the template, few active location products stay unpositioned on prod (read-only query,
   2026-09-28): WOLA 14, BRACKA 5, NORBLIN 5, KEN 2, BROWARY 1, others 0. These are products that
-  no card lists (P078, P139–P141, P146–P154, P188). They fall to the end of their category
-  section, which is where a Captain would expect an item the card lacks.
+  no card lists (P078, P139–P141, P146–P154, P188). The extras rule (below) places them at the
+  end of their category section, which is where a Captain would expect an item the card lacks.
 - On prod, `setting_id` is `LOC__Pnnn` everywhere, and no key or SQL here depends on it. Every
   write keys on `(location_id, product_id)`.
 - The product categories line up with the card sections. For all 12 cards, grouping the card
@@ -437,10 +437,9 @@ Prepare the two gated data batches and the release notes. Nothing runs on prod i
   `prod-sql-diff-before.md`. Also list, from a `VALUES` join on `(location_id, product_id)`:
   - card products with no active setting at their location, which are not on that grid;
   - override rows that match no setting, which must be zero;
-  - active location products with no effective position, per location (expected: WOLA 14,
-    BRACKA 5, NORBLIN 5, KEN 2, BROWARY 1);
-  - the extras per location: active settings whose product is not on the location's card, with
-    the section slot they will get;
+  - the extras per location: active settings whose product is not on the location's card
+    (75 on the 2026-09-28 prod copy, including the 27 settings whose product no card lists
+    at all);
   - existing overrides that step 1 will clear.
 - **Step 1 (one transaction).**
   - Set `products.inventory_order` from the template.
@@ -460,7 +459,8 @@ Prepare the two gated data batches and the release notes. Nothing runs on prod i
   - All positions are > 0.
   - Category runs per location equal the number of categories on the card.
   - Override rows applied per location = rows expected.
-  - Unpositioned active products per location match step 0.
+  - Unpositioned active products per location: 0 rows. Every active product at a carded
+    location is on its card or is an extra.
   - Bukat `display_order` is untouched.
 - **Step R (rollback).** Restore from the diff; NULL for this first batch.
 
@@ -667,6 +667,16 @@ cleared overrides included.
   - O4: all SQL keys on `(location_id, product_id)`.
   - O6: a Pago PDF check is added to the live check.
 
+- **Implementation note (Phase 3, 2026-09-28).** The generator does not emit a
+  `(location_id, product_category, section_end)` list. `prod-sql.sql` step 2d computes each
+  section end at run time from the card VALUES and prod's own `product_category`, so a category
+  renamed on prod cannot desync the file.
+  - The gap check moved into the audit: 3c (no inversions) and 3d (no contiguity break). Both
+    passed on the local prod copy.
+  - The local gap check (minimum 7) still holds for the parsed data.
+  - The same dry run showed that the extras rule positions every active product at a carded
+    location, including those no card lists. Step 3e therefore expects 0 rows.
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.
@@ -683,16 +693,16 @@ cleared overrides included.
 
 #### Automated
 
-- [x] 2.1 Frontend tests pass: `cd frontend && npm run test`
-- [x] 2.2 Frontend build passes: `cd frontend && npm run build`
-- [x] 2.3 Frontend lint passes: `cd frontend && npm run lint`
+- [x] 2.1 Frontend tests pass: `cd frontend && npm run test` — 5304483
+- [x] 2.2 Frontend build passes: `cd frontend && npm run build` — 5304483
+- [x] 2.3 Frontend lint passes: `cd frontend && npm run lint` — 5304483
 
 ### Phase 3: Prod data SQL and docs
 
 #### Automated
 
-- [ ] 3.1 prod-sql steps 0–2 of both files run clean on a local throwaway Postgres (or syntax-only, recorded)
-- [ ] 3.2 Backend and frontend suites still green
+- [x] 3.1 prod-sql steps 0–2 of both files run clean on a local throwaway Postgres (or syntax-only, recorded)
+- [x] 3.2 Backend and frontend suites still green
 
 ### Phase 4: Release (operator-gated)
 

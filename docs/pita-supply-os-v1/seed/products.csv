@@ -1,155 +1,155 @@
-product_id,gostock_id,product_name_pl,product_category,inventory_unit,is_critical,active,notes
-P001,1,Masło MR 500g,Chłodnia,szt,FALSE,TRUE,
-P002,2,Cytryna,Chłodnia,kg,FALSE,TRUE,
-P003,3,Papryka zielona,Chłodnia,kg,FALSE,TRUE,
-P004,4,Awokado,Chłodnia,szt,FALSE,TRUE,
-P005,5,Ogórek,Chłodnia,kg,FALSE,TRUE,
-P006,6,Pomidor,Chłodnia,kg,TRUE,TRUE,Greek salad essential
-P007,7,Rucola 125 gr,Chłodnia,opak,FALSE,TRUE,
-P008,8,Sałata bolero mix 150gr,Chłodnia,opak,FALSE,TRUE,
-P009,9,Natka Pietruszki,Chłodnia,kg,FALSE,TRUE,
-P010,10,Czosnek,Chłodnia,kg,FALSE,TRUE,
-P011,11,Tzatzyki,Chłodnia,kg,TRUE,TRUE,Made by Bukat — core menu sauce
-P012,12,Tirokafteri,Chłodnia,kg,FALSE,TRUE,
-P013,13,Oliwki kalamata,Chłodnia,kg,FALSE,TRUE,
-P014,14,Feta blok,Chłodnia,kg,TRUE,TRUE,Greek salad essential
-P015,15,Halloumi,Chłodnia,szt,TRUE,TRUE,Core menu cheese
-P016,16,Cebula czerwona,Chłodnia,kg,TRUE,TRUE,Greek salad essential
-P017,17,Florinis,Chłodnia,kg,FALSE,TRUE,
-P018,18,Cebula Biała,Chłodnia,kg,FALSE,TRUE,
-P019,19,Przyprawa do souvlakow,Chłodnia,kg,FALSE,TRUE,
-P020,20,Falafel,Mrożonki,kg,TRUE,TRUE,Falafel menu item
-P021,21,Frytki Aviko (opakowania),Mrożonki,kg,TRUE,TRUE,Core menu fries
-P022,22,Frytki z batatów (opakowania),Mrożonki,kg,FALSE,TRUE,
-P023,23,Fasolka Szparagowa (op.),Mrożonki,kg,FALSE,TRUE,
-P024,24,Gyros 15 KG,Mrożonki,kg,TRUE,TRUE,Core menu gyros — 15kg block
-P025,25,Gyros 25 KG,Mrożonki,kg,FALSE,TRUE,Larger gyros block — used at higher-volume points
-P026,26,Pita (opakowania) szt 10,Mrożonki,opak,TRUE,TRUE,Core menu — pita bread
-P027,27,Souvlaki Kurczak,Mrożonki,kg,TRUE,TRUE,Core menu meat
-P028,28,Souvlaki Wieprz,Mrożonki,kg,TRUE,TRUE,Core menu meat
-P029,29,Spicy Mayo,Produkcja,kg,FALSE,TRUE,Made internally
-P030,30,Musztada Miodowa,Produkcja,kg,FALSE,TRUE,Made internally
-P031,31,Musztada,Produkcja,kg,FALSE,TRUE,Made internally
-P032,32,Ketchup,Produkcja,kg,FALSE,TRUE,Made internally
-P033,33,Ladolimono,Produkcja,kg,FALSE,TRUE,Made internally — lemon-oil dressing
-P034,34,Ogórek + papryka,Produkcja,kg,FALSE,TRUE,Made internally
-P035,35,Masło czosnkowe,Produkcja,kg,FALSE,TRUE,Made internally
-P036,36,Kasza Pęczak,Produkcja,kg,FALSE,TRUE,Made internally
-P037,37,Gyros (ścięty + nieścięty),Produkcja,kg,FALSE,TRUE,Internal — sliced + unsliced gyros mix
-P038,38,Frytura Eppo 15L,Spożywcze,szt,FALSE,TRUE,Frying oil
-P039,39,Ocet spirytusowy,Spożywcze,szt,FALSE,TRUE,
-P040,40,Woda 5l pracownicza,Spożywcze,szt,FALSE,TRUE,Staff drinking water
-P041,41,Olej Rzepakowy 5 L,Spożywcze,szt,FALSE,TRUE,
-P042,42,"Ketchup Fanex VII 1,1 kg",Spożywcze,szt,FALSE,TRUE,
-P043,43,DEVELEY MUSZTARDA 3 kg,Spożywcze,szt,FALSE,TRUE,
-P044,44,FANEX MAJONEZ 4kg,Spożywcze,szt,FALSE,TRUE,
-P045,45,Oliwa z Oliwek 1L,Spożywcze,szt,FALSE,TRUE,
-P046,46,CIECIORKA,Spożywcze,szt,FALSE,TRUE,Chickpeas for falafel
-P047,47,Kasza Pęczak Melvit 900g,Spożywcze,szt,FALSE,TRUE,
-P048,48,Sriracha chili 730 ml,Spożywcze,szt,FALSE,TRUE,
-P049,49,Miód 1 kg,Spożywcze,kg,FALSE,TRUE,
-P050,50,Pieprz,Spożywcze,kg,FALSE,TRUE,
-P051,51,Oregano,Spożywcze,kg,FALSE,TRUE,
-P052,52,Papryka słodka - mielona,Spożywcze,kg,FALSE,TRUE,
-P053,53,Sól 1kg,Spożywcze,kg,FALSE,TRUE,
-P054,54,Liść Laurowy,Spożywcze,kg,FALSE,TRUE,
-P055,55,Ziele Angielskie,Spożywcze,kg,FALSE,TRUE,
-P056,56,Cukier w saszetkach 5g,Spożywcze,kg,FALSE,TRUE,
-P057,57,Sól w saszetkach 5g,Spożywcze,kg,FALSE,TRUE,
-P058,58,Pieprz w saszetkach 5g,Spożywcze,kg,FALSE,TRUE,
-P059,59,Ionos Wino Białe 750ml,Wino,szt,FALSE,TRUE,
-P060,60,Ionos Wino Białe 2l,Wino,szt,FALSE,TRUE,
-P061,61,Ionos Wino Czerwone 750 ml,Wino,szt,FALSE,TRUE,
-P062,62,Ionos Wino Czerwone 2l,Wino,szt,FALSE,TRUE,
-P063,63,Monster (wszystkie),Napoje,szt,FALSE,TRUE,All Monster variants
-P064,64,Cappy Jabłko,Napoje,szt,FALSE,TRUE,
-P065,65,Cappy Pomarańcza,Napoje,szt,FALSE,TRUE,
-P066,66,Fanta,Napoje,szt,FALSE,TRUE,
-P067,67,Sprite,Napoje,szt,FALSE,TRUE,
-P068,68,Coca Cola,Napoje,szt,TRUE,TRUE,High-volume — flag for stockout
-P069,69,Coca Cola Zero,Napoje,szt,TRUE,TRUE,High-volume — flag for stockout
-P070,70,Kropla Beskidu Niegazowana,Napoje,szt,FALSE,TRUE,
-P071,71,Kropla Beskidu Gazowana,Napoje,szt,FALSE,TRUE,
-P072,72,Retsina 500 ml,Napoje,szt,FALSE,TRUE,
-P073,73,Mythos,Napoje,szt,FALSE,TRUE,Greek beer
-P074,74,Corona,Napoje,szt,FALSE,TRUE,
-P075,75,Lemoniada Lemon,Napoje,szt,FALSE,TRUE,
-P076,76,Lemoniada Orange,Napoje,szt,FALSE,TRUE,
-P077,77,Lemoniada Grapefruit,Napoje,szt,FALSE,TRUE,
-P078,78,Lech Free,Napoje,szt,FALSE,TRUE,Non-alcoholic beer
-P079,79,Kinley,Napoje,szt,FALSE,TRUE,
-P080,80,Corona 0%,Napoje,szt,FALSE,TRUE,
-P081,81,Fuzetea,Napoje,szt,FALSE,TRUE,
-P082,82,Bowl opakowanie papierowe miska 1300 ml,Opakowania,opak,FALSE,TRUE,
-P083,83,Bowl opakowanie pokrywka plastik 1300 ml,Opakowania,opak,FALSE,TRUE,
-P084,84,Opakowaie sałatki duże jednocześciowe 750ml,Opakowania,opak,FALSE,TRUE,
-P085,85,Opakowanie sałatki małe jednocześciowe 250ml,Opakowania,opak,FALSE,TRUE,
-P086,86,Sos opakowanie pojemnik,Opakowania,opak,FALSE,TRUE,
-P087,87,Sos opakowanie pokrywka,Opakowania,opak,FALSE,TRUE,
-P088,88,Opakowanie Frytki,Opakowania,opak,FALSE,TRUE,
-P089,89,Boxy PB,Opakowania,opak,FALSE,TRUE,Branded Pita Bros box
-P090,90,Papier do Pita (PB),Opakowania,opak,FALSE,TRUE,Branded
-P091,91,Serwetki PB,Opakowania,opak,FALSE,TRUE,Branded
-P092,92,Tacki bez logo,Opakowania,opak,FALSE,TRUE,
-P093,93,Torba na wynos z uszami,Opakowania,box,FALSE,TRUE,Takeaway bag
-P094,94,Torby fałdowane pojedycze do pity,Opakowania,opak,FALSE,TRUE,
-P095,95,Folia Alumiuniowa,Opakowania,szt,FALSE,TRUE,Foil
-P096,96,Folia spożywcza,Opakowania,szt,FALSE,TRUE,Cling film
-P097,97,Papier Pergamin do pieczenia,Opakowania,szt,FALSE,TRUE,Baking parchment
-P098,98,Papier termiczny - aluminiowy,Opakowania,opak,FALSE,TRUE,Foil-thermal paper
-P099,99,Jednorazowe mini łyżeczki,Opakowania,opak,FALSE,TRUE,Disposable spoons
-P100,100,Jednorazowe Noże,Opakowania,opak,FALSE,TRUE,Disposable knives
-P101,101,Jednorazowe Widelce,Opakowania,opak,FALSE,TRUE,Disposable forks
-P102,102,Słomki 250szt,Opakowania,opak,FALSE,TRUE,Straws
-P103,103,Serwetki białe bez logo,Opakowania,opak,FALSE,TRUE,
-P104,104,Ręczniki papierowe ZZ,Chemia,opak,FALSE,TRUE,Hand-dryer paper
-P105,105,Płyn do zmywarek 5L,Chemia,szt,FALSE,TRUE,Dishwasher detergent
-P106,106,Domestos 5L,Chemia,szt,FALSE,TRUE,
-P107,107,Ludwik do naczyń 5l,Chemia,szt,FALSE,TRUE,Dish soap
-P108,108,Rosa Mydło do rąk 5L,Chemia,szt,FALSE,TRUE,Hand soap
-P109,109,Płyn do mycia szyb Tenzi,Chemia,szt,FALSE,TRUE,Glass cleaner
-P110,110,Płyn Tytan 5L,Chemia,szt,FALSE,TRUE,
-P111,111,Fenix grill cleaner 1L,Chemia,szt,FALSE,TRUE,
-P112,112,Fenix degreaser 1L,Chemia,szt,FALSE,TRUE,
-P113,113,Top Grill Tenzi 1L,Chemia,szt,FALSE,TRUE,
-P114,114,Top Glass Tenzi,Chemia,szt,FALSE,TRUE,
-P115,115,Tytan 500g,Chemia,szt,FALSE,TRUE,
-P116,116,Rękawiczki jednorazowe XL,Chemia,opak,FALSE,TRUE,Disposable gloves XL
-P117,117,Rękawiczki jednorazowe L,Chemia,opak,FALSE,TRUE,
-P118,118,Rękawiczki jednorazowe M,Chemia,opak,FALSE,TRUE,
-P119,119,Rękawiczki jednorazowe S,Chemia,opak,FALSE,TRUE,
-P120,120,Papier Toaletowy 8 rolek,Chemia,szt,FALSE,TRUE,Toilet paper 8-pack
-P121,121,Gąbka do naczyń,Chemia,szt,FALSE,TRUE,
-P122,122,Druciak do mycia,Chemia,szt,FALSE,TRUE,
-P123,123,Ścierka z mikrofibry,Chemia,szt,FALSE,TRUE,
-P124,124,Worki na śmiecie 60 L,Chemia,opak,FALSE,TRUE,
-P125,125,Worki na śmiecie 120 L,Chemia,opak,FALSE,TRUE,
-P126,126,Worki na śmiecie 160 L,Chemia,opak,FALSE,TRUE,
-P127,127,Zszywki do zszywacza,Biurowe,opak,FALSE,TRUE,
-P128,128,Rolki do kasy 57 na 20,Biurowe,szt,FALSE,TRUE,POS receipt rolls
-P129,129,Rolki do kasy 80 na 80,Biurowe,szt,FALSE,TRUE,POS receipt rolls (kitchen printer)
-P130,130,Rolki do kasy 57 na 30,Biurowe,szt,FALSE,TRUE,POS receipt rolls
-P131,131,Koperty,Biurowe,box,FALSE,TRUE,
-P132,132,Markery,Biurowe,szt,FALSE,TRUE,
-P133,133,Długopisy,Biurowe,szt,FALSE,TRUE,
-P134,134,Butla gazowa 10L,Gaz,szt,FALSE,TRUE,Gas cylinder
-P135,,Bombilla,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4)
-P136,,Corfu Lager,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4; dostawca Filber)
-P137,,Corfu Weiss,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4; dostawca Filber)
-P138,,Corfu Free,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4; dostawca Filber)
-P139,,AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30,Spożywcze,opak,FALSE,TRUE,dodane 2026-07-25 (feedback r7)
-P140,,KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6,Spożywcze,szt,FALSE,TRUE,dodane 2026-07-25 (feedback r7)
-P141,,LIPTON HERBATA YELLOW LABEL 100szt./12 koperta,Spożywcze,opak,FALSE,TRUE,dodane 2026-07-25 (feedback r7)
-P142,,Rolki do kasy 57 na 50,Biurowe,szt,FALSE,TRUE,norblin-rollout 2026-08-18: rozmiar z arkusza Norblina; do potwierdzenia przy 1. dostawie Pago
-P143,,Tacki papierowe,Opakowania,opak,FALSE,TRUE,dodane 2026-08-18 (norblin-rollout) - brak w katalogu od bracka-rollout
-P144,,Kubeczki papierowe,Opakowania,opak,FALSE,TRUE,dodane 2026-08-18 (norblin-rollout) - brak w katalogu od bracka-rollout
-P145,,Bifteki burgers,Mrożonki,kg,FALSE,TRUE,dodane 2026-08-18 (norblin-rollout) - brak w katalogu od bracka-rollout
-P146,,Aroma Patyczki zapachowe,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
-P147,,Attis odświeżacz powietrza 300 ml,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
-P148,,Szczotka do zamiatania na kiju Vileda,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej (arkusz: "Szczotlka")
-P149,,Szufelka ze zmiotką,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
-P150,,Marker podświetlacz,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - kategoria Chemia za arkuszem (zakreslacz)
-P151,,Płyn do podłogi 5L,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
-P152,,Cleaner w sprayu do stolików drewnianych lakierowanych,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
-P153,,Zapas do mopa płaskiego Vileda Ultra Max,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
-P154,,Tetra,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej
+product_id,gostock_id,product_name_pl,product_category,inventory_unit,is_critical,active,notes,inventory_order
+P001,1,Masło MR 500g,Chłodnia,szt,FALSE,TRUE,,10
+P002,2,Cytryna,Chłodnia,kg,FALSE,TRUE,,40
+P003,3,Papryka zielona,Chłodnia,kg,FALSE,TRUE,,50
+P004,4,Awokado,Chłodnia,szt,FALSE,TRUE,,60
+P005,5,Ogórek,Chłodnia,kg,FALSE,TRUE,,70
+P006,6,Pomidor,Chłodnia,kg,TRUE,TRUE,Greek salad essential,80
+P007,7,Rucola 125 gr,Chłodnia,opak,FALSE,TRUE,,90
+P008,8,Sałata bolero mix 150gr,Chłodnia,opak,FALSE,TRUE,,110
+P009,9,Natka Pietruszki,Chłodnia,kg,FALSE,TRUE,,120
+P010,10,Czosnek,Chłodnia,kg,FALSE,TRUE,,130
+P011,11,Tzatzyki,Chłodnia,kg,TRUE,TRUE,Made by Bukat — core menu sauce,140
+P012,12,Tirokafteri,Chłodnia,kg,FALSE,TRUE,,150
+P013,13,Oliwki kalamata,Chłodnia,kg,FALSE,TRUE,,160
+P014,14,Feta blok,Chłodnia,kg,TRUE,TRUE,Greek salad essential,170
+P015,15,Halloumi,Chłodnia,szt,TRUE,TRUE,Core menu cheese,180
+P016,16,Cebula czerwona,Chłodnia,kg,TRUE,TRUE,Greek salad essential,190
+P017,17,Florinis,Chłodnia,kg,FALSE,TRUE,,200
+P018,18,Cebula Biała,Chłodnia,kg,FALSE,TRUE,,210
+P019,19,Przyprawa do souvlakow,Chłodnia,kg,FALSE,TRUE,,220
+P020,20,Falafel,Mrożonki,kg,TRUE,TRUE,Falafel menu item,230
+P021,21,Frytki Aviko (opakowania),Mrożonki,kg,TRUE,TRUE,Core menu fries,240
+P022,22,Frytki z batatów (opakowania),Mrożonki,kg,FALSE,TRUE,,250
+P023,23,Fasolka Szparagowa (op.),Mrożonki,kg,FALSE,TRUE,,260
+P024,24,Gyros 15 KG,Mrożonki,kg,TRUE,TRUE,Core menu gyros — 15kg block,270
+P025,25,Gyros 25 KG,Mrożonki,kg,FALSE,TRUE,Larger gyros block — used at higher-volume points,300
+P026,26,Pita (opakowania) szt 10,Mrożonki,opak,TRUE,TRUE,Core menu — pita bread,310
+P027,27,Souvlaki Kurczak,Mrożonki,kg,TRUE,TRUE,Core menu meat,320
+P028,28,Souvlaki Wieprz,Mrożonki,kg,TRUE,TRUE,Core menu meat,330
+P029,29,Spicy Mayo,Produkcja,kg,FALSE,TRUE,Made internally,340
+P030,30,Musztada Miodowa,Produkcja,kg,FALSE,TRUE,Made internally,350
+P031,31,Musztada,Produkcja,kg,FALSE,TRUE,Made internally,360
+P032,32,Ketchup,Produkcja,kg,FALSE,TRUE,Made internally,370
+P033,33,Ladolimono,Produkcja,kg,FALSE,TRUE,Made internally — lemon-oil dressing,380
+P034,34,Ogórek + papryka,Produkcja,kg,FALSE,TRUE,Made internally,390
+P035,35,Masło czosnkowe,Produkcja,kg,FALSE,TRUE,Made internally,400
+P036,36,Kasza Pęczak,Produkcja,kg,FALSE,TRUE,Made internally,410
+P037,37,Gyros (ścięty + nieścięty),Produkcja,kg,FALSE,TRUE,Internal — sliced + unsliced gyros mix,
+P038,38,Frytura Eppo 15L,Spożywcze,szt,FALSE,TRUE,Frying oil,460
+P039,39,Ocet spirytusowy,Spożywcze,szt,FALSE,TRUE,,470
+P040,40,Woda 5l pracownicza,Spożywcze,szt,FALSE,TRUE,Staff drinking water,480
+P041,41,Olej Rzepakowy 5 L,Spożywcze,szt,FALSE,TRUE,,490
+P042,42,"Ketchup Fanex VII 1,1 kg",Spożywcze,szt,FALSE,TRUE,,500
+P043,43,DEVELEY MUSZTARDA 3 kg,Spożywcze,szt,FALSE,TRUE,,510
+P044,44,FANEX MAJONEZ 4kg,Spożywcze,szt,FALSE,TRUE,,520
+P045,45,Oliwa z Oliwek 1L,Spożywcze,szt,FALSE,TRUE,,530
+P046,46,CIECIORKA,Spożywcze,szt,FALSE,TRUE,Chickpeas for falafel,540
+P047,47,Kasza Pęczak Melvit 900g,Spożywcze,szt,FALSE,TRUE,,550
+P048,48,Sriracha chili 730 ml,Spożywcze,szt,FALSE,TRUE,,560
+P049,49,Miód 1 kg,Spożywcze,kg,FALSE,TRUE,,570
+P050,50,Pieprz,Spożywcze,kg,FALSE,TRUE,,580
+P051,51,Oregano,Spożywcze,kg,FALSE,TRUE,,590
+P052,52,Papryka słodka - mielona,Spożywcze,kg,FALSE,TRUE,,600
+P053,53,Sól 1kg,Spożywcze,kg,FALSE,TRUE,,620
+P054,54,Liść Laurowy,Spożywcze,kg,FALSE,TRUE,,630
+P055,55,Ziele Angielskie,Spożywcze,kg,FALSE,TRUE,,640
+P056,56,Cukier w saszetkach 5g,Spożywcze,kg,FALSE,TRUE,,650
+P057,57,Sól w saszetkach 5g,Spożywcze,kg,FALSE,TRUE,,660
+P058,58,Pieprz w saszetkach 5g,Spożywcze,kg,FALSE,TRUE,,670
+P059,59,Ionos Wino Białe 750ml,Wino,szt,FALSE,TRUE,,740
+P060,60,Ionos Wino Białe 2l,Wino,szt,FALSE,TRUE,,750
+P061,61,Ionos Wino Czerwone 750 ml,Wino,szt,FALSE,TRUE,,760
+P062,62,Ionos Wino Czerwone 2l,Wino,szt,FALSE,TRUE,,770
+P063,63,Monster (wszystkie),Napoje,szt,FALSE,TRUE,All Monster variants,780
+P064,64,Cappy Jabłko,Napoje,szt,FALSE,TRUE,,790
+P065,65,Cappy Pomarańcza,Napoje,szt,FALSE,TRUE,,800
+P066,66,Fanta,Napoje,szt,FALSE,TRUE,,810
+P067,67,Sprite,Napoje,szt,FALSE,TRUE,,820
+P068,68,Coca Cola,Napoje,szt,TRUE,TRUE,High-volume — flag for stockout,830
+P069,69,Coca Cola Zero,Napoje,szt,TRUE,TRUE,High-volume — flag for stockout,850
+P070,70,Kropla Beskidu Niegazowana,Napoje,szt,FALSE,TRUE,,890
+P071,71,Kropla Beskidu Gazowana,Napoje,szt,FALSE,TRUE,,900
+P072,72,Retsina 500 ml,Napoje,szt,FALSE,TRUE,,910
+P073,73,Mythos,Napoje,szt,FALSE,TRUE,Greek beer,920
+P074,74,Corona,Napoje,szt,FALSE,TRUE,,930
+P075,75,Lemoniada Lemon,Napoje,szt,FALSE,TRUE,,980
+P076,76,Lemoniada Orange,Napoje,szt,FALSE,TRUE,,990
+P077,77,Lemoniada Grapefruit,Napoje,szt,FALSE,TRUE,,1000
+P078,78,Lech Free,Napoje,szt,FALSE,TRUE,Non-alcoholic beer,
+P079,79,Kinley,Napoje,szt,FALSE,TRUE,,880
+P080,80,Corona 0%,Napoje,szt,FALSE,TRUE,,1020
+P081,81,Fuzetea,Napoje,szt,FALSE,TRUE,,1030
+P082,82,Bowl opakowanie papierowe miska 1300 ml,Opakowania,opak,FALSE,TRUE,,1040
+P083,83,Bowl opakowanie pokrywka plastik 1300 ml,Opakowania,opak,FALSE,TRUE,,1050
+P084,84,Opakowaie sałatki duże jednocześciowe 750ml,Opakowania,opak,FALSE,TRUE,,1060
+P085,85,Opakowanie sałatki małe jednocześciowe 250ml,Opakowania,opak,FALSE,TRUE,,1070
+P086,86,Sos opakowanie pojemnik,Opakowania,opak,FALSE,TRUE,,1080
+P087,87,Sos opakowanie pokrywka,Opakowania,opak,FALSE,TRUE,,1090
+P088,88,Opakowanie Frytki,Opakowania,opak,FALSE,TRUE,,1100
+P089,89,Boxy PB,Opakowania,opak,FALSE,TRUE,Branded Pita Bros box,1110
+P090,90,Papier do Pita (PB),Opakowania,opak,FALSE,TRUE,Branded,1130
+P091,91,Serwetki PB,Opakowania,opak,FALSE,TRUE,Branded,1140
+P092,92,Tacki bez logo,Opakowania,opak,FALSE,TRUE,,1150
+P093,93,Torba na wynos z uszami,Opakowania,box,FALSE,TRUE,Takeaway bag,1180
+P094,94,Torby fałdowane pojedycze do pity,Opakowania,opak,FALSE,TRUE,,1190
+P095,95,Folia Alumiuniowa,Opakowania,szt,FALSE,TRUE,Foil,1200
+P096,96,Folia spożywcza,Opakowania,szt,FALSE,TRUE,Cling film,1210
+P097,97,Papier Pergamin do pieczenia,Opakowania,szt,FALSE,TRUE,Baking parchment,1220
+P098,98,Papier termiczny - aluminiowy,Opakowania,opak,FALSE,TRUE,Foil-thermal paper,1230
+P099,99,Jednorazowe mini łyżeczki,Opakowania,opak,FALSE,TRUE,Disposable spoons,1240
+P100,100,Jednorazowe Noże,Opakowania,opak,FALSE,TRUE,Disposable knives,1250
+P101,101,Jednorazowe Widelce,Opakowania,opak,FALSE,TRUE,Disposable forks,1260
+P102,102,Słomki 250szt,Opakowania,opak,FALSE,TRUE,Straws,1270
+P103,103,Serwetki białe bez logo,Opakowania,opak,FALSE,TRUE,,1290
+P104,104,Ręczniki papierowe ZZ,Chemia,opak,FALSE,TRUE,Hand-dryer paper,1300
+P105,105,Płyn do zmywarek 5L,Chemia,szt,FALSE,TRUE,Dishwasher detergent,1310
+P106,106,Domestos 5L,Chemia,szt,FALSE,TRUE,,1320
+P107,107,Ludwik do naczyń 5l,Chemia,szt,FALSE,TRUE,Dish soap,1330
+P108,108,Rosa Mydło do rąk 5L,Chemia,szt,FALSE,TRUE,Hand soap,1350
+P109,109,Płyn do mycia szyb Tenzi,Chemia,szt,FALSE,TRUE,Glass cleaner,1360
+P110,110,Płyn Tytan 5L,Chemia,szt,FALSE,TRUE,,1370
+P111,111,Fenix grill cleaner 1L,Chemia,szt,FALSE,TRUE,,1380
+P112,112,Fenix degreaser 1L,Chemia,szt,FALSE,TRUE,,1390
+P113,113,Top Grill Tenzi 1L,Chemia,szt,FALSE,TRUE,,1400
+P114,114,Top Glass Tenzi,Chemia,szt,FALSE,TRUE,,1410
+P115,115,Tytan 500g,Chemia,szt,FALSE,TRUE,,1420
+P116,116,Rękawiczki jednorazowe XL,Chemia,opak,FALSE,TRUE,Disposable gloves XL,1430
+P117,117,Rękawiczki jednorazowe L,Chemia,opak,FALSE,TRUE,,1440
+P118,118,Rękawiczki jednorazowe M,Chemia,opak,FALSE,TRUE,,1450
+P119,119,Rękawiczki jednorazowe S,Chemia,opak,FALSE,TRUE,,1460
+P120,120,Papier Toaletowy 8 rolek,Chemia,szt,FALSE,TRUE,Toilet paper 8-pack,1470
+P121,121,Gąbka do naczyń,Chemia,szt,FALSE,TRUE,,1480
+P122,122,Druciak do mycia,Chemia,szt,FALSE,TRUE,,1490
+P123,123,Ścierka z mikrofibry,Chemia,szt,FALSE,TRUE,,1500
+P124,124,Worki na śmiecie 60 L,Chemia,opak,FALSE,TRUE,,1510
+P125,125,Worki na śmiecie 120 L,Chemia,opak,FALSE,TRUE,,1520
+P126,126,Worki na śmiecie 160 L,Chemia,opak,FALSE,TRUE,,1530
+P127,127,Zszywki do zszywacza,Biurowe,opak,FALSE,TRUE,,1540
+P128,128,Rolki do kasy 57 na 20,Biurowe,szt,FALSE,TRUE,POS receipt rolls,1570
+P129,129,Rolki do kasy 80 na 80,Biurowe,szt,FALSE,TRUE,POS receipt rolls (kitchen printer),1580
+P130,130,Rolki do kasy 57 na 30,Biurowe,szt,FALSE,TRUE,POS receipt rolls,1590
+P131,131,Koperty,Biurowe,box,FALSE,TRUE,,1610
+P132,132,Markery,Biurowe,szt,FALSE,TRUE,,1620
+P133,133,Długopisy,Biurowe,szt,FALSE,TRUE,,1630
+P134,134,Butla gazowa 10L,Gaz,szt,FALSE,TRUE,Gas cylinder,
+P135,,Bombilla,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4),1010
+P136,,Corfu Lager,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4; dostawca Filber),940
+P137,,Corfu Weiss,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4; dostawca Filber),960
+P138,,Corfu Free,Napoje,szt,FALSE,TRUE,dodane 2026-07 (feedback r4; dostawca Filber),970
+P139,,AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30,Spożywcze,opak,FALSE,TRUE,dodane 2026-07-25 (feedback r7),
+P140,,KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6,Spożywcze,szt,FALSE,TRUE,dodane 2026-07-25 (feedback r7),
+P141,,LIPTON HERBATA YELLOW LABEL 100szt./12 koperta,Spożywcze,opak,FALSE,TRUE,dodane 2026-07-25 (feedback r7),
+P142,,Rolki do kasy 57 na 50,Biurowe,szt,FALSE,TRUE,norblin-rollout 2026-08-18: rozmiar z arkusza Norblina; do potwierdzenia przy 1. dostawie Pago,1550
+P143,,Tacki papierowe,Opakowania,opak,FALSE,TRUE,dodane 2026-08-18 (norblin-rollout) - brak w katalogu od bracka-rollout,1160
+P144,,Kubeczki papierowe,Opakowania,opak,FALSE,TRUE,dodane 2026-08-18 (norblin-rollout) - brak w katalogu od bracka-rollout,1170
+P145,,Bifteki burgers,Mrożonki,kg,FALSE,TRUE,dodane 2026-08-18 (norblin-rollout) - brak w katalogu od bracka-rollout,280
+P146,,Aroma Patyczki zapachowe,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
+P147,,Attis odświeżacz powietrza 300 ml,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
+P148,,Szczotka do zamiatania na kiju Vileda,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej (arkusz: "Szczotlka"),
+P149,,Szufelka ze zmiotką,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
+P150,,Marker podświetlacz,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - kategoria Chemia za arkuszem (zakreslacz),
+P151,,Płyn do podłogi 5L,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
+P152,,Cleaner w sprayu do stolików drewnianych lakierowanych,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
+P153,,Zapas do mopa płaskiego Vileda Ultra Max,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
+P154,,Tetra,Chemia,szt,FALSE,TRUE,dodane 2026-08-20 (wolska-blueservice-master-data) - arkusz Wolskiej,
