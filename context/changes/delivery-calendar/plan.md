@@ -587,9 +587,9 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Automated
 
-- [x] 1.1 Backend lint passes
-- [x] 1.2 Backend unit tests pass incl. column lists, date cast, rules loaders, seam parity
-- [x] 1.3 Integration tests pass incl. rule and order round-trips, CHECK and UNIQUE rejections
+- [x] 1.1 Backend lint passes — 45a42e9
+- [x] 1.2 Backend unit tests pass incl. column lists, date cast, rules loaders, seam parity — 45a42e9
+- [x] 1.3 Integration tests pass incl. rule and order round-trips, CHECK and UNIQUE rejections — 45a42e9
 
 #### Manual
 
@@ -599,12 +599,12 @@ the proposal is fetched once per supplier switch plus one refetch at the deadlin
 
 #### Automated
 
-- [ ] 2.1 Backend lint passes
-- [ ] 2.2 test_delivery_calendar.py passes (all rule shapes, boundary, DST, resolution, Thursday)
-- [ ] 2.3 test_delivery_proposal.py passes (auth, 404, degrade, clock-patched proposals)
-- [ ] 2.4 Submit tests pass (fields persisted, coverage 2 → 422, edit preserves)
-- [ ] 2.5 Manager queue and detail tests pass (fields exposed)
-- [ ] 2.6 Full backend suite passes
+- [x] 2.1 Backend lint passes
+- [x] 2.2 test_delivery_calendar.py passes (all rule shapes, boundary, DST, resolution, Thursday)
+- [x] 2.3 test_delivery_proposal.py passes (auth, 404, degrade, clock-patched proposals)
+- [x] 2.4 Submit tests pass (fields persisted, coverage 2 → 422, edit preserves)
+- [x] 2.5 Manager queue and detail tests pass (fields exposed)
+- [x] 2.6 Full backend suite passes
 
 ### Phase 3: Captain order screen
 

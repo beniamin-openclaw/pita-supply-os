@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import (
+    delivery_calendar,
     ebiuro,
     errors,
     finance_match,
@@ -40,6 +41,7 @@ from .models import (
     CaptainOrderListItem,
     CaptainSubmitRequest,
     CaptainSubmitResponse,
+    DeliveryProposal,
     InventoryCount,
     InventoryCountDetail,
     InventoryCountDetailLine,
@@ -91,6 +93,7 @@ from .models import (
     RoundingRule,
     SuggestionReviewItem,
     Supplier,
+    SupplierDeliveryRule,
     SupplierProduct,
     TransportAddLocationRequest,
     TransportAddLocationResponse,
@@ -311,6 +314,83 @@ def captain_orderable(
         location_id,
         supplier_id,
         _supplier_alerts_enabled(backend.load_suppliers(), supplier_id),
+    )
+
+
+def _load_delivery_rules_safe(backend) -> list[SupplierDeliveryRule]:
+    """Delivery-calendar rules, NEVER raising (delivery-calendar). A backend
+    without the loader (older seams, test fakes), a missing 'supplier_delivery_rules'
+    worksheet, or an absent table ahead of migration 0025 all degrade to "no
+    rules" — every proposal then uses the fallback. Mirrors
+    ``_load_order_events_safe``."""
+    loader = getattr(backend, "load_supplier_delivery_rules", None)
+    if loader is None:
+        return []
+    try:
+        return list(loader())
+    except Exception:
+        log.warning(
+            "Delivery rules unavailable — proposals fall back to "
+            "suppliers.delivery_days",
+            exc_info=True,
+        )
+        return []
+
+
+def _fallback_delivery_params(supplier: Supplier) -> tuple[int, Optional[frozenset[int]]]:
+    """(lead_days, delivery_weekdays) for a supplier without a delivery rule,
+    mirroring the Captain screen's legacy default: a positive integer
+    ``delivery_days`` = that many days on any weekday; a parseable weekday list
+    = next day on those weekdays; anything else ('TBD', empty) = tomorrow."""
+    raw = (supplier.delivery_days or "").strip()
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw), None
+    weekdays = _parse_weekdays(raw)
+    if weekdays:
+        return 1, frozenset(weekdays)
+    return 1, None
+
+
+@app.get("/api/captain/delivery-proposal", response_model=DeliveryProposal)
+def captain_delivery_proposal(
+    supplier_id: str,
+    location_id: str = Depends(require_captain),
+):
+    """The delivery date the calendar proposes for this Captain's location and
+    ``supplier_id`` (delivery-calendar). The location comes from the token.
+
+    Soft default only: the Captain may pick any other date and nothing is
+    validated against the rules at submit. ``source="fallback"`` (no rule) is
+    shown but never stored by the Captain screen. ``coverage_prompt`` is true
+    on a Warsaw Thursday for a supplier with ``coverage_prompt_enabled``.
+    Unknown supplier -> 404."""
+    backend = _choose_backend()
+    supplier = next(
+        (s for s in backend.load_suppliers() if s.supplier_id == supplier_id), None
+    )
+    if supplier is None:
+        raise HTTPException(status_code=404, detail=f"Unknown supplier_id '{supplier_id}'")
+    now = delivery_calendar.now_utc()
+    lead, weekdays = _fallback_delivery_params(supplier)
+    window = delivery_calendar.delivery_window(
+        _load_delivery_rules_safe(backend),
+        supplier_id,
+        location_id,
+        now,
+        fallback_lead_days=lead,
+        fallback_delivery_weekdays=weekdays,
+    )
+    return DeliveryProposal(
+        supplier_id=supplier_id,
+        location_id=location_id,
+        proposed_delivery_date=window.next_delivery,
+        following_delivery_date=window.following_delivery,
+        order_deadline=window.order_deadline.astimezone(timezone.utc),
+        source=window.source,
+        coverage_prompt=(
+            supplier.coverage_prompt_enabled
+            and delivery_calendar.is_coverage_prompt_day(now)
+        ),
     )
 
 
@@ -748,6 +828,10 @@ def captain_submit(
         notes=req.notes,
         extra_items=req.extra_items,
         captain_note=req.captain_note,
+        # Delivery calendar: stored as sent (the proposal the Captain saw) —
+        # never recomputed here, never validated against the rules.
+        suggested_delivery_date=req.suggested_delivery_date,
+        coverage_days=req.coverage_days,
     )
 
     persisted = _persist_order(backend, order, order_lines)
@@ -1021,6 +1105,8 @@ def manager_queue(
                 ),
                 last_received_at=last_received_by_order.get(order.order_id),
                 supplier_order_reference=order.supplier_order_reference,
+                suggested_delivery_date=order.suggested_delivery_date,
+                coverage_days=order.coverage_days,
             )
         )
 
@@ -1251,6 +1337,8 @@ def manager_order_detail(
         supplier_order_reference=order.supplier_order_reference,
         events=order_events,
         editable_after_send=editable_after_send,
+        suggested_delivery_date=order.suggested_delivery_date,
+        coverage_days=order.coverage_days,
     )
 
 
