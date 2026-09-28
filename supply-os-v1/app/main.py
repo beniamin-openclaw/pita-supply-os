@@ -21,6 +21,7 @@ from . import (
     supabase_storage,
 )
 from .auth import require_any_auth, require_captain, require_manager
+from .order_qty import effective_ordered_qty, is_manager_final_set
 from .config import DataBackend, settings
 from .models import (
     CaptainEditRequest,
@@ -1141,6 +1142,7 @@ def manager_order_detail(
                 reason_code=line.reason_code,
                 captain_comment=line.captain_comment,
                 manager_comment=line.manager_comment,
+                manager_final_set=is_manager_final_set(line),
             )
         )
 
@@ -1257,6 +1259,7 @@ def _enrich_lines_for_detail(
                 reason_code=line.reason_code,
                 manager_comment=line.manager_comment,
                 captain_comment=line.captain_comment,
+                manager_final_set=is_manager_final_set(line),
             )
         )
     return enriched
@@ -1820,19 +1823,16 @@ def _effective_qty_changes(
     products_by_id: dict[str, Product],
 ) -> list[str]:
     """Per-line "Name: old → new" diff for every line whose EFFECTIVE quantity
-    (manager_final if > 0 else captain_final) actually changes in this save —
-    the same rule the transport ``quantities_changed`` event uses. Computed
-    from the pre-write ``order``."""
+    (``order_qty.effective_ordered_qty``: the Manager's final once set, incl.
+    an explicit 0, else the Captain's) actually changes in this save — the
+    same rule the transport ``quantities_changed`` event uses. Computed from
+    the pre-write ``order``."""
     changes: list[str] = []
     for original_line in order.lines:
         final = finals_by_line_id.get(original_line.order_line_id)
         if final is None:
             continue
-        old_qty = (
-            original_line.manager_final_qty_purchase
-            if original_line.manager_final_qty_purchase > 0
-            else original_line.captain_final_qty_purchase
-        )
+        old_qty = effective_ordered_qty(original_line)
         new_qty = final.manager_final_qty_purchase
         if new_qty == old_qty:
             continue
@@ -2042,8 +2042,11 @@ def manager_dispatch(
             manager_qty_purchase = final.manager_final_qty_purchase
             manager_comment = final.manager_comment
         else:
-            # No manager change for this line — keep captain's qty as final.
-            manager_qty_purchase = original_line.captain_final_qty_purchase
+            # Not in this payload — keep the line's current effective qty (a
+            # 0 the Manager saved earlier stays 0; an untouched line keeps the
+            # Captain's qty). The Manager UI sends every line, so this only
+            # matters for a partial payload.
+            manager_qty_purchase = effective_ordered_qty(original_line)
             manager_comment = original_line.manager_comment
 
         manager_qty_base = manager_qty_purchase * units_per_pu
@@ -2053,17 +2056,22 @@ def manager_dispatch(
                 "manager_final_qty_purchase": manager_qty_purchase,
                 "manager_final_qty_base": manager_qty_base,
                 "manager_comment": manager_comment,
+                "manager_final_set": True,
             }
 
         if sp and sp.price_estimate_pln:
             total += manager_qty_purchase * sp.price_estimate_pln
 
+        # In-memory copy for the Gmail URL: its manager_final IS the committed
+        # quantity, so it is marked set — otherwise a line dispatched as 0
+        # would fall back to the Captain's qty inside gmail_url._effective_qty.
         enriched_lines.append(
             original_line.model_copy(
                 update={
                     "manager_final_qty_purchase": manager_qty_purchase,
                     "manager_final_qty_base": manager_qty_base,
                     "manager_comment": manager_comment,
+                    "manager_final_set": True,
                 }
             )
         )
@@ -2178,8 +2186,10 @@ def manager_order_save(
     finals_by_line_id = {f.order_line_id: f for f in req.manager_finals}
 
     # Build line updates for touched lines; recompute total over ALL lines using
-    # the effective qty (this save's value if touched, else the saved
-    # manager_final if >0, else captain_final — mirrors dispatch / _effective_qty).
+    # the effective qty (this save's value if touched, else the line's current
+    # effective qty — order_qty.effective_ordered_qty, so a 0 the Manager saved
+    # earlier stays out of the total). A touched line is marked
+    # manager_final_set so its value — including 0 — survives the reload.
     line_updates: dict[str, dict] = {}
     total = 0.0
     for original_line in order.lines:
@@ -2193,11 +2203,10 @@ def manager_order_save(
                 "manager_final_qty_purchase": qty_purchase,
                 "manager_final_qty_base": qty_purchase * units_per_pu,
                 "manager_comment": final.manager_comment,
+                "manager_final_set": True,
             }
-        elif original_line.manager_final_qty_purchase > 0:
-            qty_purchase = original_line.manager_final_qty_purchase
         else:
-            qty_purchase = original_line.captain_final_qty_purchase
+            qty_purchase = effective_ordered_qty(original_line)
 
         if sp and sp.price_estimate_pln:
             total += qty_purchase * sp.price_estimate_pln
@@ -3432,12 +3441,11 @@ def _persist_receipt(backend, receipt: Receipt, lines: list[ReceiptLine]) -> boo
 
 
 def _effective_ordered_qty(line: OrderLine) -> float:
-    """Effective ordered purchase qty for receiving: manager_final if > 0 else
-    captain_final — the quantity actually ordered (mirrors
-    `gmail_url._effective_qty`, the same rule the dispatch email uses)."""
-    if line.manager_final_qty_purchase and line.manager_final_qty_purchase > 0:
-        return line.manager_final_qty_purchase
-    return line.captain_final_qty_purchase
+    """Effective ordered purchase qty (receiving, Transport aggregate, finalize
+    guard): the Manager's final once set — including an explicit 0 — else the
+    Captain's. Thin alias of ``order_qty.effective_ordered_qty``, the same rule
+    ``gmail_url._effective_qty`` uses; kept under this name for its callers."""
+    return effective_ordered_qty(line)
 
 
 @app.post("/api/captain/receipt/submit", response_model=ReceiptSubmitResponse)
@@ -3877,9 +3885,10 @@ def _aggregate_transport_lines(
     Transport aggregate: per-product totals plus the per-product x
     per-location breakdown (the private driver list / zużycie usage record).
 
-    Effective quantity per line is ``_effective_ordered_qty`` (manager_final
-    if > 0 else captain_final — the same rule ``gmail_url._effective_qty``
-    and the goods-receiving path use; not reinvented here). A zero effective
+    Effective quantity per line is ``_effective_ordered_qty`` (the Manager's
+    final once set, incl. an explicit 0, else the Captain's —
+    ``app/order_qty.py``, the same rule ``gmail_url._effective_qty`` and the
+    goods-receiving path use; not reinvented here). A zero effective
     quantity drops the line entirely, mirroring the dispatch email builder
     skipping zero-qty lines. A line whose ``order_id`` has no matching entry
     in ``orders`` is skipped (defensive — callers pass matched sets).

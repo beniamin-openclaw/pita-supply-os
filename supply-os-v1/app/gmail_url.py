@@ -17,6 +17,7 @@ import urllib.parse
 from typing import Optional
 
 from .models import Location, Order, OrderLine, Product, Supplier
+from .order_qty import effective_ordered_qty
 
 
 GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/"
@@ -24,10 +25,10 @@ MAX_GMAIL_URL_LENGTH = 8000
 
 
 def _effective_qty(line: OrderLine) -> float:
-    """Use manager_final if > 0, otherwise captain_final."""
-    if line.manager_final_qty_purchase and line.manager_final_qty_purchase > 0:
-        return line.manager_final_qty_purchase
-    return line.captain_final_qty_purchase
+    """The Manager's final once set (incl. an explicit 0), else the Captain's —
+    the shared rule in ``app/order_qty.py``. The TS twin (emailBody.ts) takes
+    the same rule from ``lib/orderQty.ts`` via its caller."""
+    return effective_ordered_qty(line)
 
 
 def _format_delivery_address(location: Optional[Location]) -> str:
@@ -186,7 +187,9 @@ def build_draft_url(
     """Return a https://mail.google.com/mail/?... URL with prefilled to/cc/subject/body.
 
     Lines with zero effective qty are skipped (no point ordering 0).
-    Effective qty = manager_final if > 0, else captain_final.
+    Effective qty = manager_final once the Manager set it (a positive value or
+    ``manager_final_set``, so an explicit 0 drops the line), else captain_final
+    — see ``app/order_qty.py``.
 
     ``cc_email`` is the standing office copy (settings.order_cc_email). It is
     added as the Gmail ``cc`` parameter only when it carries an "@" — the same

@@ -446,15 +446,90 @@ def test_dispatch_preserves_captain_and_suggested_history(mocker):
     assert set(passed_updates.keys()) == {"OL-001"}
     # ...and its payload carries ONLY manager_* keys — dispatch never includes a
     # captain/suggested/reason column in the write set, so it cannot overwrite
-    # the captured history.
+    # the captured history. manager_final_set (order-line-zero-qty) records
+    # that the Manager committed this quantity.
     assert set(passed_updates["OL-001"].keys()) == {
         "manager_final_qty_purchase",
         "manager_final_qty_base",
         "manager_comment",
+        "manager_final_set",
     }
+    assert passed_updates["OL-001"]["manager_final_set"] is True
     # OL-002 (no manager final sent) is not written at all → its captain /
     # suggested / reason history is preserved verbatim.
     assert "OL-002" not in passed_updates
+
+
+# ---------- order-line-zero-qty: an explicit Manager 0 never reaches the supplier ----------
+
+
+def _gmail_body(url: str) -> str:
+    from urllib.parse import parse_qs, urlparse
+
+    return parse_qs(urlparse(url).query)["body"][0]
+
+
+def test_dispatch_zeroed_line_absent_from_gmail_url_and_total(mocker):
+    """A line dispatched as 0 is persisted as an explicit 0 and is NOT in the
+    server-built Gmail URL ("Otwórz email"). The old rule rebuilt it at the
+    Captain's qty because the in-memory copy's manager_final was 0."""
+    order = _captain_submitted_order()
+    mocks = _activate_sheet_backend(mocker, order=order)
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [
+            {"order_line_id": "OL-001", "manager_final_qty_purchase": 0},
+            {"order_line_id": "OL-002", "manager_final_qty_purchase": 5},
+        ],
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    mail = _gmail_body(r.json()["gmail_compose_url"])
+    assert "Souvlaki Kurczak karton" not in mail
+    assert "1.  | Gyros karton | 5 karton" in mail
+    # 0 * 145 + 5 * 94 = 470
+    assert r.json()["total_value_estimate_pln"] == pytest.approx(470.0)
+    _, updates = mocks["update_order_lines"].call_args.args
+    assert updates["OL-001"]["manager_final_qty_purchase"] == 0
+    assert updates["OL-001"]["manager_final_set"] is True
+
+
+def test_dispatch_partial_payload_keeps_saved_explicit_zero(mocker):
+    """A line saved earlier as an explicit 0 and left out of the dispatch
+    payload stays 0 in the URL and the total — it is not revived at the
+    Captain's qty."""
+    lines = [
+        OrderLine(
+            order_line_id="OL-001",
+            order_id="ORD-20260520-WOL-PAGO-abc123",
+            product_id="P027",
+            supplier_product_id="SP_PAGO_P027",
+            captain_final_qty_purchase=5,
+            captain_final_qty_base=25,
+            manager_final_qty_purchase=0,
+            manager_final_set=True,
+        ),
+        OrderLine(
+            order_line_id="OL-002",
+            order_id="ORD-20260520-WOL-PAGO-abc123",
+            product_id="P026",
+            supplier_product_id="SP_PAGO_P026",
+            captain_final_qty_purchase=5,
+            captain_final_qty_base=25,
+        ),
+    ]
+    order = _captain_submitted_order(lines=lines)
+    mocks = _activate_sheet_backend(mocker, order=order)
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [{"order_line_id": "OL-002", "manager_final_qty_purchase": 5}],
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert "Souvlaki Kurczak karton" not in _gmail_body(r.json()["gmail_compose_url"])
+    assert r.json()["total_value_estimate_pln"] == pytest.approx(470.0)
+    _, updates = mocks["update_order_lines"].call_args.args
+    assert "OL-001" not in updates  # the saved 0 is left as it is
 
 
 def test_dispatch_empty_manager_finals():
