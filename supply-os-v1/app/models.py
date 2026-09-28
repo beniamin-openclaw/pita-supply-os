@@ -146,6 +146,18 @@ class SupplierProduct(BaseModel):
     # Only the pickup document (frontend transport.ts) filters on this value —
     # the Pago order email and order PDF still cover the whole batch.
     warehouse_pickup: bool = False
+    # Position of this product in its supplier's list (migration 0023,
+    # supplier-product-order-minimum). Every per-supplier screen and document
+    # sorts by it, then by supplier_product_id (app/product_order.py). None =
+    # no position: the row keeps the supplier_product_id order, after the
+    # positioned rows.
+    display_order: Optional[int] = None
+    # False = the product does not count toward the supplier's logistic minimum
+    # (Bukat: Tzatzyki, Tirokafteri, Feta blok) — the informational chip
+    # compares the order total minus these lines. Never a gate. `bool = True`,
+    # NOT Optional: the column is NOT NULL DEFAULT true and _insert binds every
+    # column in _SUPPLIER_PRODUCT_COLUMNS (same reason as warehouse_pickup).
+    counts_toward_minimum: bool = True
 
 
 class LocationProductSetting(BaseModel):
