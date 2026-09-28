@@ -91,7 +91,7 @@
 - **Location**: plan.md Phase 3 / Phase 5
 - **Detail**:
   - The plan names a `fallbackDate` prop on DeliveryDateField. The parent passes an already-resolved `value` instead.
-  - The plan names roadmap row R-21. The row landed as the next free id and is renumbered again at the merge with main.
+  - The plan names roadmap row R-21. The row is R-25 after the merge with main (R-21..R-24 taken by other changes).
 - **Fix**: None. Recorded here; behaviour matches the plan's intent.
 - **Decision**: SKIPPED
 

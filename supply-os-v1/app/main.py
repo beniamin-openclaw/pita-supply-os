@@ -22,6 +22,7 @@ from . import (
     supabase_storage,
 )
 from .auth import require_any_auth, require_captain, require_manager
+from .order_qty import effective_ordered_qty, is_manager_final_set
 from .config import DataBackend, settings
 from .models import (
     CaptainEditRequest,
@@ -1272,6 +1273,7 @@ def manager_order_detail(
                 reason_code=line.reason_code,
                 captain_comment=line.captain_comment,
                 manager_comment=line.manager_comment,
+                manager_final_set=is_manager_final_set(line),
                 display_order=sp.display_order if sp else None,
             )
         )
@@ -1397,6 +1399,7 @@ def _enrich_lines_for_detail(
                 reason_code=line.reason_code,
                 manager_comment=line.manager_comment,
                 captain_comment=line.captain_comment,
+                manager_final_set=is_manager_final_set(line),
                 display_order=sp.display_order if sp else None,
             )
         )
@@ -1914,6 +1917,34 @@ def _load_order_events_safe(backend, order_id: str) -> list[OrderEvent]:
     return events[:100]
 
 
+def _clear_manager_zeros_best_effort(
+    backend, order_id: str, lines: list[OrderLine]
+) -> None:
+    """Forget the Manager's explicit zeros when an order goes back to
+    ``captain_submitted`` (release, Transport remove / cancel / empty-column
+    auto-remove). A released order is the Captain's again, so a line the
+    Manager zeroed reads at the Captain's quantity — exactly as before
+    ``manager_final_set`` existed (order-line-zero-qty). Positive Manager
+    values are left alone (unchanged behaviour). Best-effort: the status write
+    already happened, so a failure here only logs."""
+    updates = {
+        ln.order_line_id: {"manager_final_set": False}
+        for ln in lines
+        if ln.manager_final_set and ln.manager_final_qty_purchase <= 0
+    }
+    if not updates:
+        return
+    try:
+        backend.update_order_lines(order_id, updates)
+    except Exception:
+        log.warning(
+            "Order %s released but clearing the Manager zeros failed — the "
+            "zeroed lines keep reading as 0",
+            order_id,
+            exc_info=True,
+        )
+
+
 def _has_receipts(backend, order_id: str) -> bool:
     """True when at least one goods-receipt exists for ``order_id``. A missing
     'receipts' worksheet reads as "no receipts" (mirrors ``manager_queue``)."""
@@ -1964,19 +1995,16 @@ def _effective_qty_changes(
     products_by_id: dict[str, Product],
 ) -> list[str]:
     """Per-line "Name: old → new" diff for every line whose EFFECTIVE quantity
-    (manager_final if > 0 else captain_final) actually changes in this save —
-    the same rule the transport ``quantities_changed`` event uses. Computed
-    from the pre-write ``order``."""
+    (``order_qty.effective_ordered_qty``: the Manager's final once set, incl.
+    an explicit 0, else the Captain's) actually changes in this save — the
+    same rule the transport ``quantities_changed`` event uses. Computed from
+    the pre-write ``order``."""
     changes: list[str] = []
     for original_line in order.lines:
         final = finals_by_line_id.get(original_line.order_line_id)
         if final is None:
             continue
-        old_qty = (
-            original_line.manager_final_qty_purchase
-            if original_line.manager_final_qty_purchase > 0
-            else original_line.captain_final_qty_purchase
-        )
+        old_qty = effective_ordered_qty(original_line)
         new_qty = final.manager_final_qty_purchase
         if new_qty == old_qty:
             continue
@@ -2034,6 +2062,7 @@ def manager_release(
                 f"(expected manager_claimed)"
             ),
         )
+    _clear_manager_zeros_best_effort(backend, order_id, order.lines)
     return ManagerReleaseResponse(
         order_id=order_id, status=OrderStatus.CAPTAIN_SUBMITTED
     )
@@ -2186,8 +2215,11 @@ def manager_dispatch(
             manager_qty_purchase = final.manager_final_qty_purchase
             manager_comment = final.manager_comment
         else:
-            # No manager change for this line — keep captain's qty as final.
-            manager_qty_purchase = original_line.captain_final_qty_purchase
+            # Not in this payload — keep the line's current effective qty (a
+            # 0 the Manager saved earlier stays 0; an untouched line keeps the
+            # Captain's qty). The Manager UI sends every line, so this only
+            # matters for a partial payload.
+            manager_qty_purchase = effective_ordered_qty(original_line)
             manager_comment = original_line.manager_comment
 
         manager_qty_base = manager_qty_purchase * units_per_pu
@@ -2197,17 +2229,22 @@ def manager_dispatch(
                 "manager_final_qty_purchase": manager_qty_purchase,
                 "manager_final_qty_base": manager_qty_base,
                 "manager_comment": manager_comment,
+                "manager_final_set": True,
             }
 
         if sp and sp.price_estimate_pln:
             total += manager_qty_purchase * sp.price_estimate_pln
 
+        # In-memory copy for the Gmail URL: its manager_final IS the committed
+        # quantity, so it is marked set — otherwise a line dispatched as 0
+        # would fall back to the Captain's qty inside gmail_url._effective_qty.
         enriched_lines.append(
             original_line.model_copy(
                 update={
                     "manager_final_qty_purchase": manager_qty_purchase,
                     "manager_final_qty_base": manager_qty_base,
                     "manager_comment": manager_comment,
+                    "manager_final_set": True,
                 }
             )
         )
@@ -2322,8 +2359,10 @@ def manager_order_save(
     finals_by_line_id = {f.order_line_id: f for f in req.manager_finals}
 
     # Build line updates for touched lines; recompute total over ALL lines using
-    # the effective qty (this save's value if touched, else the saved
-    # manager_final if >0, else captain_final — mirrors dispatch / _effective_qty).
+    # the effective qty (this save's value if touched, else the line's current
+    # effective qty — order_qty.effective_ordered_qty, so a 0 the Manager saved
+    # earlier stays out of the total). A touched line is marked
+    # manager_final_set so its value — including 0 — survives the reload.
     line_updates: dict[str, dict] = {}
     total = 0.0
     for original_line in order.lines:
@@ -2337,11 +2376,10 @@ def manager_order_save(
                 "manager_final_qty_purchase": qty_purchase,
                 "manager_final_qty_base": qty_purchase * units_per_pu,
                 "manager_comment": final.manager_comment,
+                "manager_final_set": True,
             }
-        elif original_line.manager_final_qty_purchase > 0:
-            qty_purchase = original_line.manager_final_qty_purchase
         else:
-            qty_purchase = original_line.captain_final_qty_purchase
+            qty_purchase = effective_ordered_qty(original_line)
 
         if sp and sp.price_estimate_pln:
             total += qty_purchase * sp.price_estimate_pln
@@ -3572,15 +3610,6 @@ def _persist_receipt(backend, receipt: Receipt, lines: list[ReceiptLine]) -> boo
     return True
 
 
-def _effective_ordered_qty(line: OrderLine) -> float:
-    """Effective ordered purchase qty for receiving: manager_final if > 0 else
-    captain_final — the quantity actually ordered (mirrors
-    `gmail_url._effective_qty`, the same rule the dispatch email uses)."""
-    if line.manager_final_qty_purchase and line.manager_final_qty_purchase > 0:
-        return line.manager_final_qty_purchase
-    return line.captain_final_qty_purchase
-
-
 def _minimum_basis_value(
     total: Optional[float],
     lines: list[OrderLine],
@@ -3593,17 +3622,16 @@ def _minimum_basis_value(
     minimum (Bukat's 500 PLN excludes Tzatzyki, Hot Feta and Feta —
     ``supplier_products.counts_toward_minimum = false``). The basis is the
     stored total minus the value of those lines: effective quantity
-    (``_effective_ordered_qty``) × ``price_estimate_pln`` (a missing price
+    (``order_qty.effective_ordered_qty``) × ``price_estimate_pln`` (a missing price
     contributes 0), floored at 0 and rounded to grosze.
 
     Returns ``None`` when ``total`` is ``None`` or no line's supplier_product is
     excluded — the chip then compares the total exactly as before.
     Display-only: nothing gates on it, and it is never persisted.
 
-    Two known drifts, both accepted: a line the Manager zeroed (stored
-    ``manager_final = 0``) is valued at its ``captain_final``, so an excluded
-    zeroed line LOWERS the basis — the chip warns more, never less; and a later
-    master-data price edit moves the basis but not the stored total."""
+    Known drift, accepted: a later master-data price edit moves the basis but
+    not the stored total. (A line the Manager zeroed is valued at 0 since
+    order-line-zero-qty, so it no longer lowers the basis.)"""
     if total is None:
         return None
     excluded_value = 0.0
@@ -3613,7 +3641,7 @@ def _minimum_basis_value(
         if sp is None or sp.counts_toward_minimum:
             continue
         any_excluded = True
-        excluded_value += _effective_ordered_qty(line) * (sp.price_estimate_pln or 0.0)
+        excluded_value += effective_ordered_qty(line) * (sp.price_estimate_pln or 0.0)
     if not any_excluded:
         return None
     return round(max(0.0, total - excluded_value), 2)
@@ -3685,7 +3713,7 @@ def captain_receipt_submit(
                     f"order {req.order_id}"
                 ),
             )
-        ordered = _effective_ordered_qty(order_line)
+        ordered = effective_ordered_qty(order_line)
         variance = line.received_qty_purchase - ordered
         if variance != 0:
             discrepancy_count += 1
@@ -4057,9 +4085,10 @@ def _aggregate_transport_lines(
     Transport aggregate: per-product totals plus the per-product x
     per-location breakdown (the private driver list / zużycie usage record).
 
-    Effective quantity per line is ``_effective_ordered_qty`` (manager_final
-    if > 0 else captain_final — the same rule ``gmail_url._effective_qty``
-    and the goods-receiving path use; not reinvented here). A zero effective
+    Effective quantity per line is ``effective_ordered_qty`` (the Manager's
+    final once set, incl. an explicit 0, else the Captain's —
+    ``app/order_qty.py``, the same rule ``gmail_url._effective_qty`` and the
+    goods-receiving path use; not reinvented here). A zero effective
     quantity drops the line entirely, mirroring the dispatch email builder
     skipping zero-qty lines. A line whose ``order_id`` has no matching entry
     in ``orders`` is skipped (defensive — callers pass matched sets).
@@ -4096,7 +4125,7 @@ def _aggregate_transport_lines(
         order = orders_by_id.get(line.order_id)
         if order is None:
             continue
-        qty = _effective_ordered_qty(line)
+        qty = effective_ordered_qty(line)
         if qty <= 0:
             continue
 
@@ -4880,7 +4909,7 @@ def manager_transport_finalize(
     never aborts the rest of the batch.
 
     Empty-column guard (v4 feedback): BEFORE any transition, every
-    ``manager_claimed`` member's effective total (``_effective_ordered_qty``
+    ``manager_claimed`` member's effective total (``effective_ordered_qty``
     summed over its lines — the same rule the aggregate/driver-list/email use)
     is computed. A member with zero effective total is never sent — it is
     auto-REMOVED from the batch exactly like ``remove-order`` (a
@@ -4929,7 +4958,7 @@ def manager_transport_finalize(
         lines_by_order.setdefault(ln.order_id, []).append(ln)
     totals_by_order = {
         o.order_id: sum(
-            _effective_ordered_qty(ln) for ln in lines_by_order.get(o.order_id, [])
+            effective_ordered_qty(ln) for ln in lines_by_order.get(o.order_id, [])
         )
         for o in claimed
     }
@@ -4999,6 +5028,10 @@ def manager_transport_finalize(
                     )
                 )
                 continue
+            if not manager_created:
+                _clear_manager_zeros_best_effort(
+                    backend, order.order_id, lines_by_order.get(order.order_id, [])
+                )
             skipped.append(
                 TransportSkippedOrder(
                     order_id=order.order_id, reason="empty — removed"
@@ -5303,6 +5336,7 @@ def manager_transport_remove_order(
                 status_code=409,
                 detail=f"Order {req.order_id} was changed concurrently",
             )
+        _clear_manager_zeros_best_effort(backend, req.order_id, order.lines)
         action = "released"
 
     _log_transport_event(
@@ -5489,6 +5523,9 @@ def manager_transport_cancel(
                     supplier_order_reference=None,
                     status=OrderStatus.CAPTAIN_SUBMITTED.value,
                     expected_status=OrderStatus.MANAGER_CLAIMED.value,
+                )
+                _clear_manager_zeros_best_effort(
+                    backend, order.order_id, lines_by_order.get(order.order_id, [])
                 )
                 released.append(order.order_id)
         except errors.OrderStatusConflictError:

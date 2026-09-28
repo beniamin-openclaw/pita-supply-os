@@ -494,6 +494,11 @@ export interface ManagerOrderLineDetail {
   reason_code?: ReasonCode | null;
   captain_comment: string;
   manager_comment: string;
+  // The Manager committed a quantity for this line — including 0
+  // (order-line-zero-qty, migration 0024). Normalized server-side (stored flag
+  // OR a positive manager_final). Optional: absent from an older backend, where
+  // the lib/orderQty.ts rule falls back to "manager_final > 0".
+  manager_final_set?: boolean;
   // Position of the line's supplier product (migration 0023) — document
   // builders sort with lib/productOrder.ts compareProductOrder. null = none.
   display_order?: number | null;

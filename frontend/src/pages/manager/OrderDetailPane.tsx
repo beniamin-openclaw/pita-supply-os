@@ -114,13 +114,10 @@ export function OrderDetailPane({
   const sentTransportMember =
     detail.status === "manager_sent" &&
     (detail.supplier_order_reference ?? "").startsWith("TRN-");
-  // Dispatched orders are the only ones where a persisted manager_final 0 means
-  // a deliberately-dropped line; before that, 0 = "not set yet" → neutral.
-  const dispatched = detail.status === "manager_sent" || detail.status === "closed";
   // Summary + Δ axes use the live draft when editable, else the persisted line.
   const summary = editable
     ? managerSummary(detail.lines, (line) => draftQty(drafts, line))
-    : managerSummary(detail.lines, undefined, dispatched);
+    : managerSummary(detail.lines);
   const dirty = editable && hasDirtyDrafts(drafts, detail.lines);
   const busy = busyId === detail.order_id;
 
@@ -210,7 +207,6 @@ export function OrderDetailPane({
         <OrderLineTable
           lines={detail.lines}
           editable={editable}
-          dispatched={dispatched}
           drafts={drafts}
           onQtyChange={onQtyChange}
           onCommentChange={onCommentChange}

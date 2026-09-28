@@ -48,7 +48,9 @@ def _sp(sp_id: str, price: float | None, counts: bool = True) -> SupplierProduct
     )
 
 
-def _line(sp_id: str, captain: float, manager: float = 0.0) -> OrderLine:
+def _line(
+    sp_id: str, captain: float, manager: float = 0.0, manager_set: bool = False
+) -> OrderLine:
     return OrderLine(
         order_line_id=f"OL-{sp_id}",
         order_id="ORD-1",
@@ -56,6 +58,7 @@ def _line(sp_id: str, captain: float, manager: float = 0.0) -> OrderLine:
         supplier_product_id=sp_id,
         captain_final_qty_purchase=captain,
         manager_final_qty_purchase=manager,
+        manager_final_set=manager_set,
     )
 
 
@@ -95,11 +98,17 @@ def test_basis_uses_manager_final_when_positive():
     assert _minimum_basis_value(400.0, lines, SPS) == 250.0
 
 
-def test_basis_values_a_zeroed_line_at_captain_final():
-    # Documented drift: manager_final 0 falls back to captain_final, so an
-    # excluded line the Manager zeroed still lowers the basis (warns more).
+def test_basis_values_an_untouched_line_at_captain_final():
+    # manager_final 0 with the flag off = the Manager never touched the line.
     lines = [_line("SP_BUKAT_P011", 2, manager=0)]
     assert _minimum_basis_value(400.0, lines, SPS) == 340.0
+
+
+def test_basis_values_a_line_the_manager_zeroed_at_zero():
+    # order-line-zero-qty: an explicit Manager 0 is out of the order, so an
+    # excluded zeroed line no longer lowers the basis.
+    lines = [_line("SP_BUKAT_P011", 2, manager=0, manager_set=True)]
+    assert _minimum_basis_value(400.0, lines, SPS) == 400.0
 
 
 def test_basis_missing_price_contributes_zero():
