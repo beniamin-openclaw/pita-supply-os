@@ -135,9 +135,9 @@ describe("pojemnik / paczka declension (week2-feedback-quantities Phase 3)", () 
 });
 
 describe("PACK_UNIT_FORMS integrity", () => {
-  it("every entry has all five Polish forms and both English forms non-empty", () => {
+  it("every entry has all four Polish forms and both English forms non-empty", () => {
     for (const [unit, forms] of Object.entries(PACK_UNIT_FORMS)) {
-      for (const key of ["one", "few", "many", "frac", "loc"] as const) {
+      for (const key of ["one", "few", "many", "frac"] as const) {
         expect(forms.pl[key], `${unit}.pl.${key}`).toBeTruthy();
       }
       for (const key of ["one", "many"] as const) {

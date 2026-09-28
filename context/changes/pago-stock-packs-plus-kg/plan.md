@@ -486,19 +486,19 @@ the frontend PR; stored data is unaffected either way.
 
 #### Automated
 
-- [x] 1.1 `lib/packStock.test.ts` covers split, combine, format, suggestPackCount cases
-- [x] 1.2 Declension tests for blok/karton/opak added to `lib/packUnits.test.ts`
-- [x] 1.3 `npm run test` passes
-- [x] 1.4 `npm run build` passes
-- [x] 1.5 `npm run lint` passes
+- [x] 1.1 `lib/packStock.test.ts` covers split, combine, format, suggestPackCount cases — 35e7e2c
+- [x] 1.2 Declension tests for blok/karton/opak added to `lib/packUnits.test.ts` — 35e7e2c
+- [x] 1.3 `npm run test` passes — 35e7e2c
+- [x] 1.4 `npm run build` passes — 35e7e2c
+- [x] 1.5 `npm run lint` passes — 35e7e2c
 
 ### Phase 2: Two-field input on the order card
 
 #### Automated
 
-- [ ] 2.1 `npm run test` passes, including PackStockInput and updated ProductCard tests
-- [ ] 2.2 `npm run build` passes
-- [ ] 2.3 `npm run lint` passes
+- [x] 2.1 `npm run test` passes, including PackStockInput and updated ProductCard tests
+- [x] 2.2 `npm run build` passes
+- [x] 2.3 `npm run lint` passes
 
 #### Manual
 

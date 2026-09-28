@@ -179,18 +179,6 @@ export const STRINGS = {
     pl: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
     en: "1 {purchaseUnit} = {unitsPerPurchase} {inventoryUnit}",
   },
-  "card.stockPacks": {
-    pl: "{base} {inventoryUnit} = {packs}",
-    en: "{base} {inventoryUnit} = {packs}",
-  },
-  "card.packsToStock": {
-    pl: "{packs} = {base} {inventoryUnit}",
-    en: "{packs} = {base} {inventoryUnit}",
-  },
-  "card.packInputToggle": {
-    pl: "wpisz w {unitLoc}",
-    en: "enter in {unitLoc}",
-  },
   // Suggestion tile, pack variant: "brakuje 80 szt" / "= 3,3 zgrzewki" /
   // "→ 4 zgrzewki" as three no-wrap segments (the "=" / "→" parts are symbols
   // + a formatted pack label, composed in ProductCard).

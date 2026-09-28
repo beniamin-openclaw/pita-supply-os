@@ -71,45 +71,63 @@ function renderCard(item: OrderableItem, initialLine: OrderLine) {
 }
 
 describe("ProductCard — pack-unit display (×24 SKU)", () => {
-  it("shows Cel/Max pack hints, the stock hint, and the suggestion pack detail", () => {
+  it("shows packs-first Cel/Max, the two-field stock reading, and the suggestion pack detail", () => {
     renderCard(makeItem(), makeLine({ current_stock_qty_base: 40 }));
 
     expect(screen.getByText(/Cel: 5 zgrzewek \(120 szt\)/)).toBeInTheDocument();
     expect(screen.getByText(/Max: 5 zgrzewek \(120 szt\)/)).toBeInTheDocument();
-    expect(screen.getByText("40 szt = 1,7 zgrzewki")).toBeInTheDocument();
-    // Suggestion tile: three no-wrap segments ("brakuje 80 szt" / "= 3,3 zgrzewki" / "→ 4 zgrzewki").
+    // 40 szt seeds as 1 zgrzewka + 16 szt.
+    expect((screen.getByLabelText("Obecny stan, zgrzewka") as HTMLInputElement).value).toBe("1");
+    expect((screen.getByLabelText("Obecny stan, szt") as HTMLInputElement).value).toBe("16");
+    expect(screen.getByText("= 1 zgrzewka + 16 szt (40 szt)")).toBeInTheDocument();
     expect(screen.getByText("brakuje 80 szt")).toBeInTheDocument();
     expect(screen.getByText("= 3,3 zgrzewki")).toBeInTheDocument();
     expect(screen.getByText("→ 4 zgrzewki")).toBeInTheDocument();
-    // Unit captions sit under the fields (no absolute suffix over the number).
-    expect(document.getElementById("current-unit-P1")?.textContent).toBe("szt");
     expect(document.getElementById("final-unit-P1")?.textContent).toBe("zgrzewka");
   });
 
-  it("toggle on + typing '2' sends base units (48) and shows the reverse hint", () => {
+  it("typing 2 packs stores 48 base units; there is no 'wpisz w' toggle", () => {
     const { onChangeSpy } = renderCard(makeItem(), makeLine());
 
-    fireEvent.click(screen.getByRole("button", { name: /wpisz w zgrzewkach/i }));
-    const input = screen.getByLabelText("Obecny stan") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "2" } });
+    expect(screen.queryByRole("button", { name: /wpisz w/i })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Obecny stan, zgrzewka"), { target: { value: "2" } });
 
-    expect(onChangeSpy).toHaveBeenCalledWith(
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ current_stock_qty_base: 48 }),
     );
-    expect(screen.getByText("2 zgrzewki = 48 szt")).toBeInTheDocument();
-    // While the toggle is on the stock field is captioned with the pack unit.
-    expect(document.getElementById("current-unit-P1")?.textContent).toBe("zgrzewka");
+    expect(screen.getByText("= 2 zgrzewki (48 szt)")).toBeInTheDocument();
+  });
+
+  it("below-min uses the pack wording", () => {
+    renderCard(makeItem({ min_stock_qty_base: 48 }), makeLine({ current_stock_qty_base: 10 }));
+    expect(screen.getByText("Poniżej minimum: 2 zgrzewki (48 szt)")).toBeInTheDocument();
+  });
+
+  it("prompts 'did you mean' when previousStock is large and the loose value is small", () => {
+    const onChangeSpy = vi.fn();
+    render(
+      <LangProvider>
+        <ProductCard
+          item={makeItem()}
+          line={makeLine({ current_stock_qty_base: 5 })}
+          onChange={onChangeSpy}
+          previousStock={200}
+        />
+      </LangProvider>,
+    );
+    expect(screen.getByText(/Czy chodziło o 5 zgrzewek \(120 szt\)\?/)).toBeInTheDocument();
   });
 });
 
 describe("ProductCard — ×1 SKU renders byte-identically to today", () => {
-  it("has no toggle button, the old target-line wording, and no pack '=' hint", () => {
+  it("has one stock field, the old target-line wording, and no pack '=' hint", () => {
     renderCard(
       makeItem({ purchase_unit: "szt", units_per_purchase_unit: 1 }),
       makeLine({ current_stock_qty_base: 40 }),
     );
 
-    expect(screen.queryByRole("button", { name: /wpisz w/i })).not.toBeInTheDocument();
+    expect((screen.getByLabelText("Obecny stan") as HTMLInputElement).value).toBe("40");
+    expect(document.getElementById("current-unit-P1")?.textContent).toBe("szt");
     expect(
       screen.getByText("target 120 szt · max 120 · 1 szt = 1 szt"),
     ).toBeInTheDocument();
