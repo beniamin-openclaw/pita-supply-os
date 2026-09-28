@@ -38,8 +38,25 @@ import {
   buildEmailBody,
   buildEmailSubject,
   buildGmailComposeUrl,
-  joinCc,
+  fallbackCc,
 } from "./lib/emailBody";
+import { useOrderEmailSigner } from "./lib/useOrderEmailSigner";
+import { SignerSelect } from "./SignerSelect";
+
+/** Extra facts about a dispatch the parent needs for its confirmation. */
+export interface DispatchOpts {
+  /** Set when a verified Gmail draft was created before the dispatch — the
+   *  mailbox that now holds it (order-email-v2). */
+  draftMailbox?: string;
+}
+
+/** Dispatch callback: channel, the chosen e-mail signer (email channel only)
+ *  and optional extras. */
+export type DispatchHandler = (
+  sentMethod: OrderingMethod,
+  signerEmail?: string | null,
+  opts?: DispatchOpts,
+) => void;
 
 interface DispatchPanelProps {
   detail: ManagerOrderDetail;
@@ -47,7 +64,7 @@ interface DispatchPanelProps {
   /** True while a dispatch is in flight for this order. */
   busy: boolean;
   /** Fire the dispatch state-write with the full draft line set + sent_method. */
-  onDispatch: (sentMethod: OrderingMethod) => void;
+  onDispatch: DispatchHandler;
   /** Surface a toast (copy success/failure). */
   onToast: (msg: string, ok: boolean) => void;
 }
@@ -212,7 +229,7 @@ interface EmailDispatchProps {
   effQty: (line: ManagerOrderLineDetail) => number;
   empty: boolean;
   busy: boolean;
-  onDispatch: (sentMethod: OrderingMethod) => void;
+  onDispatch: DispatchHandler;
   onCopy: (text: string) => void;
 }
 
@@ -225,14 +242,17 @@ function EmailDispatch({
   onCopy,
 }: EmailDispatchProps) {
   const { t } = useT();
+  const { signer, setSignerEmail } = useOrderEmailSigner(detail.email_signers);
 
   // Seed subject/body from the draft on mount; the manager then edits freely.
   // DispatchPanel is keyed by order id at the parent, so a new order remounts
-  // this and re-seeds. "Odśwież" re-seeds from the current draft qty on demand.
+  // this and re-seeds. "Odśwież" re-seeds from the current draft qty on demand,
+  // and so does picking another signer (the signature is in the body).
   const [subject, setSubject] = useState(() => buildEmailSubject(detail));
   const [body, setBody] = useState(() =>
-    buildEmailBody(detail, effQty),
+    buildEmailBody(detail, effQty, signer),
   );
+  const signerEmail = signer?.email ?? null;
 
   const to = detail.supplier_email ?? "";
   // "@" check (not bare non-empty): master data used placeholders like 'TBD'
@@ -240,12 +260,11 @@ function EmailDispatch({
   // recipient in a normal-looking Gmail draft. Mirrors the backend gate.
   const noEmail = !to.includes("@");
 
-  // DW (CC) from the backend — the standing office copy + the location's own
-  // mailbox (week2-feedback-quantities Phase 2), one source of truth shared with
-  // the server-side re-open URL (main.py `_join_cc`). Shown below so the operator
-  // SEES both copies going out; the "@" gate mirrors the recipient check
+  // DW (CC) for the compose-link path — the standing office copy + the
+  // location's own mailbox, one source of truth shared with the server-side
+  // re-open URL (main.py `_join_cc`). The "@" gate mirrors the recipient check
   // (feedback r7) — placeholders like 'TBD' are dropped by joinCc.
-  const cc = joinCc(detail.cc_email, detail.location_email);
+  const cc = fallbackCc(detail);
   const hasCc = cc.includes("@");
 
   const { url, tooLong } = buildGmailComposeUrl({ to, subject, body, cc });
@@ -276,6 +295,18 @@ function EmailDispatch({
         </div>
       )}
 
+      <SignerSelect
+        id="dispatch-signer"
+        signers={detail.email_signers}
+        value={signer}
+        disabled={busy}
+        onChange={(email) => {
+          const next = setSignerEmail(email);
+          setSubject(buildEmailSubject(detail));
+          setBody(buildEmailBody(detail, effQty, next));
+        }}
+      />
+
       {/* Subject (editable) */}
       <div className="flex items-center gap-2">
         <label className="w-16 shrink-0 text-xs font-semibold text-slate-500" htmlFor="dispatch-subject">
@@ -300,7 +331,7 @@ function EmailDispatch({
             type="button"
             onClick={() => {
               setSubject(buildEmailSubject(detail));
-              setBody(buildEmailBody(detail, effQty));
+              setBody(buildEmailBody(detail, effQty, signer));
             }}
             className="text-[11px] text-blue-700 underline hover:text-blue-900"
           >
@@ -332,7 +363,7 @@ function EmailDispatch({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => {
-              if (!busy) onDispatch("email");
+              if (!busy) onDispatch("email", signerEmail);
             }}
             className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
           >
@@ -371,7 +402,7 @@ interface PortalDispatchProps {
   emptyNote: ReactNode;
   busy: boolean;
   empty: boolean;
-  onDispatch: (sentMethod: OrderingMethod) => void;
+  onDispatch: DispatchHandler;
 }
 
 function PortalDispatch({

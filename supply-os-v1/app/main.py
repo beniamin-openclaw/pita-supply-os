@@ -2205,7 +2205,17 @@ def manager_dispatch(
                 cc_email=_join_cc(
                     settings.order_cc_email, location.email if location else None
                 ),
+                signer=gmail_url.resolve_signer(
+                    _load_email_signers(backend), req.signer_email
+                ),
+                include_delivery_date=settings.order_email_delivery_date_enabled,
             )
+        except gmail_url.GmailUrlTooLongError:
+            # Non-fatal (order-email-v2 D12): the draft path has no URL limit,
+            # so a long order still dispatches — only the session re-open link
+            # is absent. Must stay BEFORE `except ValueError` (it subclasses it).
+            log.info("Order %s too long for a Gmail URL — no re-open link", req.order_id)
+            url = None
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}")
 

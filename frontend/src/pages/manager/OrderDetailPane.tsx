@@ -19,7 +19,7 @@ import { AddProductPicker } from "../../components/ui/AddProductPicker";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
-import { DispatchPanel } from "./DispatchPanel";
+import { DispatchPanel, type DispatchOpts } from "./DispatchPanel";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
 import { ResendPanel } from "./ResendPanel";
@@ -58,7 +58,12 @@ interface OrderDetailPaneProps {
   /** Save (PATCH) the dirty draft lines without dispatching. */
   onSave: (orderId: string) => void;
   /** Dispatch with the full draft line set + the channel sent_method. */
-  onDispatch: (orderId: string, sentMethod: OrderingMethod) => void;
+  onDispatch: (
+    orderId: string,
+    sentMethod: OrderingMethod,
+    signerEmail?: string | null,
+    opts?: DispatchOpts,
+  ) => void;
   onQtyChange: (orderLineId: string, qty: number) => void;
   onCommentChange: (orderLineId: string, comment: string) => void;
   onToast: (msg: string, ok: boolean) => void;
@@ -344,7 +349,9 @@ export function OrderDetailPane({
             detail={detail}
             drafts={drafts}
             busy={busy}
-            onDispatch={(sentMethod) => onDispatch(detail.order_id, sentMethod)}
+            onDispatch={(sentMethod, signerEmail, opts) =>
+              onDispatch(detail.order_id, sentMethod, signerEmail, opts)
+            }
             onToast={onToast}
           />
         </>

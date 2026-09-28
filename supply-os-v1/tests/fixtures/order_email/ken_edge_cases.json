@@ -1,0 +1,99 @@
+{
+  "_comment": "Edge cases: switch on but no date, no signer, no phone, no company, extra items + captain note, fractions, declension few/many/frac, unmapped unit, inventory-unit fallback, zero line dropped.",
+  "include_delivery_date": true,
+  "signer": null,
+  "order": {
+    "order_id": "ORD-20261004-KEN-BUKA-000001",
+    "requested_delivery_date": null,
+    "extra_items": "Mięta 2 pęczki",
+    "captain_note": "Proszę o świeże pomidory."
+  },
+  "location": {
+    "location_name": "Pita Bros KEN",
+    "delivery_address": "",
+    "city": "",
+    "phone": null,
+    "company_name": null,
+    "company_address": null,
+    "company_nip": null
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P301",
+      "product_name_pl": "Pomidor",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P301",
+      "supplier_product_name": "Pomidor",
+      "purchase_unit": "kg",
+      "display_order": 1,
+      "qty": 1.5
+    },
+    {
+      "order_line_id": "OL-002",
+      "product_id": "P302",
+      "product_name_pl": "Tzatzyki",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P302",
+      "supplier_product_name": "Tzatzyki",
+      "purchase_unit": "pojemnik",
+      "display_order": 2,
+      "qty": 3
+    },
+    {
+      "order_line_id": "OL-003",
+      "product_id": "P303",
+      "product_name_pl": "Feta blok",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P303",
+      "supplier_product_name": "Feta blok",
+      "purchase_unit": "blok",
+      "display_order": 3,
+      "qty": 2.5
+    },
+    {
+      "order_line_id": "OL-004",
+      "product_id": "P304",
+      "product_name_pl": "Pita",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P304",
+      "supplier_product_name": "Pita",
+      "purchase_unit": "karton",
+      "display_order": 4,
+      "qty": 22
+    },
+    {
+      "order_line_id": "OL-005",
+      "product_id": "P305",
+      "product_name_pl": "Kubki",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P305",
+      "supplier_product_name": "Kubki",
+      "purchase_unit": "tacka",
+      "display_order": 5,
+      "qty": 2
+    },
+    {
+      "order_line_id": "OL-006",
+      "product_id": "P306",
+      "product_name_pl": "Sól",
+      "inventory_unit": "worek",
+      "supplier_product_id": "SP_P306",
+      "supplier_product_name": "Sól",
+      "purchase_unit": "",
+      "display_order": 6,
+      "qty": 12
+    },
+    {
+      "order_line_id": "OL-007",
+      "product_id": "P307",
+      "product_name_pl": "Ogórek",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P307",
+      "supplier_product_name": "Ogórek",
+      "purchase_unit": "kg",
+      "display_order": 7,
+      "qty": 0
+    }
+  ]
+}

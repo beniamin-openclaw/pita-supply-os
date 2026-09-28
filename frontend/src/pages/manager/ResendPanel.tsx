@@ -18,8 +18,10 @@ import {
   buildEmailBody,
   buildGmailComposeUrl,
   buildResendSubject,
-  joinCc,
+  fallbackCc,
 } from "./lib/emailBody";
+import { useOrderEmailSigner } from "./lib/useOrderEmailSigner";
+import { SignerSelect } from "./SignerSelect";
 
 interface ResendPanelProps {
   detail: ManagerOrderDetail;
@@ -48,8 +50,12 @@ export function ResendPanel({ detail, drafts, dirty, onToast }: ResendPanelProps
   const isEmail = detail.ordering_method === "email";
   const to = detail.supplier_email ?? "";
   const noEmail = !to.includes("@");
-  const body = useMemo(() => buildEmailBody(detail, effQty), [detail, effQty]);
-  const cc = joinCc(detail.cc_email, detail.location_email);
+  const { signer, setSignerEmail } = useOrderEmailSigner(detail.email_signers);
+  const body = useMemo(
+    () => buildEmailBody(detail, effQty, signer),
+    [detail, effQty, signer],
+  );
+  const cc = fallbackCc(detail);
   const { url, tooLong } = buildGmailComposeUrl({
     to,
     subject: buildResendSubject(detail),
@@ -94,6 +100,16 @@ export function ResendPanel({ detail, drafts, dirty, onToast }: ResendPanelProps
         <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
           {t("manager.urlTooLong")}
         </p>
+      )}
+      {isEmail && !dirty && (
+        <div className="mt-2">
+          <SignerSelect
+            id="resend-signer"
+            signers={detail.email_signers}
+            value={signer}
+            onChange={setSignerEmail}
+          />
+        </div>
       )}
       {!isEmail && !dirty && (
         <pre className="mt-2 overflow-x-auto rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">

@@ -304,8 +304,15 @@ export function ManagerPage() {
   // channel the DispatchPanel already opened the (edited-body) Gmail link via a
   // clicked <a>; this just persists manager_final + status + sent_method.
   const handleDispatch = useCallback(
-    async (orderId: string, sentMethod: OrderingMethod) => {
+    async (
+      orderId: string,
+      sentMethod: OrderingMethod,
+      signerEmail?: string | null,
+    ) => {
       if (!detail) return;
+      // Re-entry guard: a second trigger while one dispatch is in flight (e.g.
+      // the fallback link clicked during a draft) must not dispatch twice.
+      if (busyId) return;
       const manager_finals = dispatchPayload(drafts, detail.lines);
       setBusyId(orderId);
       try {
@@ -313,6 +320,8 @@ export function ManagerPage() {
           order_id: orderId,
           manager_finals,
           sent_method: sentMethod,
+          // The chosen signer, so the server re-open URL signs identically.
+          signer_email: sentMethod === "email" ? signerEmail ?? null : null,
         });
         // Non-email channels have no email artifact — "marked as ordered" is
         // the accurate confirmation there; email keeps the dispatched copy.
@@ -333,7 +342,7 @@ export function ManagerPage() {
         setBusyId(null);
       }
     },
-    [detail, drafts, refreshAll, showToast, t],
+    [busyId, detail, drafts, refreshAll, showToast, t],
   );
 
   // Add one ad-hoc product line to the claimed order (add-product-to-order). The

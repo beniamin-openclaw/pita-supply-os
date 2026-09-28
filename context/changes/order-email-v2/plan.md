@@ -535,10 +535,10 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Automated
 
-- [x] 1.1 Backend lint + tests pass
-- [x] 1.2 Integration suite applies 0026
-- [x] 1.3 New unit tests for signer parsing/resolution, detail fields, degrade
-- [x] 1.4 Frontend build + lint + tests pass
+- [x] 1.1 Backend lint + tests pass — 22aa686
+- [x] 1.2 Integration suite applies 0026 — 22aa686
+- [x] 1.3 New unit tests for signer parsing/resolution, detail fields, degrade — 22aa686
+- [x] 1.4 Frontend build + lint + tests pass — 22aa686
 
 #### Manual
 
@@ -548,13 +548,13 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Automated
 
-- [ ] 2.1 Golden fixtures pass on both sides
-- [ ] 2.2 Declension table parity test passes
-- [ ] 2.3 Full backend + frontend suites, lint, build pass
+- [x] 2.1 Golden fixtures pass on both sides
+- [x] 2.2 Declension table parity test passes
+- [x] 2.3 Full backend + frontend suites, lint, build pass
 
 #### Manual
 
-- [ ] 2.4 Rendered STOP examples match the fixtures
+- [x] 2.4 Rendered STOP examples match the fixtures
 
 ### Phase 3: Gmail draft delivery path
 
