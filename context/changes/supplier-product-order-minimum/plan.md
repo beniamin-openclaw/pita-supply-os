@@ -641,13 +641,13 @@ TTL-cached on Sheets). All sorting is in-process over tens of rows.
 
 #### Automated
 
-- [x] 4.1 Captain submit for SUP_INTERNAL returns 400, nothing persisted
-- [x] 4.2 isOrderingSupplier unit tests
-- [x] 4.3 Full suites, ruff, build, lint green
+- [x] 4.1 Captain submit for SUP_INTERNAL returns 400, nothing persisted — 10259f2
+- [x] 4.2 isOrderingSupplier unit tests — 10259f2
+- [x] 4.3 Full suites, ruff, build, lint green — 10259f2
 
 #### Manual
 
-- [x] 4.4 Seed preview: no Pita Bros in the Captain picker; Produkcja still in the count grid
+- [x] 4.4 Seed preview: no Pita Bros in the Captain picker; Produkcja still in the count grid — 10259f2
 
 ### Phase 5: Release (operator-run, after approval)
 
