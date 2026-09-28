@@ -82,6 +82,8 @@ WHERE EXISTS (SELECT 1 FROM suppliers s WHERE s.supplier_id = v.supplier_id)
        OR EXISTS (SELECT 1 FROM locations l WHERE l.location_id = v.location_id))
 -- Re-runnable: a corrected value in a later run overwrites the existing row.
 ON CONFLICT (rule_id) DO UPDATE SET
+    supplier_id       = EXCLUDED.supplier_id,
+    location_id       = EXCLUDED.location_id,
     order_weekdays    = EXCLUDED.order_weekdays,
     lead_days         = EXCLUDED.lead_days,
     delivery_weekdays = EXCLUDED.delivery_weekdays,
@@ -89,9 +91,11 @@ ON CONFLICT (rule_id) DO UPDATE SET
     active            = EXCLUDED.active,
     notes             = EXCLUDED.notes;
 
+-- Converges to exactly this scope on every run (a supplier dropped from the
+-- list is switched off again).
 UPDATE suppliers
-SET coverage_prompt_enabled = true
-WHERE supplier_id IN ('SUP_BUKAT', 'SUP_INTERMLECZ');
+SET coverage_prompt_enabled = (supplier_id IN ('SUP_BUKAT', 'SUP_INTERMLECZ'))
+WHERE coverage_prompt_enabled IS DISTINCT FROM (supplier_id IN ('SUP_BUKAT', 'SUP_INTERMLECZ'));
 
 -- ============================================================
 -- 4. Audit after

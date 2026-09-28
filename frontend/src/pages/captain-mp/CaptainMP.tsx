@@ -63,6 +63,9 @@ const PILOT_SUPPLIER_ID = "SUP_BUKAT";
 // Delivery calendar: proposal refetch backoff when the browser clock is
 // already past the order deadline the server returned.
 const DEADLINE_RETRY_MS = 30_000;
+// At most this many back-to-back retries (5 min); after that the strip keeps
+// the last proposal until the Captain switches supplier or reloads.
+const DEADLINE_RETRY_MAX = 10;
 
 /** True when the screen carries anything worth persisting as a draft. Freshly
  * initialized (all-blank) states must not overwrite or create drafts.
@@ -145,6 +148,7 @@ export function CaptainMP() {
   useEffect(() => {
     deliveryChoicesRef.current = deliveryChoices;
   }, [deliveryChoices]);
+  const deadlineRetriesRef = useRef<number>(0);
   const proposalForRef = useRef<typeof proposalFor>(null);
   useEffect(() => {
     proposalForRef.current = proposalFor;
@@ -374,6 +378,13 @@ export function CaptainMP() {
     if (!activeProposal) return;
     const ms = new Date(activeProposal.order_deadline).getTime() + 1000 - Date.now();
     if (!Number.isFinite(ms)) return;
+    if (ms > 0) {
+      deadlineRetriesRef.current = 0;
+    } else if (deadlineRetriesRef.current >= DEADLINE_RETRY_MAX) {
+      return;
+    } else {
+      deadlineRetriesRef.current += 1;
+    }
     const delay = ms > 0 ? ms : DEADLINE_RETRY_MS;
     const id = window.setTimeout(() => setProposalReload((k) => k + 1), delay);
     return () => window.clearTimeout(id);
