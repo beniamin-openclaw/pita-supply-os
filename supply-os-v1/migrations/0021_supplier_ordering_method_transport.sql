@@ -19,6 +19,8 @@
 -- queue, Transport). The repo already had this failure once with
 -- supplier_products.rounding_rule = 'tenth_kg' ahead of its enum member.
 --
+-- Applied on prod 2026-09-28 (MCP apply_migration), before the code deploy.
+--
 -- Rollback (only while no supplier row carries 'transport'):
 --   ALTER TABLE suppliers DROP CONSTRAINT suppliers_ordering_method_check;
 --   ALTER TABLE suppliers ADD CONSTRAINT suppliers_ordering_method_check

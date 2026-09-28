@@ -99,12 +99,12 @@ receiving path. Their disposition with Lineage is an operator decision, not a co
 on prod on 2026-09-28, not 2026-09-21. Section B of `prod-sql.sql` therefore starts from
 `manual`; its guard still accepts `email` so a reverted stopgap cannot make it a silent no-op.
 
-**How Pago is ordered now.** Operator decision, 2026-09-28: Pago for every Warsaw location is
-sent from the Google Sheet "Ordering PB v5 prod", not from the app. In the app a Pago Transport
-batch is a record only (finalize = status change, no e-mail). The "correct Pago artifact"
-paragraph above describes the app's Transport e-mail as it was designed on 2026-09-21; it is
-not the sending path any more, and no Pago e-mail or draft is sent from the app. The purpose of
-this change is unchanged: no per-order Pago dispatch from the app.
+**How Pago is ordered now (temporary).** Operator decision, 2026-09-28: for now Pago for every
+Warsaw location is sent from the Google Sheet "Ordering PB v5 prod"; the Manager retypes the
+app's quantities into it. This is temporary: once the remaining locations are in the app,
+Pago goes through the app again. Nothing in the app is disconnected meanwhile; the Transport
+screen keeps its Gmail draft (the "correct Pago artifact" paragraph above). The purpose of this
+change is unchanged: no per-order Pago dispatch from the Manager queue.
 
 **Merged origin/main (PR #34, pago-suggestion-no-alerts, migration 0022).** The only conflict
 was the integration fixture; it now applies 0021 and 0022. The two migrations are independent
@@ -112,4 +112,20 @@ was the integration fixture; it now applies 0021 and 0022. The two migrations ar
 `reviews/impl-review-merge-main.md`. Added tests pin the prod combination (`transport` channel
 plus alerts off): Captain orderable + submit still work, per-order dispatch still 409s, and the
 row round-trips on Postgres.
+
+### Prod rollout, 2026-09-28 — steps (a)–(c) done, data pass pending
+
+- **(a) Migration 0021 applied on prod** before the merge (MCP `apply_migration`, name
+  `0021_supplier_ordering_method_transport`). Before: one CHECK
+  `suppliers_ordering_method_check` with four values, SUP_PAGO `manual`, alerts `false`, six
+  recipients. After: the same constraint name with five values incl. `transport`; no row
+  changed (14 suppliers: email 7, manual 4, portal 2, phone 1).
+- **(b) PR #33 merged** as `c2662b9` (2026-09-28 11:05 UTC). CI 9/9 green, including both
+  `Backend integration (real Postgres)` runs.
+- **(c) Build confirmed live.** Railway deployment for `c2662b9`: success at 11:06:54 UTC;
+  `/health` ok; `/openapi.json` `OrderingMethod` = `email, portal, phone, manual, transport`.
+  Vercel deployment: success; production bundle `index-CMK7fQGJ.js` on
+  pita-supply-os.vercel.app contains `manager.transportOnlyNote`, `manager.transportOnlyLink`
+  and `manager.dispatch.transport`.
+- **(d) Data pass (`prod-sql.sql` section B): not yet run.** Code is inert until then.
 

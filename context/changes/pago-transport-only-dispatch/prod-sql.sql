@@ -55,10 +55,10 @@ UPDATE suppliers
 -- ---------- C. AUDIT after ----------
 
 -- C1. Pago is on the transport channel; section B touched nothing else on the
---     row. The email column is left as it was for reference only: the app
---     sends NO Pago e-mail. Since 2026-09-28 Pago for every Warsaw location is
---     ordered from the "Ordering PB v5 prod" sheet, and an app Transport batch
---     for Pago is a record only (finalize = status change, no e-mail).
+--     row. The email column stays as it was: the Transport screen's Gmail draft
+--     reads its recipients from it. (Temporarily, since 2026-09-28, the Pago
+--     order itself goes out from the "Ordering PB v5 prod" sheet, into which the
+--     Manager retypes the app's quantities.)
 SELECT supplier_id,
        ordering_method,
        (ordering_method = 'transport')                          AS channel_ok,
@@ -79,8 +79,8 @@ SELECT ordering_method, count(*) AS suppliers
 -- expect: exactly one row with ordering_method = 'transport'
 
 -- C3. Pago orders still waiting. The per-order queue now refuses to dispatch
---     them (409). In the app they can only be recorded in a Transport batch,
---     with no e-mail; the real Pago order goes out from the Ordering sheet.
+--     them (409); they go into a Transport batch. (Temporarily the Pago order
+--     itself goes out from the Ordering sheet.)
 SELECT order_id, location_id, status, captain_submitted_at::date AS submitted,
        supplier_order_reference
   FROM orders

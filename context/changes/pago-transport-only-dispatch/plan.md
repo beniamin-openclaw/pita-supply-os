@@ -405,7 +405,7 @@ the value.)
 
 #### Manual
 
-- [ ] 1.5 pytest -m integration green in CI with the new migration wired
+- [x] 1.5 pytest -m integration green in CI with the new migration wired — 61da3a3
 
 ### Phase 2: Frontend — the transport branch
 
@@ -424,8 +424,8 @@ the value.)
 
 #### Manual
 
-- [ ] 3.3 Operator applied migration 0021 on prod
-- [ ] 3.4 Operator confirmed the new Railway and Vercel builds are live
+- [x] 3.3 Operator applied migration 0021 on prod — c2662b9
+- [x] 3.4 Operator confirmed the new Railway and Vercel builds are live — c2662b9
 - [ ] 3.5 Operator ran the data pass and the audit returned no violations
 - [ ] 3.6 Prod: Pago order reports ordering_method transport and shows the notice
 - [ ] 3.7 Prod: Bukat order still dispatches normally
