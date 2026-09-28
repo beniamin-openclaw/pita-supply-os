@@ -677,6 +677,18 @@ cleared overrides included.
   - The same dry run showed that the extras rule positions every active product at a carded
     location, including those no card lists. Step 3e therefore expects 0 rows.
 
+- **Impl-review follow-ups (2026-09-28).** The review found no critical or warning items.
+  The observations were handled like this:
+  - The EN label for `productList.sort.supplier` is now "Supplier order" (Phase 2 said
+    "Ordering order"). The PL label is unchanged.
+  - Step 2d now carries a comment saying audit 3d is the tripwire for its "+ 1" gap and that
+    settings of inactive products are positioned on purpose. The change is comment-only and
+    `prod-sql.sql` was regenerated from the generator.
+  - `app/product_order.py` states that the inventory key has no TS twin on purpose;
+    `captain_inventory_count_detail` documents its card-order sort.
+  - The Manager CSV keeps the card order whatever sort the screen shows. That matches this
+    plan; revisit only if a Manager asks for "export as shown".
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.
@@ -701,8 +713,8 @@ cleared overrides included.
 
 #### Automated
 
-- [x] 3.1 prod-sql steps 0–2 of both files run clean on a local throwaway Postgres (or syntax-only, recorded)
-- [x] 3.2 Backend and frontend suites still green
+- [x] 3.1 prod-sql steps 0–2 of both files run clean on a local throwaway Postgres (or syntax-only, recorded) — 9befd16
+- [x] 3.2 Backend and frontend suites still green — 9befd16
 
 ### Phase 4: Release (operator-gated)
 

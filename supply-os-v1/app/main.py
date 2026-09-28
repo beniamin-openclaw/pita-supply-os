@@ -3269,6 +3269,10 @@ def captain_inventory_count_detail(
     (Phase 2, training-feedback-0901) so the Captain can see whether/when this
     snapshot was previously edited; a missing event worksheet degrades to an
     empty history, never a 500.
+
+    Lines come back in the location's current inventory-card order
+    (inventory-card-order): the effective ``inventory_order``, then
+    ``product_id`` — not in stored line-id order.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):

@@ -3297,6 +3297,11 @@ WHERE s.location_id = o.location_id AND s.product_id = o.product_id;
 
 -- 2d. Extras: section end + 1, computed from the card's effective positions and
 --     prod's product_category (ties among extras break by product_id).
+--     "+ 1" relies on a gap of at least 2 before the next section's first
+--     position (template and overrides step by 10). Audit 3d is the tripwire:
+--     it fails when a future override lands at section end + 1.
+--     Settings of inactive products are positioned too, on purpose: they never
+--     render, and a re-activated product already sits at its section end.
 WITH card(location_id, seq, product_id) AS (VALUES
     ('BRACKA', 1, 'P001'),
     ('BRACKA', 2, 'P002'),

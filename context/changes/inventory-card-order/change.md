@@ -1,7 +1,7 @@
 ---
 change_id: inventory-card-order
 title: Inventory screens in each location's printed card order; Pago and Mory list order
-status: implementing
+status: impl_reviewed
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null

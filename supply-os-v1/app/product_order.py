@@ -3,7 +3,10 @@
 1. **Per supplier** (supplier-product-order-minimum): ``supplier_product_sort_key``
    / ``line_sort_key`` below.
 2. **Per location, inventory card** (inventory-card-order): ``inventory_sort_key``
-   at the end of this module.
+   at the end of this module. It has no TypeScript twin on purpose: the backend
+   returns inventory rows already sorted, and the frontend "card" sort is a
+   stable sort on ``inventory_order`` that keeps this module's ``product_id``
+   tie-break (``frontend/src/lib/productListFilter.ts``).
 
 Canonical order of a supplier's products (supplier-product-order-minimum).
 
