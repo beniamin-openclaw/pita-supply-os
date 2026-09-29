@@ -7,7 +7,7 @@
 // finally finalize (draft -> sent), which mirrors v1's totals/driver-list/
 // email/copy view exactly, now read-only.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Loader2 } from "lucide-react";
 
@@ -32,6 +32,11 @@ import {
   transportDirtySavePayloads,
   transportDisplayLabel,
   leadSupplierView,
+  orderSupplierId,
+  lineSupplierId,
+  transportOrdersFor,
+  transportSuppliers,
+  TRANSPORT_COMPANION_SUPPLIER_IDS,
   type TransportDraftMap,
 } from "./lib/transport";
 import { AddLocationPicker } from "./transport/AddLocationPicker";
@@ -251,7 +256,12 @@ export function TransportPage() {
       .then((data) => {
         if (cancelled) return;
         // Active, and not on-site production (SUP_INTERNAL) — lib/orderingSuppliers.
-        const active = data.filter(isOrderingSupplier);
+        // Companion suppliers (Magazyn Mory) ride on the Pago run and have no
+        // run of their own, so they are not offered here
+        // (transport-pago-mory-combined).
+        const active = data.filter(
+          (s) => isOrderingSupplier(s) && !TRANSPORT_COMPANION_SUPPLIER_IDS.includes(s.supplier_id),
+        );
         setSuppliers(active);
         const pago = active.find((s) => s.supplier_id === "SUP_PAGO");
         const defaultId = pago ? pago.supplier_id : (active[0]?.supplier_id ?? "");
@@ -301,7 +311,9 @@ export function TransportPage() {
     Promise.all(
       batchDetail.orders.map((o) =>
         api
-          .managerOrderable(batchDetail.supplier_id, o.location_id)
+          // Each member's OWN supplier — a Magazyn Mory order on a Pago run
+          // offers Mory's catalogue (transport-pago-mory-combined).
+          .managerOrderable(orderSupplierId(o, batchDetail), o.location_id)
           .then((items) => [o.order_id, items] as const)
           .catch(() => [o.order_id, []] as const),
       ),
@@ -354,7 +366,9 @@ export function TransportPage() {
     setCreateError(null);
     setCreateResult(null);
     api
-      .transportCreate({ supplier_id: supplierId, order_ids: orderIds })
+      // allow_companions: Magazyn Mory orders selected in the list join a
+      // Pago batch (transport-pago-mory-combined).
+      .transportCreate({ supplier_id: supplierId, order_ids: orderIds, allow_companions: true })
       .then((resp) => {
         setCreateResult({
           transportId: resp.transport_id,
@@ -470,10 +484,12 @@ export function TransportPage() {
 
   const [addAllBusy, setAddAllBusy] = useState(false);
 
+  // Scoped to ONE supplier section (transport-pago-mory-combined): a Pago
+  // product is never offered to — and would 400 on — a Magazyn Mory order.
   const handleAddProductAll = useCallback(
-    (productId: string) => {
+    (productId: string, sectionSupplierId: string) => {
       if (!detail) return;
-      const targets = detail.orders
+      const targets = transportOrdersFor(detail, sectionSupplierId)
         .filter((order) => !order.lines.some((l) => l.product_id === productId))
         .map((order) => {
           const item = (orderableByOrderId[order.order_id] ?? []).find(
@@ -517,14 +533,21 @@ export function TransportPage() {
 
   // ---- v2 draft workstation: add location -------------------------------------
 
-  const locationsNotInBatch = useMemo(() => {
-    if (!detail) return locations;
-    const present = new Set(detail.orders.map((o) => o.location_id));
-    return locations.filter((l) => !present.has(l.location_id));
-  }, [locations, detail]);
+  // Per supplier section: a location that only has a Pago order can still get
+  // a Magazyn Mory column, and vice versa (transport-pago-mory-combined).
+  const locationsNotInSection = useCallback(
+    (sectionSupplierId: string): Location[] => {
+      if (!detail) return locations;
+      const present = new Set(
+        transportOrdersFor(detail, sectionSupplierId).map((o) => o.location_id),
+      );
+      return locations.filter((l) => !present.has(l.location_id));
+    },
+    [locations, detail],
+  );
 
   const handleAddLocation = useCallback(
-    (location: Location) => {
+    (location: Location, sectionSupplierId: string) => {
       if (!detail) return;
       setAddLocationBusy(true);
       api
@@ -535,7 +558,14 @@ export function TransportPage() {
         // Prefilling gives the location a zero-qty line for every product it
         // can order from this supplier; a zero drops out of the totals, the
         // driver list and the email, so an untouched column costs nothing.
-        .transportAddLocation(detail.transport_id, location.location_id, true)
+        // supplier_id only for a companion section, so the lead's request is
+        // byte-identical to before.
+        .transportAddLocation(
+          detail.transport_id,
+          location.location_id,
+          true,
+          sectionSupplierId === detail.supplier_id ? undefined : sectionSupplierId,
+        )
         .then(() => {
           showToast(t("manager.transport.addLocation.ok"), true);
           refreshDetail(detail.transport_id);
@@ -693,7 +723,7 @@ export function TransportPage() {
       if (!supplierId || locationIds.length === 0) return;
       setGridCreateBusy(true);
       api
-        .transportCreate({ supplier_id: supplierId, order_ids: [] })
+        .transportCreate({ supplier_id: supplierId, order_ids: [], allow_companions: true })
         .then(async (createResp) => {
           const transportId = createResp.transport_id;
           const errors: string[] = [];
@@ -732,19 +762,40 @@ export function TransportPage() {
   );
 
   // rows = product, cols = detail.location_ids (private driver matrix — sent
-  // view only, unchanged from v1).
+  // view only). Grouped by supplier (transport-pago-mory-combined): a Pago run
+  // that carried Magazyn Mory orders shows a Pago block, then a Mory block,
+  // each under its own header row when more than one supplier has lines.
   const matrix = useMemo(() => {
     if (!detail) return null;
-    return detail.lines.map((line) => {
-      const byLocation = new Map<string, number>();
-      line.per_location.forEach((pl) => {
-        byLocation.set(
-          pl.location_id,
-          roundQty((byLocation.get(pl.location_id) ?? 0) + pl.qty_purchase),
-        );
-      });
-      return { line, byLocation };
-    });
+    return transportSuppliers(detail)
+      .map((sup) => ({
+        supplier: sup,
+        rows: detail.lines
+          .filter((line) => lineSupplierId(line, detail) === sup.supplier_id)
+          .map((line) => {
+            const byLocation = new Map<string, number>();
+            line.per_location.forEach((pl) => {
+              byLocation.set(
+                pl.location_id,
+                roundQty((byLocation.get(pl.location_id) ?? 0) + pl.qty_purchase),
+              );
+            });
+            return { line, byLocation };
+          }),
+      }))
+      .filter((block) => block.rows.length > 0);
+  }, [detail]);
+  const showSupplierHeaders = (matrix?.length ?? 0) > 1;
+
+  // Draft sections: one editable matrix per supplier the batch can carry —
+  // the lead first, then (on a Pago batch) Magazyn Mory, shown even before it
+  // has a member so a Mory column can be added.
+  const draftSections = useMemo(() => {
+    if (!detail) return [];
+    return transportSuppliers(detail).map((sup) => ({
+      supplier: sup,
+      orders: transportOrdersFor(detail, sup.supplier_id),
+    }));
   }, [detail]);
 
   const locationNameById = useMemo(() => {
@@ -913,6 +964,11 @@ export function TransportPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 truncate">{o.location_name}</span>
+                            {o.supplier_id !== supplierId && (
+                              <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-800">
+                                {o.supplier_name}
+                              </span>
+                            )}
                             <span
                               className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${visual.pill}`}
                             >
@@ -1173,24 +1229,54 @@ export function TransportPage() {
 
                   {isDraft ? (
                     <>
-                      <TransportMatrix
-                        orders={detail.orders}
-                        editable
-                        drafts={drafts}
-                        onQtyChange={handleQtyChange}
-                        orderableByOrderId={orderableByOrderId}
-                        onAddProductAll={handleAddProductAll}
-                        addAllBusy={addAllBusy}
-                        onRemoveOrder={handleRemoveOrder}
-                        busyOrderId={busyOrderId}
-                      />
+                      {draftSections.map((section) => (
+                        <div key={section.supplier.supplier_id} className="space-y-2">
+                          {section.orders.length > 0 ? (
+                            <TransportMatrix
+                              orders={section.orders}
+                              title={
+                                draftSections.length > 1
+                                  ? t("manager.transport.section.title", {
+                                      supplier: section.supplier.supplier_name,
+                                    })
+                                  : undefined
+                              }
+                              editable
+                              drafts={drafts}
+                              onQtyChange={handleQtyChange}
+                              orderableByOrderId={orderableByOrderId}
+                              onAddProductAll={(productId) =>
+                                handleAddProductAll(productId, section.supplier.supplier_id)
+                              }
+                              addAllBusy={addAllBusy}
+                              onRemoveOrder={handleRemoveOrder}
+                              busyOrderId={busyOrderId}
+                            />
+                          ) : (
+                            <>
+                              {draftSections.length > 1 && (
+                                <h3 className="text-sm font-semibold text-slate-800">
+                                  {t("manager.transport.section.title", {
+                                    supplier: section.supplier.supplier_name,
+                                  })}
+                                </h3>
+                              )}
+                              <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">
+                                {t("manager.transport.section.empty")}
+                              </div>
+                            </>
+                          )}
+                          <AddLocationPicker
+                            items={locationsNotInSection(section.supplier.supplier_id)}
+                            disabled={addLocationBusy}
+                            onSelect={(location) =>
+                              handleAddLocation(location, section.supplier.supplier_id)
+                            }
+                          />
+                        </div>
+                      ))}
 
                       <div className="flex flex-wrap items-center gap-3">
-                        <AddLocationPicker
-                          items={locationsNotInBatch}
-                          disabled={addLocationBusy}
-                          onSelect={handleAddLocation}
-                        />
                         {dirty && (
                           <button
                             type="button"
@@ -1338,13 +1424,27 @@ export function TransportPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {detail.lines.map((line) => (
-                                <tr key={line.product_id} className="border-t border-gray-100">
-                                  <td className="px-3 py-2">{line.product_name_pl}</td>
-                                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                                    {line.total_qty_purchase} {line.purchase_unit}
-                                  </td>
-                                </tr>
+                              {matrix.map((block) => (
+                                <Fragment key={block.supplier.supplier_id}>
+                                  {showSupplierHeaders && (
+                                    <tr className="border-t border-gray-200 bg-slate-100">
+                                      <td colSpan={2} className="px-3 py-1.5 text-xs font-semibold text-slate-700">
+                                        {block.supplier.supplier_name}
+                                      </td>
+                                    </tr>
+                                  )}
+                                  {block.rows.map(({ line }) => (
+                                    <tr
+                                      key={`${block.supplier.supplier_id}:${line.product_id}`}
+                                      className="border-t border-gray-100"
+                                    >
+                                      <td className="px-3 py-2">{line.product_name_pl}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                                        {line.total_qty_purchase} {line.purchase_unit}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </Fragment>
                               ))}
                             </tbody>
                           </table>
@@ -1368,15 +1468,32 @@ export function TransportPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {matrix.map(({ line, byLocation }) => (
-                                <tr key={line.product_id} className="border-t border-gray-100">
-                                  <td className="px-3 py-2">{line.product_name_pl}</td>
-                                  {detail.location_ids.map((locId) => (
-                                    <td key={locId} className="px-3 py-2 text-right tabular-nums">
-                                      {byLocation.has(locId) ? byLocation.get(locId) : "–"}
-                                    </td>
+                              {matrix.map((block) => (
+                                <Fragment key={block.supplier.supplier_id}>
+                                  {showSupplierHeaders && (
+                                    <tr className="border-t border-gray-200 bg-slate-100">
+                                      <td
+                                        colSpan={detail.location_ids.length + 1}
+                                        className="px-3 py-1.5 text-xs font-semibold text-slate-700"
+                                      >
+                                        {block.supplier.supplier_name}
+                                      </td>
+                                    </tr>
+                                  )}
+                                  {block.rows.map(({ line, byLocation }) => (
+                                    <tr
+                                      key={`${block.supplier.supplier_id}:${line.product_id}`}
+                                      className="border-t border-gray-100"
+                                    >
+                                      <td className="px-3 py-2">{line.product_name_pl}</td>
+                                      {detail.location_ids.map((locId) => (
+                                        <td key={locId} className="px-3 py-2 text-right tabular-nums">
+                                          {byLocation.has(locId) ? byLocation.get(locId) : "–"}
+                                        </td>
+                                      ))}
+                                    </tr>
                                   ))}
-                                </tr>
+                                </Fragment>
                               ))}
                             </tbody>
                           </table>

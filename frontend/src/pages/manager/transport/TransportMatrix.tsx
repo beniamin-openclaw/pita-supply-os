@@ -23,6 +23,9 @@ import { buildTransportAddAllOptions, buildTransportMatrix, draftQtyFor, type Tr
 
 interface TransportMatrixProps {
   orders: TransportBatchOrder[];
+  // Overrides the default heading — the per-supplier section title when a
+  // Pago batch also carries Magazyn Mory (transport-pago-mory-combined).
+  title?: string;
   editable: boolean;
   drafts: TransportDraftMap;
   onQtyChange: (orderId: string, orderLineId: string, qty: number) => void;
@@ -35,6 +38,7 @@ interface TransportMatrixProps {
 
 export function TransportMatrix({
   orders,
+  title,
   editable,
   drafts,
   onQtyChange,
@@ -51,7 +55,7 @@ export function TransportMatrix({
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-slate-800">
-        {t("manager.transport.matrix.title")}
+        {title ?? t("manager.transport.matrix.title")}
       </h3>
       <div className="overflow-x-auto mb-2">
         <table className="w-full text-sm">

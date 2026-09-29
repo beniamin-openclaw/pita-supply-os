@@ -572,22 +572,22 @@ None. Existing single-supplier batches read exactly as before. Headerless legacy
 
 #### Automated
 
-- [x] 2.1 Frontend tests pass: `cd frontend && npm run test`
-- [x] 2.2 Frontend build passes: `cd frontend && npm run build`
-- [x] 2.3 Frontend lint passes: `cd frontend && npm run lint`
+- [x] 2.1 Frontend tests pass: `cd frontend && npm run test` — 19093e6
+- [x] 2.2 Frontend build passes: `cd frontend && npm run build` — 19093e6
+- [x] 2.3 Frontend lint passes: `cd frontend && npm run lint` — 19093e6
 
 ### Phase 3: Frontend — Transport screen
 
 #### Automated
 
-- [ ] 3.1 Frontend tests pass: `cd frontend && npm run test`
-- [ ] 3.2 Frontend build passes: `cd frontend && npm run build`
-- [ ] 3.3 Frontend lint passes: `cd frontend && npm run lint`
+- [x] 3.1 Frontend tests pass: `cd frontend && npm run test`
+- [x] 3.2 Frontend build passes: `cd frontend && npm run build`
+- [x] 3.3 Frontend lint passes: `cd frontend && npm run lint`
 
 #### Manual
 
-- [ ] 3.4 Local auth-ON preview: two sections, Mory location added
-- [ ] 3.5 Preview: sent view grouped, e-mail body Pago-only
+- [x] 3.4 Local auth-ON preview: two sections, Mory location added
+- [x] 3.5 Preview: sent view grouped, e-mail body Pago-only
 
 ### Phase 4: Verify and docs
 
