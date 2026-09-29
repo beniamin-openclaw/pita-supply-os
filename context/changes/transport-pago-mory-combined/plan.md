@@ -593,11 +593,11 @@ None. Existing single-supplier batches read exactly as before. Headerless legacy
 
 #### Automated
 
-- [x] 4.1 Backend and frontend suites, lint and build all green
+- [x] 4.1 Backend and frontend suites, lint and build all green — 30eb3b1
 
 #### Manual
 
-- [x] 4.2 Preview notes recorded
+- [x] 4.2 Preview notes recorded — 30eb3b1
 
 ### Phase 5: Release (operator-gated)
 
