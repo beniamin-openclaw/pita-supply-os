@@ -118,6 +118,7 @@ from .models import (
     TransportRemoveOrderRequest,
     TransportRemoveOrderResponse,
     TransportSkippedOrder,
+    TransportSupplierRef,
 )
 from .product_order import line_sort_key, supplier_product_sort_key
 from .suggestion import SuggestionInput, compute_suggestion, rounding_step
@@ -1820,6 +1821,40 @@ def _reject_if_transport_only_supplier(order: Order, supplier: Supplier) -> None
     )
 
 
+def _reject_if_transport_member(order: Order) -> None:
+    """409 when ``order`` carries a ``TRN-`` marker — it belongs (or
+    belonged) to a Transport batch, and its lines already rode on that batch's
+    documents, so it must not ALSO be dispatched on its own from the queue.
+
+    Reached only for a non-transport supplier whose batch is not draft (the
+    draft guard and ``_reject_if_transport_only_supplier`` run first): in
+    practice a Magazyn Mory member (``manual``) that finalize skipped with a
+    send conflict (transport-pago-mory-combined, plan-review A5). Releasing
+    it first clears the marker (``_stale_transport_marker_clear``)."""
+    ref = order.supplier_order_reference or ""
+    if not ref.startswith("TRN-"):
+        return
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Order {order.order_id} belongs to transport {ref} — cannot "
+            f"dispatch it here. Release it first, or use the Transport screen."
+        ),
+    )
+
+
+def _stale_transport_marker_clear(order: Order) -> dict:
+    """Extra ``update_order`` kwargs for a queue release/cancel: clear a
+    ``TRN-`` marker the draft guard let through (its batch is sent, cancelled
+    or a headerless legacy one), so the order does not come back to the
+    Captain — or into a later eligible list — still claiming batch
+    membership (transport-pago-mory-combined, plan-review A5). ``{}`` for an
+    order without a marker, so every other call stays byte-identical."""
+    if (order.supplier_order_reference or "").startswith("TRN-"):
+        return {"supplier_order_reference": None}
+    return {}
+
+
 def _log_transport_event(
     backend,
     transport_id: str,
@@ -2053,6 +2088,7 @@ def manager_release(
             status=OrderStatus.CAPTAIN_SUBMITTED.value,
             notes=req.reason.strip(),
             expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            **_stale_transport_marker_clear(order),
         )
     except errors.OrderStatusConflictError:
         raise HTTPException(
@@ -2116,6 +2152,7 @@ def manager_cancel(
             cancelled_by="manager-default",  # proxy until real Manager auth
             cancel_reason=req.reason.strip(),
             expected_status=order.status.value,
+            **_stale_transport_marker_clear(order),
         )
     except errors.OrderStatusConflictError:
         raise HTTPException(
@@ -2174,6 +2211,7 @@ def manager_dispatch(
             detail=f"Supplier {order.supplier_id} not in master data",
         )
     _reject_if_transport_only_supplier(order, supplier)
+    _reject_if_transport_member(order)
     # Channel-aware: only the email channel requires/builds a Gmail URL. Portal,
     # phone and manual suppliers "mark ordered" — they record the transition +
     # sent_method but have no email artifact. Branch on the supplier's
@@ -4074,12 +4112,54 @@ def captain_receipt_photo_urls(
 # ---------- Manager Transport (Phase 1 read side / to-ordering-pago) ----------
 
 
+# Suppliers whose orders may ride on another supplier's Transport run
+# (transport-pago-mory-combined, operator decision 2B, 2026-09-28): the driver
+# collects Magazyn własny Mory goods on the Pago run, so a Pago batch may carry
+# SUP_MORY orders. One-directional — a Mory batch never carries Pago orders.
+# A code constant, like _INTERNAL_SUPPLIER_ID; the frontend mirrors it in
+# lib/transport.ts (TRANSPORT_COMPANION_SUPPLIER_IDS).
+_TRANSPORT_COMPANION_SUPPLIERS: dict[str, tuple[str, ...]] = {"SUP_PAGO": ("SUP_MORY",)}
+
+
+def _transport_supplier_ids(lead_supplier_id: str) -> tuple[str, ...]:
+    """The suppliers a batch led by ``lead_supplier_id`` may carry: the lead
+    first, then its companions. The tuple order is also the block order of
+    the aggregate and of every driver document (Pago, then Magazyn Mory)."""
+    return (lead_supplier_id, *_TRANSPORT_COMPANION_SUPPLIERS.get(lead_supplier_id, ()))
+
+
+def _transport_allowed_supplier_ids(
+    lead_supplier_id: str, include_companions: bool
+) -> tuple[str, ...]:
+    """The member suppliers a route accepts: the companions only when the
+    client opted in (``include_companions`` / ``allow_companions``). An old
+    frontend bundle never opts in, so it keeps today's single-supplier
+    behaviour and can never put a companion line into a lead-supplier
+    document (plan-review A1)."""
+    if include_companions:
+        return _transport_supplier_ids(lead_supplier_id)
+    return (lead_supplier_id,)
+
+
+def _transport_supplier_rank(lead_supplier_id: Optional[str], supplier_id: str) -> int:
+    """Block position of ``supplier_id`` in a batch led by ``lead_supplier_id``
+    — its index in ``_transport_supplier_ids``, or after every listed supplier.
+    Without a lead every supplier ranks 0 (blocks fall into supplier_id order)."""
+    if lead_supplier_id is None:
+        return 0
+    ids = _transport_supplier_ids(lead_supplier_id)
+    return ids.index(supplier_id) if supplier_id in ids else len(ids)
+
+
 def _aggregate_transport_lines(
     orders: list[Order],
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
     sps_by_id: dict[str, SupplierProduct],
     locations_by_id: dict[str, Location],
+    *,
+    suppliers_by_id: Optional[dict[str, Supplier]] = None,
+    lead_supplier_id: Optional[str] = None,
 ) -> list[TransportAggregateLine]:
     """Pure roll-up of a set of orders' frozen ``order_lines`` into the
     Transport aggregate: per-product totals plus the per-product x
@@ -4093,33 +4173,39 @@ def _aggregate_transport_lines(
     skipping zero-qty lines. A line whose ``order_id`` has no matching entry
     in ``orders`` is skipped (defensive — callers pass matched sets).
 
-    Grouping key is ``product_id`` (not ``product_id`` + ``supplier_product_id``):
-    every order aggregated together shares one ``supplier_id`` by construction
-    (a Transport batch is single-supplier), so a product has one
-    supplier_product in practice. The FIRST line encountered for a product
-    supplies its ``supplier_product_id`` / ``supplier_product_name`` /
-    ``purchase_unit`` display fields. Two lines for the SAME product from the
+    Grouping key is ``(order.supplier_id, product_id)``
+    (transport-pago-mory-combined): a Pago batch can carry Magazyn Mory
+    orders, and old Pago orders can hold the retired ``SP_PAGO_*`` row of a
+    product Mory now sells — the supplier in the key keeps the two apart.
+    Within one supplier a product has one supplier_product in practice; the
+    FIRST line encountered supplies its ``supplier_product_id`` /
+    ``supplier_product_name`` / ``purchase_unit`` display fields, and
+    ``supplier_name`` comes from ``suppliers_by_id`` (id fallback). Two lines for the SAME product from the
     SAME location in TWO different source orders are kept as two separate
     ``per_location`` entries (auditability — each traces back to its own
     ``order_id``) and summed into ``total_qty_purchase``.
 
     Missing product / supplier_product / location master data falls back to
     the raw id in the display field (mirrors ``_aggregate_suggestion_review``
-    / ``manager_queue``), never raises. Output is in the canonical supplier
-    order (``display_order``, then ``supplier_product_id`` —
-    app/product_order.py; supplier-product-order-minimum replaced the earlier
-    code-point name sort), so the driver list, Pago documents and the sent
-    view read like every other per-supplier list.
+    / ``manager_queue``), never raises. Output comes in supplier blocks —
+    ``lead_supplier_id`` first, then its companions
+    (``_transport_supplier_ids``), then any other supplier by id — and each
+    block is in the canonical supplier order (``display_order``, then
+    ``supplier_product_id`` — app/product_order.py), so the driver list, Pago
+    documents and the sent view read like every other per-supplier list. For
+    a single-supplier batch the order is exactly the canonical one.
 
     ``warehouse_pickup`` (training-feedback-0901 Phase 4) is joined the same
     way as ``supplier_sku`` — False when the supplier_product is missing. This
     function does NOT filter on it: only the frontend pickup-document builder
     (buildTransportPagoPrintDoc) does, so the aggregate stays the single
-    unfiltered source for the driver list, weight totals and the Pago order
-    email/PDF, which cover the whole batch (hardening finding G7).
+    unfiltered source for the driver list and weight totals (hardening
+    finding G7). The Pago order email/PDF cover the lead supplier's lines
+    only — the frontend's ``leadSupplierView`` drops companion blocks.
     """
+    suppliers_by_id = suppliers_by_id or {}
     orders_by_id = {o.order_id: o for o in orders}
-    groups: dict[str, dict] = {}
+    groups: dict[tuple[str, str], dict] = {}
 
     for line in lines:
         order = orders_by_id.get(line.order_id)
@@ -4129,11 +4215,17 @@ def _aggregate_transport_lines(
         if qty <= 0:
             continue
 
-        group = groups.get(line.product_id)
+        key = (order.supplier_id, line.product_id)
+        group = groups.get(key)
         if group is None:
             product = products_by_id.get(line.product_id)
             sp = sps_by_id.get(line.supplier_product_id)
+            supplier = suppliers_by_id.get(order.supplier_id)
             group = {
+                "supplier_id": order.supplier_id,
+                "supplier_name": (
+                    supplier.supplier_name if supplier else order.supplier_id
+                ),
                 "product_id": line.product_id,
                 "product_name_pl": (
                     product.product_name_pl if product else line.product_id
@@ -4148,7 +4240,7 @@ def _aggregate_transport_lines(
                 "display_order": sp.display_order if sp else None,
                 "per_location": [],
             }
-            groups[line.product_id] = group
+            groups[key] = group
 
         location = locations_by_id.get(order.location_id)
         group["per_location"].append(
@@ -4174,11 +4266,17 @@ def _aggregate_transport_lines(
                 sum(pl.qty_purchase for pl in g["per_location"]), 3
             ),
             per_location=g["per_location"],
+            supplier_id=g["supplier_id"],
+            supplier_name=g["supplier_name"],
         )
         for g in groups.values()
     ]
     items.sort(
-        key=lambda it: supplier_product_sort_key(it.display_order, it.supplier_product_id)
+        key=lambda it: (
+            _transport_supplier_rank(lead_supplier_id, it.supplier_id),
+            it.supplier_id,
+            *supplier_product_sort_key(it.display_order, it.supplier_product_id),
+        )
     )
     return items
 
@@ -4188,12 +4286,19 @@ def _aggregate_transport_lines(
 )
 def manager_transport_eligible(
     supplier_id: str,
+    include_companions: bool = False,
     _: None = Depends(require_manager),
 ):
     """Orders a Transport batch can combine: ``captain_submitted`` or
     ``manager_claimed`` orders for ``supplier_id``, across every location,
     newest ``captain_submitted_at`` first. Reuses the ``manager_queue``
     load/enrich pattern (targeted ``load_order_lines_for_orders``).
+
+    ``include_companions=true`` (transport-pago-mory-combined) also offers
+    the orders of ``supplier_id``'s companions (Magazyn Mory for Pago), after
+    the lead's own — lead block first, each block newest first. Without the
+    flag (an old frontend bundle) only ``supplier_id``'s orders are listed,
+    exactly as before.
 
     Deliberately UNCAPPED — no ``limit`` param, unlike ``manager_queue`` /
     ``manager_transport_batches``: those cap ever-growing history lanes,
@@ -4212,11 +4317,12 @@ def manager_transport_eligible(
         )
         return []
 
+    allowed = _transport_allowed_supplier_ids(supplier_id, include_companions)
     orders = backend.load_orders()
     filtered = [
         o
         for o in orders
-        if o.supplier_id == supplier_id
+        if o.supplier_id in allowed
         and o.status in (OrderStatus.CAPTAIN_SUBMITTED, OrderStatus.MANAGER_CLAIMED)
         # An order already stamped into a transport (draft member) must NOT be
         # offered again — a second create would silently re-stamp the marker
@@ -4227,8 +4333,9 @@ def manager_transport_eligible(
         return []
 
     filtered.sort(
-        key=lambda o: -(
-            o.captain_submitted_at.timestamp() if o.captain_submitted_at else 0.0
+        key=lambda o: (
+            allowed.index(o.supplier_id),
+            -(o.captain_submitted_at.timestamp() if o.captain_submitted_at else 0.0),
         )
     )
 
@@ -4292,6 +4399,14 @@ def manager_transport_batches(
     decision 4); pass ``include_cancelled=true`` to see it. A headerless
     legacy batch is always ``status="sent"`` and is therefore never affected.
 
+    transport-pago-mory-combined: a batch can hold orders of two suppliers
+    (Magazyn Mory on a Pago run), so the ``supplier_id`` filter applies to the
+    BATCH, not to each member order: members are grouped by marker first, the
+    batch supplier is resolved (the header's, else ``group[0]``'s for a
+    headerless legacy batch), and only then filtered. ``order_count`` and
+    ``location_ids`` cover every member — a combined batch is listed once,
+    under its lead supplier.
+
     Seed mode -> [] (orders are not persisted there; mirrors ``manager_queue``).
     """
     backend = _choose_backend()
@@ -4306,8 +4421,6 @@ def manager_transport_batches(
         ref = order.supplier_order_reference
         if not ref or not ref.startswith("TRN-"):
             continue
-        if supplier_id is not None and order.supplier_id != supplier_id:
-            continue
         by_transport.setdefault(ref, []).append(order)
 
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
@@ -4321,8 +4434,6 @@ def manager_transport_batches(
     # alone cannot see them. Union them in with zero members.
     for header in headers_by_id.values():
         if header.transport_id in by_transport:
-            continue
-        if supplier_id is not None and header.supplier_id != supplier_id:
             continue
         by_transport[header.transport_id] = []
 
@@ -4342,11 +4453,16 @@ def manager_transport_batches(
         batch_status = header.status if header is not None else "sent"
         if batch_status == "cancelled" and not include_cancelled:
             continue
-        # Supplier comes from the members when any exist, else from the header
-        # (a header-only empty draft has no member orders to read it from).
+        # The header's supplier is authoritative (a combined Pago + Mory batch
+        # must not be filed under whichever member happens to come first); a
+        # headerless legacy batch falls back to its first member.
         batch_supplier_id = (
-            group[0].supplier_id if group else header.supplier_id if header else ""
+            header.supplier_id
+            if header is not None
+            else group[0].supplier_id if group else ""
         )
+        if supplier_id is not None and batch_supplier_id != supplier_id:
+            continue
         supplier = suppliers_by_id.get(batch_supplier_id)
         summaries.append(
             TransportBatchSummary(
@@ -4428,6 +4544,11 @@ def manager_transport_batch_detail(
     batch, implicit ``status="sent"`` (read-only, exactly as v1 behaved). A
     missing 'transport_batches' worksheet degrades the same way.
 
+    transport-pago-mory-combined: each member order and each aggregate line
+    names its own supplier (a Pago batch can carry Magazyn Mory orders), the
+    aggregate comes in supplier blocks with the lead first, and ``suppliers``
+    lists what the batch can carry — see ``_transport_batch_suppliers``.
+
     Seed mode -> 503 (mirrors ``manager_order_detail``); no order carries the
     marker -> 404.
     """
@@ -4505,6 +4626,7 @@ def manager_transport_batch_detail(
         location = locations_by_id.get(order.location_id)
         order_lines = [ln for ln in lines if ln.order_id == order.order_id]
         settings_by_pid = settings_by_loc_pid.get(order.location_id, {})
+        member_supplier = suppliers_by_id.get(order.supplier_id)
         orders_out.append(
             TransportBatchOrder(
                 order_id=order.order_id,
@@ -4514,6 +4636,12 @@ def manager_transport_batch_detail(
                 ),
                 status=order.status,
                 total_value_estimate_pln=order.total_value_estimate_pln,
+                supplier_id=order.supplier_id,
+                supplier_name=(
+                    member_supplier.supplier_name
+                    if member_supplier
+                    else order.supplier_id
+                ),
                 lines=_enrich_lines_for_detail(
                     order_lines, products_by_id, sps_by_id, settings_by_pid
                 ),
@@ -4530,7 +4658,13 @@ def manager_transport_batch_detail(
         )
 
     aggregate_lines = _aggregate_transport_lines(
-        group, lines, products_by_id, sps_by_id, locations_by_id
+        group,
+        lines,
+        products_by_id,
+        sps_by_id,
+        locations_by_id,
+        suppliers_by_id=suppliers_by_id,
+        lead_supplier_id=batch_supplier_id,
     )
 
     # Weight preview (v2): join each aggregate line's supplier_product for its
@@ -4585,7 +4719,41 @@ def manager_transport_batch_detail(
         unknown_weight_count=unknown_weight_count,
         events=events,
         name=header.name if header is not None else None,
+        suppliers=_transport_batch_suppliers(batch_supplier_id, group, suppliers_by_id),
     )
+
+
+def _transport_batch_suppliers(
+    lead_supplier_id: str,
+    group: list[Order],
+    suppliers_by_id: dict[str, Supplier],
+) -> list[TransportSupplierRef]:
+    """The suppliers a batch can carry, for the Transport screen's draft
+    sections: the lead first, then each companion that exists in master data
+    and is ``active``, then any member supplier not yet listed (defensive —
+    e.g. a legacy batch), in first-seen order. Names fall back to the id.
+
+    The ``active`` filter governs only the empty-section OFFER (an inactive
+    Magazyn Mory gets no empty draft section); it is not a membership rule —
+    a member order of an inactive supplier is still listed via the tail."""
+    ids: list[str] = [lead_supplier_id] if lead_supplier_id else []
+    for companion_id in _TRANSPORT_COMPANION_SUPPLIERS.get(lead_supplier_id, ()):
+        companion = suppliers_by_id.get(companion_id)
+        if companion is not None and companion.active and companion_id not in ids:
+            ids.append(companion_id)
+    for order in group:
+        if order.supplier_id not in ids:
+            ids.append(order.supplier_id)
+    out: list[TransportSupplierRef] = []
+    for sid in ids:
+        supplier = suppliers_by_id.get(sid)
+        out.append(
+            TransportSupplierRef(
+                supplier_id=sid,
+                supplier_name=supplier.supplier_name if supplier else sid,
+            )
+        )
+    return out
 
 
 # ---------- Manager Transport create (Phase 2 write side / to-ordering-pago) ----------
@@ -4684,11 +4852,18 @@ def manager_transport_create(
     non-eligible status ("status <x> not eligible"). ``transport_id`` is
     ALWAYS returned, even when every order ends up in ``skipped``.
 
+    transport-pago-mory-combined: with ``allow_companions=True`` an order of
+    one of ``supplier_id``'s companions (Magazyn Mory for Pago) is combined
+    like the lead's own; the header stays ``supplier_id``. Without the flag
+    (an old frontend bundle) a companion order is "different supplier", as
+    before. The ``order_combined`` event names a companion order's supplier.
+
     Seed mode -> 503 (mirrors every other manager write route). A missing
     'transport_batches' worksheet (append_to lookup, or the header append)
     -> 503. ``SUP_INTERNAL`` -> 400 before anything is read or written: on-site
     production is never ordered, so it never starts a batch (and add-location
-    takes its supplier from the batch header, so this is the only gate needed).
+    only takes the batch header's supplier or one of its companions, so this
+    is the only gate needed).
     """
     if req.supplier_id == _INTERNAL_SUPPLIER_ID:
         raise HTTPException(
@@ -4751,6 +4926,7 @@ def manager_transport_create(
             req.supplier_id, datetime.now(timezone.utc).date()
         )
 
+    allowed = _transport_allowed_supplier_ids(req.supplier_id, req.allow_companions)
     combined: list[str] = []
     skipped: list[TransportSkippedOrder] = []
     seen: set[str] = set()
@@ -4765,7 +4941,7 @@ def manager_transport_create(
         if order is None:
             skipped.append(TransportSkippedOrder(order_id=order_id, reason="not found"))
             continue
-        if order.supplier_id != req.supplier_id:
+        if order.supplier_id not in allowed:
             skipped.append(
                 TransportSkippedOrder(order_id=order_id, reason="different supplier")
             )
@@ -4846,7 +5022,12 @@ def manager_transport_create(
             backend,
             transport_id,
             "order_combined",
-            f"order {order_id} combined",
+            f"order {order_id} combined"
+            + (
+                f" ({order.supplier_id})"
+                if order.supplier_id != req.supplier_id
+                else ""
+            ),
             order_id=order_id,
         )
 
@@ -4919,6 +5100,11 @@ def manager_transport_finalize(
     "empty — removed", and logged as an ``order_removed`` event. If EVERY
     ``manager_claimed`` member is empty, nothing is written at all and the
     request 400s ("nothing to send") — the batch stays ``draft`` untouched.
+
+    Lead-supplier guard (transport-pago-mory-combined): the same 400 when no
+    ``manager_claimed`` member of the batch's own supplier has a positive
+    total — a Pago run whose only quantities are Magazyn Mory would ship
+    empty Pago documents. Nothing is written either.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -4972,6 +5158,18 @@ def manager_transport_finalize(
             detail=(
                 f"Transport batch {req.transport_id} has no positive-quantity "
                 f"lines on any member order — nothing to send"
+            ),
+        )
+    if claimed and not any(
+        totals_by_order[o.order_id] > 0
+        for o in claimed
+        if o.supplier_id == batch.supplier_id
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Transport batch {req.transport_id} has no positive-quantity "
+                f"lines for {batch.supplier_id} — nothing to send"
             ),
         )
 
@@ -5126,9 +5324,15 @@ def manager_transport_add_location(
     ``append_order_lines`` call; zero-qty lines drop out of totals / driver
     list / email until the Manager types a quantity in.
 
+    ``supplier_id`` (transport-pago-mory-combined) picks the new order's
+    supplier: None = the batch's own (today's behaviour); a companion of the
+    batch supplier (SUP_MORY on a Pago batch) creates a Magazyn Mory order,
+    prefilled from Mory's catalogue. Any other supplier -> 400.
+
     Gates: seed mode -> 503. Batch not found -> 404; batch not draft -> 409.
-    Unknown ``location_id`` -> 400. A location already represented by a member
-    order of this batch -> 400 (no duplicate location in one batch).
+    Supplier not allowed on this batch -> 400. Unknown ``location_id`` -> 400.
+    A location that already has a member order of THIS supplier in the batch
+    -> 400 — one Pago and one Mory order per location is fine.
 
     The new order is created directly in ``manager_claimed`` (never
     ``captain_submitted``) with ``captain_user="manager-default"`` — the same
@@ -5161,6 +5365,16 @@ def manager_transport_add_location(
             ),
         )
 
+    target_supplier_id = req.supplier_id or batch.supplier_id
+    if target_supplier_id not in _transport_supplier_ids(batch.supplier_id):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Supplier '{target_supplier_id}' cannot ride on transport "
+                f"{req.transport_id} (supplier {batch.supplier_id})"
+            ),
+        )
+
     locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
     if req.location_id not in locations_by_id:
         raise HTTPException(
@@ -5170,22 +5384,25 @@ def manager_transport_add_location(
     backend.invalidate_cache("orders")
     orders = backend.load_orders()
     group = [o for o in orders if o.supplier_order_reference == req.transport_id]
-    if any(o.location_id == req.location_id for o in group):
+    if any(
+        o.location_id == req.location_id and o.supplier_id == target_supplier_id
+        for o in group
+    ):
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Location '{req.location_id}' is already in batch "
-                f"{req.transport_id}"
+                f"{req.transport_id} for supplier {target_supplier_id}"
             ),
         )
 
     today = datetime.now(timezone.utc).date()
-    order_id = _generate_order_id(req.location_id, batch.supplier_id, today)
+    order_id = _generate_order_id(req.location_id, target_supplier_id, today)
     now = datetime.now(timezone.utc)
     order = Order(
         order_id=order_id,
         location_id=req.location_id,
-        supplier_id=batch.supplier_id,
+        supplier_id=target_supplier_id,
         order_date=today,
         status=OrderStatus.MANAGER_CLAIMED,
         captain_user="manager-default",
@@ -5200,7 +5417,9 @@ def manager_transport_add_location(
 
     prefilled_count = 0
     if req.prefill_products:
-        orderable = _build_orderable_items(backend, req.location_id, batch.supplier_id)
+        orderable = _build_orderable_items(
+            backend, req.location_id, target_supplier_id
+        )
         skeleton_lines = [
             OrderLine(
                 order_line_id=f"OL-{order_id}-P-{idx:03d}",
@@ -5224,6 +5443,8 @@ def manager_transport_add_location(
         prefilled_count = len(skeleton_lines)
 
     details = f"location {req.location_id} added"
+    if target_supplier_id != batch.supplier_id:
+        details += f" for {target_supplier_id}"
     if prefilled_count:
         details += f" (prefilled {prefilled_count} products)"
     _log_transport_event(
@@ -5237,6 +5458,19 @@ def manager_transport_add_location(
     )
 
 
+def _is_manager_created_empty(order: Order, lines: list[OrderLine]) -> bool:
+    """True for an ``add-location`` skeleton nobody filled in:
+    ``captain_user == "manager-default"`` and no line with a positive
+    effective quantity. Such an order never came from a Captain, so remove /
+    cancel CANCEL it rather than release a phantom ``captain_submitted``
+    order to the location (plan-review A2 — a prefilled skeleton carries
+    zero-qty lines, so "no lines" alone was not enough). The same rule
+    finalize's empty-column pass uses."""
+    return order.captain_user == "manager-default" and not any(
+        effective_ordered_qty(ln) > 0 for ln in lines
+    )
+
+
 @app.post(
     "/api/manager/transport/remove-order", response_model=TransportRemoveOrderResponse
 )
@@ -5246,9 +5480,9 @@ def manager_transport_remove_order(
 ):
     """Drop one member order from a DRAFT batch.
 
-    A manager-created empty order (from ``add-location``, never given any
-    lines — ``captain_user == "manager-default"`` AND ``lines == []``) is
-    CANCELLED outright via the existing cancel trace (there is nothing useful
+    A manager-created empty order (from ``add-location``, with no line of
+    positive quantity — ``_is_manager_created_empty``, so a prefilled
+    skeleton nobody filled in counts too) is CANCELLED outright via the existing cancel trace (there is nothing useful
     to hand back to a captain — it never came from one). Any other order has
     its marker cleared and is released back to ``captain_submitted`` (guarded
     ``manager_claimed -> captain_submitted``) so the captain/manager queue
@@ -5304,9 +5538,7 @@ def manager_transport_remove_order(
             ),
         )
 
-    manager_created_empty = (
-        order.captain_user == "manager-default" and not order.lines
-    )
+    manager_created_empty = _is_manager_created_empty(order, order.lines)
     if manager_created_empty:
         try:
             backend.update_order(
@@ -5437,7 +5669,8 @@ def manager_transport_cancel(
     the supplier already received is deliberately out of scope; see plan Open
     Questions). Per member order this mirrors ``remove-order``'s
     released/cancelled split: a manager-created empty order (an
-    ``add-location`` skeleton never given any lines) is CANCELLED via the
+    ``add-location`` skeleton with no positive quantity —
+    ``_is_manager_created_empty``) is CANCELLED via the
     existing cancel trace (reason "transport cancelled"); any other member
     has its marker cleared and is released back to ``captain_submitted``
     (guarded ``manager_claimed -> captain_submitted``). A member not in
@@ -5502,9 +5735,8 @@ def manager_transport_cancel(
             )
             continue
 
-        manager_created_empty = (
-            order.captain_user == "manager-default"
-            and not lines_by_order.get(order.order_id)
+        manager_created_empty = _is_manager_created_empty(
+            order, lines_by_order.get(order.order_id, [])
         )
         try:
             if manager_created_empty:

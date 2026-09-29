@@ -34,6 +34,7 @@ from app.models import (
     LocationProductSetting,
     Order,
     OrderLine,
+    OrderingMethod,
     OrderStatus,
     Product,
     Receipt,
@@ -105,9 +106,18 @@ def _line(
     )
 
 
-def _supplier(supplier_id: str = "SUP_PAGO", name: str = "Pago") -> Supplier:
+def _supplier(
+    supplier_id: str = "SUP_PAGO",
+    name: str = "Pago",
+    ordering_method: OrderingMethod = OrderingMethod.EMAIL,
+    active: bool = True,
+) -> Supplier:
     return Supplier(
-        supplier_id=supplier_id, supplier_name=name, email="zamowienia@pago.example"
+        supplier_id=supplier_id,
+        supplier_name=name,
+        email="zamowienia@pago.example",
+        ordering_method=ordering_method,
+        active=active,
     )
 
 
@@ -3159,3 +3169,521 @@ def test_draft_config_partial_keys_default_missing_ones_to_empty(mocker):
 def test_draft_config_requires_manager_auth(mocker):
     r = client.get("/api/manager/transport/draft-config")
     assert r.status_code == 401
+
+
+# ============================================================
+# Pago + Mory on one run (transport-pago-mory-combined)
+# ============================================================
+
+def _pago() -> Supplier:
+    return _supplier("SUP_PAGO", "Pago", ordering_method=OrderingMethod.TRANSPORT)
+
+
+def _mory(active: bool = True) -> Supplier:
+    return _supplier(
+        "SUP_MORY", "Magazyn własny Mory", ordering_method=OrderingMethod.MANUAL,
+        active=active,
+    )
+
+
+def _mixed_master_data() -> dict:
+    """Pago sells P027 (pos 2) and P001 (pos 1); Mory sells P050 (pos 1) and —
+    under its own SP_MORY row — P027 too, the "old Pago row" collision case."""
+    return {
+        "suppliers": [_pago(), _mory(), _supplier("SUP_BUKAT", "Bukat")],
+        "products": [
+            _product("P027", "Souvlaki Kurczak"),
+            _product("P001", "Gyros"),
+            _product("P050", "Pita"),
+        ],
+        "supplier_products": [
+            _supplier_product("SP_PAGO_P027", "SUP_PAGO", "P027").model_copy(
+                update={"display_order": 2}
+            ),
+            _supplier_product("SP_PAGO_P001", "SUP_PAGO", "P001", "Gyros karton").model_copy(
+                update={"display_order": 1}
+            ),
+            _supplier_product("SP_MORY_P050", "SUP_MORY", "P050", "Pita paczka").model_copy(
+                update={"display_order": 1}
+            ),
+            _supplier_product("SP_MORY_P027", "SUP_MORY", "P027", "Souvlaki Mory").model_copy(
+                update={"display_order": 2}
+            ),
+        ],
+    }
+
+
+def test_aggregate_mixed_batch_supplier_blocks_lead_first():
+    md = _mixed_master_data()
+    sps_by_id = {sp.supplier_product_id: sp for sp in md["supplier_products"]}
+    suppliers_by_id = {s.supplier_id: s for s in md["suppliers"]}
+    orders = [
+        _order("ORD-M", supplier_id="SUP_MORY"),
+        _order("ORD-P", supplier_id="SUP_PAGO"),
+    ]
+    lines = [
+        _line("ORD-M", "OL-M1", product_id="P027", sp_id="SP_MORY_P027", captain_qty=1),
+        _line("ORD-M", "OL-M2", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2),
+        _line("ORD-P", "OL-P1", product_id="P027", sp_id="SP_PAGO_P027", captain_qty=3),
+        _line("ORD-P", "OL-P2", product_id="P001", sp_id="SP_PAGO_P001", captain_qty=4),
+    ]
+    items = _aggregate_transport_lines(
+        orders, lines, {}, sps_by_id, {},
+        suppliers_by_id=suppliers_by_id, lead_supplier_id="SUP_PAGO",
+    )
+    assert [(it.supplier_id, it.supplier_product_id) for it in items] == [
+        ("SUP_PAGO", "SP_PAGO_P001"),
+        ("SUP_PAGO", "SP_PAGO_P027"),
+        ("SUP_MORY", "SP_MORY_P050"),
+        ("SUP_MORY", "SP_MORY_P027"),
+    ]
+    # The same product under two suppliers stays two lines, not one merged row.
+    assert [it.total_qty_purchase for it in items if it.product_id == "P027"] == [3, 1]
+    assert items[2].supplier_name == "Magazyn własny Mory"
+
+
+def test_aggregate_mixed_batch_without_lead_orders_blocks_by_supplier_id():
+    orders = [_order("ORD-P", supplier_id="SUP_PAGO"), _order("ORD-M", supplier_id="SUP_MORY")]
+    lines = [
+        _line("ORD-P", "OL-P1", sp_id="SP_PAGO_P027"),
+        _line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050"),
+    ]
+    items = _aggregate_transport_lines(orders, lines, {}, {}, {})
+    assert [it.supplier_id for it in items] == ["SUP_MORY", "SUP_PAGO"]
+    # No suppliers_by_id -> the name falls back to the id.
+    assert items[0].supplier_name == "SUP_MORY"
+
+
+def test_eligible_include_companions_lists_pago_then_mory(mocker):
+    orders = [
+        _order("ORD-M-OLD", supplier_id="SUP_MORY",
+               captain_submitted_at=datetime(2026, 5, 19, tzinfo=timezone.utc)),
+        _order("ORD-M-NEW", supplier_id="SUP_MORY",
+               captain_submitted_at=datetime(2026, 5, 21, tzinfo=timezone.utc)),
+        _order("ORD-P", supplier_id="SUP_PAGO",
+               captain_submitted_at=datetime(2026, 5, 18, tzinfo=timezone.utc)),
+        _order("ORD-B", supplier_id="SUP_BUKAT"),
+    ]
+    _enable_sheet_backend(mocker, orders=orders, suppliers=_mixed_master_data()["suppliers"])
+    r = client.get(
+        "/api/manager/transport/eligible?supplier_id=SUP_PAGO&include_companions=true",
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [o["order_id"] for o in body] == ["ORD-P", "ORD-M-NEW", "ORD-M-OLD"]
+    assert body[1]["supplier_name"] == "Magazyn własny Mory"
+
+
+def test_eligible_without_flag_lists_lead_only(mocker):
+    """An old frontend bundle sends no flag -> Pago orders only (review A1)."""
+    orders = [_order("ORD-M", supplier_id="SUP_MORY"), _order("ORD-P", supplier_id="SUP_PAGO")]
+    _enable_sheet_backend(mocker, orders=orders)
+    r = client.get("/api/manager/transport/eligible?supplier_id=SUP_PAGO", headers=MANAGER_AUTH)
+    assert [o["order_id"] for o in r.json()] == ["ORD-P"]
+
+
+def test_eligible_mory_lists_mory_only(mocker):
+    orders = [_order("ORD-M", supplier_id="SUP_MORY"), _order("ORD-P", supplier_id="SUP_PAGO")]
+    _enable_sheet_backend(mocker, orders=orders)
+    r = client.get(
+        "/api/manager/transport/eligible?supplier_id=SUP_MORY&include_companions=true",
+        headers=MANAGER_AUTH,
+    )
+    assert [o["order_id"] for o in r.json()] == ["ORD-M"]
+
+
+def test_create_with_allow_companions_combines_mory_order(mocker):
+    orders = [
+        _order("ORD-P", supplier_id="SUP_PAGO"),
+        _order("ORD-M", supplier_id="SUP_MORY"),
+    ]
+    patches = _enable_sheet_backend_for_create(
+        mocker, orders=orders, suppliers=_mixed_master_data()["suppliers"]
+    )
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-P", "ORD-M"],
+              "allow_companions": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["combined"] == ["ORD-P", "ORD-M"]
+    header = patches["append_transport_batch"].call_args.args[0]
+    assert header.supplier_id == "SUP_PAGO"
+    m_calls = [c.kwargs for c in patches["update_order"].call_args_list if c.args[0] == "ORD-M"]
+    assert m_calls[0]["status"] == "manager_claimed"
+    assert m_calls[1]["supplier_order_reference"] == r.json()["transport_id"]
+    combined_events = [
+        c.args[0] for c in patches["append_transport_event"].call_args_list
+        if c.args[0].event_type == "order_combined"
+    ]
+    details = {e.order_id: e.details for e in combined_events}
+    assert details["ORD-M"] == "order ORD-M combined (SUP_MORY)"
+    assert details["ORD-P"] == "order ORD-P combined"
+
+
+def test_create_without_flag_skips_mory_order(mocker):
+    orders = [_order("ORD-M", supplier_id="SUP_MORY")]
+    patches = _enable_sheet_backend_for_create(mocker, orders=orders)
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-M"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["skipped"] == [{"order_id": "ORD-M", "reason": "different supplier"}]
+    patches["update_order"].assert_not_called()
+
+
+def test_create_mory_batch_skips_pago_order(mocker):
+    orders = [_order("ORD-P", supplier_id="SUP_PAGO")]
+    _enable_sheet_backend_for_create(mocker, orders=orders, suppliers=[_pago(), _mory()])
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_MORY", "order_ids": ["ORD-P"], "allow_companions": True},
+    )
+    assert r.json()["skipped"] == [{"order_id": "ORD-P", "reason": "different supplier"}]
+
+
+def test_create_append_to_pago_draft_combines_mory_order(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-M", supplier_id="SUP_MORY")]
+    _enable_sheet_backend_for_create(
+        mocker, orders=orders, suppliers=[_pago(), _mory()], transport_batches=[header]
+    )
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-M"], "append_to": "TRN-X",
+              "allow_companions": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["combined"] == ["ORD-M"]
+    assert r.json()["transport_id"] == "TRN-X"
+
+
+def _mixed_batch_orders(status: OrderStatus = OrderStatus.MANAGER_CLAIMED) -> list[Order]:
+    return [
+        _order("ORD-P", location_id="WOLA", supplier_id="SUP_PAGO", status=status,
+               supplier_order_reference="TRN-X"),
+        _order("ORD-M", location_id="BRACKA", supplier_id="SUP_MORY", status=status,
+               supplier_order_reference="TRN-X"),
+    ]
+
+
+def test_batch_detail_mixed_members_lines_and_suppliers(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    md = _mixed_master_data()
+    lines = [
+        _line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2),
+        _line("ORD-P", "OL-P1", product_id="P027", sp_id="SP_PAGO_P027", captain_qty=3),
+    ]
+    _enable_sheet_backend(
+        mocker, orders=_mixed_batch_orders(), lines=lines, transport_batches=[header],
+        locations=[_location("WOLA", "Wola"), _location("BRACKA", "Bracka")], **md,
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    members = {o["order_id"]: o for o in body["orders"]}
+    assert members["ORD-M"]["supplier_id"] == "SUP_MORY"
+    assert members["ORD-M"]["supplier_name"] == "Magazyn własny Mory"
+    assert members["ORD-P"]["supplier_name"] == "Pago"
+    assert [ln["supplier_id"] for ln in body["lines"]] == ["SUP_PAGO", "SUP_MORY"]
+    assert body["suppliers"] == [
+        {"supplier_id": "SUP_PAGO", "supplier_name": "Pago"},
+        {"supplier_id": "SUP_MORY", "supplier_name": "Magazyn własny Mory"},
+    ]
+
+
+def test_batch_detail_offers_active_mory_without_mory_member(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    _enable_sheet_backend(
+        mocker, orders=[], transport_batches=[header], suppliers=[_pago(), _mory()]
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert [s["supplier_id"] for s in r.json()["suppliers"]] == ["SUP_PAGO", "SUP_MORY"]
+
+
+def test_batch_detail_inactive_mory_not_offered(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    _enable_sheet_backend(
+        mocker, orders=[], transport_batches=[header],
+        suppliers=[_pago(), _mory(active=False)],
+    )
+    r = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+    assert [s["supplier_id"] for s in r.json()["suppliers"]] == ["SUP_PAGO"]
+
+
+def test_batches_combined_batch_listed_once_under_pago(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    mory_header = TransportBatch(transport_id="TRN-Y", supplier_id="SUP_MORY", status="draft")
+    orders = _mixed_batch_orders() + [
+        _order("ORD-MY", supplier_id="SUP_MORY", status=OrderStatus.MANAGER_CLAIMED,
+               supplier_order_reference="TRN-Y"),
+    ]
+    _enable_sheet_backend(
+        mocker, orders=orders, transport_batches=[header, mory_header],
+        suppliers=[_pago(), _mory()],
+    )
+    r = client.get("/api/manager/transport/batches?supplier_id=SUP_PAGO", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [b["transport_id"] for b in body] == ["TRN-X"]
+    assert body[0]["order_count"] == 2
+    assert body[0]["location_ids"] == ["BRACKA", "WOLA"]
+    assert body[0]["supplier_id"] == "SUP_PAGO"
+
+    r = client.get("/api/manager/transport/batches?supplier_id=SUP_MORY", headers=MANAGER_AUTH)
+    assert [b["transport_id"] for b in r.json()] == ["TRN-Y"]
+
+
+def test_batches_header_supplier_wins_over_first_member(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-M", supplier_id="SUP_MORY", supplier_order_reference="TRN-X")]
+    _enable_sheet_backend(
+        mocker, orders=orders, transport_batches=[header], suppliers=[_pago(), _mory()]
+    )
+    r = client.get("/api/manager/transport/batches", headers=MANAGER_AUTH)
+    assert r.json()[0]["supplier_id"] == "SUP_PAGO"
+
+
+def _mory_add_location_setup(mocker, header: TransportBatch, orders: list[Order]) -> dict:
+    md = _mixed_master_data()
+    settings = [
+        LocationProductSetting(setting_id="S1", location_id="WOLA", product_id="P050"),
+        LocationProductSetting(setting_id="S2", location_id="WOLA", product_id="P001"),
+    ]
+    return _enable_sheet_backend_for_write(
+        mocker, orders=orders, transport_batches=[header],
+        location_product_settings=settings, **md,
+    )
+
+
+def test_add_location_mory_next_to_pago_member(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-P", location_id="WOLA", status=OrderStatus.MANAGER_CLAIMED,
+                     supplier_order_reference="TRN-X")]
+    patches = _mory_add_location_setup(mocker, header, orders)
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "WOLA", "prefill_products": True,
+              "supplier_id": "SUP_MORY"},
+    )
+    assert r.status_code == 200, r.text
+    new_order = patches["append_order"].call_args.args[0]
+    assert new_order.supplier_id == "SUP_MORY"
+    assert "-MORY-" in new_order.order_id
+    lines = patches["append_order_lines"].call_args.args[0]
+    assert [ln.supplier_product_id for ln in lines] == ["SP_MORY_P050"]
+    event = patches["append_transport_event"].call_args.args[0]
+    assert "for SUP_MORY" in event.details
+
+
+def test_add_location_second_mory_order_same_location_400(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-M", location_id="WOLA", supplier_id="SUP_MORY",
+                     status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X")]
+    patches = _mory_add_location_setup(mocker, header, orders)
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "WOLA", "supplier_id": "SUP_MORY"},
+    )
+    assert r.status_code == 400
+    assert "SUP_MORY" in r.json()["detail"]
+    patches["append_order"].assert_not_called()
+
+
+def test_add_location_non_companion_supplier_400(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    patches = _mory_add_location_setup(mocker, header, [])
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-X", "location_id": "WOLA", "supplier_id": "SUP_BUKAT"},
+    )
+    assert r.status_code == 400
+    assert "cannot ride on transport" in r.json()["detail"]
+    patches["append_order"].assert_not_called()
+
+
+def test_add_location_on_mory_batch_with_its_own_supplier_allowed(mocker):
+    header = TransportBatch(transport_id="TRN-Y", supplier_id="SUP_MORY", status="draft")
+    patches = _mory_add_location_setup(mocker, header, [])
+    r = client.post(
+        "/api/manager/transport/add-location",
+        headers=MANAGER_AUTH,
+        json={"transport_id": "TRN-Y", "location_id": "WOLA", "supplier_id": "SUP_MORY"},
+    )
+    assert r.status_code == 200, r.text
+    assert patches["append_order"].call_args.args[0].supplier_id == "SUP_MORY"
+    event = patches["append_transport_event"].call_args.args[0]
+    assert "for SUP_MORY" not in event.details
+
+
+def test_finalize_mixed_batch_sends_pago_and_mory(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    lines = [
+        _line("ORD-P", "OL-P1", captain_qty=3),
+        _line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2),
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=_mixed_batch_orders(), lines=lines, transport_batches=[header]
+    )
+    r = client.post("/api/manager/transport/finalize", headers=MANAGER_AUTH,
+                    json={"transport_id": "TRN-X"})
+    assert r.status_code == 200, r.text
+    assert set(r.json()["sent"]) == {"ORD-P", "ORD-M"}
+    calls = {c.args[0]: c.kwargs for c in patches["update_order"].call_args_list}
+    assert calls["ORD-M"]["sent_method"] == "transport"
+
+
+def test_finalize_lead_empty_mory_positive_400(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    lines = [
+        _line("ORD-P", "OL-P1", captain_qty=0),
+        _line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2),
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=_mixed_batch_orders(), lines=lines, transport_batches=[header]
+    )
+    r = client.post("/api/manager/transport/finalize", headers=MANAGER_AUTH,
+                    json={"transport_id": "TRN-X"})
+    assert r.status_code == 400
+    assert "for SUP_PAGO" in r.json()["detail"]
+    patches["update_order"].assert_not_called()
+    patches["update_transport_batch"].assert_not_called()
+
+
+def test_finalize_pago_positive_empty_mory_skeleton_cancelled(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = _mixed_batch_orders()
+    orders[1] = orders[1].model_copy(update={"captain_user": "manager-default"})
+    lines = [
+        _line("ORD-P", "OL-P1", captain_qty=3),
+        _line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=0),
+    ]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+    r = client.post("/api/manager/transport/finalize", headers=MANAGER_AUTH,
+                    json={"transport_id": "TRN-X"})
+    assert r.status_code == 200, r.text
+    assert r.json()["sent"] == ["ORD-P"]
+    calls = {c.args[0]: c.kwargs for c in patches["update_order"].call_args_list}
+    assert calls["ORD-M"]["status"] == "cancelled"
+
+
+def test_remove_order_captain_origin_mory_member_released(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    lines = [_line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2)]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=_mixed_batch_orders(), lines=lines, transport_batches=[header]
+    )
+    r = client.post("/api/manager/transport/remove-order", headers=MANAGER_AUTH,
+                    json={"transport_id": "TRN-X", "order_id": "ORD-M"})
+    assert r.status_code == 200, r.text
+    assert r.json()["action"] == "released"
+    kwargs = patches["update_order"].call_args.kwargs
+    assert kwargs["supplier_order_reference"] is None
+    assert kwargs["status"] == "captain_submitted"
+
+
+def test_remove_order_prefilled_skeleton_without_quantities_cancelled(mocker):
+    """Review A2: a prefilled skeleton has lines but no positive quantity — it
+    is cancelled, not released as a phantom captain_submitted order."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [_order("ORD-M", location_id="BRACKA", supplier_id="SUP_MORY",
+                     status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X",
+                     captain_user="manager-default")]
+    lines = [_line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=0)]
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+    r = client.post("/api/manager/transport/remove-order", headers=MANAGER_AUTH,
+                    json={"transport_id": "TRN-X", "order_id": "ORD-M"})
+    assert r.status_code == 200, r.text
+    assert r.json()["action"] == "cancelled"
+    assert patches["update_order"].call_args.kwargs["status"] == "cancelled"
+
+
+def test_cancel_mixed_batch_releases_mory_member_cancels_prefilled_skeleton(mocker):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = _mixed_batch_orders() + [
+        _order("ORD-S", location_id="KEN", supplier_id="SUP_MORY",
+               status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X",
+               captain_user="manager-default"),
+    ]
+    lines = [
+        _line("ORD-P", "OL-P1", captain_qty=3),
+        _line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2),
+        _line("ORD-S", "OL-S1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=0),
+    ]
+    _enable_sheet_backend_for_write(
+        mocker, orders=orders, lines=lines, transport_batches=[header]
+    )
+    r = client.post("/api/manager/transport/cancel", headers=MANAGER_AUTH,
+                    json={"transport_id": "TRN-X"})
+    assert r.status_code == 200, r.text
+    assert sorted(r.json()["released"]) == ["ORD-M", "ORD-P"]
+    assert r.json()["cancelled"] == ["ORD-S"]
+
+
+def _stranded_mory_member(mocker) -> dict:
+    """A Mory member finalize skipped (still manager_claimed, marker of a SENT
+    batch) — reachable from the queue because Mory is `manual`."""
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="sent")
+    order = _order("ORD-M", supplier_id="SUP_MORY", status=OrderStatus.MANAGER_CLAIMED,
+                   supplier_order_reference="TRN-X")
+    lines = [_line("ORD-M", "OL-M1", product_id="P050", sp_id="SP_MORY_P050", captain_qty=2)]
+    md = _mixed_master_data()
+    patches = _enable_sheet_backend_for_write(
+        mocker, orders=[order], lines=lines, transport_batches=[header], **md
+    )
+    patches["update_order_lines"] = mocker.patch.object(
+        sheets, "update_order_lines", return_value=None
+    )
+    return patches
+
+
+def test_dispatch_mory_member_of_sent_batch_409(mocker):
+    patches = _stranded_mory_member(mocker)
+    r = client.post(
+        "/api/manager/dispatch",
+        headers=MANAGER_AUTH,
+        json={"order_id": "ORD-M", "sent_method": "manual",
+              "manager_finals": [{"order_line_id": "OL-M1", "manager_final_qty_purchase": 2}]},
+    )
+    assert r.status_code == 409, r.text
+    assert "belongs to transport TRN-X" in r.json()["detail"]
+    patches["update_order"].assert_not_called()
+    patches["update_order_lines"].assert_not_called()
+
+
+def test_release_mory_member_of_sent_batch_clears_marker(mocker):
+    patches = _stranded_mory_member(mocker)
+    r = client.post("/api/manager/release/ORD-M", headers=MANAGER_AUTH, json={"reason": "x"})
+    assert r.status_code == 200, r.text
+    kwargs = patches["update_order"].call_args.kwargs
+    assert kwargs["status"] == "captain_submitted"
+    assert kwargs["supplier_order_reference"] is None
+
+
+def test_cancel_order_mory_member_of_sent_batch_clears_marker(mocker):
+    patches = _stranded_mory_member(mocker)
+    r = client.post("/api/manager/cancel/ORD-M", headers=MANAGER_AUTH, json={"reason": "x"})
+    assert r.status_code == 200, r.text
+    assert patches["update_order"].call_args.kwargs["supplier_order_reference"] is None
+
+
+def test_release_without_marker_sends_no_marker_field(mocker):
+    """An ordinary order's release call stays byte-identical (no extra kwarg)."""
+    order = _order("ORD-A", status=OrderStatus.MANAGER_CLAIMED)
+    patches = _enable_sheet_backend_for_write(mocker, orders=[order])
+    r = client.post("/api/manager/release/ORD-A", headers=MANAGER_AUTH, json={"reason": "x"})
+    assert r.status_code == 200, r.text
+    assert "supplier_order_reference" not in patches["update_order"].call_args.kwargs
