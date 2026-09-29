@@ -41,6 +41,9 @@ import {
   transportDirtySavePayloads,
   transportDisplayLabel,
   transportEventTypeLabel,
+  leadSupplierView,
+  lineSupplierId,
+  transportSuppliers,
 } from "./transport";
 
 /** In-memory Storage stub for loadSeenTransports/markTransportSeen tests —
@@ -813,21 +816,23 @@ describe("buildTransportDriverPrintDoc", () => {
     expect(doc.driver).toBe("Jan Kowalski");
     expect(doc.vehicle).toBe("Ducato");
     expect(doc.supplierName).toBe("Bukat");
-    expect(doc.supplierBarText).toBe("Bukat"); // not Pago -> no " / LINEAGE" suffix
+    expect(doc.sections).toHaveLength(1);
+    expect(doc.sections[0].supplierBarText).toBe("Bukat"); // not Pago -> no " / LINEAGE" suffix
     // Short forms — the redundant "Pita Bros " brand prefix is stripped on
     // the internal driver doc (operator feedback v5.1); still pl-collated.
     expect(doc.locations).toEqual(["Bracka", "Wola"]);
     expect(doc.locationsLine).toBe("Bracka, Wola");
-    expect(doc.products).toHaveLength(1);
-    expect(doc.products[0].name).toBe("Pomidory");
-    expect(doc.products[0].totalQty).toBe(12);
+    const products = doc.sections[0].products;
+    expect(products).toHaveLength(1);
+    expect(products[0].name).toBe("Pomidory");
+    expect(products[0].totalQty).toBe(12);
     // Column order matches doc.locations: Bracka first, then Wola.
-    expect(doc.products[0].qtyByLocation).toEqual([7, 5]);
+    expect(products[0].qtyByLocation).toEqual([7, 5]);
   });
 
   it("adds ' / LINEAGE' to the supplier bar text for SUP_PAGO only", () => {
     const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago" });
-    expect(buildTransportDriverPrintDoc(b, "Pago").supplierBarText).toBe("Pago / LINEAGE");
+    expect(buildTransportDriverPrintDoc(b, "Pago").sections[0].supplierBarText).toBe("Pago / LINEAGE");
   });
 
   it("falls back to created date and empty driver/vehicle when logistics are unset", () => {
@@ -866,9 +871,9 @@ describe("buildTransportDriverPrintDoc", () => {
       ],
     });
     const doc = buildTransportDriverPrintDoc(b, "Bukat");
-    expect(doc.products.map((p) => p.productId)).toEqual(["P2"]);
+    expect(doc.sections[0].products.map((p) => p.productId)).toEqual(["P2"]);
     // doc.locations = [Bracka, Wola] (pl-collated); Bracka's cell is 0, Wola's is 3.
-    expect(doc.products[0].qtyByLocation).toEqual([0, 3]);
+    expect(doc.sections[0].products[0].qtyByLocation).toEqual([0, 3]);
   });
 });
 
@@ -1277,5 +1282,170 @@ describe("loadSeenTransports / markTransportSeen", () => {
       length: 0,
     };
     expect(() => markTransportSeen("TRN-1", broken)).not.toThrow();
+  });
+});
+
+
+// ---- transport-pago-mory-combined: Pago + Magazyn Mory on one run ----------
+
+/** A Pago batch carrying one Magazyn Mory order: WOLA has a Pago order and
+ * KEN only a Mory one. P027 is sold by both (an old Pago row vs the Mory row),
+ * so the aggregate holds two P027 lines, one per supplier block. */
+function mixedBatch(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDetail {
+  return batch({
+    transport_id: "TRN-20260930-PAGO-abc123",
+    supplier_id: "SUP_PAGO",
+    supplier_name: "Pago",
+    location_ids: ["KEN", "WOLA"],
+    order_count: 2,
+    suppliers: [
+      { supplier_id: "SUP_PAGO", supplier_name: "Pago" },
+      { supplier_id: "SUP_MORY", supplier_name: "Magazyn własny Mory" },
+    ],
+    orders: [
+      {
+        order_id: "ORD-P", location_id: "WOLA", location_name: "Pita Bros Wola",
+        status: "manager_sent", lines: [], supplier_id: "SUP_PAGO", supplier_name: "Pago",
+        extra_items: "Tacki - 2 opak",
+      },
+      {
+        order_id: "ORD-M", location_id: "KEN", location_name: "Pita Bros KEN",
+        status: "manager_sent", lines: [], supplier_id: "SUP_MORY",
+        supplier_name: "Magazyn własny Mory", extra_items: "Serwetki - 1 karton",
+      },
+    ],
+    lines: [
+      {
+        product_id: "P027", product_name_pl: "Souvlaki", supplier_product_id: "SP_PAGO_P027",
+        supplier_product_name: "Souvlaki karton", purchase_unit: "karton", total_qty_purchase: 3,
+        warehouse_pickup: true, supplier_id: "SUP_PAGO", supplier_name: "Pago",
+        per_location: [
+          { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-P", qty_purchase: 3 },
+        ],
+      },
+      {
+        product_id: "P027", product_name_pl: "Souvlaki", supplier_product_id: "SP_MORY_P027",
+        supplier_product_name: "Souvlaki Mory", purchase_unit: "szt", total_qty_purchase: 4,
+        warehouse_pickup: false, supplier_id: "SUP_MORY", supplier_name: "Magazyn własny Mory",
+        per_location: [
+          { location_id: "KEN", location_name: "Pita Bros KEN", order_id: "ORD-M", qty_purchase: 4 },
+        ],
+      },
+      {
+        product_id: "P050", product_name_pl: "Pita", supplier_product_id: "SP_MORY_P050",
+        supplier_product_name: "Pita paczka", purchase_unit: "paczka", total_qty_purchase: 6,
+        warehouse_pickup: false, supplier_id: "SUP_MORY", supplier_name: "Magazyn własny Mory",
+        per_location: [
+          { location_id: "KEN", location_name: "Pita Bros KEN", order_id: "ORD-M", qty_purchase: 6 },
+        ],
+      },
+    ],
+    ...overrides,
+  });
+}
+
+describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
+  it("leadSupplierView keeps only the Pago members, lines and locations", () => {
+    const view = leadSupplierView(mixedBatch());
+    expect(view.orders.map((o) => o.order_id)).toEqual(["ORD-P"]);
+    expect(view.lines.map((l) => l.supplier_product_id)).toEqual(["SP_PAGO_P027"]);
+    expect(view.location_ids).toEqual(["WOLA"]);
+    expect(view.order_count).toBe(1);
+  });
+
+  it("a line or order with supplier_id \"\" counts as the lead's (falsy fallback)", () => {
+    const b = batch({ supplier_id: "SUP_PAGO" });
+    expect(lineSupplierId({ supplier_id: "" }, b)).toBe("SUP_PAGO");
+    expect(lineSupplierId({}, b)).toBe("SUP_PAGO");
+    const withBlank = batch({
+      supplier_id: "SUP_PAGO",
+      supplier_name: "Pago",
+      lines: batch().lines.map((l) => ({ ...l, supplier_id: "" })),
+      orders: batch().orders.map((o) => ({ ...o, supplier_id: "" })),
+    });
+    expect(leadSupplierView(withBlank).lines).toHaveLength(1);
+    expect(leadSupplierView(withBlank).orders).toHaveLength(2);
+    expect(buildTransportDriverPrintDoc(withBlank, "x").sections).toHaveLength(1);
+  });
+
+  it("a batch without any supplier fields behaves as before (one block, everything included)", () => {
+    const b = batch();
+    expect(transportSuppliers(b)).toEqual([{ supplier_id: "SUP_BUKAT", supplier_name: "Bukat" }]);
+    expect(leadSupplierView(b).lines).toEqual(b.lines);
+    expect(buildTransportDriverText(b, makeT())).toBe(
+      buildTransportDriverText({ ...b, suppliers: [] }, makeT()),
+    );
+  });
+
+  it("transportSuppliers adds a member supplier missing from detail.suppliers (defensive tail)", () => {
+    const b = mixedBatch({ suppliers: [{ supplier_id: "SUP_PAGO", supplier_name: "Pago" }] });
+    expect(transportSuppliers(b).map((s) => s.supplier_id)).toEqual(["SUP_PAGO", "SUP_MORY"]);
+    expect(transportSuppliers(b)[1].supplier_name).toBe("Magazyn własny Mory");
+  });
+
+  it("the order e-mail lists Pago lines and Pago extra items only", () => {
+    const body = buildTransportEmailBody(mixedBatch(), makeT());
+    expect(body).toContain("Souvlaki karton");
+    expect(body).not.toContain("Souvlaki Mory");
+    expect(body).not.toContain("Pita paczka");
+    expect(body).toContain("Tacki - 2 opak");
+    expect(body).not.toContain("Serwetki");
+  });
+
+  it("the Pago print doc lists Pago warehouse lines only; the exclusion notice ignores Mory", () => {
+    const doc = buildTransportPagoPrintDoc(mixedBatch(), "Pago");
+    expect(doc.products.map((p) => p.catalogNo)).toEqual(["Souvlaki karton"]);
+    expect(doc.excludedProducts).toEqual([]);
+    expect(computePagoWarehouseExclusion(mixedBatch()).excludedProducts).toEqual([]);
+  });
+
+  it("the Pago label lists only lead locations", () => {
+    const locationsById: Record<string, Location> = {
+      WOLA: { location_id: "WOLA", location_name: "Pita Bros Wola", city: "Warszawa", active: true },
+      KEN: { location_id: "KEN", location_name: "Pita Bros KEN", city: "Kraków", active: true },
+    } as Record<string, Location>;
+    const opts = { lang: "pl" as Lang, locationsById };
+    const full = transportDisplayLabel(mixedBatch(), makeT(), opts);
+    const pago = transportDisplayLabel(leadSupplierView(mixedBatch()), makeT(), opts);
+    expect(full).toContain("Kraków");
+    expect(pago).not.toContain("Kraków");
+    expect(pago).toContain("Warszawa");
+  });
+
+  it("the driver text has a Pago block then a Mory block, plus every member's extra items", () => {
+    const text = buildTransportDriverText(mixedBatch(), makeT());
+    const pagoAt = text.indexOf("Dostawca: Pago");
+    const moryAt = text.indexOf("Dostawca: Magazyn własny Mory");
+    expect(pagoAt).toBeGreaterThan(-1);
+    expect(moryAt).toBeGreaterThan(pagoAt);
+    expect(text.indexOf("Souvlaki — 3 karton.")).toBeLessThan(moryAt);
+    expect(text.indexOf("Pita — 6 paczka.")).toBeGreaterThan(moryAt);
+    expect(text).toContain("Serwetki - 1 karton");
+  });
+
+  it("the driver print doc has two sections, Pago / LINEAGE first, on shared columns", () => {
+    const doc = buildTransportDriverPrintDoc(mixedBatch(), "x");
+    expect(doc.locations).toEqual(["KEN", "Wola"]);
+    expect(doc.sections.map((s) => s.supplierBarText)).toEqual([
+      "Pago / LINEAGE",
+      "Magazyn własny Mory",
+    ]);
+    // The same product_id under two suppliers is two rows in two sections.
+    expect(doc.sections[0].products.map((p) => p.productId)).toEqual(["P027"]);
+    expect(doc.sections[1].products.map((p) => p.productId)).toEqual(["P027", "P050"]);
+    expect(doc.sections[0].products[0].qtyByLocation).toEqual([0, 3]);
+    expect(doc.sections[1].products[0].qtyByLocation).toEqual([4, 0]);
+  });
+
+  it("drops an empty block; with nothing positive the lead block stays, empty", () => {
+    const onlyMory = mixedBatch({ lines: mixedBatch().lines.slice(1) });
+    expect(buildTransportDriverPrintDoc(onlyMory, "x").sections.map((s) => s.supplierId)).toEqual([
+      "SUP_MORY",
+    ]);
+    expect(buildTransportDriverText(onlyMory, makeT())).not.toContain("Dostawca: Pago");
+    const empty = mixedBatch({ lines: [] });
+    const sections = buildTransportDriverPrintDoc(empty, "x").sections;
+    expect(sections).toEqual([{ supplierId: "SUP_PAGO", supplierBarText: "Pago / LINEAGE", products: [] }]);
+    expect(buildTransportDriverText(empty, makeT())).toContain("Dostawca: Pago");
   });
 });

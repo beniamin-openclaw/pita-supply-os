@@ -272,3 +272,35 @@ describe("buildDriverPdfDocDefinition — ad-hoc items with location attribution
     expect(flattenText(pdfDoc.content)).not.toContain("Pozycje spoza katalogu");
   });
 });
+
+describe("buildDriverPdfDocDefinition — supplier sections (transport-pago-mory-combined)", () => {
+  it("renders one navy bar and one table per supplier section, rows numbered from 1", () => {
+    const b = batch({
+      supplier_id: "SUP_PAGO",
+      supplier_name: "Pago",
+      suppliers: [
+        { supplier_id: "SUP_PAGO", supplier_name: "Pago" },
+        { supplier_id: "SUP_MORY", supplier_name: "Magazyn własny Mory" },
+      ],
+      lines: [
+        { ...batch().lines[0], supplier_id: "SUP_PAGO", product_name_pl: "Gyros" },
+        { ...batch().lines[0], supplier_id: "SUP_MORY", product_name_pl: "Pita" },
+      ],
+    });
+    const doc = buildTransportDriverPrintDoc(b, "Pago");
+    const pdfDoc = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);
+    const text = flattenText(pdfDoc.content);
+    expect(text.indexOf("Pago / LINEAGE")).toBeGreaterThan(-1);
+    expect(text.indexOf("Magazyn własny Mory")).toBeGreaterThan(text.indexOf("Gyros"));
+    expect(text.indexOf("Pita")).toBeGreaterThan(text.indexOf("Magazyn własny Mory"));
+    const tables = pdfDoc.content.filter(
+      (node) =>
+        typeof node === "object" &&
+        node !== null &&
+        "table" in node &&
+        typeof (node as { table?: { headerRows?: unknown } }).table?.headerRows === "number",
+    ) as { table: { body: { text: string }[][] } }[];
+    expect(tables).toHaveLength(2);
+    for (const table of tables) expect(table.table.body[1][0].text).toBe("1");
+  });
+});

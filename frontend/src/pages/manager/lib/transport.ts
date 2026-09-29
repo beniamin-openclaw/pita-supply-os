@@ -12,6 +12,13 @@
 //     logistics, not the supplier's business (plan: "Driver list stays
 //     private"). Keep this asymmetry — do not add per-location detail to the
 //     email builder.
+//
+// A second axis since transport-pago-mory-combined: a Pago batch also carries
+// Magazyn własny Mory orders (the driver collects them on the same run).
+// Supplier-facing documents (the order e-mail, the Pago PDF, the Pago Gmail
+// draft, the warehouse-exclusion notice) are built from `leadSupplierView` —
+// the batch supplier's own members and lines only; Pago never sees a Mory
+// line. Driver documents cover every supplier, in blocks (lead first).
 
 import type { Lang } from "../../../i18n";
 import type { StringKey } from "../../../i18n/strings";
@@ -25,6 +32,7 @@ import type {
   TransportBatchOrder,
   TransportBatchSummary,
   TransportEvent,
+  TransportSupplierRef,
 } from "../../../types";
 import { compareProductOrder } from "../../../lib/productOrder";
 import { buildGmailComposeUrl } from "./emailBody";
@@ -44,6 +52,99 @@ function formatQty(qty: number): string {
 function isoDatePart(iso?: string | null): string {
   if (!iso) return "";
   return iso.slice(0, 10);
+}
+
+// ---- transport-pago-mory-combined: suppliers on one batch ------------------
+
+/** Suppliers whose orders may ride on another supplier's Transport run —
+ * mirrors the backend's `_TRANSPORT_COMPANION_SUPPLIERS` (Magazyn Mory rides
+ * on the Pago run). The Transport supplier dropdown hides them: a
+ * Magazyn-only batch would have no physical run of its own. */
+export const TRANSPORT_COMPANION_SUPPLIER_IDS: readonly string[] = ["SUP_MORY"];
+
+/** Supplier of a line or member order. A missing or "" `supplier_id` (an
+ * older backend, or the model default) counts as the batch's own supplier —
+ * falsy, not nullish, on purpose. */
+export function lineSupplierId(
+  item: { supplier_id?: string },
+  detail: Pick<TransportBatchDetail, "supplier_id">,
+): string {
+  return item.supplier_id || detail.supplier_id;
+}
+
+/** Same rule as `lineSupplierId`, for a member order. */
+export const orderSupplierId = lineSupplierId;
+
+/** Suppliers of a batch in block order: `detail.suppliers` when the backend
+ * sends it (lead, companions, other members), else the batch's own supplier;
+ * plus — defensively — any member or line supplier not listed yet. */
+export function transportSuppliers(detail: TransportBatchDetail): TransportSupplierRef[] {
+  const out: TransportSupplierRef[] =
+    detail.suppliers && detail.suppliers.length > 0
+      ? [...detail.suppliers]
+      : [{ supplier_id: detail.supplier_id, supplier_name: detail.supplier_name }];
+  const seen = new Set(out.map((s) => s.supplier_id));
+  const add = (id: string, name?: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ supplier_id: id, supplier_name: name || id });
+  };
+  for (const o of detail.orders) add(orderSupplierId(o, detail), o.supplier_name);
+  for (const l of detail.lines) add(lineSupplierId(l, detail), l.supplier_name);
+  return out;
+}
+
+/** The member orders of one supplier. */
+export function transportOrdersFor(
+  detail: TransportBatchDetail,
+  supplierId: string,
+): TransportBatchOrder[] {
+  return detail.orders.filter((o) => orderSupplierId(o, detail) === supplierId);
+}
+
+/** The batch as its OWN supplier sees it: only the lead supplier's member
+ * orders and aggregate lines, and `location_ids` / `order_count` recomputed
+ * from those orders (so a Pago document's label never names a location that
+ * only has a Mory order). Every supplier-facing builder runs on this, so no
+ * caller can forget the filter. For a single-supplier batch it is the batch
+ * itself. */
+export function leadSupplierView(detail: TransportBatchDetail): TransportBatchDetail {
+  const orders = transportOrdersFor(detail, detail.supplier_id);
+  if (orders.length === detail.orders.length) {
+    return { ...detail, lines: detail.lines.filter((l) => lineSupplierId(l, detail) === detail.supplier_id) };
+  }
+  return {
+    ...detail,
+    orders,
+    order_count: orders.length,
+    location_ids: [...new Set(orders.map((o) => o.location_id))].sort(),
+    lines: detail.lines.filter((l) => lineSupplierId(l, detail) === detail.supplier_id),
+  };
+}
+
+/** The positive-quantity aggregate lines of each supplier, in block order,
+ * with the ONE empty-block rule every driver document shares (plan-review
+ * F2): blocks without a positive line are dropped; when none is left, the
+ * lead block stays, with no lines, so the document still names its
+ * supplier. */
+function driverBlocks(
+  detail: TransportBatchDetail,
+): { supplier: TransportSupplierRef; lines: TransportBatchDetail["lines"] }[] {
+  const blocks = transportSuppliers(detail)
+    .map((supplier) => ({
+      supplier,
+      lines: detail.lines.filter(
+        (l) => lineSupplierId(l, detail) === supplier.supplier_id && l.total_qty_purchase > 0,
+      ),
+    }))
+    .filter((b) => b.lines.length > 0);
+  if (blocks.length > 0) return blocks;
+  return [
+    {
+      supplier: { supplier_id: detail.supplier_id, supplier_name: detail.supplier_name },
+      lines: [],
+    },
+  ];
 }
 
 // ---- training-feedback-0901 F1: ad-hoc off-catalogue items on the Transport
@@ -140,24 +241,28 @@ export function collectCaptainNotes(orders: TransportBatchOrder[]): TransportCap
 }
 
 /**
- * The PRIVATE driver list: transport id + date, then one block per product —
+ * The PRIVATE driver list: transport id + date, then per supplier a
+ * "Dostawca: …" line and one block per product —
  * "<produkt> — <total> <jm>." followed by an indented "  <lokal>: <qty> <jm>."
- * line for each location that contributed to it. Never sent to the supplier;
- * copy/clipboard + in-app display only.
+ * line for each location that contributed to it. Supplier blocks follow
+ * `driverBlocks` (lead first; a Pago run also lists Magazyn Mory). Never sent
+ * to the supplier; copy/clipboard + in-app display only.
  */
 export function buildTransportDriverText(detail: TransportBatchDetail, t: TFunc): string {
   const out: string[] = [];
   out.push(t("manager.transport.driverText.header", { id: detail.transport_id, date: isoDatePart(detail.created) }));
-  out.push(t("manager.transport.driverText.supplierLine", { supplier: detail.supplier_name }));
-  out.push("");
 
-  detail.lines.forEach((line) => {
-    out.push(`${line.product_name_pl} — ${formatQty(line.total_qty_purchase)} ${line.purchase_unit}.`);
-    line.per_location.forEach((pl) => {
-      out.push(`  ${pl.location_name}: ${formatQty(pl.qty_purchase)} ${line.purchase_unit}.`);
-    });
+  for (const block of driverBlocks(detail)) {
+    out.push(t("manager.transport.driverText.supplierLine", { supplier: block.supplier.supplier_name }));
     out.push("");
-  });
+    block.lines.forEach((line) => {
+      out.push(`${line.product_name_pl} — ${formatQty(line.total_qty_purchase)} ${line.purchase_unit}.`);
+      line.per_location.forEach((pl) => {
+        out.push(`  ${pl.location_name}: ${formatQty(pl.qty_purchase)} ${line.purchase_unit}.`);
+      });
+      out.push("");
+    });
+  }
 
   // Ad-hoc off-catalogue items (F1) — WITH location attribution (this is an
   // internal document; the driver needs to know who gets the extra feta).
@@ -187,9 +292,12 @@ export function buildTransportEmailSubject(detail: TransportBatchDetail, t: TFun
  * The SUPPLIER-facing body: per-product totals only, no per-location
  * breakdown — deliberately parallel to the driver text's opposite discipline.
  * Supplier-facing product name (supplier_product_name) is preferred over the
- * internal product_name_pl, mirroring emailBody.ts's dispatch email.
+ * internal product_name_pl, mirroring emailBody.ts's dispatch email. Built
+ * from `leadSupplierView`: a companion's (Magazyn Mory's) lines and extra
+ * items never reach the supplier.
  */
-export function buildTransportEmailBody(detail: TransportBatchDetail, t: TFunc): string {
+export function buildTransportEmailBody(fullDetail: TransportBatchDetail, t: TFunc): string {
+  const detail = leadSupplierView(fullDetail);
   const out: string[] = [];
   out.push(t("manager.transport.email.greeting"));
   out.push("");
@@ -282,7 +390,8 @@ export interface TransportMatrixRow {
   product_name_pl: string;
   purchase_unit: string;
   // Sort key (supplier-product-order-minimum), taken from the row's first
-  // line: a batch is single-supplier, so every line of a product shares it.
+  // line: TransportPage passes ONE supplier's orders per matrix section
+  // (transport-pago-mory-combined), so every line of a product shares it.
   supplier_product_id: string;
   display_order?: number | null;
   linesByOrderId: Record<string, ManagerOrderLineDetail>;
@@ -711,6 +820,15 @@ export interface PrintDriverProductLine {
   qtyByLocation: number[];
 }
 
+/** One supplier block of the driver document (transport-pago-mory-combined):
+ * a navy section bar and its own product x location table. */
+export interface PrintDriverSection {
+  supplierId: string;
+  // Supplier name + " / LINEAGE" for SUP_PAGO, else the name verbatim.
+  supplierBarText: string;
+  products: PrintDriverProductLine[];
+}
+
 export interface TransportDriverPrintDoc {
   transportId: string;
   displayLabel: string; // caller-computed transportDisplayLabel(...) — the doc's primary title context
@@ -719,11 +837,11 @@ export interface TransportDriverPrintDoc {
   driver: string; // "" when unset
   vehicle: string; // "" when unset
   supplierName: string;
-  // supplierName + " / LINEAGE" for SUP_PAGO, else supplierName verbatim.
-  supplierBarText: string;
   locationsLine: string; // joined location names, for the header "Miasto/Lokalizacje" row
   locations: string[]; // location names, one per matrix column — same order as each line's qtyByLocation
-  products: PrintDriverProductLine[];
+  // Supplier blocks, lead first (driverBlocks). Every section's products are
+  // aligned to the SAME `locations` columns.
+  sections: PrintDriverSection[];
   // Ad-hoc off-catalogue items (F1), WITH location attribution — see
   // collectExtraItemsByLocation. [] when no member order carries one; the PDF
   // builder then omits the section entirely.
@@ -752,21 +870,27 @@ export function buildTransportDriverPrintDoc(
   // qtyByLocation below stays index-aligned to `locationIds`.
   const locations = locationIds.map((id) => shortLocationName(namesById.get(id) ?? id));
 
-  const products = detail.lines
-    .filter((line) => line.total_qty_purchase > 0)
-    .map((line) => {
-      const qtyById = new Map<string, number>();
-      for (const pl of line.per_location) {
-        qtyById.set(pl.location_id, (qtyById.get(pl.location_id) ?? 0) + pl.qty_purchase);
-      }
-      return {
-        productId: line.product_id,
-        name: line.product_name_pl,
-        unit: line.purchase_unit,
-        totalQty: line.total_qty_purchase,
-        qtyByLocation: locationIds.map((id) => qtyById.get(id) ?? 0),
-      };
-    });
+  const toProductLine = (line: TransportBatchDetail["lines"][number]): PrintDriverProductLine => {
+    const qtyById = new Map<string, number>();
+    for (const pl of line.per_location) {
+      qtyById.set(pl.location_id, (qtyById.get(pl.location_id) ?? 0) + pl.qty_purchase);
+    }
+    return {
+      productId: line.product_id,
+      name: line.product_name_pl,
+      unit: line.purchase_unit,
+      totalQty: line.total_qty_purchase,
+      qtyByLocation: locationIds.map((id) => qtyById.get(id) ?? 0),
+    };
+  };
+  const sections: PrintDriverSection[] = driverBlocks(detail).map((block) => ({
+    supplierId: block.supplier.supplier_id,
+    supplierBarText:
+      block.supplier.supplier_id === "SUP_PAGO"
+        ? `${block.supplier.supplier_name} / LINEAGE`
+        : block.supplier.supplier_name,
+    products: block.lines.map(toProductLine),
+  }));
 
   return {
     transportId: detail.transport_id,
@@ -776,11 +900,9 @@ export function buildTransportDriverPrintDoc(
     driver: detail.driver ?? "",
     vehicle: detail.vehicle ?? "",
     supplierName: detail.supplier_name,
-    supplierBarText:
-      detail.supplier_id === "SUP_PAGO" ? `${detail.supplier_name} / LINEAGE` : detail.supplier_name,
     locationsLine: locations.join(", "),
     locations,
-    products,
+    sections,
     extraItems: collectExtraItemsByLocation(detail.orders),
   };
 }
@@ -814,9 +936,12 @@ export interface PagoWarehouseExclusion {
  * drops from the self-pickup document, by name — the pure computation behind
  * both buildTransportPagoPrintDoc's `excludedProducts`/
  * `warehousePickupDataMissing` fields and TransportPage's on-screen notice
- * (computed once here so the two can never disagree).
+ * (computed once here so the two can never disagree). Runs on
+ * `leadSupplierView`: a Magazyn Mory line is not "excluded from the Pago
+ * pickup" — it was never a Pago line.
  */
-export function computePagoWarehouseExclusion(detail: TransportBatchDetail): PagoWarehouseExclusion {
+export function computePagoWarehouseExclusion(fullDetail: TransportBatchDetail): PagoWarehouseExclusion {
+  const detail = leadSupplierView(fullDetail);
   const isPago = detail.supplier_id === "SUP_PAGO";
   if (!isPago) return { isPago, excludedProducts: [], warehousePickupDataMissing: false };
 
@@ -889,9 +1014,13 @@ export interface TransportPagoPrintDoc {
  * buildTransportEmailBody. The DRIVER document is the opposite case and keeps
  * its per-location columns — that one is ours, not the supplier's. */
 export function buildTransportPagoPrintDoc(
-  detail: TransportBatchDetail,
+  fullDetail: TransportBatchDetail,
   displayLabel: string,
 ): TransportPagoPrintDoc {
+  // Lead supplier's lines only (transport-pago-mory-combined): a Magazyn Mory
+  // line riding on the Pago run never reaches the Pago document. The caller
+  // computes `displayLabel` from leadSupplierView too (PrintViews).
+  const detail = leadSupplierView(fullDetail);
   const { isPago, excludedProducts, warehousePickupDataMissing } =
     computePagoWarehouseExclusion(detail);
 
@@ -927,7 +1056,9 @@ export function buildTransportPagoPrintDoc(
     // the Gmail order draft for Bukat, Coca-Cola and everyone else, silently.
     //
     // The driver doc, the order email and the driver text export never filter
-    // on this at all — the warehouse run is a subset of the purchase.
+    // on this at all — the warehouse run is a subset of the purchase. (The
+    // lead-supplier filter above is a different axis: it drops companion
+    // Magazyn Mory lines from every supplier-facing document.)
     products: detail.lines
       .filter(
         (line) =>

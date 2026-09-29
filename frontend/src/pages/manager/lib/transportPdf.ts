@@ -154,16 +154,32 @@ export function buildDriverPdfDocDefinition(
     { text: t("manager.transport.print.totalCol"), style: "tableHeader" },
   ];
 
-  const bodyRows = doc.products.map((p: PrintDriverProductLine, idx: number) => {
-    const zebra = idx % 2 === 1 ? { fillColor: ZEBRA } : {};
-    return [
-      { text: String(idx + 1), ...zebra },
-      { text: p.name, ...zebra },
-      { text: p.unit, ...zebra },
-      ...p.qtyByLocation.map((qty) => ({ text: String(qty), ...zebra })),
-      { text: String(p.totalQty), style: "total", ...zebra },
-    ];
-  });
+  const bodyRowsFor = (products: PrintDriverProductLine[]) =>
+    products.map((p: PrintDriverProductLine, idx: number) => {
+      const zebra = idx % 2 === 1 ? { fillColor: ZEBRA } : {};
+      return [
+        { text: String(idx + 1), ...zebra },
+        { text: p.name, ...zebra },
+        { text: p.unit, ...zebra },
+        ...p.qtyByLocation.map((qty) => ({ text: String(qty), ...zebra })),
+        { text: String(p.totalQty), style: "total", ...zebra },
+      ];
+    });
+
+  // One navy supplier bar + one table per supplier block
+  // (transport-pago-mory-combined: "Pago / LINEAGE", then "Magazyn własny
+  // Mory"). Same columns in every table; each numbers its rows from 1.
+  const supplierSections: unknown[] = doc.sections.flatMap((section) => [
+    sectionBar(section.supplierBarText),
+    {
+      table: {
+        headerRows: 1,
+        widths: [20, "*", 30, ...doc.locations.map(() => 45), 40],
+        body: [columnHeaders, ...bodyRowsFor(section.products)],
+      },
+      layout: TABLE_BORDER_LAYOUT,
+    },
+  ]);
 
   // Ad-hoc off-catalogue items (training-feedback-0901 F1), WITH location
   // attribution — this is an internal document, and the driver needs to know
@@ -191,15 +207,7 @@ export function buildDriverPdfDocDefinition(
     content: [
       titleBar(t("manager.transport.print.driverBarTitle")),
       headerTable(headerRows),
-      sectionBar(doc.supplierBarText),
-      {
-        table: {
-          headerRows: 1,
-          widths: [20, "*", 30, ...doc.locations.map(() => 45), 40],
-          body: [columnHeaders, ...bodyRows],
-        },
-        layout: TABLE_BORDER_LAYOUT,
-      },
+      ...supplierSections,
       ...extraItemsSection,
       footerLine(t, generatedAt, doc.transportId),
     ],

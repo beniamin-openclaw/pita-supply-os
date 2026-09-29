@@ -564,17 +564,17 @@ None. Existing single-supplier batches read exactly as before. Headerless legacy
 
 #### Automated
 
-- [x] 1.1 Backend suite passes: `cd supply-os-v1 && python -m pytest -q`
-- [x] 1.2 Lint passes: `cd supply-os-v1 && ruff check .`
-- [x] 1.3 Integration suite passes on a local Postgres 16: `python -m pytest -m integration -q`
+- [x] 1.1 Backend suite passes: `cd supply-os-v1 && python -m pytest -q` — f72a429
+- [x] 1.2 Lint passes: `cd supply-os-v1 && ruff check .` — f72a429
+- [x] 1.3 Integration suite passes on a local Postgres 16: `python -m pytest -m integration -q` — f72a429
 
 ### Phase 2: Frontend — types and document builders
 
 #### Automated
 
-- [ ] 2.1 Frontend tests pass: `cd frontend && npm run test`
-- [ ] 2.2 Frontend build passes: `cd frontend && npm run build`
-- [ ] 2.3 Frontend lint passes: `cd frontend && npm run lint`
+- [x] 2.1 Frontend tests pass: `cd frontend && npm run test`
+- [x] 2.2 Frontend build passes: `cd frontend && npm run build`
+- [x] 2.3 Frontend lint passes: `cd frontend && npm run lint`
 
 ### Phase 3: Frontend — Transport screen
 

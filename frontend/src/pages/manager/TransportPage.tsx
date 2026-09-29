@@ -31,6 +31,7 @@ import {
   seedTransportDrafts,
   transportDirtySavePayloads,
   transportDisplayLabel,
+  leadSupplierView,
   type TransportDraftMap,
 } from "./lib/transport";
 import { AddLocationPicker } from "./transport/AddLocationPicker";
@@ -1159,6 +1160,11 @@ export function TransportPage() {
                   <PrintViews
                     detail={detail}
                     displayLabel={transportDisplayLabel(detail, t, displayLabelOpts)}
+                    pagoDisplayLabel={transportDisplayLabel(
+                      leadSupplierView(detail),
+                      t,
+                      displayLabelOpts,
+                    )}
                     supplierEmail={suppliers?.find((s) => s.supplier_id === detail.supplier_id)?.email}
                     driverRecipients={driverRecipients}
                   />
