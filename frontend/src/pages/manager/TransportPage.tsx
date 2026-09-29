@@ -1536,7 +1536,14 @@ export function TransportPage() {
                             const received = o.received_count ?? 0;
                             return (
                               <li key={o.order_id} className="flex items-center justify-between gap-2">
-                                <span className="truncate">{o.location_name}</span>
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span className="truncate">{o.location_name}</span>
+                                  {orderSupplierId(o, detail) !== detail.supplier_id && (
+                                    <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-800">
+                                      {o.supplier_name || orderSupplierId(o, detail)}
+                                    </span>
+                                  )}
+                                </span>
                                 <span className="flex items-center gap-2 shrink-0">
                                   {/* Delivery status chip (v3 Phase 8) — mirrors
                                       ManagerQueue's receipt signal styling. Only

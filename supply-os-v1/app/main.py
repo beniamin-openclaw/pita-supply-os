@@ -1855,6 +1855,18 @@ def _stale_transport_marker_clear(order: Order) -> dict:
     return {}
 
 
+def _log_stale_transport_member_exit(backend, order: Order, details: str) -> None:
+    """Record in the batch history that a ``TRN-``-marked member left its
+    (non-draft) batch through the queue — the counterpart of
+    ``_stale_transport_marker_clear``. No-op for an order without a marker;
+    best-effort like every transport event."""
+    ref = order.supplier_order_reference or ""
+    if ref.startswith("TRN-"):
+        _log_transport_event(
+            backend, ref, "order_removed", details, order_id=order.order_id
+        )
+
+
 def _log_transport_event(
     backend,
     transport_id: str,
@@ -2099,6 +2111,7 @@ def manager_release(
             ),
         )
     _clear_manager_zeros_best_effort(backend, order_id, order.lines)
+    _log_stale_transport_member_exit(backend, order, "released from queue")
     return ManagerReleaseResponse(
         order_id=order_id, status=OrderStatus.CAPTAIN_SUBMITTED
     )
@@ -2162,6 +2175,7 @@ def manager_cancel(
                 f"(expected {order.status.value})"
             ),
         )
+    _log_stale_transport_member_exit(backend, order, "cancelled from queue")
     return ManagerCancelResponse(order_id=order_id, status=OrderStatus.CANCELLED)
 
 

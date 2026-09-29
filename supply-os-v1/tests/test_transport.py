@@ -3671,6 +3671,11 @@ def test_release_mory_member_of_sent_batch_clears_marker(mocker):
     kwargs = patches["update_order"].call_args.kwargs
     assert kwargs["status"] == "captain_submitted"
     assert kwargs["supplier_order_reference"] is None
+    event = patches["append_transport_event"].call_args.args[0]
+    assert (event.transport_id, event.event_type, event.order_id) == (
+        "TRN-X", "order_removed", "ORD-M"
+    )
+    assert event.details == "released from queue"
 
 
 def test_cancel_order_mory_member_of_sent_batch_clears_marker(mocker):
@@ -3687,3 +3692,4 @@ def test_release_without_marker_sends_no_marker_field(mocker):
     r = client.post("/api/manager/release/ORD-A", headers=MANAGER_AUTH, json={"reason": "x"})
     assert r.status_code == 200, r.text
     assert "supplier_order_reference" not in patches["update_order"].call_args.kwargs
+    patches["append_transport_event"].assert_not_called()

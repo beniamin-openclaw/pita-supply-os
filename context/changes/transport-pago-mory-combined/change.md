@@ -1,7 +1,7 @@
 ---
 change_id: transport-pago-mory-combined
 title: One Pago transport run also carries Magazyn Mory orders
-status: implementing
+status: impl_reviewed
 created: 2026-09-28
 updated: 2026-09-29
 archived_at: null
