@@ -1,10 +1,10 @@
 ---
 change_id: elektrownia-westfield-rollout
 title: Roll out ELEKTROWNIA and WESTFIELD (activate, address, thresholds) and refresh NORBLIN thresholds from Marek's min/max sheets
-status: new
+status: archived
 created: 2026-09-29
-updated: 2026-09-29
-archived_at: null
+updated: 2026-09-30
+archived_at: 2026-09-30T09:28:26Z
 ---
 
 ## Notes

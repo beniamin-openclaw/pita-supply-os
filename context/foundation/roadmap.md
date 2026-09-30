@@ -3,7 +3,7 @@ project: "Pita Supply OS"
 version: 1
 status: active
 created: 2026-06-04
-updated: 2026-09-28
+updated: 2026-09-30
 prd_version: 2
 main_goal: market-feedback
 top_blocker: decisions
@@ -277,6 +277,7 @@ Horizon 2 shipped the infrastructure (Supabase, multi-supplier data, product CI)
 | R-24 | supplier-product-order-minimum      | Every screen and document lists a supplier's products in one order (Bukat: Marek's order), and Bukat's 500 PLN minimum chip no longer counts Tzatzyki, Hot Feta and Feta; SUP_INTERNAL is no longer offered for ordering | FR-002, FR-006, FR-010 | done — archived 2026-09-28 | `context/archive/2026-09-28-supplier-product-order-minimum/` |
 | R-25 | pago-stock-packs-plus-kg            | Captain enters stock of pack-based products as [packs] + [loose kg/opak/szt] with a combined reading, packs-first thresholds on order screens and a soft "Czy chodziło o N bloków?" prompt; stored value stays in base units | FR-003, FR-015 | implemented — PR open; merge gated on operator converting pack-count thresholds (threshold-audit.sql) | `context/changes/pago-stock-packs-plus-kg/` |
 | R-26 | delivery-calendar                   | Captain sees a proposed delivery date (supplier rules per location, 17:00 Warsaw order deadline) and may change it; Thursday "na 1 dzień / na 3 dni" reminder for Bukat and Intermlecz; Manager sees a subtle marker when the chosen date differs from the proposal | FR-005, FR-006 | implemented — migration 0025 + seed applied on prod 2026-09-28 (prod-sql-audit.md) | `context/changes/delivery-calendar/` |
+| R-27 | elektrownia-westfield-rollout        | Captains at Elektrownia Powiśle and Westfield Mokotów can log in and order with their own min/max (from Marek's sheets); Norblin thresholds refreshed; Westfield orders Coca-Cola in glass | PRD "+2 locations" gated rollout, FR-012 | done — archived 2026-09-30; open items (Westfield mailbox, rolls, production thresholds) in rollout-notes | `context/archive/2026-09-29-elektrownia-westfield-rollout/` |
 
 ## 10x Execution Playbook
 
@@ -352,3 +353,4 @@ How to execute Horizon 2 for maximum efficiency and lowest rework — the 10x sk
 - **R-20: Manager can no longer dispatch a Pago order on its own from the queue (transport-only supplier channel)** — Archived 2026-09-28 → `context/archive/2026-09-21-pago-transport-only-dispatch/`. Shipped via PR #33 (migration 0021; SUP_PAGO flipped to `transport` on prod 2026-09-28). Manual prod checks 3.6/3.7 passed on prod (operator, 2026-09-28). Lesson: —.
 - **R-23: Manager queue shows no deviation chip for suppliers with suggestion alerts off** — Archived 2026-09-28 → `context/archive/2026-09-28-pago-queue-deviation-chips/`. Shipped via PR #35 (no migration). Lesson: —.
 - **R-24: One product order per supplier everywhere; Bukat minimum excludes Tzatzyki, Hot Feta and Feta** — Archived 2026-09-28 → `context/archive/2026-09-28-supplier-product-order-minimum/`. Shipped via PR #37 (migration 0023) + prod-sql (14 Bukat positions, 3 exclusions; diff saved). Live check passed (operator, 2026-09-28). Lesson: —.
+- **R-27: Elektrownia Powiśle and Westfield Mokotów live with their own min/max; Norblin thresholds refreshed** — Archived 2026-09-30 → `context/archive/2026-09-29-elektrownia-westfield-rollout/`. Data-only (prod SQL + Railway captain tokens, no code). Lesson: —.
