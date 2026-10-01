@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { overruleAll } from "./overruleAll";
+import { clearStaleAutoReasons, overruleAll } from "./overruleAll";
 import type { OrderableItem, OrderLine } from "../types";
 
 // The automatic sticky pass; "overwrite" cases below say so explicitly.
@@ -371,5 +371,59 @@ describe("overruleAll — supplier with alerts off", () => {
 
     expect(overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, OVERWRITE)).toBe(lines);
     expect(overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL)).toBe(lines);
+  });
+});
+
+describe("overruleAll — auto-filled reasons (impl-review F1)", () => {
+  const bulk = { code: "WEEKEND_HIGH_TRAFFIC" as const, comment: "" };
+
+  it("marks every reason it fills as reason_auto, in both modes", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    for (const mode of [FILL, OVERWRITE]) {
+      const result = overruleAll(items, { P001: deviatingLine() }, bulk, mode);
+      expect(result.P001.reason_auto).toBe(true);
+    }
+  });
+
+  it("typing '1' then '12' leaves no reason on the matching line", () => {
+    // Target 120 szt, 10 per karton, stock 0 -> suggestion 12 kartons.
+    const items = [makeItem({ product_id: "P001", target_stock_qty_base: 120 })];
+    const afterOne = overruleAll(
+      items,
+      { P001: deviatingLine({ captain_final_qty_purchase: 1 }) },
+      bulk,
+      FILL,
+    );
+    expect(afterOne.P001.reason_code).toBe("WEEKEND_HIGH_TRAFFIC");
+
+    const typed = { P001: { ...afterOne.P001, captain_final_qty_purchase: 12 } };
+    const afterTwelve = overruleAll(items, typed, bulk, FILL);
+    expect(afterTwelve.P001.reason_code).toBe("");
+    expect(afterTwelve.P001.reason_auto).toBe(false);
+    // Stable: another pass changes nothing.
+    expect(overruleAll(items, afterTwelve, bulk, FILL)).toBe(afterTwelve);
+  });
+
+  it("keeps a hand-picked reason on a line that no longer needs one", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = { P001: matchingLine({ reason_code: "LOW_STORAGE" }) };
+    expect(clearStaleAutoReasons(items, lines)).toBe(lines);
+    expect(overruleAll(items, lines, bulk, FILL)).toBe(lines);
+  });
+
+  it("an auto OTHER loses its comment with the reason", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = {
+      P001: matchingLine({ reason_code: "OTHER", captain_comment: "bulk why", reason_auto: true }),
+    };
+    const result = clearStaleAutoReasons(items, lines);
+    expect(result.P001.reason_code).toBe("");
+    expect(result.P001.captain_comment).toBe("");
+  });
+
+  it("keeps an auto reason while the line still requires one", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = { P001: deviatingLine({ reason_code: "LOW_STORAGE", reason_auto: true }) };
+    expect(clearStaleAutoReasons(items, lines)).toBe(lines);
   });
 });

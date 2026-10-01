@@ -34,7 +34,7 @@ import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
 import { CoveragePrompt, type CoverageDays } from "./components/CoveragePrompt";
 
 import { computeRowState } from "./lib/compute";
-import { overruleAll } from "./lib/overruleAll";
+import { clearStaleAutoReasons, overruleAll } from "./lib/overruleAll";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
 import { serializeExtraItems } from "./lib/extraItems";
@@ -670,11 +670,14 @@ export function CaptainMP() {
   // on lines that now require one and have none. A hand-picked reason is never
   // touched (mode "fillMissing"); an unchanged result is the same reference, so
   // React bails out and this cannot loop.
+  // With no bulk reason active (after "Wyłącz") it still removes an auto-filled
+  // reason from a line that stopped requiring one (impl-review F1).
   useEffect(() => {
-    if (!bulkReason) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLines((prev) =>
-      overruleAll(orderableItems, prev, bulkReason, "fillMissing", handEditedReasons),
+      bulkReason
+        ? overruleAll(orderableItems, prev, bulkReason, "fillMissing", handEditedReasons)
+        : clearStaleAutoReasons(orderableItems, prev),
     );
   }, [bulkReason, lines, orderableItems, handEditedReasons]);
 

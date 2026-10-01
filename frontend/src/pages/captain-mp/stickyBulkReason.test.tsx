@@ -12,6 +12,7 @@ import { LangProvider } from "../../i18n";
 import { loadDraft, setToken } from "../../auth";
 import type { CaptainOrderDetail, ManagerOrderLineDetail, OrderableItem } from "../../types";
 import type { DraftState } from "./types";
+import { buildPayloadLines } from "./lib/buildPayloadLines";
 
 const suppliers = vi.fn();
 const orderable = vi.fn();
@@ -147,6 +148,41 @@ describe("CaptainMP — sticky bulk reason", () => {
     expect(reasonOf("P1")).toBe("");
   });
 
+  it("typing '1' then '12' does not leave the bulk reason on the matching line (F1)", async () => {
+    suppliers.mockResolvedValue([
+      { supplier_id: "SUP_BUKAT", supplier_name: "Bukat", ordering_method: "email", active: true, notes: "" },
+    ]);
+    // Target 12, stock 0 -> suggestion 12.
+    orderable.mockResolvedValue([makeItem("P1", { target_stock_qty_base: 12 }), makeItem("P2")]);
+    const view = render(
+      <MemoryRouter>
+        <LangProvider>
+          <CaptainMP />
+        </LangProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Produkt P1");
+    typeDeviation("P2"); // gives Apply something to fill
+    applyBulk("WEEKEND_HIGH_TRAFFIC");
+
+    fireEvent.change(document.getElementById("current-P1")!, { target: { value: "0" } });
+    fireEvent.change(document.getElementById("final-P1")!, { target: { value: "1" } });
+    expect(reasonOf("P1")).toBe("WEEKEND_HIGH_TRAFFIC"); // -92%: filled
+    fireEvent.change(document.getElementById("final-P1")!, { target: { value: "12" } });
+    expect(document.getElementById("reason-P1")).toBeNull(); // green, picker gone
+
+    // After "Wyłącz" an auto reason is still removed once its line goes green.
+    fireEvent.click(screen.getByRole("button", { name: "Wyłącz" }));
+    fireEvent.change(document.getElementById("final-P2")!, { target: { value: "50" } });
+
+    view.unmount(); // flush writes the draft synchronously
+    const lines = loadDraft<DraftState>("SUP_BUKAT")!.state.lines;
+    expect(lines.P1.reason_code ?? "").toBe("");
+    expect(lines.P2.reason_code ?? "").toBe("");
+    // Nothing stale is submitted.
+    expect(buildPayloadLines(lines).every((ln) => ln.reason_code === null)).toBe(true);
+  });
+
   it("persists bulkReason in the draft and restores it after a reload", async () => {
     const first = renderCreate();
     await screen.findByText("Produkt P1");
@@ -241,6 +277,12 @@ describe("OrderEditPage — sticky bulk reason", () => {
 
     typeDeviation("P2");
     expect(reasonOf("P2")).toBe("LOW_STORAGE");
+
+    // An auto reason disappears once the line matches (F1): 90 -> 50.
+    fireEvent.change(document.getElementById("final-P1")!, { target: { value: "50" } });
+    expect(document.getElementById("reason-P1")).toBeNull();
+    fireEvent.change(document.getElementById("final-P1")!, { target: { value: "90" } });
+    expect(reasonOf("P1")).toBe("LOW_STORAGE"); // still sticky: filled again
 
     // A hand-cleared reason stays cleared on the edit screen too.
     fireEvent.change(document.getElementById("reason-P2")!, { target: { value: "" } });

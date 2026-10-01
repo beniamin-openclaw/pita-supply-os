@@ -20,6 +20,12 @@ export interface OrderLine {
   captain_final_qty_purchase: number | "";
   reason_code?: ReasonCode | "";
   captain_comment?: string;
+  /** True when `reason_code` was filled by "Powód zbiorczo" (overruleAll), not
+   *  picked by hand: such a reason is removed again once the line stops
+   *  requiring one (impl-review F1), so a reason the Captain never saw is not
+   *  submitted. A hand change clears it. UI-only — buildPayloadLines never
+   *  sends it; it rides in the draft lines. */
+  reason_auto?: boolean;
 }
 
 /** The sticky "Powód zbiorczo" selection: applied now and to lines that start

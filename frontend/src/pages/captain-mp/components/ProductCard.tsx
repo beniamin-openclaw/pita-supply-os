@@ -148,6 +148,8 @@ export function ProductCard({
       // empty string clears the reason
       reason_code: reason === "" ? "" : (reason as OrderLine["reason_code"]),
       captain_comment: comment,
+      // A hand change makes the reason the Captain's own (impl-review F1).
+      reason_auto: false,
     });
   };
 

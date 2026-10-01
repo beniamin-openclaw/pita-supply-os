@@ -30,7 +30,7 @@ import { OverruleAllControl } from "./components/OverruleAllControl";
 import { OrderCommentField } from "./components/OrderCommentField";
 import { computeRowState } from "./lib/compute";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
-import { overruleAll } from "./lib/overruleAll";
+import { clearStaleAutoReasons, overruleAll } from "./lib/overruleAll";
 import { parseExtraItems, serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
 import type { BulkReason, OrderLine, ReasonCode } from "./types";
@@ -203,9 +203,12 @@ export function OrderEditPage() {
   // Sticky pass — see CaptainMP: fills only lines without a reason; an
   // unchanged result keeps the same reference, so this cannot loop.
   useEffect(() => {
-    if (!bulkReason) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLines((prev) => overruleAll(items, prev, bulkReason, "fillMissing", handEditedReasons));
+    setLines((prev) =>
+      bulkReason
+        ? overruleAll(items, prev, bulkReason, "fillMissing", handEditedReasons)
+        : clearStaleAutoReasons(items, prev),
+    );
   }, [bulkReason, lines, items, handEditedReasons]);
 
   const handleScrollToRed = useCallback(() => {
