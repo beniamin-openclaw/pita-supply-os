@@ -65,14 +65,15 @@ Upp stays 1. The names were already set in Phase 1 step 1.1.
 - **Kept**, because they are already in jars (copied 1:1 from Marek's sheet): WOLA, BRACKA, ELEKTROWNIA, NORBLIN,
   WESTFIELD.
 - **Converted at BROWARY.** BROWARY is clearly kg (3-decimal scale values). Each value is divided by the jar weight
-  and rounded to the nearest 0,5, half up. A positive threshold never becomes 0.
+  and rounded to the nearest 0,5, half up. A positive threshold never becomes 0, and max is never below one jar: an
+  uncounted order of one jar above max is refused with "over MAX without reason" (review 2026-10-01).
 
 | | P050 pieprz | P051 oregano | P052 papryka | P055 ziele |
 |---|---|---|---|---|
 | WOLA (kept) | 0,5/1,5/1,5 | 0,5/1/1 | 0,5/1,5/1,5 | 1/1/1 |
 | BRACKA (kept) | 0,5/1,5/1,5 | 0,5/1,5/1,5 | 0,5/1,5/1,5 | 0,5/1,5/1,5 |
 | ELEKTROWNIA, NORBLIN, WESTFIELD (kept) | 0,5/1,5/1,5 | 0,5/1,5/1,5 | 0,5/1,5/1,5 | 0,5/1,5/1,5 |
-| **BROWARY** | 0,2/0,82/0,82 kg → **0,5/1/1** | 0,5/1/1 kg → **4,5/9/9** ⚠ | 0,36/0,72/0,72 kg → **0,5/1/1** | 0,01/0,1/0,1 (kg typed into opak) → **0,5/0,5/0,5** |
+| **BROWARY** | 0,2/0,82/0,82 kg → **0,5/1/1** | 0,5/1/1 kg → **4,5/9/9** ⚠ | 0,36/0,72/0,72 kg → **0,5/1/1** | 0,01/0,1/0,1 (kg typed into opak) → **0,5/1/1** |
 | **KEN: keep** (default, 1b.6 not run) | 0,2/1/1 | 0,3/1/1 | 0,2/1/1 | 0,1/0,5/0,5 |
 | **KEN: read as kg** (run 1b.6) | 0,5/1/1 | 2,5/9/9 | 0,5/1,5/1,5 | 0,5/1/1 |
 
@@ -109,6 +110,11 @@ The plan's guard: no line on the supplier row in `captain_submitted` or `manager
   ones are listed below as stale.
 - **To restore the literal guard:** set `v_sent_window := interval '100 years'`. The dry run confirms it then blocks
   all five products.
+- **Why 14 days is safe (review, prod read 2026-10-01).** The first receipt flips `manager_sent` → `closed`, so a
+  `manager_sent` order never has a receipt; "without a receipt" adds nothing. Over all 113 receipted orders the first
+  receipt came at most 6,7 days after sending (p95 2,7 days). Today 36 of the 54 `manager_sent` orders are older than
+  14 days: unconfirmed deliveries, not pending ones. If one is confirmed after all, its old line simply reads "N szt"
+  (upp stays 1).
 
 | Supplier row | Open lines | Counted by the guard? |
 |---|---|---|
@@ -132,6 +138,9 @@ the jar that arrives is 720 g.
 4. **Supplier-row notes for the jars:** "1 szt = słoik N g".
 5. **One block per product.** A blocked spice (P052 today) does not hold the others. The staff message for part 1b
    should mention papryka słodka only once 1b.4 has run, or say it follows a few days later.
+6. **Kept rows are re-checked (review).** 1b.2–1b.5 also assert that the six kept rows per spice (WOLA, BRACKA,
+   ELEKTROWNIA, NORBLIN, WESTFIELD, KEN) still hold the values in the table above. They are re-read in szt from that
+   block on, so a change after this diff raises instead of being reinterpreted unreviewed.
 
 ## Dry run (local Postgres 16, 2026-10-01)
 
@@ -149,3 +158,7 @@ Same copy as Phase 1 (see `prod-sql-1-diff.md`), with `prod-sql-1.sql` applied f
   - 1b.4 applied, then 1b.6 (KEN, kg) applied.
   - Audit: 10 of 10 ok.
 - **Literal guard (`interval '100 years'`):** 1b.1–1b.5 all raise, as described above.
+- **Reviewer re-run (after the review changes):** same results (run 1: 1b.4 and 1b.6 raise, audit 8 of 10; run 2:
+  every block raises, checksums unchanged; unblock with a receipt: 10 of 10). Moving NORBLIN P050 max to 2 makes 1b.2
+  raise "expected 6 kept threshold rows as reviewed, got 5". STEP R of 1b then of Phase 1 restores the template
+  byte-identical. 1b also runs on a copy without Phase 1 (1b.1, 1b.3, 1b.5 apply).

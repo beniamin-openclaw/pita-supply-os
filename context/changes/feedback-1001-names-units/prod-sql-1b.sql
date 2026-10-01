@@ -25,6 +25,12 @@
 -- pass. Each block therefore counts only manager_sent orders sent within
 -- v_sent_window (default 14 days); older ones are listed in the diff as
 -- stale. Set v_sent_window := interval '100 years' for the literal guard.
+-- Why 14 days is safe (review 2026-10-01, prod read): a receipt flips
+-- manager_sent -> closed, so a manager_sent order has no receipt by
+-- construction. Over all 113 receipted orders the first receipt came at
+-- most 6,7 days after sending (p95 2,7 days), so an order sent more than
+-- 14 days ago is an unconfirmed delivery, not a pending one. If one is
+-- confirmed after all, its old line simply reads "N szt" (upp stays 1).
 --   * 1b.4 (P052) is BLOCKED on 2026-10-01 by ORD-20261001-WOL-INTE-8971b4
 --     (WOLA, sent 2026-10-01 12:25 UTC, no receipt yet). Re-run after WOLA
 --     confirms that delivery.
@@ -169,6 +175,15 @@ BEGIN
               AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = o.order_id)));
   IF n > 0 THEN RAISE EXCEPTION '1b.2 P050: % open line(s) — retry later', n; END IF;
 
+  -- Kept rows (already in jars, operator-reviewed in prod-sql-1b-diff.md):
+  -- they are re-read in szt from this block on, so re-check they did not move.
+  SELECT count(*) INTO n FROM location_product_settings s
+    JOIN (VALUES ('WOLA',0.5,1.5,1.5), ('BRACKA',0.5,1.5,1.5), ('ELEKTROWNIA',0.5,1.5,1.5),
+                 ('NORBLIN',0.5,1.5,1.5), ('WESTFIELD',0.5,1.5,1.5), ('KEN',0.2,1,1)) AS v(loc, mn, tg, mx)
+      ON s.location_id = v.loc AND s.product_id = 'P050' AND s.min_stock_qty_base = v.mn
+     AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
+  IF n <> 6 THEN RAISE EXCEPTION '1b.2 P050: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
+
   UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P050' AND inventory_unit = 'kg';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.2 P050 product: expected 1 row in kg, got %', n; END IF;
@@ -203,6 +218,15 @@ BEGIN
           OR (o.status = 'manager_sent' AND o.manager_sent_at >= now() - v_sent_window
               AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = o.order_id)));
   IF n > 0 THEN RAISE EXCEPTION '1b.3 P051: % open line(s) — retry later', n; END IF;
+
+  -- Kept rows (already in jars, operator-reviewed in prod-sql-1b-diff.md):
+  -- they are re-read in szt from this block on, so re-check they did not move.
+  SELECT count(*) INTO n FROM location_product_settings s
+    JOIN (VALUES ('WOLA',0.5,1,1), ('BRACKA',0.5,1.5,1.5), ('ELEKTROWNIA',0.5,1.5,1.5),
+                 ('NORBLIN',0.5,1.5,1.5), ('WESTFIELD',0.5,1.5,1.5), ('KEN',0.3,1,1)) AS v(loc, mn, tg, mx)
+      ON s.location_id = v.loc AND s.product_id = 'P051' AND s.min_stock_qty_base = v.mn
+     AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
+  IF n <> 6 THEN RAISE EXCEPTION '1b.3 P051: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
 
   UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P051' AND inventory_unit = 'kg';
   GET DIAGNOSTICS n = ROW_COUNT;
@@ -240,6 +264,15 @@ BEGIN
               AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = o.order_id)));
   IF n > 0 THEN RAISE EXCEPTION '1b.4 P052: % open line(s) — retry after the delivery is confirmed', n; END IF;
 
+  -- Kept rows (already in jars, operator-reviewed in prod-sql-1b-diff.md):
+  -- they are re-read in szt from this block on, so re-check they did not move.
+  SELECT count(*) INTO n FROM location_product_settings s
+    JOIN (VALUES ('WOLA',0.5,1.5,1.5), ('BRACKA',0.5,1.5,1.5), ('ELEKTROWNIA',0.5,1.5,1.5),
+                 ('NORBLIN',0.5,1.5,1.5), ('WESTFIELD',0.5,1.5,1.5), ('KEN',0.2,1,1)) AS v(loc, mn, tg, mx)
+      ON s.location_id = v.loc AND s.product_id = 'P052' AND s.min_stock_qty_base = v.mn
+     AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
+  IF n <> 6 THEN RAISE EXCEPTION '1b.4 P052: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
+
   UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P052' AND inventory_unit = 'kg';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.4 P052 product: expected 1 row in kg, got %', n; END IF;
@@ -263,7 +296,9 @@ END $$;
 -- ---------------------------------------------------------------------
 -- 1b.5 Prymat ziele angielskie P055 opak -> szt (label only; 1 szt =
 --      600 g jar), price 43,90. BROWARY values are kg typed into the
---      opak field (0,01/0,1/0,1): / 0,6 -> 0,5/0,5/0,5 (never 0).
+--      opak field (0,01/0,1/0,1): / 0,6 -> 0,5 min; target = max = 1 jar
+--      (review 2026-10-01: a max below one jar makes every uncounted
+--      1-jar order a 400 "over MAX without reason"; same as KEN 1b.6).
 -- ---------------------------------------------------------------------
 DO $$
 DECLARE n int; v_sent_window interval := interval '14 days';
@@ -274,6 +309,15 @@ BEGIN
           OR (o.status = 'manager_sent' AND o.manager_sent_at >= now() - v_sent_window
               AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = o.order_id)));
   IF n > 0 THEN RAISE EXCEPTION '1b.5 P055: % open line(s) — retry later', n; END IF;
+
+  -- Kept rows (already in jars, operator-reviewed in prod-sql-1b-diff.md):
+  -- they are re-read in szt from this block on, so re-check they did not move.
+  SELECT count(*) INTO n FROM location_product_settings s
+    JOIN (VALUES ('WOLA',1,1,1), ('BRACKA',0.5,1.5,1.5), ('ELEKTROWNIA',0.5,1.5,1.5),
+                 ('NORBLIN',0.5,1.5,1.5), ('WESTFIELD',0.5,1.5,1.5), ('KEN',0.1,0.5,0.5)) AS v(loc, mn, tg, mx)
+      ON s.location_id = v.loc AND s.product_id = 'P055' AND s.min_stock_qty_base = v.mn
+     AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
+  IF n <> 6 THEN RAISE EXCEPTION '1b.5 P055: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
 
   UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P055' AND inventory_unit = 'opak';
   GET DIAGNOSTICS n = ROW_COUNT;
@@ -288,12 +332,12 @@ BEGIN
 
   UPDATE location_product_settings s
      SET notes = s.notes || ' [2026-10-01 feedback-1001 1b.5 D28, przed 0.01/0.1/0.1 (kg)]',
-         min_stock_qty_base = 0.5, target_stock_qty_base = 0.5, max_stock_qty_base = 0.5
+         min_stock_qty_base = 0.5, target_stock_qty_base = 1, max_stock_qty_base = 1
    WHERE s.location_id = 'BROWARY' AND s.product_id = 'P055'
      AND s.min_stock_qty_base = 0.01 AND s.target_stock_qty_base = 0.1 AND s.max_stock_qty_base = 0.1;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.5 BROWARY P055: expected 1, got %', n; END IF;
-  RAISE NOTICE '1b.5 applied: P055 szt, 43.90, BROWARY 0.5/0.5/0.5';
+  RAISE NOTICE '1b.5 applied: P055 szt, 43.90, BROWARY 0.5/1/1';
 END $$;
 
 -- ---------------------------------------------------------------------
@@ -362,11 +406,11 @@ SELECT n, check_name, ok FROM (
                  (('SP_INTERMLECZ_P050',47.60), ('SP_INTERMLECZ_P051',11.30),
                   ('SP_INTERMLECZ_P052',25.76), ('SP_INTERMLECZ_P055',43.90))) = 4
   UNION ALL
-  SELECT 7, '1b BROWARY spices: P050 0.5/1/1, P051 4.5/9/9, P052 0.5/1/1, P055 0.5/0.5/0.5 (pending: 1b.4)',
+  SELECT 7, '1b BROWARY spices: P050 0.5/1/1, P051 4.5/9/9, P052 0.5/1/1, P055 0.5/1/1 (pending: 1b.4)',
          (SELECT count(*) FROM location_product_settings
            WHERE location_id = 'BROWARY'
              AND (product_id, min_stock_qty_base, target_stock_qty_base, max_stock_qty_base) IN
-                 (('P050',0.5,1,1), ('P051',4.5,9,9), ('P052',0.5,1,1), ('P055',0.5,0.5,0.5))) = 4
+                 (('P050',0.5,1,1), ('P051',4.5,9,9), ('P052',0.5,1,1), ('P055',0.5,1,1))) = 4
   UNION ALL
   SELECT 8, '1b KEN spices: kept (0.2/1/1, 0.3/1/1, 0.2/1/1, 0.1/0.5/0.5) OR converted by 1b.6',
          (SELECT count(*) FROM location_product_settings

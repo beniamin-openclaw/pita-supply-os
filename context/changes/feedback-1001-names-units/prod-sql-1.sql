@@ -24,6 +24,11 @@
 --          ORD-20260930-KEN-COCA-b8acbc (P065 line). Re-run when that order
 --          has left captain_submitted / manager_claimed.
 --   * 1.11b..g need 1.11a first.
+--   * 1.11h (P064/P065 renamed "… 0,33 l PET") runs LAST, only after all
+--          six glass locations have switched (1.11b..g, KEN included). It is
+--          therefore blocked as long as 1.11d is. Until then P064/P065 keep
+--          their generic names, so the Coca-Cola portal copy list for a glass
+--          location never says "PET" (review 2026-10-01).
 --
 -- Scope: the 7 active locations (WOLA, BRACKA, KEN, BROWARY, NORBLIN,
 -- ELEKTROWNIA, WESTFIELD). Rows of the 6 inactive locations are untouched.
@@ -39,7 +44,7 @@
 -- STEP 0 — DIFF BEFORE (read-only). Save every result set.
 -- =====================================================================
 
--- 0.1 products touched by 1.1, 1.5, 1.6, 1.11a
+-- 0.1 products touched by 1.1, 1.5, 1.6, 1.11a, 1.11h
 SELECT product_id, product_name_pl, inventory_unit, is_critical, active
   FROM products
  WHERE product_id IN ('P012','P013','P015','P021','P022','P023','P038','P040','P043','P044',
@@ -48,7 +53,7 @@ SELECT product_id, product_name_pl, inventory_unit, is_critical, active
                       'P064','P065','P186','P187','P190','P191')
  ORDER BY product_id;
 
--- 0.2 supplier_products touched by 1.1, 1.3, 1.4, 1.7, 1.8, 1.11a
+-- 0.2 supplier_products touched by 1.1, 1.3, 1.4, 1.7, 1.8, 1.11a, 1.11h
 SELECT supplier_product_id, product_id, supplier_product_name, purchase_unit,
        units_per_purchase_unit::float8 AS upp, rounding_rule,
        price_estimate_pln::float8 AS price, active, order_note
@@ -144,7 +149,7 @@ BEGIN
       ('P121','Gąbka do naczyń','Gąbka do naczyń 10szt'),
       ('P140','KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6','Kawa Jacobs Cronat Gold Rozpuszczalna 200gr'),
       ('P141','LIPTON HERBATA YELLOW LABEL 100szt./12 koperta','Herbata Lipton Yellow Label 100szt'),
-      ('P189','Cukier w kostkach Diament 1kg','Cukier w kostkach Diament 0,5kg')
+      ('P189','Cukier w kostkach Diament 1kg','Cukier w kostkach Diamant 0,5kg')
     ) AS v(pid, old_name, new_name)
    WHERE p.product_id = v.pid AND p.product_name_pl = v.old_name;
   GET DIAGNOSTICS n = ROW_COUNT;
@@ -477,7 +482,7 @@ END $$;
 --       see prod-sql-1-diff.md). Price 100,32 zł netto per crate (KEN
 --       invoice). inventory_order / display_order stay NULL: no Coca-Cola
 --       product and no product at all has a position on prod today.
---       P064/P065 renamed "… 0,33 l PET" (screen + supplier name).
+--       The P064/P065 "… 0,33 l PET" rename moved to 1.11h (runs last).
 -- ---------------------------------------------------------------------
 DO $$
 DECLARE n int;
@@ -520,21 +525,7 @@ BEGIN
    WHERE sp.supplier_product_id = 'SP_COCACOLA_P186';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 2 THEN RAISE EXCEPTION '1.11a supplier_products insert: expected 2, got %', n; END IF;
-
-  UPDATE products p SET product_name_pl = v.new_name
-    FROM (VALUES ('P064','Cappy Jabłko','Cappy Jabłko 0,33 l PET'),
-                 ('P065','Cappy Pomarańcza','Cappy Pomarańcza 0,33 l PET')) AS v(pid, old_name, new_name)
-   WHERE p.product_id = v.pid AND p.product_name_pl = v.old_name;
-  GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 2 THEN RAISE EXCEPTION '1.11a PET product rename: expected 2, got %', n; END IF;
-
-  UPDATE supplier_products sp SET supplier_product_name = v.new_name
-    FROM (VALUES ('SP_COCACOLA_P064','Cappy Jabłko','Cappy Jabłko 0,33 l PET'),
-                 ('SP_COCACOLA_P065','Cappy Pomarańcza','Cappy Pomarańcza 0,33 l PET')) AS v(spid, old_name, new_name)
-   WHERE sp.supplier_product_id = v.spid AND sp.supplier_product_name = v.old_name;
-  GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 2 THEN RAISE EXCEPTION '1.11a PET supplier rename: expected 2, got %', n; END IF;
-  RAISE NOTICE '1.11a applied: P190/P191 created, P064/P065 renamed PET';
+  RAISE NOTICE '1.11a applied: P190/P191 created (PET rename waits for 1.11h)';
 END $$;
 
 -- ---------------------------------------------------------------------
@@ -777,6 +768,42 @@ BEGIN
   RAISE NOTICE '1.11g applied: % Cappy glass max %', v_loc, v_max;
 END $$;
 
+-- 1.11h P064/P065 renamed "… 0,33 l PET" (screen + supplier name). LAST
+--       Cappy step (review 2026-10-01): names are joined live, so renaming
+--       while a glass location still orders P064/P065 would put "0,33 l PET"
+--       on its Coca-Cola portal copy list (KEN's claimed b8acbc has a P065
+--       line today). Runs only when no glass location has a PET row left and
+--       no open PET line remains at a glass location. NORBLIN (PET) is fine.
+DO $$
+DECLARE n int;
+BEGIN
+  IF EXISTS (SELECT 1 FROM location_product_settings
+              WHERE location_id IN ('WOLA','BRACKA','KEN','WESTFIELD','ELEKTROWNIA','BROWARY')
+                AND product_id IN ('P064','P065')) THEN
+    RAISE EXCEPTION '1.11h: a glass location still has a Cappy PET row — run 1.11b..g (incl. KEN 1.11d) first';
+  END IF;
+  SELECT count(*) INTO n FROM orders o JOIN order_lines ol USING (order_id)
+   WHERE o.location_id IN ('WOLA','BRACKA','KEN','WESTFIELD','ELEKTROWNIA','BROWARY')
+     AND o.status IN ('captain_submitted','manager_claimed')
+     AND ol.product_id IN ('P064','P065');
+  IF n > 0 THEN RAISE EXCEPTION '1.11h: % open Cappy PET line(s) at a glass location — retry when the queue is clear', n; END IF;
+
+  UPDATE products p SET product_name_pl = v.new_name
+    FROM (VALUES ('P064','Cappy Jabłko','Cappy Jabłko 0,33 l PET'),
+                 ('P065','Cappy Pomarańcza','Cappy Pomarańcza 0,33 l PET')) AS v(pid, old_name, new_name)
+   WHERE p.product_id = v.pid AND p.product_name_pl = v.old_name;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 2 THEN RAISE EXCEPTION '1.11h PET product rename: expected 2, got %', n; END IF;
+
+  UPDATE supplier_products sp SET supplier_product_name = v.new_name
+    FROM (VALUES ('SP_COCACOLA_P064','Cappy Jabłko','Cappy Jabłko 0,33 l PET'),
+                 ('SP_COCACOLA_P065','Cappy Pomarańcza','Cappy Pomarańcza 0,33 l PET')) AS v(spid, old_name, new_name)
+   WHERE sp.supplier_product_id = v.spid AND sp.supplier_product_name = v.old_name;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 2 THEN RAISE EXCEPTION '1.11h PET supplier rename: expected 2, got %', n; END IF;
+  RAISE NOTICE '1.11h applied: P064/P065 renamed "… 0,33 l PET"';
+END $$;
+
 
 -- =====================================================================
 -- STEP 2 — AUDIT (read-only). Every row must show ok = true, except the
@@ -796,7 +823,7 @@ SELECT n, check_name, ok FROM (
             'Opakowanie sałatki duże jednoczęściowe 750ml','Opakowanie sałatki małe jednoczęściowe 250ml',
             'Torby fałdowane pojedyncze do pity','Folia Aluminiowa','Gąbka do naczyń 10szt',
             'Kawa Jacobs Cronat Gold Rozpuszczalna 200gr','Herbata Lipton Yellow Label 100szt',
-            'Cukier w kostkach Diament 0,5kg')) = 25 AS ok
+            'Cukier w kostkach Diamant 0,5kg')) = 25 AS ok
   UNION ALL
   SELECT 2, '1.1 28 new supplier names (active rows)',
          (SELECT count(*) FROM supplier_products WHERE active AND supplier_product_name IN (
@@ -874,15 +901,12 @@ SELECT n, check_name, ok FROM (
      AND (SELECT count(*) FROM location_product_settings
            WHERE location_id = 'NORBLIN' AND product_id IN ('P068','P069')) = 2
   UNION ALL
-  SELECT 14, '1.11a P190/P191 + SP_COCACOLA_P190/P191 (skrzynka x24, 100.32); P064/P065 named PET',
+  SELECT 14, '1.11a P190/P191 + SP_COCACOLA_P190/P191 (skrzynka x24, 100.32)',
          (SELECT count(*) FROM products WHERE product_id IN ('P190','P191') AND active
             AND inventory_unit = 'szt' AND NOT is_critical) = 2
      AND (SELECT count(*) FROM supplier_products WHERE supplier_product_id IN ('SP_COCACOLA_P190','SP_COCACOLA_P191')
             AND active AND purchase_unit = 'skrzynka' AND units_per_purchase_unit = 24
             AND price_estimate_pln = 100.32 AND rounding_rule = 'up_for_critical') = 2
-     AND (SELECT count(*) FROM products WHERE product_id IN ('P064','P065') AND product_name_pl LIKE '%0,33 l PET') = 2
-     AND (SELECT count(*) FROM supplier_products WHERE supplier_product_id IN ('SP_COCACOLA_P064','SP_COCACOLA_P065')
-            AND supplier_product_name LIKE '%0,33 l PET') = 2
   UNION ALL
   SELECT 15, '1.11 glass-only (2 glass, 0 PET) at WOLA, BRACKA, WESTFIELD, ELEKTROWNIA, BROWARY',
          (SELECT count(*) FROM (
@@ -913,6 +937,21 @@ SELECT n, check_name, ok FROM (
          NOT EXISTS (SELECT 1 FROM suppliers WHERE active AND ordering_method = 'email'
                       AND (email IS NULL OR email NOT LIKE '%@%'))
      AND NOT EXISTS (SELECT 1 FROM locations WHERE email IS NOT NULL AND email NOT LIKE '%@%')
+  UNION ALL
+  SELECT 20, '1.11h P064/P065 named "… 0,33 l PET" (pending: until every glass location switched, KEN included)',
+         (SELECT count(*) FROM products WHERE product_id IN ('P064','P065') AND product_name_pl LIKE '%0,33 l PET') = 2
+     AND (SELECT count(*) FROM supplier_products WHERE supplier_product_id IN ('SP_COCACOLA_P064','SP_COCACOLA_P065')
+            AND supplier_product_name LIKE '%0,33 l PET') = 2
+  UNION ALL
+  SELECT 21, '1.11 Cappy glass values: min = PET min, target = max, max 24 (WOLA/KEN: 48 or 24 per operator)',
+         (SELECT count(*) FROM location_product_settings
+           WHERE product_id IN ('P190','P191') AND target_stock_qty_base = max_stock_qty_base
+             AND (((location_id, min_stock_qty_base) IN (('WOLA',12), ('KEN',12))
+                   AND max_stock_qty_base IN (24, 48))
+               OR (location_id, min_stock_qty_base, max_stock_qty_base) IN
+                   (('BRACKA',5,24), ('WESTFIELD',10,24), ('ELEKTROWNIA',10,24), ('BROWARY',6,24))))
+         = (SELECT count(*) FROM location_product_settings WHERE product_id IN ('P190','P191'))
+     AND (SELECT count(*) FROM location_product_settings WHERE product_id IN ('P190','P191')) >= 10
 ) c
 ORDER BY n;
 
@@ -948,9 +987,11 @@ ORDER BY n;
 -- DELETE FROM location_product_settings WHERE product_id IN ('P190','P191');
 -- COMMIT;
 --
--- -- R 1.11a (only after every 1.11b..g is rolled back, and only if no order line,
--- --          receipt line or inventory count line references P190/P191 — the FKs
--- --          make the DELETE fail otherwise)
+-- -- R 1.11a + R 1.11h (only after every 1.11b..g is rolled back, and only if no
+-- --          order line, receipt line or inventory count line references P190/P191 —
+-- --          the FKs make the DELETE fail otherwise; if they do, set P190/P191
+-- --          active = false instead of deleting). The four name UPDATEs undo 1.11h
+-- --          and are no-ops when 1.11h never ran.
 -- BEGIN;
 -- DELETE FROM supplier_products WHERE supplier_product_id IN ('SP_COCACOLA_P190','SP_COCACOLA_P191');
 -- DELETE FROM products WHERE product_id IN ('P190','P191');

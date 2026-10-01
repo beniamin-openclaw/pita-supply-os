@@ -8,7 +8,8 @@
   - Each block re-checks the before-state below. If anything changed since this read, that block raises and changes
     nothing.
 - **Held:** 1.5 (gyros nieścięty) waits until you confirm the staff message has gone out.
-- **Blocked today:** 1.11d (Cappy at KEN), by a claimed order (see "Open orders").
+- **Blocked today:** 1.11d (Cappy at KEN), by a claimed order (see "Open orders"), and therefore 1.11h (the
+  P064/P065 "… 0,33 l PET" rename), which runs only after every glass location has switched.
 - **Moved to `prod-sql-1b.sql`:** papryka P017 (name, unit, Helcom row) and the Prymat spice units and prices.
 
 ## Summary (row counts)
@@ -27,9 +28,10 @@
 | 1.10a | ELEKTROWNIA Coca-Cola → glass | +2 / −2 setting rows |
 | 1.10b | WESTFIELD Coca-Cola glass re-rounded | 2 setting rows |
 | 1.10c | BROWARY Coca-Cola → glass | +2 / −2 setting rows |
-| 1.11a | Cappy glass P190/P191; P064/P065 → "… 0,33 l PET" | +2 products, +2 supplier rows, 2 + 2 renames |
+| 1.11a | Cappy glass P190/P191 | +2 products, +2 supplier rows |
 | 1.11b, c, e, f, g | Cappy glass at WOLA, BRACKA, WESTFIELD, ELEKTROWNIA, BROWARY | +10 / −10 setting rows |
 | 1.11d | **BLOCKED.** Cappy glass at KEN | +2 / −2 when retried |
+| 1.11h | **Waits for 1.11d.** P064/P065 → "… 0,33 l PET" (screen + supplier name) | 2 + 2 renames |
 
 ## 1.1 Names (screen name / supplier name in the e-mail)
 
@@ -66,7 +68,7 @@
 | P121 | Gąbka do naczyń → Gąbka do naczyń 10szt | (no change) |
 | P140 | KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6 → Kawa Jacobs Cronat Gold Rozpuszczalna 200gr | (no change) |
 | P141 | LIPTON HERBATA YELLOW LABEL 100szt./12 koperta → Herbata Lipton Yellow Label 100szt | (no change) |
-| P189 | Cukier w kostkach Diament 1kg → Cukier w kostkach Diament 0,5kg | Cukier w kostkach Diament 1 kg → DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10 |
+| P189 | Cukier w kostkach Diament 1kg → Cukier w kostkach **Diamant** 0,5kg (brand spelling as on the invoice; the sheet's "Diament" is a typo, like "Eppo") | Cukier w kostkach Diament 1 kg → DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10 |
 
 Inactive supplier rows (Selgros, Kuchnie Świata) keep their old names. Pago "Pita (opakowania) szt 10" keeps its name
 (names.md).
@@ -129,7 +131,10 @@ locations. Coca-Cola products are critical at product level anyway.
 
 - Copied from P186: category Napoje, `up_for_critical`, counts toward minimum, note "1 skrzynka = 24 szt".
 - `is_critical = false` (see Decisions).
-- P064/P065 are renamed "Cappy Jabłko 0,33 l PET" / "Cappy Pomarańcza 0,33 l PET" (screen and supplier name).
+- P064/P065 are renamed "Cappy Jabłko 0,33 l PET" / "Cappy Pomarańcza 0,33 l PET" (screen and supplier name) in
+  **1.11h, the last Cappy step**. It runs only when no glass location has a PET row or an open PET line left. Names
+  are read live, so an earlier rename would put "0,33 l PET" on the Coca-Cola portal copy list of a glass location
+  (KEN's claimed order b8acbc has a P065 line today).
 
 **Positions:** `inventory_order` and `display_order` stay NULL. No product and no setting on prod has an
 `inventory_order` today, and no Coca-Cola supplier row has a `display_order`. P190/P191 therefore sort by ID, after
@@ -206,6 +211,34 @@ The PET rows are deleted at the six glass locations.
 - **No receipts on any sent order.** All 54 `manager_sent` orders on prod have no receipt, the oldest from 23.06.
   This matters for Phase 1b (see `prod-sql-1b-diff.md`).
 
+## Review changes (2026-10-01, `reviews/prod-sql-1-review.md`)
+
+- P189 screen name spelled **Diamant** (the invoice brand), not "Diament".
+- The P064/P065 "… 0,33 l PET" rename moved out of 1.11a into a new last block **1.11h**, guarded on "no glass location
+  still has a PET row or an open PET line". Audit row 14 no longer checks the rename; new row 20 does (pending until
+  1.11h), and new row 21 checks the Cappy glass values (min = PET min, target = max, max 24; WOLA/KEN 48 or 24).
+- Open points added below: Cappy glass price (invoice line netto 75,24 vs list 100,32), the `inventory-card-order`
+  positions batch, and the Prymat names reaching the e-mail before the units change in 1b.
+
+## Review open points (operator decisions)
+
+- **Cappy glass price.** KEN invoice 2424225127 (06.08): "0.25 RGB X24 CAPPY APPLE / ORANGE", 1 CS each, unit price
+  100,32 but **line netto 75,24**. 100,32 is the price before the invoice discount. Other prod prices are the paid netto
+  (oliwki 45,31 = line netto). Suggest 75,24. The same invoices give Coca-Cola glass ~60,67 (Cola) and ~58,87 (Zero)
+  netto per crate, from line netto ÷ quantity (the unit-price column varies from 84 to 177 and is not usable). Coca-Cola
+  has a 500 zł minimum, so an overstated price can make the minimum chip read "met" too early.
+- **`inventory-card-order` positions (pending, `context/changes/inventory-card-order/prod-sql.sql`).** Its card map
+  places P064/P065 at every location and P068/P069 at ELEKTROWNIA/BROWARY. After 1.10/1.11 the glass locations have no
+  P064/P065 (and ELEKTROWNIA/BROWARY no can) rows. P190/P191 then land at the end of the Napoje section (if that batch
+  runs after this one) or at the very end of the grid (if it ran before: a NULL position sorts last). Before that batch
+  runs, map those card rows to P190/P191 and P186/P187, or re-run its pipeline after 1.11.
+- **Prymat names before the 1b units.** 1.1 renames P050/P051/P052 to the jar names ("PRYMAT OREGANO 110g/6 pet")
+  while their purchase unit stays `kg` until 1b. Until 1b runs, the Intermlecz e-mail line reads
+  "PRYMAT OREGANO 110g/6 pet | 1 kg", which a supplier can read as 9 jars. Either run 1b soon after 1, or move these
+  three renames into 1b.2–1b.4 (the same reasoning as moving P017 to 1b).
+- **P121 "Gąbka do naczyń 10szt"** while counted per sponge (`szt`, thresholds ×10): staff may count packs into the
+  szt field until Phase 4 adds the opak-10 case. Consider renaming it with Phase 4 instead.
+
 ## Dry run (local Postgres 16, 2026-10-01)
 
 - **Schema:** built from `supply-os-v1/migrations/0001…0027`. Column counts match prod on all 21 tables.
@@ -224,3 +257,12 @@ The PET rows are deleted at the six glass locations.
 - **Rollback:** STEP R, uncommented and run, restored products, supplier_products and location_product_settings
   byte-identical to the before snapshot.
 - **Unblock test:** with the KEN order set to `manager_sent`, 1.11d applied and the audit showed 19 of 19 ok.
+- **Reviewer re-run (after the review changes, fresh copy of the same template):**
+  - Run 1: 18 blocks applied; 1.11d raised (KEN open line) and 1.11h raised ("a glass location still has a Cappy PET
+    row"). Audit 19 of 21 ok; rows 16 and 20 pending.
+  - Run 2: all 20 blocks raised; checksums of products, supplier_products and location_product_settings unchanged.
+  - Unblock (KEN order set to `manager_sent`): 1.11d and 1.11h applied; audit 21 of 21 ok.
+  - STEP R restored the three tables byte-identical to the template, also on a copy where 1.11d/1.11h never ran.
+  - Template fidelity vs prod (2026-10-01 ~17:30): every guarded or written column matches prod on the touched rows.
+    Only `products.gostock_id` and the `notes` of products, supplier rows and inactive-location settings are blank in
+    the template; no guard, write or rollback reads them.
