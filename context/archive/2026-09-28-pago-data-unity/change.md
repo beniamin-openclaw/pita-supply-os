@@ -1,10 +1,10 @@
 ---
 change_id: pago-data-unity
 title: Read-only reconciliation of Pago orders between the app, the ordering sheet and sent mail
-status: new
+status: archived
 created: 2026-09-28
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T14:11:06Z
 ---
 
 ## Notes

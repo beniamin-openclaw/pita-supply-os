@@ -110,7 +110,7 @@ the open gap: role checks exist per route ad hoc, not as a systematic sweep.
 | backend integration on Postgres | CI job `backend-integration` | required | row-lock / atomic-write regressions (Risk #3) |
 | frontend build + lint + Vitest | local + CI job `frontend` | required | UI math and component regressions (Risk #2) |
 | post-edit hook (ruff / eslint --fix) | local (agent loop) | recommended | style drift at edit time |
-| AI code review comment on PR | CI on PR | optional, non-blocking | drift vs plan — `context/changes/ci-cd-code-review/` |
+| AI code review comment on PR | CI on PR | optional, non-blocking | drift vs plan — `context/archive/2026-09-13-ci-cd-code-review/` |
 | pre-prod smoke | between merge and live test | required by convention | env mismatches (lessons.md "Verify what production actually runs") |
 
 ## 6. Cookbook Patterns

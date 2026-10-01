@@ -1,10 +1,10 @@
 ---
 change_id: order-line-zero-qty
 title: Zeroing an order line quantity does not drop the line or update the total
-status: impl_reviewed
+status: archived
 created: 2026-09-28
-updated: 2026-09-28
-archived_at: null
+updated: 2026-10-01
+archived_at: 2026-10-01T10:58:45Z
 ---
 
 ## Notes
@@ -26,3 +26,12 @@ Impl-review decisions (reviews/impl-review.md):
 Prod 2026-09-28 (operator request in chat, before merge): 0024 applied on Supabase lpzhphufjwrndfogkfub via apply_migration.
 - Pre-check A: column absent; expected_flagged 1363 of 1687 order_lines; A3 dispatched zero with captain > 0 = 0; open lines with manager_final 0: manager_claimed 16, captain_submitted 25 (stay unflagged). 0023 already on prod.
 - Audit C: boolean NOT NULL DEFAULT false; flagged 1363; zero_flagged 0; positive unflagged 0; total 1687 unchanged.
+
+Archived 2026-10-01 (WIP cleanup).
+- Shipped: PR #39 merged 2026-09-28 as 6149dce. Migration 0024 is on prod (see above). Main 3915bab, which contains it, is live: the Vercel production deployment and Railway both report success (checked 2026-10-01).
+- Prod evidence, read-only, 2026-10-01: 0 order lines have `manager_final_set = true` with `manager_final_qty_purchase = 0`. No Manager has zeroed a line on prod since the release, so the new path has not run on prod yet.
+- Carried over to the operator. These are open, not passed:
+  - 3.5: prod smoke. Zero a line on a throwaway or stale order, Zapisz, reload; the line must stay out of the e-mail preview. Never press Wyślij.
+  - 3.6: Transport smoke. Only possible if a captain-origin draft exists.
+  - 3.7: untouched claimed and sent orders unchanged.
+- Still to do: pass the Polish note above to Marek.

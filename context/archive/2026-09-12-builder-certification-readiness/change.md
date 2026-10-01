@@ -1,10 +1,10 @@
 ---
 change_id: builder-certification-readiness
 title: 10xDevs 3.0 Builder (+ Champion A) certification readiness — reconcile docs with code, add test plan, AI review in CI
-status: implementing
+status: archived
 created: 2026-09-12
-updated: 2026-09-13
-archived_at: null
+updated: 2026-10-01
+archived_at: 2026-10-01T11:40:00Z
 ---
 
 ## Notes
@@ -34,3 +34,8 @@ English; `context/foundation/roadmap.md` is canonical, `/10x-archive` flips `don
 Hard stops: the operator submits the forms (never the agent); the operator adds the
 `OPENROUTER_API_KEY` repo secret (the agent never handles keys); nothing is merged to `main`
 without the operator's PR review except the one-line CI test fix (authorized 2026-09-12).
+
+Status 2026-10-01 (WIP cleanup):
+- Done: 4.4 (secret added 14.09), 4.5 (screenshots in the course workspace) and 5.5 (PR #31 merged 14.09).
+- 6.3 closed by the operator (2026-10-01): one form was submitted and a positive answer received; the second form was not sent.
+- Archived 2026-10-01 (6.4).
