@@ -204,6 +204,17 @@ export const STRINGS = {
     pl: "→ {packs}",
     en: "→ {packs}",
   },
+  // Same, when the per-rule need differs from the case suggestion — the need is
+  // one end of the no-reason interval (D34, impl-review F5): "→ 3 kg ≈
+  // 1 skrzynka (6 kg)"; "→ 2 kg ≈ 0 skrzynek" under half a case.
+  "card.suggestionCaseNeed": {
+    pl: "→ {need} ≈ {packs} ({total})",
+    en: "→ {need} ≈ {packs} ({total})",
+  },
+  "card.suggestionCaseNeedNone": {
+    pl: "→ {need} ≈ {packs}",
+    en: "→ {need} ≈ {packs}",
+  },
 
   // Row state messages (compute.ts) -----------------------------------------
   "state.empty": { pl: "Wpisz zamówienie", en: "Enter order qty" },

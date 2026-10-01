@@ -107,10 +107,11 @@ export function ProductCard({
     line.current_stock_qty_base !== "" &&
     item.min_stock_qty_base > 0 &&
     currentVal < item.min_stock_qty_base;
-  const { base: suggestedBase, purchase: suggestedPurchase } = computeSuggestion(
-    item,
-    currentVal,
-  );
+  const {
+    base: suggestedBase,
+    purchase: suggestedPurchase,
+    need: needPurchase,
+  } = computeSuggestion(item, currentVal);
 
   // Pack-unit display (pack-units-display-mobile-wrap Track A) — only when the
   // purchase unit actually packs multiple inventory units (e.g. a "zgrzewka"
@@ -365,28 +366,42 @@ export function ProductCard({
                   <>
                     <span className="inline-block whitespace-nowrap">
                       {tParts("card.suggestionNeed", {
-                        base: suggestedBase,
+                        base: formatBaseQty(suggestedBase, lang),
                         inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                       })}
                     </span>{" "}
                     <span className="inline-block whitespace-nowrap">
-                      {suggestedPurchase > 0
-                        ? tParts("card.suggestionCase", {
-                            packs: (
-                              <PackQty n={suggestedCases} unit={itemCase.unit} lang={lang} />
-                            ),
-                            total: (
-                              <>
-                                {formatBaseQty(suggestedPurchase, lang)}{" "}
-                                <UnitLabel>
-                                  {packUnitLabel(suggestedPurchase, item.purchase_unit, lang)}
-                                </UnitLabel>
-                              </>
-                            ),
-                          })
-                        : tParts("card.suggestionCaseNone", {
-                            packs: <PackQty n={0} unit={itemCase.unit} lang={lang} />,
-                          })}
+                      {tParts(
+                        needPurchase !== suggestedPurchase
+                          ? suggestedPurchase > 0
+                            ? "card.suggestionCaseNeed"
+                            : "card.suggestionCaseNeedNone"
+                          : suggestedPurchase > 0
+                            ? "card.suggestionCase"
+                            : "card.suggestionCaseNone",
+                        {
+                          // The per-rule need (one end of the no-reason interval).
+                          need: (
+                            <>
+                              {formatBaseQty(needPurchase, lang)}{" "}
+                              <UnitLabel>
+                                {packUnitLabel(needPurchase, item.purchase_unit, lang)}
+                              </UnitLabel>
+                            </>
+                          ),
+                          packs: (
+                            <PackQty n={suggestedCases} unit={itemCase.unit} lang={lang} />
+                          ),
+                          total: (
+                            <>
+                              {formatBaseQty(suggestedPurchase, lang)}{" "}
+                              <UnitLabel>
+                                {packUnitLabel(suggestedPurchase, item.purchase_unit, lang)}
+                              </UnitLabel>
+                            </>
+                          ),
+                        },
+                      )}
                     </span>
                   </>
                 ) : packBased ? (

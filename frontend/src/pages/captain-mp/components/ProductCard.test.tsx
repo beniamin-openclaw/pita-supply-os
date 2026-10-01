@@ -203,8 +203,9 @@ describe("ProductCard — bulk pack (feedback-1001 D22/D33)", () => {
     expect(screen.getByText(innermostText("1 skrzynka = 6 kg"))).toBeInTheDocument();
     expect((screen.getByLabelText("Obecny stan, skrzynka") as HTMLInputElement).value).toBe("2");
     expect((screen.getByLabelText("Obecny stan, kg") as HTMLInputElement).value).toBe("2");
-    // Need 28 kg -> 4,67 crates -> 5 crates (30 kg).
-    expect(screen.getByText(innermostText("→ 5 skrzynek (30 kg)"))).toBeInTheDocument();
+    // Need 28 kg -> 4,67 crates -> 5 crates (30 kg); the need is shown too (F5).
+    expect(screen.getByText(innermostText("brakuje 28 kg"))).toBeInTheDocument();
+    expect(screen.getByText(innermostText("→ 28 kg ≈ 5 skrzynek (30 kg)"))).toBeInTheDocument();
   });
 
   it("the order is [skrzynki] + [kg] and emits one combined purchase quantity", () => {
@@ -234,8 +235,46 @@ describe("ProductCard — bulk pack (feedback-1001 D22/D33)", () => {
       pomidor(),
       makeLine({ current_stock_qty_base: 40, captain_final_qty_purchase: 18 }),
     );
-    expect(screen.getByText(innermostText("→ 0 skrzynek"))).toBeInTheDocument();
+    expect(screen.getByText(innermostText("→ 2 kg ≈ 0 skrzynek"))).toBeInTheDocument();
     expect(screen.getByLabelText("Zamawiasz, skrzynka")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByRole("status")).toHaveTextContent("+800% odchylenia — wymagany powód");
+  });
+});
+
+describe("ProductCard — bulk pack shows the per-rule need (impl-review F5)", () => {
+  const pomidor = (): OrderableItem =>
+    makeItem({
+      product_name_pl: "Pomidor",
+      inventory_unit: "kg",
+      purchase_unit: "kg",
+      units_per_purchase_unit: 1,
+      rounding_rule: "tenth_kg",
+      is_critical: true,
+      target_stock_qty_base: 10,
+      max_stock_qty_base: 12,
+      case_unit: "skrzynka",
+      units_per_case: 6,
+    });
+
+  it("stock 7,05: 'brakuje 2,95 kg → 3 kg ≈ 1 skrzynka (6 kg)'", () => {
+    renderCard(pomidor(), makeLine({ current_stock_qty_base: 7.05 }));
+    expect(screen.getByText(innermostText("brakuje 2,95 kg"))).toBeInTheDocument();
+    expect(screen.getByText(innermostText("→ 3 kg ≈ 1 skrzynka (6 kg)"))).toBeInTheDocument();
+  });
+
+  it("need equal to the case suggestion keeps the short form", () => {
+    renderCard(pomidor(), makeLine({ current_stock_qty_base: 4 }));
+    expect(screen.getByText(innermostText("→ 1 skrzynka (6 kg)"))).toBeInTheDocument();
+  });
+
+  it("English copy", () => {
+    localStorage.setItem("supply_os_lang", "en");
+    try {
+      renderCard(pomidor(), makeLine({ current_stock_qty_base: 7.05 }));
+      expect(screen.getByText(innermostText("need 2.95 kg"))).toBeInTheDocument();
+      expect(screen.getByText(innermostText("→ 3 kg ≈ 1 crate (6 kg)"))).toBeInTheDocument();
+    } finally {
+      localStorage.removeItem("supply_os_lang");
+    }
   });
 });
