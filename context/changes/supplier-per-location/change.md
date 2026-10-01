@@ -3,7 +3,7 @@ change_id: supplier-per-location
 title: Supplier dimension at the location level — one product, many suppliers, per-location choice
 status: blocked
 created: 2026-08-20
-updated: 2026-09-13
+updated: 2026-10-01
 archived_at: null
 ---
 
@@ -79,7 +79,11 @@ Data section, which today states plainly "no schema change in the baseline pilot
   four gates), then the office-supply **pin mechanism was dropped** (`5b5af29`): Wolska's office
   supplies come from Pago, not Blue Service, so the premise did not survive real data. One prod write
   stayed (Allegro as an inactive portal supplier, `62cafa4`).
-- Still open on `main`: `supplier_products.active` is not enforced by the orderable list; five real
+- ~~Still open on `main`: `supplier_products.active` is not enforced by the orderable list~~ — wrong: it
+  is enforced on `main` since 2026-09-03 (`99018b7`, training-feedback-0901; `_build_orderable_items`
+  filters `sp.active` and `product.active`). Corrected 2026-10-01. Five real
   per-location candidates (P088/P095/P096/P097/P102) wait for an operator decision (Selgros vs Allegro).
 - Follow-up lane `claude/multi-location-master-data` (PR #27) builds on this branch; both PRs parked.
+- 2026-10-01: PR #26 closed unmerged (operator decision). Migration 0008 was never applied to prod.
+  The branch is kept because PR #27 is based on it; #27 stays open only as the source for H-01.
 - Status set to `blocked` (operator decision) on 2026-09-13; this folder stays in `context/changes/`.

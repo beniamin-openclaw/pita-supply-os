@@ -1,10 +1,10 @@
 ---
 change_id: delivery-calendar
 title: Delivery calendar — proposed delivery date, 17:00 deadline and Thursday coverage prompt
-status: impl_reviewed
+status: archived
 created: 2026-09-28
-updated: 2026-09-28
-archived_at: null
+updated: 2026-10-01
+archived_at: 2026-10-01T10:58:45Z
 ---
 
 ## Notes
@@ -47,3 +47,17 @@ Second relay from the coordinating lane (2026-09-28), pending operator confirmat
 - Migration 0025 confirmed by the coordinator.
 - Reminders later via a Telegram bot (anti-spam design, separate change); keep the rule data ready.
 - PR #33 merged; rebase on main before implementing.
+
+Archived 2026-10-01 (WIP cleanup).
+- Shipped: PR #42 merged 2026-09-28 as 3915bab. Migration 0025 and the seed rules are on prod (prod-sql-audit.md). Vercel production and Railway are live (checked 2026-10-01).
+- Prod evidence, read-only, 2026-10-01: since the merge, 9 of 11 orders store `suggested_delivery_date`, and 1 order has a requested date different from the proposal. `coverage_days` is still empty on every order: 1.10 is the first Thursday after the release, and there were no orders yet at 12:58 Warsaw.
+- Carried over to the operator. These are open, not passed:
+  - 3.5: Captain date field, deadline strip, change and restore, fallback note.
+  - 3.6: mobile wrap.
+  - 4.4: Manager marker only when the dates differ.
+  - 5.3: post-deploy prod check; cancel the test order.
+  - Thursday prompt: watch it on 1.10.
+- Open rules:
+  - Coca-Cola delivery days exist only for WESTFIELD.
+  - Spec Food and Kamino lead 1 day is assumed.
+  - Kuchnie Świata and Go Gastro "next business day" is still to confirm with Marek.

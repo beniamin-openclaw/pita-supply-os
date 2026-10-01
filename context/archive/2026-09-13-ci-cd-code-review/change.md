@@ -1,10 +1,10 @@
 ---
 change_id: ci-cd-code-review
 title: AI code review in GitHub Actions — OpenRouter (DeepSeek V4.1 Flash) scores every PR on six criteria
-status: impl_reviewed
+status: archived
 created: 2026-09-13
-updated: 2026-09-13
-archived_at: null
+updated: 2026-10-01
+archived_at: 2026-10-01T10:58:45Z
 ---
 
 ## Notes
@@ -17,3 +17,8 @@ merge gate. Requirements adapted from the course prompt in `requirements.md`; gr
 
 Manual prerequisite (operator): repository secret `OPENROUTER_API_KEY`. Until it exists the
 workflow runs, unit-tests the reviewer, and logs "AI review skipped" — the wiring is visible either way.
+
+Archived 2026-10-01 (WIP cleanup).
+- Merged with the cert PR #31 on 2026-09-14. The `OPENROUTER_API_KEY` secret was added the same day.
+- The reviewer has run live on every PR since then, e.g. PR #42 got the comment "AI code review — PASS".
+- Evidence for 3.1/3.2 is in the course workspace `~/Desktop/10xDEVS/certyfikacja/screenshots/champion/`.

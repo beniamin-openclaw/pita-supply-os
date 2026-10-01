@@ -138,8 +138,8 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Manual
 
-- [ ] 4.4 Operator adds OPENROUTER_API_KEY secret
-- [ ] 4.5 Evidence screenshots captured (job view, logs, PR comment)
+- [x] 4.4 Operator adds OPENROUTER_API_KEY secret — added 2026-09-14 (gh secret list)
+- [x] 4.5 Evidence screenshots captured (job view, logs, PR comment) — screenshots in ~/Desktop/10xDEVS/certyfikacja/screenshots/champion/ (01 run, 02 log, 03 PR #31 comment)
 
 ### Phase 5: Verification
 
@@ -152,7 +152,7 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Manual
 
-- [ ] 5.5 Operator reviews and merges the cert PR; main green
+- [x] 5.5 Operator reviews and merges the cert PR; main green — PR #31 merged 2026-09-14
 
 ### Phase 6: Submission package
 
@@ -163,5 +163,5 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Manual
 
-- [ ] 6.3 Operator submits both forms; confirmation e-mail received
-- [ ] 6.4 Changes archived after merge
+- [x] 6.3 Operator submits both forms; confirmation e-mail received — closed by the operator 2026-10-01: one form was submitted and a positive answer received; the second form was not sent
+- [x] 6.4 Changes archived after merge — ci-cd-code-review archived 2026-10-01 (b7884c7); this folder archived 2026-10-01
