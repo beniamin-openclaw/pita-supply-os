@@ -26,14 +26,14 @@
 // network call — see the task's test scope).
 
 import type { StringKey } from "../../../i18n/strings";
-import type { TransportBatchDetail } from "../../../types";
+import type { TransportBatchDetail, TransportBatchOrder } from "../../../types";
 // Deliberate exception to this module's usual zero-coupling-with-transport.ts
 // stance (see `isoDatePart` below): the ad-hoc off-catalogue items block MUST
 // be the SAME function both here and in transport.ts's buildTransportEmailBody
 // call, not two independently-maintained copies — that exact "both builders"
 // drift (migration 0013 patched one and not the other) is the bug this fixes
 // (training-feedback-0901 F1).
-import { buildExtraItemsSupplierBlock } from "./transport";
+import { buildExtraItemsSupplierBlock, leadSupplierView } from "./transport";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
@@ -183,7 +183,11 @@ export function buildPagoDraftEmail(
 ): { subject: string; bodyText: string } {
   const date = detail.pickup_date ?? isoDatePart(detail.created);
   const subject = `Zlecenie odbioru wlasnego - ${displayLabel} - ${date}`;
-  return { subject, bodyText: buildDraftBody(detail, displayLabel, date, t) };
+  // Supplier-facing: only the batch supplier's own members' extra items — a
+  // Magazyn Mory order riding on the Pago run never reaches Pago
+  // (transport-pago-mory-combined).
+  const orders = leadSupplierView(detail).orders;
+  return { subject, bodyText: buildDraftBody(detail, orders, displayLabel, date, t) };
 }
 
 /**
@@ -200,11 +204,13 @@ export function buildDriverDraftEmail(
 ): { subject: string; bodyText: string } {
   const date = detail.pickup_date ?? isoDatePart(detail.created);
   const subject = `Transport / odbior i rozwoz - ${displayLabel} - ${date}`;
-  return { subject, bodyText: buildDraftBody(detail, displayLabel, date, t) };
+  // Driver-facing: every member's extra items, whatever its supplier.
+  return { subject, bodyText: buildDraftBody(detail, detail.orders, displayLabel, date, t) };
 }
 
 function buildDraftBody(
   detail: TransportBatchDetail,
+  orders: TransportBatchOrder[],
   displayLabel: string,
   date: string,
   t: TFunc,
@@ -234,7 +240,7 @@ function buildDraftBody(
   // the SAME buildExtraItemsSupplierBlock as transport.ts's
   // buildTransportEmailBody (verbatim, never de-duplicated, no location
   // attribution) rather than a second, driftable copy.
-  const extraItemsBlock = buildExtraItemsSupplierBlock(detail.orders, t);
+  const extraItemsBlock = buildExtraItemsSupplierBlock(orders, t);
   if (extraItemsBlock.length > 0) {
     out.push("");
     out.push(...extraItemsBlock);

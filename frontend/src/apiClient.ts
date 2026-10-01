@@ -512,9 +512,11 @@ export const api = {
     apiGet<SuggestionReviewItem[]>("/api/manager/suggestion-review", "manager"),
   // Manager Transport (to-ordering-pago) — combine several locations' orders
   // for one supplier into a single Transport ("TO") batch.
+  // include_companions: a Pago batch also lists Magazyn Mory orders
+  // (transport-pago-mory-combined) — the backend only offers them on opt-in.
   transportEligible: (supplier_id: string) =>
     apiGet<TransportEligibleOrder[]>(
-      `/api/manager/transport/eligible?supplier_id=${encodeURIComponent(supplier_id)}`,
+      `/api/manager/transport/eligible?supplier_id=${encodeURIComponent(supplier_id)}&include_companions=true`,
       "manager",
     ),
   transportBatches: (supplier_id?: string, limit?: number, include_cancelled?: boolean) => {
@@ -544,10 +546,16 @@ export const api = {
     transport_id: string,
     location_id: string,
     prefill_products?: boolean,
+    supplier_id?: string,
   ) =>
     apiPost<TransportAddLocationResponse>(
       "/api/manager/transport/add-location",
-      { transport_id, location_id, prefill_products } as TransportAddLocationRequest,
+      {
+        transport_id,
+        location_id,
+        prefill_products,
+        supplier_id,
+      } as TransportAddLocationRequest,
       "manager",
     ),
   transportRemoveOrder: (transport_id: string, order_id: string) =>

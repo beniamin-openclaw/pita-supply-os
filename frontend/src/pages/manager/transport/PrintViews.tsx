@@ -41,6 +41,11 @@ interface PrintViewsProps {
   // Precomputed by the caller (transportDisplayLabel needs `lang` +
   // `locationsById`, neither of which this component has) — see TransportPage.
   displayLabel: string;
+  // The label of the supplier-facing (Pago) documents, computed from
+  // leadSupplierView(detail) so it never names a location that only has a
+  // Magazyn Mory order (transport-pago-mory-combined). Defaults to
+  // `displayLabel` (identical for a single-supplier batch).
+  pagoDisplayLabel?: string;
   // Supplier's e-mail (possibly a comma/semicolon-separated distribution
   // list) — recipients for the PAGO order Gmail draft. undefined/null/no "@"
   // disables that draft button (mirrors the existing single-order dispatch
@@ -60,8 +65,15 @@ type DraftDoc = "gmailOrder" | "gmailDriver";
 // token request has nothing to authenticate against.
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? "";
 
-export function PrintViews({ detail, displayLabel, supplierEmail, driverRecipients }: PrintViewsProps) {
+export function PrintViews({
+  detail,
+  displayLabel,
+  pagoDisplayLabel,
+  supplierEmail,
+  driverRecipients,
+}: PrintViewsProps) {
   const { t } = useT();
+  const pagoLabel = pagoDisplayLabel ?? displayLabel;
   const [busy, setBusy] = useState<PdfDoc | DraftDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draftSuccess, setDraftSuccess] = useState<DraftDoc | null>(null);
@@ -77,9 +89,9 @@ export function PrintViews({ detail, displayLabel, supplierEmail, driverRecipien
         const docDefinition = buildDriverPdfDocDefinition(doc, t, generatedAt);
         await downloadTransportPdf(docDefinition, transportPdfFilename(displayLabel, "lista-kierowcy"));
       } else {
-        const doc = buildTransportPagoPrintDoc(detail, displayLabel);
+        const doc = buildTransportPagoPrintDoc(detail, pagoLabel);
         const docDefinition = buildPagoPdfDocDefinition(doc, t, generatedAt);
-        await downloadTransportPdf(docDefinition, transportPdfFilename(displayLabel, "zamowienie"));
+        await downloadTransportPdf(docDefinition, transportPdfFilename(pagoLabel, "zamowienie"));
       }
     } catch {
       setError(t("manager.transport.print.downloadError"));
@@ -104,11 +116,11 @@ export function PrintViews({ detail, displayLabel, supplierEmail, driverRecipien
 
       if (which === "gmailOrder") {
         to = splitRecipients(supplierEmail ?? "").join(",");
-        ({ subject, bodyText } = buildPagoDraftEmail(detail, displayLabel, t));
-        const doc = buildTransportPagoPrintDoc(detail, displayLabel);
+        ({ subject, bodyText } = buildPagoDraftEmail(detail, pagoLabel, t));
+        const doc = buildTransportPagoPrintDoc(detail, pagoLabel);
         const docDefinition = buildPagoPdfDocDefinition(doc, t, generatedAt);
         pdfBase64 = await generateTransportPdfBase64(docDefinition);
-        attachmentFilename = transportPdfFilename(displayLabel, "zamowienie");
+        attachmentFilename = transportPdfFilename(pagoLabel, "zamowienie");
       } else {
         to = splitRecipients(driverRecipients ?? "").join(",");
         ({ subject, bodyText } = buildDriverDraftEmail(detail, displayLabel, t));

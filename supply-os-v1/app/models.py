@@ -183,7 +183,8 @@ class SupplierProduct(BaseModel):
     # column in _SUPPLIER_PRODUCT_COLUMNS from model_dump(), so an unset
     # Optional would bind SQL NULL and raise IntegrityError (see 0013/B2).
     # Only the pickup document (frontend transport.ts) filters on this value —
-    # the Pago order email and order PDF still cover the whole batch.
+    # the Pago order email and order PDF cover every lead-supplier line of the
+    # batch (transport-pago-mory-combined: companion Mory lines never reach them).
     warehouse_pickup: bool = False
     # Position of this product in its supplier's list (migration 0023,
     # supplier-product-order-minimum). Every per-supplier screen and document
@@ -1229,6 +1230,12 @@ class TransportAggregateLine(BaseModel):
     # Position of the line's supplier_product (migration 0023); the aggregate
     # is returned in canonical supplier order (app/product_order.py).
     display_order: Optional[int] = None
+    # Supplier of the ORDERS this line was aggregated from
+    # (transport-pago-mory-combined): a Pago batch can carry Magazyn Mory
+    # orders, so lines come in supplier blocks — lead first. "" only on a
+    # hand-built model; the frontend reads "" as the batch's own supplier.
+    supplier_id: str = ""
+    supplier_name: str = ""
 
 
 class TransportEligibleOrder(BaseModel):
@@ -1258,6 +1265,11 @@ class TransportBatchOrder(BaseModel):
     location_name: str  # joined from locations (id fallback)
     status: OrderStatus
     total_value_estimate_pln: float | None = None
+    # The member order's own supplier (transport-pago-mory-combined) — the
+    # batch header's supplier for a normal member, SUP_MORY for a Magazyn Mory
+    # order riding on a Pago run. "" only on a hand-built model.
+    supplier_id: str = ""
+    supplier_name: str = ""
     # Full enriched lines (v2, to-ordering-pago ADDENDUM v2) — reuses
     # ManagerOrderLineDetail (``_enrich_lines_for_detail``) so the FE can
     # render the editable product x location matrix. Empty for a
@@ -1346,6 +1358,17 @@ class TransportBatchDetail(BaseModel):
     # Friendly operator-facing name (v4 feedback, migration 0011) — see
     # TransportBatchSummary.name.
     name: str | None = None
+    # Suppliers this batch can carry (transport-pago-mory-combined): the lead
+    # (header supplier) first, then its active companions (Pago -> Magazyn
+    # Mory), then any other member supplier as a defensive tail. The Transport
+    # screen renders one draft section per entry.
+    suppliers: list["TransportSupplierRef"] = Field(default_factory=list)
+
+
+class TransportSupplierRef(BaseModel):
+    """One supplier a Transport batch can carry — id + display name."""
+    supplier_id: str
+    supplier_name: str
 
 
 class TransportBatch(BaseModel):
@@ -1415,6 +1438,11 @@ class TransportCreateRequest(BaseModel):
     # so there is no manager-created skeleton to prefill. Prefill happens on
     # add-location instead.
     prefill_products: bool = False
+    # transport-pago-mory-combined: True lets the batch combine orders of the
+    # supplier's companions (Magazyn Mory on a Pago run). False (the default,
+    # and what an old frontend bundle sends) keeps create single-supplier, so
+    # a stale tab can never put a Mory line into a Pago document.
+    allow_companions: bool = False
 
 
 class TransportSkippedOrder(BaseModel):
@@ -1474,6 +1502,10 @@ class TransportAddLocationRequest(BaseModel):
     transport_id: str
     location_id: str
     prefill_products: bool = False
+    # transport-pago-mory-combined: the supplier of the new order. None = the
+    # batch's own supplier (today's behaviour); a companion (SUP_MORY on a
+    # Pago batch) adds a Mory column. Anything else is a 400.
+    supplier_id: str | None = None
 
 
 class TransportAddLocationResponse(BaseModel):

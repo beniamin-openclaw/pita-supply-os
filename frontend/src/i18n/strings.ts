@@ -1525,6 +1525,16 @@ export const STRINGS = {
     pl: "Produkty × lokalizacje (edytowalne)",
     en: "Products × locations (editable)",
   },
+  // transport-pago-mory-combined: one draft section per supplier on a Pago
+  // batch that can also carry Magazyn własny Mory.
+  "manager.transport.section.title": {
+    pl: "Produkty × lokalizacje — {supplier}",
+    en: "Products × locations — {supplier}",
+  },
+  "manager.transport.section.empty": {
+    pl: "Brak zamówień od tego dostawcy w tym transporcie. Dodaj lokalizację poniżej.",
+    en: "No orders from this supplier in this transport yet. Add a location below.",
+  },
   "manager.transport.matrix.emptyCell": { pl: "–", en: "–" },
   "manager.transport.matrix.saveButton": { pl: "Zapisz zmiany", en: "Save changes" },
   "manager.transport.matrix.saveBusy": { pl: "Zapisywanie…", en: "Saving…" },

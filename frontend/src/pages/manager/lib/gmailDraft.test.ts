@@ -389,3 +389,35 @@ describe("buildDraftBody ad-hoc items (F1)", () => {
     expect(bodyText).toContain("Feta - 5 kg");
   });
 });
+
+
+describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
+  const mixed = () =>
+    batch({
+      supplier_id: "SUP_PAGO",
+      supplier_name: "Pago",
+      pickup_date: "2026-09-30",
+      orders: [
+        {
+          order_id: "ORD-P", location_id: "WOLA", location_name: "Pita Bros Wola",
+          status: "manager_sent", lines: [], supplier_id: "SUP_PAGO", extra_items: "Tacki - 2 opak",
+        },
+        {
+          order_id: "ORD-M", location_id: "KEN", location_name: "Pita Bros KEN",
+          status: "manager_sent", lines: [], supplier_id: "SUP_MORY", extra_items: "Serwetki - 1 karton",
+        },
+      ],
+    });
+
+  it("the Pago draft carries only Pago members' extra items", () => {
+    const { bodyText } = buildPagoDraftEmail(mixed(), "Transport", makeT());
+    expect(bodyText).toContain("Tacki - 2 opak");
+    expect(bodyText).not.toContain("Serwetki");
+  });
+
+  it("the driver draft carries every member's extra items", () => {
+    const { bodyText } = buildDriverDraftEmail(mixed(), "Transport", makeT());
+    expect(bodyText).toContain("Tacki - 2 opak");
+    expect(bodyText).toContain("Serwetki - 1 karton");
+  });
+});

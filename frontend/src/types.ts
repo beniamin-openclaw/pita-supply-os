@@ -807,11 +807,17 @@ export interface TransportAggregateLine {
   // opposed to merely purchased through this supplier (migration 0015).
   // SUP_PAGO is a purchasing CHANNEL, not a warehouse: one batch mixes frozen
   // meat with till rolls and napkins. ONLY the self-pickup document filters on
-  // this — the order email and order PDF still cover the whole batch.
+  // this — the order email and order PDF cover every lead-supplier line
+  // (companion Magazyn Mory lines never reach them — leadSupplierView).
   warehouse_pickup?: boolean;
   // Position of the product's supplier product (migration 0023); the backend
   // returns the aggregate in canonical order. null = none.
   display_order?: number | null;
+  // Supplier of the orders this line comes from (transport-pago-mory-combined):
+  // a Pago batch can carry Magazyn Mory orders, so the aggregate comes in
+  // supplier blocks, lead first. Missing or "" = the batch's own supplier.
+  supplier_id?: string;
+  supplier_name?: string;
 }
 
 /** One row on the Transport "orders to combine" picker. */
@@ -837,6 +843,10 @@ export interface TransportBatchOrder {
   location_name: string;
   status: OrderStatus;
   total_value_estimate_pln?: number | null;
+  // The member order's own supplier (transport-pago-mory-combined). Missing
+  // or "" = the batch's own supplier.
+  supplier_id?: string;
+  supplier_name?: string;
   // Full enriched lines (v2, to-ordering-pago ADDENDUM v2) — reuses
   // ManagerOrderLineDetail so the FE can render the editable product x
   // location matrix. Empty for a newly-created skeleton order (add-location)
@@ -917,6 +927,17 @@ export interface TransportBatchDetail {
   events: TransportEvent[];
   // Friendly operator-facing name (v4 feedback) — see TransportBatchSummary.name.
   name?: string | null;
+  // Suppliers this batch can carry (transport-pago-mory-combined): the lead
+  // first, then its active companions, then any other member supplier. One
+  // draft section per entry. Missing on an older backend — transportSuppliers
+  // then falls back to the batch's own supplier.
+  suppliers?: TransportSupplierRef[];
+}
+
+/** One supplier a Transport batch can carry. */
+export interface TransportSupplierRef {
+  supplier_id: string;
+  supplier_name: string;
 }
 
 /** One append-only row of a Transport batch's audit trail (v3 Phase 6) — the
@@ -951,6 +972,9 @@ export interface TransportCreateRequest {
   // but NOT implemented server-side for create — prefill only happens via
   // add-location (create only ever combines EXISTING orders).
   prefill_products?: boolean;
+  // transport-pago-mory-combined: true lets a Pago batch combine Magazyn Mory
+  // orders. The Transport screen always sends it.
+  allow_companions?: boolean;
 }
 
 export interface TransportCreateResponse {
@@ -984,6 +1008,9 @@ export interface TransportAddLocationRequest {
   // is populated with a zero-qty line for every product this location can
   // order from the batch's supplier — exactly the Captain's orderable set.
   prefill_products?: boolean;
+  // transport-pago-mory-combined: the new order's supplier. Omitted = the
+  // batch's own; SUP_MORY on a Pago batch adds a Magazyn Mory column.
+  supplier_id?: string;
 }
 
 export interface TransportAddLocationResponse {
