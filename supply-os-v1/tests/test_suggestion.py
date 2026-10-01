@@ -145,11 +145,28 @@ def test_case_suggestion_without_a_real_case_is_the_need(upc):
     assert case_suggestion(4, upc) == 4
 
 
-def test_deviation_reference_picks_the_nearer_and_ties_to_the_need():
-    assert deviation_reference(5, 4, 6) == 4  # tie -> need
-    assert deviation_reference(5.5, 4, 6) == 6
-    assert deviation_reference(0, 2, 0) == 0
-    assert deviation_reference(3, 3, 3) == 3  # no case
+def test_deviation_reference_interval_rule():
+    """D34: inside [min(need, case), max(need, case)] the order is its own
+    reference (zero deviation); outside, the nearer end."""
+    assert deviation_reference(5, 4, 6) == 5  # inside
+    assert deviation_reference(0.5, 2, 0) == 0.5  # inside (case 0 below the need)
+    assert deviation_reference(18, 2, 0) == 2  # above -> the need
+    assert deviation_reference(1, 4, 6) == 4  # below -> the need
+    assert deviation_reference(13, 10, 12) == 12  # above -> the case
+    assert deviation_reference(5, 3, 3) == 3  # no case: the suggestion
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"), [(0.25, 0.5), (0.75, 1.0), (1.25, 1.5), (2.5, 2.5)]
+)
+def test_half_allowed_rounds_halves_up(target: float, expected: float):
+    """half_allowed parity: nearest half, halves up, as the Captain's screen
+    shows (Python's round() gave 0.25 -> 0 and 1.25 -> 1.0)."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=target,
+        max_stock_qty_base=10, rounding_rule=RoundingRule.HALF_ALLOWED,
+    ))
+    assert out.suggested_qty_purchase == expected
 
 
 def test_case_rounded_max():

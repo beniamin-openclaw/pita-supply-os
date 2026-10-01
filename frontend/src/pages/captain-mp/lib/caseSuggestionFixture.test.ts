@@ -139,10 +139,13 @@ describe("rounding + case helpers (twins of app/suggestion.py)", () => {
     expect(caseSuggestion(4, null)).toBe(4);
   });
 
-  it("deviationReference picks the nearer, ties to the need", () => {
-    expect(deviationReference(5, 4, 6)).toBe(4);
-    expect(deviationReference(5.5, 4, 6)).toBe(6);
-    expect(deviationReference(0, 2, 0)).toBe(0);
+  it("deviationReference: zero inside [need, case], else the nearer end (D34)", () => {
+    expect(deviationReference(5, 4, 6)).toBe(5);
+    expect(deviationReference(0.5, 2, 0)).toBe(0.5);
+    expect(deviationReference(18, 2, 0)).toBe(2);
+    expect(deviationReference(1, 4, 6)).toBe(4);
+    expect(deviationReference(13, 10, 12)).toBe(12);
+    expect(deviationReference(5, 3, 3)).toBe(3);
   });
 
   it("caseRoundedMax rounds max up to a whole case", () => {

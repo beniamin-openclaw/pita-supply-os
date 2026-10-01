@@ -37,10 +37,14 @@ export function caseSuggestion(needPurchase: number, unitsPerCase: number | null
   return clean(roundHalfUp(needPurchase / unitsPerCase) * unitsPerCase);
 }
 
-/** D34: the nearer of need and case suggestion, ties to the need — twin of
- *  `deviation_reference`. Without a case both are equal. */
+/** D34 interval rule — twin of `deviation_reference`: an order anywhere in
+ *  [min(need, case), max(need, case)] is its own reference (zero deviation);
+ *  outside it, the nearer end. That is `final` clamped to the interval. Without
+ *  a case the interval is one point (the suggestion). */
 export function deviationReference(final: number, need: number, suggested: number): number {
-  return Math.abs(final - need) <= Math.abs(final - suggested) ? need : suggested;
+  const low = Math.min(need, suggested);
+  const high = Math.max(need, suggested);
+  return Math.min(Math.max(final, low), high);
 }
 
 /** D34: the uncounted over-MAX ceiling — max rounded UP to a whole case
@@ -64,7 +68,8 @@ function roundPerRule(
   if (raw <= 0) return 0;
   switch (rule) {
     case "half_allowed":
-      return Math.round(raw * 2) / 2;
+      // Nearest half, halves up — the same cleaned helper as the backend.
+      return roundHalfUp(raw * 2) / 2;
     case "up_for_critical":
       return isCritical ? Math.ceil(raw) : roundHalfUp(raw);
     case "tenth_kg":
@@ -240,8 +245,8 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  // D34: measured against the nearer of need and case suggestion (the same
-  // number without a case), with the backend's step floor.
+  // D34: zero inside [need, case suggestion], else measured against the
+  // nearer end (one point without a case), with the backend's step floor.
   const reference = deviationReference(final, need, suggested);
   const deviation = computeDeviation(reference, final, roundingStep(item.rounding_rule));
   const absDeviation = Math.abs(deviation);
@@ -267,7 +272,7 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   }
 
   // Green when the order equals the reference: the suggestion, or (with a
-  // case) the need — both "match" (plan-review F1).
+  // case) anything between the need and the case suggestion (D34).
   if (final === reference) {
     return {
       state: "green",

@@ -621,10 +621,11 @@ def _evaluate_submit_line(
     the suggestion is the need rounded to the nearest whole case and is what
     ``suggested_qty_purchase`` stores; the need itself is not persisted. The
     branches above key on the NEED (plan-review F1: a case suggestion of 0 with
-    a need above 0 still runs the gates). The deviation is measured against the
-    nearer of need and case suggestion (``deviation_reference``) and stored in
-    ``delta_vs_suggestion_pct``; the critical gate fires only below the smaller
-    of the two; the uncounted over-MAX gate allows up to max rounded up to a
+    a need above 0 still runs the gates). An order anywhere between the need
+    and the case suggestion (inclusive) has zero deviation; outside that
+    interval it is measured against the nearer end (``deviation_reference``)
+    and stored in ``delta_vs_suggestion_pct``; the critical gate fires only
+    below the smaller of the two; the uncounted over-MAX gate allows up to max rounded up to a
     whole case (``case_rounded_max``). Without a case need == suggestion, so
     every branch is byte-identical to before.
     """
@@ -692,8 +693,8 @@ def _evaluate_submit_line(
         stored_stock = stock
         delta_pct = None
     else:
-        # D34: measured against the nearer of need and case suggestion (both
-        # the same number without a case).
+        # D34: zero inside [need, case suggestion], else measured against the
+        # nearer end (one point — the suggestion — without a case).
         reference = deviation_reference(
             line.captain_final_qty_purchase, need_qty_purchase, suggested_qty_purchase
         )

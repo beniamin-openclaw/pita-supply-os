@@ -19,7 +19,8 @@ whole case, half up:
     suggested_qty_purchase = round_half_up(need / units_per_case) × units_per_case
 
 Without a case the suggestion IS the need, byte-for-byte as before. The reason
-gates measure the order against the nearer of the two (``deviation_reference``,
+gates treat every order between the two (inclusive) as matching, and measure an
+order outside that interval against the nearer end (``deviation_reference``,
 D34). Twin: frontend/src/pages/captain-mp/lib/compute.ts; the shared examples
 live in docs/pita-supply-os-v1/fixtures/case_suggestion_cases.json.
 
@@ -101,7 +102,10 @@ def _round_per_rule(raw: float, rule: RoundingRule, is_critical: bool) -> float:
     if rule == RoundingRule.FULL_ONLY:
         return float(math.ceil(raw))
     if rule == RoundingRule.HALF_ALLOWED:
-        return round(raw * 2) / 2
+        # Nearest half, halves UP (0.25 -> 0.5, 1.25 -> 1.5): the frontend's
+        # Math.round semantics, which the Captain sees on screen. Python's
+        # round() went to even (0.25 -> 0, 1.25 -> 1.0) and drifted from it.
+        return round_half_up(raw * 2) / 2
     if rule == RoundingRule.UP_FOR_CRITICAL:
         if is_critical:
             return float(math.ceil(raw))
@@ -139,10 +143,14 @@ def case_suggestion(need_purchase: float, units_per_case: Optional[float]) -> fl
 
 
 def deviation_reference(final: float, need: float, suggested: float) -> float:
-    """D34: the reference the Captain's order is measured against — the nearer
-    of the need and the case suggestion, ties going to the need. Without a case
-    both are equal, so this is the suggestion as before."""
-    return need if abs(final - need) <= abs(final - suggested) else suggested
+    """D34 (interval rule): the reference the Captain's order is measured
+    against. Any order in the closed interval [min(need, case), max(need, case)]
+    is its own reference — zero deviation, no reason; an order outside it is
+    measured against the nearer end. That is ``final`` clamped to the interval.
+    Without a case need == suggestion, so the interval is one point and this
+    is the suggestion as before."""
+    low, high = min(need, suggested), max(need, suggested)
+    return min(max(final, low), high)
 
 
 def case_rounded_max(
