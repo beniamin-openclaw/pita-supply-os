@@ -249,7 +249,7 @@ export function buildPagoPdfDocDefinition(
 
   const columnHeaders = [
     { text: t("manager.transport.print.lpCol"), style: "tableHeader" },
-    { text: t("manager.transport.print.pagoDoc.catalogCol"), style: "tableHeader" },
+    { text: t("manager.transport.print.productCol"), style: "tableHeader" },
     { text: t("manager.transport.print.unitCol"), style: "tableHeader" },
     { text: t("manager.transport.print.qtyCol"), style: "tableHeader" },
   ];
@@ -258,7 +258,7 @@ export function buildPagoPdfDocDefinition(
     const zebra = idx % 2 === 1 ? { fillColor: ZEBRA } : {};
     return [
       { text: String(idx + 1), ...zebra },
-      { text: p.catalogNo, ...zebra },
+      { text: p.name, ...zebra },
       { text: p.unit, ...zebra },
       { text: String(p.qty), ...zebra },
     ];
