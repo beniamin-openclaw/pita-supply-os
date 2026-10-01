@@ -1,10 +1,10 @@
 ---
 change_id: pickup-doc-product-names
 title: Pickup document lists product names instead of placeholder catalog codes
-status: implemented
+status: archived
 created: 2026-10-01
 updated: 2026-10-01
-archived_at: null
+archived_at: 2026-10-01T11:45:25Z
 ---
 
 ## Notes
@@ -28,3 +28,5 @@ data and the API, unused by documents; reintroduce a code column only if real su
 
 Verify: frontend vitest 585/585, lint, build. Manual (operator, prod after deploy): download the
 pickup PDF of a draft Pago transport — the table reads Lp. | Produkt | Jm. | Ilość with names.
+
+Operator confirmed on prod 2026-10-01: the pickup PDF shows product names. Shipped via PR #47 (f8f28b2). Light change: no plan.md, no impl-review.
