@@ -95,6 +95,7 @@ _engine_lock = threading.Lock()
 _PRODUCT_COLUMNS = [
     "product_id", "gostock_id", "product_name_pl", "product_category",
     "inventory_unit", "is_critical", "active", "notes",
+    "inventory_order",  # migration 0027 (inventory-card-order)
 ]
 _SUPPLIER_COLUMNS = [
     "supplier_id", "supplier_name", "email", "ordering_method", "delivery_days",
@@ -116,6 +117,7 @@ _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "setting_id", "location_id", "product_id", "min_stock_qty_base",
     "max_stock_qty_base", "target_stock_qty_base", "is_critical_for_location",
     "allow_over_max_due_to_packaging", "notes",
+    "inventory_order",  # migration 0027 (inventory-card-order)
 ]
 _ORDER_COLUMNS = [
     "order_id", "location_id", "supplier_id", "order_date",

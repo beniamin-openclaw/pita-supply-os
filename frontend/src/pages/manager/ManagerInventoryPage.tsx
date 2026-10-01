@@ -14,6 +14,7 @@ import { categoryLabel } from "../../i18n/categoryLabels";
 import {
   DEFAULT_PRODUCT_LIST_VIEW,
   applyProductListView,
+  defaultInventoryListView,
   attentionReason,
   stockDelta,
   type ProductListView,
@@ -105,7 +106,11 @@ export function ManagerInventoryPage() {
     api
       .managerInventoryCount(countId)
       .then((d) => {
-        if (detailReqRef.current === countId) setDetail(d);
+        if (detailReqRef.current !== countId) return;
+        setDetail(d);
+        // Open in the location's card order when positions exist
+        // (inventory-card-order); otherwise keep the name sort.
+        setListView(defaultInventoryListView(d.lines));
       })
       .catch((e: ApiError) => {
         if (detailReqRef.current === countId && e.status !== 401) setDetailError(e.detail);

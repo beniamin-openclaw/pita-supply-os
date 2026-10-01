@@ -60,6 +60,12 @@ class Product(BaseModel):
     is_critical: bool = False
     active: bool = True
     notes: str = ""
+    # Position on the common inventory-card template (migration 0027,
+    # inventory-card-order): the order of the printed "… - DRUK" cards shared by
+    # every location. A location can override it
+    # (LocationProductSetting.inventory_order); the inventory screens sort by
+    # the effective value (app/product_order.py). None = no position.
+    inventory_order: Optional[int] = None
 
 
 class Supplier(BaseModel):
@@ -204,6 +210,10 @@ class LocationProductSetting(BaseModel):
     is_critical_for_location: bool = False
     allow_over_max_due_to_packaging: bool = False
     notes: str = ""
+    # Per-location override of Product.inventory_order on the same scale
+    # (migration 0027): where this location's own card places the product.
+    # None = use the template.
+    inventory_order: Optional[int] = None
 
 
 # ---------- Orders ----------
@@ -798,6 +808,10 @@ class InventoryProduct(BaseModel):
     min_stock_qty_base: float = 0
     target_stock_qty_base: float = 0
     max_stock_qty_base: float = 0
+    # Effective card position (inventory-card-order): the location override,
+    # else the product template (app/product_order.py). The route returns rows
+    # sorted by it; None = no position.
+    inventory_order: Optional[int] = None
 
 
 class InventoryCountLine(BaseModel):
@@ -965,6 +979,13 @@ class InventoryCountDetailLine(BaseModel):
     units_per_purchase_unit: Optional[float] = None
     supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None
+    # Order fields (inventory-card-order). ``inventory_order`` is the effective
+    # card position the detail routes sort by; ``display_order`` and
+    # ``supplier_product_id`` come from the primary supplier_product and feed
+    # the Manager's "Kolejność zamawiania" sort. None when unknown.
+    inventory_order: Optional[int] = None
+    display_order: Optional[int] = None
+    supplier_product_id: Optional[str] = None
 
 
 class InventoryCountEvent(BaseModel):

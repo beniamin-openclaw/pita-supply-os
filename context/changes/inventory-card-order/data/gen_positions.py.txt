@@ -1,0 +1,72 @@
+"""Global card template (products.inventory_order) + per-location overrides
+(location_product_settings.inventory_order) from card_order.json.
+
+Invariant proven here: for every location, sorting its card products by
+(effective position, product_id) reproduces the card sequence exactly."""
+import json
+STEP = 10
+d = json.load(open("card_order.json"))["locations"]
+
+def seq_of(loc):
+    out, seen = [], set()
+    for row in d[loc]["rows"]:
+        for pid in row["product_ids"]:
+            if pid not in seen:
+                seen.add(pid); out.append(pid)
+    return out
+
+cards = {loc: seq_of(loc) for loc in d}
+# 1. template: start from WOLA, insert products missing from it after their
+#    nearest earlier neighbour already in the template, card by card.
+ORDER = ["WOLA", "KEN", "BRACKA", "STARY_BROWAR", "NORBLIN", "BROWARY", "FORUM",
+         "KAMIENICA", "SLONY", "SUPERSAM", "WESTFIELD", "ELEKTROWNIA"]
+tmpl = list(cards["WOLA"])
+for loc in ORDER[1:]:
+    for i, pid in enumerate(cards[loc]):
+        if pid in tmpl: continue
+        prev = next((cards[loc][j] for j in range(i - 1, -1, -1) if cards[loc][j] in tmpl), None)
+        tmpl.insert(tmpl.index(prev) + 1 if prev else 0, pid)
+glob = {pid: STEP * (i + 1) for i, pid in enumerate(tmpl)}
+
+def lis_keep(seq):
+    """Indices of a longest strictly increasing subsequence of glob positions."""
+    vals = [glob[p] for p in seq]
+    n = len(vals); best = [1] * n; prev = [-1] * n
+    for i in range(n):
+        for j in range(i):
+            if vals[j] < vals[i] and best[j] + 1 > best[i]:
+                best[i] = best[j] + 1; prev[i] = j
+    i = max(range(n), key=lambda k: best[k]); keep = set()
+    while i != -1: keep.add(i); i = prev[i]
+    return keep
+
+overrides = {}
+for loc, seq in cards.items():
+    keep = lis_keep(seq)
+    eff, ov = {}, {}
+    i = 0
+    while i < len(seq):
+        if i in keep:
+            eff[seq[i]] = glob[seq[i]]; i += 1; continue
+        j = i
+        while j < len(seq) and j not in keep: j += 1
+        lo = eff[seq[i - 1]] if i > 0 else 0
+        hi = glob[seq[j]] if j < len(seq) else lo + STEP * (j - i + 1)
+        k = j - i
+        if hi - lo <= k:
+            raise SystemExit(f"{loc}: no room for {k} overrides between {lo} and {hi}")
+        for m in range(k):
+            v = lo + (hi - lo) * (m + 1) // (k + 1)
+            eff[seq[i + m]] = v; ov[seq[i + m]] = v
+        i = j
+    # proof: sorting by (effective, product_id) reproduces the card
+    got = sorted(seq, key=lambda p: (eff[p], p))
+    assert got == seq, loc
+    # a product off the card at this location falls back to glob; card products must not
+    # tie with a different product's glob value in a way that breaks order -> checked above
+    overrides[loc] = ov
+json.dump({"template": [[p, glob[p]] for p in tmpl], "overrides": overrides},
+          open("positions.json", "w"), indent=1)
+print("template products:", len(tmpl))
+for loc, ov in overrides.items(): print(loc, len(ov), ov)
+print("total overrides:", sum(len(v) for v in overrides.values()))

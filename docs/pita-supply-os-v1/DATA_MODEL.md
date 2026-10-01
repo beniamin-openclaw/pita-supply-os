@@ -40,6 +40,7 @@ The master list of every SKU Pita Bros tracks at the inventory level.
 | `is_critical`     | boolean      | Stockout has high operational cost                     |
 | `active`          | boolean      | Soft-delete flag                                       |
 | `notes`           | string       | Free text                                              |
+| `inventory_order` | integer, nullable | Position on the common inventory-card template (migration 0027). See `location_product_settings.inventory_order` |
 
 **Why this table:** the canonical product list. Captains and Managers never
 type product names; they pick from this list.
@@ -155,6 +156,16 @@ The min / max / target stock per product per location, all in inventory unit.
 | `is_critical_for_location`        | boolean     | Overrides `products.is_critical` if set                     |
 | `allow_over_max_due_to_packaging` | boolean     | When `true`, packaging-driven overage doesn't trigger reason |
 | `notes`                           | string      |                                                             |
+| `inventory_order`                 | integer, nullable | Per-location override of `products.inventory_order` (migration 0027) |
+
+**Inventory card order (inventory-card-order, migration 0027).** The location-wide inventory
+screens (Captain count grid and correction, Captain count history, Manager inventory detail and
+its CSV) list products in the order of the location's printed inventory card. Effective position
+= `location_product_settings.inventory_order` when set, else `products.inventory_order`; rows
+sort by it, then by `product_id`, and rows without a position go last (`app/product_order.py`).
+Both columns are master data owned by the card pipeline in
+`context/changes/inventory-card-order/data/` — never hand-edit them; re-run the pipeline and its
+gated SQL after a card changes.
 
 **Why this table:** the heart of the suggestion logic. Same product can have
 different settings per location (Wola has 20 m² of cooler; another point has

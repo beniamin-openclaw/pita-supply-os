@@ -121,7 +121,12 @@ from .models import (
     TransportSkippedOrder,
     TransportSupplierRef,
 )
-from .product_order import line_sort_key, supplier_product_sort_key
+from .product_order import (
+    effective_inventory_order,
+    inventory_sort_key,
+    line_sort_key,
+    supplier_product_sort_key,
+)
 from .suggestion import SuggestionInput, compute_suggestion, rounding_step
 
 log = logging.getLogger(__name__)
@@ -2881,6 +2886,24 @@ def _primary_supplier_product(
     return min(pool, key=lambda sp: sp.supplier_product_id)
 
 
+def _effective_inventory_order_for(
+    product_id: str,
+    products_by_id: dict[str, Product],
+    settings_by_pid: dict[str, LocationProductSetting],
+) -> Optional[int]:
+    """Effective inventory-card position of ``product_id`` at the location whose
+    settings are ``settings_by_pid`` (inventory-card-order): the location
+    override, else the product template. A product without a setting at the
+    location (e.g. a setting removed after the count) uses the template; an
+    unknown product has no position."""
+    setting = settings_by_pid.get(product_id)
+    product = products_by_id.get(product_id)
+    return effective_inventory_order(
+        setting.inventory_order if setting else None,
+        product.inventory_order if product else None,
+    )
+
+
 @app.get(
     "/api/captain/inventory/products",
     response_model=list[InventoryProduct],
@@ -2904,6 +2927,11 @@ def captain_inventory_products(
     (`_primary_supplier_product` — one extra `load_supplier_products` +
     `load_suppliers` read, both TTL-cached). A product without an active
     supplier_product keeps the four supplier fields ``None``.
+
+    Order (inventory-card-order): rows come back in the location's printed
+    inventory-card order — the effective ``inventory_order`` (location override,
+    else product template), then ``product_id``; see ``app/product_order.py``.
+    The Captain grid renders them as returned.
     """
     backend = _choose_backend()
     products_by_id = {p.product_id: p for p in backend.load_products()}
@@ -2933,8 +2961,12 @@ def captain_inventory_products(
                 min_stock_qty_base=setting.min_stock_qty_base,
                 target_stock_qty_base=setting.target_stock_qty_base,
                 max_stock_qty_base=setting.max_stock_qty_base,
+                inventory_order=effective_inventory_order(
+                    setting.inventory_order, product.inventory_order
+                ),
             )
         )
+    items.sort(key=lambda it: inventory_sort_key(it.inventory_order, it.product_id))
     return items
 
 
@@ -3329,6 +3361,10 @@ def captain_inventory_count_detail(
     (Phase 2, training-feedback-0901) so the Captain can see whether/when this
     snapshot was previously edited; a missing event worksheet degrades to an
     empty history, never a 500.
+
+    Lines come back in the location's current inventory-card order
+    (inventory-card-order): the effective ``inventory_order``, then
+    ``product_id`` — not in stored line-id order.
     """
     backend = _choose_backend()
     if not _is_persistent(backend):
@@ -3353,13 +3389,29 @@ def captain_inventory_count_detail(
             status_code=404, detail=f"Inventory count {count_id} not found"
         )
 
+    # Card order (inventory-card-order): the Captain history renders these lines
+    # as returned, and a corrected count's line ids are random, so sort by the
+    # location's current card positions rather than by stored line id.
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    settings_by_pid = {
+        s.product_id: s
+        for s in backend.load_location_product_settings()
+        if s.location_id == count.location_id
+    }
+    ordered_lines = sorted(
+        count.lines,
+        key=lambda ln: inventory_sort_key(
+            _effective_inventory_order_for(ln.product_id, products_by_id, settings_by_pid),
+            ln.product_id,
+        ),
+    )
     lines = [
         InventoryLatestLine(
             product_id=line.product_id,
             current_stock_qty_base=line.current_stock_qty_base,
             count_comment=line.count_comment,
         )
-        for line in count.lines
+        for line in ordered_lines
     ]
 
     # Correction history (Phase 2, training-feedback-0901) — degrades to []
@@ -3404,7 +3456,14 @@ def _enrich_inventory_count_detail(
     the caller via ``_primary_supplier_product``) supplies the pack unit and
     supplier id, and ``suppliers_by_id`` the supplier name. All three maps are
     optional so the function stays pure and older callers keep working; a
-    product missing from a map keeps those fields ``None``."""
+    product missing from a map keeps those fields ``None``.
+
+    Order (inventory-card-order): lines come back sorted by the effective
+    ``inventory_order`` (this location's override, else the product template),
+    then ``product_id`` — the location's printed card order, whatever the stored
+    line ids (a corrected count's ids are random). Each line carries that
+    ``inventory_order`` plus its primary supplier_product's ``display_order`` and
+    ``supplier_product_id`` for the Manager's "Kolejność zamawiania" sort."""
     settings_by_pid = settings_by_pid or {}
     primary_sp_by_pid = primary_sp_by_pid or {}
     suppliers_by_id = suppliers_by_id or {}
@@ -3430,8 +3489,14 @@ def _enrich_inventory_count_detail(
                 units_per_purchase_unit=sp.units_per_purchase_unit if sp else None,
                 supplier_id=sp.supplier_id if sp else None,
                 supplier_name=supplier.supplier_name if supplier else None,
+                inventory_order=_effective_inventory_order_for(
+                    line.product_id, products_by_id, settings_by_pid
+                ),
+                display_order=sp.display_order if sp else None,
+                supplier_product_id=sp.supplier_product_id if sp else None,
             )
         )
+    enriched.sort(key=lambda ln: inventory_sort_key(ln.inventory_order, ln.product_id))
     return InventoryCountDetail(
         count_id=count.count_id,
         location_id=count.location_id,

@@ -19,7 +19,12 @@ from fastapi.testclient import TestClient
 from app import sheets
 from app.config import DataBackend
 from app.main import app
-from app.models import InventoryCount, InventoryCountLine
+from app.models import (
+    InventoryCount,
+    InventoryCountLine,
+    LocationProductSetting,
+    Product,
+)
 
 client = TestClient(app)
 
@@ -61,18 +66,29 @@ def _count(
     )
 
 
-def _activate_sheet(mocker, counts: list[InventoryCount]) -> None:
+def _activate_sheet(
+    mocker,
+    counts: list[InventoryCount],
+    products: list[Product] | None = None,
+    settings: list[LocationProductSetting] | None = None,
+) -> None:
     """Switch the backend selector to `sheets` and stub the inventory reads.
 
     Mirrors test_inventory_latest._activate_sheet: `load_inventory_counts`
     returns the summaries; `get_inventory_count` returns the matching count with
     its lines populated. `load_inventory_count_events_for` (Phase 2,
     training-feedback-0901) defaults to no history — the detail route now
-    loads it unconditionally.
+    loads it unconditionally. `load_products` / `load_location_product_settings`
+    (inventory-card-order) feed the detail route's card-order sort; empty by
+    default (every line unpositioned -> product_id order).
     """
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SHEET)
     mocker.patch.object(sheets, "is_configured", return_value=True)
     mocker.patch.object(sheets, "load_inventory_counts", return_value=counts)
+    mocker.patch.object(sheets, "load_products", return_value=products or [])
+    mocker.patch.object(
+        sheets, "load_location_product_settings", return_value=settings or []
+    )
     by_id = {c.count_id: c for c in counts}
     mocker.patch.object(
         sheets, "get_inventory_count", side_effect=lambda cid: by_id.get(cid)
@@ -231,6 +247,61 @@ def test_count_detail_returns_lines(mocker):
     assert body["line_count"] == 2
     by_pid = {ln["product_id"]: ln["current_stock_qty_base"] for ln in body["lines"]}
     assert by_pid == {"P027": 7, "P026": 2}
+
+
+def test_count_detail_lines_in_card_order(mocker):
+    """inventory-card-order: the Captain history renders detail lines as
+    returned, so the route sorts them by the location's effective card position
+    (override, else template), then product_id — not by stored line id. A
+    corrected count's ids are random (ICL-{count}-E-{hex}); a product without a
+    setting at the location uses its template; an unknown product goes last."""
+    lines = [
+        InventoryCountLine(
+            count_line_id="ICL-INV-ORD-E-ffffff", count_id="INV-ORD",
+            product_id="P001", current_stock_qty_base=1,
+        ),
+        InventoryCountLine(
+            count_line_id="ICL-INV-ORD-E-000000", count_id="INV-ORD",
+            product_id="P999", current_stock_qty_base=2,  # unknown product
+        ),
+        InventoryCountLine(
+            count_line_id="ICL-INV-ORD-E-aaaaaa", count_id="INV-ORD",
+            product_id="P002", current_stock_qty_base=3,  # no setting -> template
+        ),
+        InventoryCountLine(
+            count_line_id="ICL-INV-ORD-E-111111", count_id="INV-ORD",
+            product_id="P003", current_stock_qty_base=4,
+        ),
+    ]
+    c = _count(
+        "INV-ORD", "WOLA",
+        datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc), date(2026, 6, 5),
+        lines=lines,
+    )
+    products = [
+        Product(product_id="P001", product_name_pl="A", product_category="X",
+                inventory_unit="kg", inventory_order=30),
+        Product(product_id="P002", product_name_pl="B", product_category="X",
+                inventory_unit="kg", inventory_order=20),
+        Product(product_id="P003", product_name_pl="C", product_category="X",
+                inventory_unit="kg", inventory_order=50),
+    ]
+    settings = [
+        LocationProductSetting(setting_id="WOLA__P001", location_id="WOLA",
+                               product_id="P001"),
+        LocationProductSetting(setting_id="WOLA__P003", location_id="WOLA",
+                               product_id="P003", inventory_order=5),
+        # Another location's override must not leak into WOLA's order.
+        LocationProductSetting(setting_id="KEN__P001", location_id="KEN",
+                               product_id="P001", inventory_order=1),
+    ]
+    _activate_sheet(mocker, [c], products=products, settings=settings)
+
+    r = client.get("/api/captain/inventory/count/INV-ORD", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert [ln["product_id"] for ln in r.json()["lines"]] == [
+        "P003", "P002", "P001", "P999",
+    ]
 
 
 def test_count_detail_cross_location_404(mocker):

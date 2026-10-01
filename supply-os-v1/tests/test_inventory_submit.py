@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from app import seed_loader, sheets
 from app.config import DataBackend
 from app.main import _WARSAW_TZ, _primary_supplier_product, app
-from app.models import Supplier, SupplierProduct
+from app.models import LocationProductSetting, Product, Supplier, SupplierProduct
 
 client = TestClient(app)
 
@@ -50,6 +50,8 @@ def test_inventory_products_lists_location_products():
         "min_stock_qty_base",
         "target_stock_qty_base",
         "max_stock_qty_base",
+        # Card order (inventory-card-order): the effective position.
+        "inventory_order",
     }
     assert p027["is_critical"] is True
     assert p027["inventory_unit"] == "kg"
@@ -69,6 +71,66 @@ def test_inventory_products_carry_pack_hint_and_thresholds():
     assert p027["min_stock_qty_base"] == 4
     assert p027["target_stock_qty_base"] == 12
     assert p027["max_stock_qty_base"] == 12
+
+
+def test_inventory_products_follow_card_order(mocker):
+    """inventory-card-order: rows come back by effective card position — the
+    location override beats the product template, template-only products
+    interleave by value, equal positions tie by product_id, unpositioned rows go
+    last by product_id — and the categories come out first-seen in that order."""
+
+    def prod(pid: str, cat: str, order: int | None) -> Product:
+        return Product(
+            product_id=pid, product_name_pl=f"Name {pid}", product_category=cat,
+            inventory_unit="kg", inventory_order=order,
+        )
+
+    def setting(pid: str, order: int | None, loc: str = "WOLA") -> LocationProductSetting:
+        return LocationProductSetting(
+            setting_id=f"{loc}__{pid}", location_id=loc, product_id=pid,
+            inventory_order=order,
+        )
+
+    products = [
+        prod("P001", "Chłodnia", 30),
+        prod("P002", "Chłodnia", 10),
+        prod("P003", "Mrożonki", 40),
+        prod("P004", "Chłodnia", 50),  # override 20 at WOLA -> second
+        prod("P005", "Mrożonki", 40),  # equal to P003 -> tie by id
+        prod("P006", "Chemia", None),  # no position anywhere -> last
+        prod("P007", "Chłodnia", None),  # no position -> last, after P006 by id
+    ]
+    settings = [
+        setting("P007", None),
+        setting("P006", None),
+        setting("P005", None),
+        setting("P004", 20),
+        setting("P003", None),
+        setting("P002", None),
+        setting("P001", None),
+        setting("P001", 1, loc="KEN"),  # another location's override is ignored
+    ]
+    mocker.patch.object(seed_loader, "load_products", return_value=products)
+    mocker.patch.object(
+        seed_loader, "load_location_product_settings", return_value=settings
+    )
+    mocker.patch.object(seed_loader, "load_supplier_products", return_value=[])
+    mocker.patch.object(seed_loader, "load_suppliers", return_value=[])
+
+    r = client.get("/api/captain/inventory/products", headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    items = r.json()
+    assert [it["product_id"] for it in items] == [
+        "P002", "P004", "P001", "P003", "P005", "P006", "P007",
+    ]
+    assert [it["inventory_order"] for it in items] == [10, 20, 30, 40, 40, None, None]
+    # First-seen categories follow the positions (the Captain grid groups
+    # first-seen, so this is the section order it shows).
+    first_seen: list[str] = []
+    for it in items:
+        if it["product_category"] not in first_seen:
+            first_seen.append(it["product_category"])
+    assert first_seen == ["Chłodnia", "Mrożonki", "Chemia"]
 
 
 # ---------- _primary_supplier_product (pure helper, Phase 3 / reused by Phase 4) ----------

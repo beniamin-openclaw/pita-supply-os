@@ -320,6 +320,65 @@ def test_manager_count_detail_unknown_product_falls_back_to_id(mocker):
     assert ghost["supplier_id"] is None
 
 
+def test_manager_count_detail_lines_in_card_order(mocker):
+    """inventory-card-order: detail lines come back by effective card position
+    (WOLA's override, else the product template), then product_id, whatever the
+    stored line ids (a corrected count's are random). Each line carries the
+    resolved inventory_order and its primary supplier_product's display_order +
+    supplier_product_id. A product without a setting uses the template; an
+    unknown product is unpositioned and goes last."""
+    products = [
+        PRODUCTS[0].model_copy(update={"inventory_order": 40}),  # P027
+        PRODUCTS[1].model_copy(update={"inventory_order": 30}),  # P026
+        Product(product_id="P030", product_name_pl="Ogórek",
+                product_category="Warzywa", inventory_unit="kg",
+                inventory_order=35),  # no setting at WOLA -> template 35
+    ]
+    settings = [
+        SETTINGS[0].model_copy(update={"inventory_order": 10}),  # P027 override
+        SETTINGS[1],  # P026 -> template 30
+        SETTINGS[2],
+    ]
+    sps = [
+        SUPPLIER_PRODUCTS[0],
+        SUPPLIER_PRODUCTS[1].model_copy(update={"display_order": 70}),
+    ]
+    c = _count(
+        "INV-CARD", "WOLA",
+        datetime(2026, 6, 5, 9, 0, tzinfo=timezone.utc), date(2026, 6, 5),
+        lines=[
+            InventoryCountLine(count_line_id="ICL-INV-CARD-E-f00000",
+                               count_id="INV-CARD", product_id="P999",
+                               current_stock_qty_base=1),
+            InventoryCountLine(count_line_id="ICL-INV-CARD-E-a00000",
+                               count_id="INV-CARD", product_id="P030",
+                               current_stock_qty_base=2),
+            InventoryCountLine(count_line_id="ICL-INV-CARD-E-000000",
+                               count_id="INV-CARD", product_id="P026",
+                               current_stock_qty_base=3),
+            InventoryCountLine(count_line_id="ICL-INV-CARD-E-b00000",
+                               count_id="INV-CARD", product_id="P027",
+                               current_stock_qty_base=4),
+        ],
+    )
+    _activate_sheet(mocker, [c])
+    mocker.patch.object(sheets, "load_products", return_value=products)
+    mocker.patch.object(sheets, "load_location_product_settings", return_value=settings)
+    mocker.patch.object(sheets, "load_supplier_products", return_value=sps)
+
+    r = client.get("/api/manager/inventory/count/INV-CARD", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    lines = r.json()["lines"]
+    assert [ln["product_id"] for ln in lines] == ["P027", "P026", "P030", "P999"]
+    assert [ln["inventory_order"] for ln in lines] == [10, 30, 35, None]
+    p027 = lines[0]
+    assert p027["supplier_product_id"] == "SP_BUK_P027"  # primary (Bukat)
+    assert p027["display_order"] == 70
+    # No supplier_product -> both order fields null.
+    assert lines[1]["supplier_product_id"] is None
+    assert lines[1]["display_order"] is None
+
+
 def test_manager_count_detail_missing_404(mocker):
     _activate_sheet(mocker, [])
     r = client.get("/api/manager/inventory/count/INV-NOPE", headers=MANAGER_AUTH)
