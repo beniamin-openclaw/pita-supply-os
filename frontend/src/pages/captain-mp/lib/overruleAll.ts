@@ -7,7 +7,9 @@
 //   - "fillMissing" — the automatic, sticky pass run whenever lines change while
 //                     a bulk reason is active: fills only lines that have no
 //                     reason yet, so a reason the Captain hand-picked on a line
-//                     afterwards is never touched.
+//                     afterwards is never touched. Lines in `handEdited` (the
+//                     Captain changed or CLEARED the reason by hand since the
+//                     last Apply) are skipped too, so clearing a reason sticks.
 //
 // "Requires a reason" is `computeRowState(item, line).requiresReason` — reused
 // as-is so this never re-derives (and risks drifting from) the deviation /
@@ -40,6 +42,7 @@ export function overruleAll(
   lines: Record<string, OrderLine>,
   bulk: BulkReason,
   mode: OverruleMode,
+  handEdited?: ReadonlySet<string>,
 ): Record<string, OrderLine> {
   const trimmedComment = bulk.comment.trim();
   if (bulk.code === "OTHER" && trimmedComment.length === 0) {
@@ -52,6 +55,7 @@ export function overruleAll(
     const line = lines[item.product_id];
     if (!line) continue;
     if (mode === "fillMissing" && line.reason_code) continue; // hand-picked — keep
+    if (mode === "fillMissing" && handEdited?.has(item.product_id)) continue; // hand-cleared
     if (!computeRowState(item, line).requiresReason) continue;
 
     const nextComment =

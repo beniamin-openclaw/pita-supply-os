@@ -335,6 +335,33 @@ describe("overruleAll fillMissing — sticky pass", () => {
 
     expect(result.P001.captain_comment).toBe("why");
   });
+
+  it("skips a line the Captain cleared by hand (handEdited), fills the rest", () => {
+    const items = [makeItem({ product_id: "P001" }), makeItem({ product_id: "P003" })];
+    const lines = {
+      P001: deviatingLine({ product_id: "P001", reason_code: "" }),
+      P003: deviatingLine({ product_id: "P003" }),
+    };
+    const bulk = { code: "LOW_STORAGE" as const, comment: "" };
+
+    const result = overruleAll(items, lines, bulk, FILL, new Set(["P001"]));
+
+    expect(result.P001.reason_code).toBe("");
+    expect(result.P003.reason_code).toBe("LOW_STORAGE");
+  });
+
+  it("overwrite (an explicit Apply) ignores handEdited", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const result = overruleAll(
+      items,
+      { P001: deviatingLine({ reason_code: "" }) },
+      { code: "LOW_STORAGE", comment: "" },
+      OVERWRITE,
+      new Set(["P001"]),
+    );
+
+    expect(result.P001.reason_code).toBe("LOW_STORAGE");
+  });
 });
 
 describe("overruleAll — supplier with alerts off", () => {

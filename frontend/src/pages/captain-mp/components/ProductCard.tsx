@@ -31,6 +31,9 @@ interface ProductCardProps {
   /** Newest inventory snapshot's count for this product (base units) — the
    *  plausibility reference for the pack stock input's "did you mean" prompt. */
   previousStock?: number | null;
+  /** Called when the Captain changes (or clears) this line's reason by hand,
+   *  so a sticky bulk reason stops refilling it (feedback-1001 D10). */
+  onReasonEdit?: (productId: string) => void;
 }
 
 const STATE_STYLES: Record<
@@ -84,7 +87,13 @@ function StateIcon({ state }: { state: CardState }) {
   }
 }
 
-export function ProductCard({ item, line, onChange, previousStock }: ProductCardProps) {
+export function ProductCard({
+  item,
+  line,
+  onChange,
+  previousStock,
+  onReasonEdit,
+}: ProductCardProps) {
   const { t, tParts, lang } = useT();
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
@@ -133,6 +142,7 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
     onChange({ ...line, captain_final_qty_purchase: v });
   };
   const handleReasonChange = (reason: string, comment: string) => {
+    onReasonEdit?.(item.product_id);
     onChange({
       ...line,
       // empty string clears the reason

@@ -97,6 +97,11 @@ export function OrderEditPage() {
   // Sticky bulk reason (feedback-1001 D10) — same behaviour as the create
   // screen, but no draft: it only lives while the edit screen is open.
   const [bulkReason, setBulkReason] = useState<BulkReason | null>(null);
+  // Lines whose reason the Captain changed or cleared by hand since the last
+  // Apply — the sticky pass leaves them alone (see CaptainMP).
+  const [handEditedReasons, setHandEditedReasons] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
@@ -178,20 +183,30 @@ export function OrderEditPage() {
       ).length;
       setLines((prev) => overruleAll(items, prev, bulk, "overwrite"));
       setBulkReason(bulk);
+      setHandEditedReasons(new Set<string>());
       showToast(t("captain.overruleAllAppliedToast", { count: patchedCount }), "success");
     },
     [items, lines, showToast, t],
   );
 
-  const handleOverruleAllDisable = useCallback(() => setBulkReason(null), []);
+  const handleOverruleAllDisable = useCallback(() => {
+    setBulkReason(null);
+    setHandEditedReasons(new Set<string>());
+  }, []);
+
+  const handleReasonEdit = useCallback((productId: string) => {
+    setHandEditedReasons((prev) =>
+      prev.has(productId) ? prev : new Set<string>(prev).add(productId),
+    );
+  }, []);
 
   // Sticky pass — see CaptainMP: fills only lines without a reason; an
   // unchanged result keeps the same reference, so this cannot loop.
   useEffect(() => {
     if (!bulkReason) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLines((prev) => overruleAll(items, prev, bulkReason, "fillMissing"));
-  }, [bulkReason, lines, items]);
+    setLines((prev) => overruleAll(items, prev, bulkReason, "fillMissing", handEditedReasons));
+  }, [bulkReason, lines, items, handEditedReasons]);
 
   const handleScrollToRed = useCallback(() => {
     const firstRed = items.find((item) => {
@@ -341,6 +356,7 @@ export function OrderEditPage() {
                 }
               }
               onChange={handleLineChange}
+              onReasonEdit={handleReasonEdit}
             />
           ))
         )}

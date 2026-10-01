@@ -131,6 +131,12 @@ export function CaptainMP() {
   // reason on lines that start requiring one later. Per supplier: reset on
   // supplier switch, persisted in the draft.
   const [bulkReason, setBulkReason] = useState<BulkReason | null>(null);
+  // Lines whose reason the Captain changed or cleared by hand since the last
+  // Apply: the sticky pass leaves them alone. Reset on Apply / Wyłącz /
+  // supplier switch; not persisted in the draft.
+  const [handEditedReasons, setHandEditedReasons] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
   const [draftBanner, setDraftBanner] = useState<{
@@ -279,6 +285,7 @@ export function CaptainMP() {
     setExtraItemRows([]);
     setCaptainNote("");
     setBulkReason(null);
+    setHandEditedReasons(new Set<string>());
     /* eslint-enable react-hooks/set-state-in-effect */
 
     api
@@ -642,12 +649,22 @@ export function CaptainMP() {
       ).length;
       setLines((prev) => overruleAll(orderableItems, prev, bulk, "overwrite"));
       setBulkReason(bulk);
+      setHandEditedReasons(new Set<string>());
       showToast(t("captain.overruleAllAppliedToast", { count: patchedCount }), "success");
     },
     [orderableItems, lines, showToast, t],
   );
 
-  const handleOverruleAllDisable = useCallback(() => setBulkReason(null), []);
+  const handleOverruleAllDisable = useCallback(() => {
+    setBulkReason(null);
+    setHandEditedReasons(new Set<string>());
+  }, []);
+
+  const handleReasonEdit = useCallback((productId: string) => {
+    setHandEditedReasons((prev) =>
+      prev.has(productId) ? prev : new Set<string>(prev).add(productId),
+    );
+  }, []);
 
   // Sticky pass: whenever lines (or the active reason) change, fill the reason
   // on lines that now require one and have none. A hand-picked reason is never
@@ -656,8 +673,10 @@ export function CaptainMP() {
   useEffect(() => {
     if (!bulkReason) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLines((prev) => overruleAll(orderableItems, prev, bulkReason, "fillMissing"));
-  }, [bulkReason, lines, orderableItems]);
+    setLines((prev) =>
+      overruleAll(orderableItems, prev, bulkReason, "fillMissing", handEditedReasons),
+    );
+  }, [bulkReason, lines, orderableItems, handEditedReasons]);
 
   const handleSubmit = useCallback(async () => {
     if (!activeSupplierId) return;
@@ -1045,6 +1064,7 @@ export function CaptainMP() {
                   }
                 }
                 onChange={handleLineChange}
+                onReasonEdit={handleReasonEdit}
                 previousStock={newestSnapshotStock[item.product_id] ?? null}
               />
             ))}

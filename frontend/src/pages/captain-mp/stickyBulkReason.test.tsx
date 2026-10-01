@@ -1,7 +1,8 @@
 // Sticky "Powód zbiorczo" (feedback-1001 Phase 2, D10) on the two Captain
 // order screens: Apply sets the reason now, the reason follows lines that start
-// requiring one later, "Wyłącz" stops it, a hand-picked reason survives, and on
-// the create screen the selection round-trips through the localStorage draft.
+// requiring one later, "Wyłącz" stops it, a hand-picked reason survives, a
+// hand-CLEARED reason is not refilled, and on the create screen the selection
+// round-trips through the localStorage draft.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -121,6 +122,31 @@ describe("CaptainMP — sticky bulk reason", () => {
     expect(screen.queryByText(/Aktywny powód zbiorczy/)).not.toBeInTheDocument();
   });
 
+  it("a reason the Captain clears by hand stays cleared until the next Apply", async () => {
+    renderCreate();
+    await screen.findByText("Produkt P1");
+    typeDeviation("P1");
+    applyBulk("LOW_STORAGE");
+    expect(reasonOf("P1")).toBe("LOW_STORAGE");
+
+    // Clearing it by hand is not undone by the sticky pass — not even after
+    // another edit on the same line.
+    fireEvent.change(document.getElementById("reason-P1")!, { target: { value: "" } });
+    expect(reasonOf("P1")).toBe("");
+    fireEvent.change(document.getElementById("final-P1")!, { target: { value: "95" } });
+    expect(reasonOf("P1")).toBe("");
+
+    // Other lines still follow the sticky reason.
+    typeDeviation("P2");
+    expect(reasonOf("P2")).toBe("LOW_STORAGE");
+
+    // An explicit Apply overwrites again and resets the hand-edited memory.
+    applyBulk("EVENT_HIGH_TRAFFIC");
+    expect(reasonOf("P1")).toBe("EVENT_HIGH_TRAFFIC");
+    fireEvent.change(document.getElementById("reason-P1")!, { target: { value: "" } });
+    expect(reasonOf("P1")).toBe("");
+  });
+
   it("persists bulkReason in the draft and restores it after a reload", async () => {
     const first = renderCreate();
     await screen.findByText("Produkt P1");
@@ -215,6 +241,10 @@ describe("OrderEditPage — sticky bulk reason", () => {
 
     typeDeviation("P2");
     expect(reasonOf("P2")).toBe("LOW_STORAGE");
+
+    // A hand-cleared reason stays cleared on the edit screen too.
+    fireEvent.change(document.getElementById("reason-P2")!, { target: { value: "" } });
+    expect(reasonOf("P2")).toBe("");
 
     fireEvent.click(screen.getByRole("button", { name: "Wyłącz" }));
     expect(screen.queryByText(/Aktywny powód zbiorczy/)).not.toBeInTheDocument();
