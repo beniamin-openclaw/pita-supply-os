@@ -111,3 +111,53 @@ describe("OrderLineTable — Δ vs sugestia with a stored deviation (plan-review
     expect(screen.getByText("brak bazy")).toBeInTheDocument();
   });
 });
+
+describe("OrderLineTable — bulk-pack hint (feedback-1001 D36)", () => {
+  // Frytki: one field in paczki (the invoice unit) + "= 6 kartonów + 2 paczki".
+  const frytki = (overrides: Partial<ManagerOrderLineDetail> = {}): ManagerOrderLineDetail =>
+    makeLine({
+      product_name_pl: "Frytki Aviko",
+      inventory_unit: "szt",
+      purchase_unit: "paczka",
+      units_per_purchase_unit: 1,
+      current_stock_qty_base: 4,
+      target_stock_qty_base: 30,
+      suggested_qty_purchase: 28,
+      captain_final_qty_purchase: 26,
+      case_unit: "karton",
+      units_per_case: 4,
+      ...overrides,
+    });
+
+  it("reads the manager quantity and the suggestion in cartons", () => {
+    renderTable([frytki()]);
+    expect(screen.getByTestId("case-hint-OL-1")).toHaveTextContent("= 6 kartonów + 2 paczki");
+    expect(screen.getByText("= 7 kartonów")).toBeInTheDocument();
+  });
+
+  it("follows the live draft and stays one input in the invoice unit", () => {
+    render(
+      <LangProvider>
+        <OrderLineTable
+          lines={[frytki()]}
+          editable
+          drafts={{ "OL-1": { qty: 24, comment: "" } }}
+          onQtyChange={() => undefined}
+          onCommentChange={() => undefined}
+        />
+      </LangProvider>,
+    );
+    expect(screen.getAllByLabelText("Ilość zamawiana przez managera")).toHaveLength(1);
+    expect(screen.getByTestId("case-hint-OL-1")).toHaveTextContent("= 6 kartonów");
+  });
+
+  it("no hint under one case", () => {
+    renderTable([frytki({ captain_final_qty_purchase: 2, suggested_qty_purchase: 2 })]);
+    expect(screen.queryByTestId("case-hint-OL-1")).not.toBeInTheDocument();
+  });
+
+  it("no hint for a line without a case", () => {
+    renderTable([makeLine()]);
+    expect(screen.queryByTestId("case-hint-OL-1")).not.toBeInTheDocument();
+  });
+});
