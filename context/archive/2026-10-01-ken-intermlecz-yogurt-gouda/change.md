@@ -1,8 +1,10 @@
 ---
 change_id: ken-intermlecz-yogurt-gouda
 title: KEN — Intermlecz yogurt and gouda match the invoices
-status: implemented
+status: archived
 created: 2026-10-01
+updated: 2026-10-01
+archived_at: 2026-10-01T11:46:01Z
 type: master-data (prod SQL only, no code)
 ---
 
