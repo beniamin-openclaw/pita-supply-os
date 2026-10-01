@@ -19,7 +19,7 @@ P017,17,Florinis,Chłodnia,kg,FALSE,TRUE,,200
 P018,18,Cebula Biała,Chłodnia,kg,FALSE,TRUE,,210
 P019,19,Przyprawa do souvlakow,Chłodnia,kg,FALSE,TRUE,,220
 P020,20,Falafel,Mrożonki,kg,TRUE,TRUE,Falafel menu item,230
-P021,21,Frytki Aviko (opakowania),Mrożonki,kg,TRUE,TRUE,Core menu fries,240
+P021,21,Frytki Aviko (opakowania),Mrożonki,szt,TRUE,TRUE,Core menu fries,240
 P022,22,Frytki z batatów (opakowania),Mrożonki,kg,FALSE,TRUE,,250
 P023,23,Fasolka Szparagowa (op.),Mrożonki,kg,FALSE,TRUE,,260
 P024,24,Gyros 15 KG,Mrożonki,kg,TRUE,TRUE,Core menu gyros — 15kg block,270

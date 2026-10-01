@@ -52,7 +52,13 @@ def test_inventory_products_lists_location_products():
         "max_stock_qty_base",
         # Card order (inventory-card-order): the effective position.
         "inventory_order",
+        # Bulk pack of the primary supplier_product (migration 0028).
+        "case_unit",
+        "units_per_case",
     }
+    # P027 has no case in seed -> both stay null (the grid keeps one field).
+    assert p027["case_unit"] is None
+    assert p027["units_per_case"] is None
     assert p027["is_critical"] is True
     assert p027["inventory_unit"] == "kg"
     assert p027["product_category"] == "Mrożonki"

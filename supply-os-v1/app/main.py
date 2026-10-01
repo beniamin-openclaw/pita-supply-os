@@ -229,6 +229,9 @@ def _build_orderable_item(
         "order_note": sp.order_note,
         "suggestion_alerts_enabled": suggestion_alerts_enabled,
         "display_order": sp.display_order,
+        # Bulk pack (migration 0028) — None on both when the product has none.
+        "case_unit": sp.case_unit,
+        "units_per_case": sp.units_per_case,
     }
 
 
@@ -1305,6 +1308,8 @@ def manager_order_detail(
                 manager_comment=line.manager_comment,
                 manager_final_set=is_manager_final_set(line),
                 display_order=sp.display_order if sp else None,
+                case_unit=sp.case_unit if sp else None,
+                units_per_case=sp.units_per_case if sp else None,
             )
         )
 
@@ -1436,6 +1441,8 @@ def _enrich_lines_for_detail(
                 captain_comment=line.captain_comment,
                 manager_final_set=is_manager_final_set(line),
                 display_order=sp.display_order if sp else None,
+                case_unit=sp.case_unit if sp else None,
+                units_per_case=sp.units_per_case if sp else None,
             )
         )
     return enriched
@@ -2912,6 +2919,8 @@ def captain_inventory_products(
                 inventory_order=effective_inventory_order(
                     setting.inventory_order, product.inventory_order
                 ),
+                case_unit=sp.case_unit if sp else None,
+                units_per_case=sp.units_per_case if sp else None,
             )
         )
     items.sort(key=lambda it: inventory_sort_key(it.inventory_order, it.product_id))

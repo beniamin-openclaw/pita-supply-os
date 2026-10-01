@@ -60,6 +60,10 @@ function lineToItem(
     supplier_product_name: line.supplier_product_name,
     suggestion_alerts_enabled: suggestionAlertsEnabled,
     display_order: line.display_order ?? null,
+    // Bulk pack (migration 0028) so a card rebuilt from the order line keeps
+    // the two-field input and the case-aware suggestion.
+    case_unit: line.case_unit ?? null,
+    units_per_case: line.units_per_case ?? null,
   };
 }
 

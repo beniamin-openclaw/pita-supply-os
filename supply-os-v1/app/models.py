@@ -197,6 +197,17 @@ class SupplierProduct(BaseModel):
     # NOT Optional: the column is NOT NULL DEFAULT true and _insert binds every
     # column in _SUPPLIER_PRODUCT_COLUMNS (same reason as warehouse_pickup).
     counts_toward_minimum: bool = True
+    # Optional bulk pack ("opakowanie zbiorcze", migration 0028,
+    # feedback-1001-names-units D22/D33-D36): the case the supplier ships the
+    # purchase unit in (karton, skrzynka, worek, opak) and how many PURCHASE
+    # units it holds (> 1). Both set or both None (DB CHECK). When set, the
+    # Captain enters stock/order as [cases] + [loose], the suggestion rounds
+    # the need to the nearest whole case (app/suggestion.py) and the supplier
+    # e-mail prints "6 kartonów + 2 paczki (26 paczek)". Order lines, receipts
+    # and thresholds stay in the purchase unit. Optional/None like the other
+    # nullable master-data columns — None binds SQL NULL, which is valid here.
+    case_unit: Optional[str] = None
+    units_per_case: Optional[float] = None
 
 
 class LocationProductSetting(BaseModel):
@@ -522,6 +533,12 @@ class ManagerOrderLineDetail(BaseModel):
     # routes return lines sorted by it (app/product_order.py) and the FE
     # document builders re-sort with the TS twin. None = no position.
     display_order: Optional[int] = None
+    # Bulk pack of the line's supplier_product (migration 0028), joined from
+    # CURRENT master data: the Manager hint "= 6 kartonów + 2 paczki", the
+    # e-mail / copy-list wording and the Captain edit screen's two-field input.
+    # None on both when the product has no case.
+    case_unit: Optional[str] = None
+    units_per_case: Optional[float] = None
 
 
 class ManagerOrderReceiptLine(BaseModel):
@@ -811,6 +828,10 @@ class InventoryProduct(BaseModel):
     # else the product template (app/product_order.py). The route returns rows
     # sorted by it; None = no position.
     inventory_order: Optional[int] = None
+    # Bulk pack of the primary supplier_product (migration 0028): the count
+    # grid then takes stock as [cases] + [loose]. None on both = no case.
+    case_unit: Optional[str] = None
+    units_per_case: Optional[float] = None
 
 
 class InventoryCountLine(BaseModel):

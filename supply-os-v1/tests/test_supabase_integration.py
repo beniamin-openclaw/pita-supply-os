@@ -209,6 +209,12 @@ def _schema():
     # _LOCATION_PRODUCT_SETTING_COLUMNS reference them, so the master-data
     # inserts below error against a pre-0027 schema.
     inventory_order = (MIGRATIONS_DIR / "0027_inventory_order.sql").read_text()
+    # 0028 adds supplier_products.case_unit + units_per_case (feedback-1001
+    # bulk packs); _SUPPLIER_PRODUCT_COLUMNS references both, so the
+    # supplier_products insert below errors against a pre-0028 schema.
+    supplier_product_case = (
+        MIGRATIONS_DIR / "0028_supplier_product_case.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -237,6 +243,7 @@ def _schema():
         conn.exec_driver_sql(delivery_calendar)
         conn.exec_driver_sql(sender_and_phone)
         conn.exec_driver_sql(inventory_order)
+        conn.exec_driver_sql(supplier_product_case)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -377,6 +384,10 @@ def test_master_data_roundtrip():
         if s.setting_id == "S1"
     )
     assert s1.inventory_order is None
+    # Migration 0028 (bulk packs): the fixture never passes a case, so both
+    # nullable defaults bind (and satisfy the pair CHECK).
+    assert sps[0].case_unit is None
+    assert sps[0].units_per_case is None
     # RLS deny-all is enabled on every table (migration 0002); a successful read
     # here proves the connection role (postgres) BYPASSES RLS.
     assert supabase_backend.load_locations()
@@ -429,6 +440,57 @@ def test_supplier_product_display_order_and_minimum_flag_roundtrip():
             conn.exec_driver_sql(
                 "DELETE FROM supplier_products WHERE supplier_product_id = 'SP_POS'"
             )
+
+
+def test_supplier_product_case_roundtrip_and_checks():
+    """Migration 0028: a case (skrzynka × 6) survives a write + load, and the two
+    CHECKs refuse a half-set pair and a case of 1 or less."""
+    supabase_backend._insert(
+        "supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS,
+        SupplierProduct(
+            supplier_product_id="SP_CASE", supplier_id="SUP_X", product_id="P1",
+            supplier_product_name="Pomidor", purchase_unit="kg",
+            units_per_purchase_unit=1.0, case_unit="skrzynka", units_per_case=6,
+        ),
+    )
+    try:
+        loaded = next(
+            sp for sp in supabase_backend.load_supplier_products()
+            if sp.supplier_product_id == "SP_CASE"
+        )
+        assert loaded.case_unit == "skrzynka"
+        assert loaded.units_per_case == 6.0
+        for bad_set in (
+            "case_unit = NULL",  # half-set: units_per_case stays 6
+            "units_per_case = NULL",  # half-set: case_unit stays skrzynka
+            "units_per_case = 1",  # a case must hold more than one purchase unit
+        ):
+            with pytest.raises(IntegrityError):
+                with supabase_backend._get_engine().begin() as conn:
+                    conn.exec_driver_sql(
+                        f"UPDATE supplier_products SET {bad_set} "
+                        "WHERE supplier_product_id = 'SP_CASE'"
+                    )
+        # Clearing BOTH is allowed (the "no case" state).
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql(
+                "UPDATE supplier_products SET case_unit = NULL, units_per_case = NULL "
+                "WHERE supplier_product_id = 'SP_CASE'"
+            )
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM supplier_products WHERE supplier_product_id = 'SP_CASE'"
+            )
+
+
+def test_migration_0028_is_rerunnable():
+    """0028 is applied a second time without error (ADD COLUMN IF NOT EXISTS,
+    DROP CONSTRAINT IF EXISTS before each ADD CONSTRAINT)."""
+    sql = (MIGRATIONS_DIR / "0028_supplier_product_case.sql").read_text()
+    assert "%" not in sql  # exec_driver_sql would treat it as a placeholder
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(sql)
 
 
 def test_supplier_transport_channel_with_alerts_off_roundtrip():
