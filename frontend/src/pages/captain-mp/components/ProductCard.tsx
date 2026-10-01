@@ -408,7 +408,7 @@ export function ProductCard({
                   <>
                     <span className="inline-block whitespace-nowrap">
                       {tParts("card.suggestionNeed", {
-                        base: suggestedBase,
+                        base: formatBaseQty(suggestedBase, lang),
                         inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                       })}
                     </span>{" "}
@@ -432,9 +432,9 @@ export function ProductCard({
                   </>
                 ) : (
                   tParts("card.suggestionDetail", {
-                    base: suggestedBase,
+                    base: formatBaseQty(suggestedBase, lang),
                     inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
-                    purchase: suggestedPurchase,
+                    purchase: formatBaseQty(suggestedPurchase, lang),
                     purchaseUnit: <UnitLabel>{item.purchase_unit}</UnitLabel>,
                   })
                 )}

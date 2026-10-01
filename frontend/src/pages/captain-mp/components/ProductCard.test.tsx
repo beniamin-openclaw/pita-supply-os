@@ -278,3 +278,20 @@ describe("ProductCard — bulk pack shows the per-rule need (impl-review F5)", (
     }
   });
 });
+
+describe("ProductCard — non-case suggestion detail number formatting", () => {
+  it("stock 7,05 / target 10: 'brakuje 2,95 kg' without a float artefact", () => {
+    const item: OrderableItem = makeItem({
+      product_name_pl: "Pomidor",
+      inventory_unit: "kg",
+      purchase_unit: "kg",
+      units_per_purchase_unit: 1,
+      rounding_rule: "tenth_kg",
+      target_stock_qty_base: 10,
+      max_stock_qty_base: 12,
+    });
+    renderCard(item, makeLine({ current_stock_qty_base: 7.05 }));
+    expect(screen.getByText(innermostText(/^brakuje 2,95 kg/))).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/2\.9500/);
+  });
+});
