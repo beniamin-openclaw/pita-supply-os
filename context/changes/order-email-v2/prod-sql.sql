@@ -19,8 +19,8 @@
 -- Confirmed by the operator 2026-10-01:
 --   * WESTFIELD phone +48 784 984 092 (stored in display form "784 984 092");
 --     sender alias mokotow@pitabros.pl (also D12 in feedback-1001-names-units)
+--   * BROWARY phone 881 914 889 (applied separately after B, see prod-sql-applied.md)
 -- Still open (non-blocking):
---   * BROWARY phone: unknown -> left NULL (no phone line)
 --   * WESTFIELD location mailbox (DW) westfieldpitabros@gmail.com is set by the
 --     feedback-1001-names-units lane (its step 1.7), not here
 --
@@ -43,7 +43,7 @@ BEGIN;
 
 -- Active locations (brief rule 1 + rule 5).
 UPDATE locations SET sender_email = 'bracka@pitabros.pl',      phone = '600 722 252' WHERE location_id = 'BRACKA';
-UPDATE locations SET sender_email = 'browary@pitabros.pl',     phone = NULL          WHERE location_id = 'BROWARY';
+UPDATE locations SET sender_email = 'browary@pitabros.pl',     phone = '881 914 889' WHERE location_id = 'BROWARY';
 UPDATE locations SET sender_email = 'ken@pitabros.pl',         phone = '530 699 266' WHERE location_id = 'KEN';
 UPDATE locations SET sender_email = 'norblin@pitabros.pl',     phone = '535 300 514' WHERE location_id = 'NORBLIN';
 -- WOLA sends from the order mailbox itself (brief) -> sender_email NULL.

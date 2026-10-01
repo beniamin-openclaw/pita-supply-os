@@ -42,7 +42,7 @@ D4:
 | Location | sender_email | phone |
 |---|---|---|
 | BRACKA | bracka@pitabros.pl | 600 722 252 |
-| BROWARY | browary@pitabros.pl | — |
+| BROWARY | browary@pitabros.pl | 881 914 889 (follow-up, see below) |
 | KEN | ken@pitabros.pl | 530 699 266 |
 | NORBLIN | norblin@pitabros.pl | 535 300 514 |
 | WOLA | — (biuro@) | 662 015 470 |
@@ -54,3 +54,9 @@ D4:
 | SUPERSAM (inactive) | supersam@pitabros.pl | — |
 | KULINARNA (inactive) | kulinarna@pitabros.pl | — |
 | KAMIENICA (inactive) | — | — |
+
+## Follow-up 2026-10-01
+
+Operator gave the Browary phone after B ran:
+`UPDATE locations SET phone = '881 914 889' WHERE location_id = 'BROWARY' AND phone IS NULL` → 1 row.
+Rollback: set it back to NULL.
