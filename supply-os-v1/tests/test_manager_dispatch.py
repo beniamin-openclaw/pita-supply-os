@@ -813,3 +813,56 @@ def test_join_cc_helper():
     assert _join_cc("TBD", "wola@x.pl") == "wola@x.pl"
     assert _join_cc(None, "", "TBD") is None
     assert _join_cc() is None
+
+
+# ---------- order-email-v2: signer on the re-open URL, too-long URL ----------
+
+
+def test_dispatch_url_renders_chosen_signer(mocker):
+    """signer_email picks the configured signer; the re-open URL signs with it."""
+    import json
+    import urllib.parse
+
+    order = _captain_submitted_order()
+    _activate_sheet_backend(mocker, order=order)
+    mocker.patch.object(
+        sheets,
+        "load_meta",
+        return_value={
+            "order_email_signers": json.dumps(
+                [
+                    {"name": "Marek Złotopolski", "phone": "+48 662 184 258",
+                     "email": "marek@pitabros.pl"},
+                    {"name": "Sławomir Glanowski", "phone": "+48 692 840 194",
+                     "email": "slawek@pitabros.pl"},
+                ]
+            )
+        },
+    )
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 5}],
+        "signer_email": "slawek@pitabros.pl",
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(r.json()["gmail_compose_url"]).query)
+    assert "Pozdrawiam,\nSławomir Glanowski\ntel. +48 692 840 194 · slawek@pitabros.pl" in (
+        q["body"][0]
+    )
+
+
+def test_dispatch_too_long_url_still_dispatches(mocker):
+    """D12: a body too long for a Gmail URL no longer 400s — the order is sent
+    and only the re-open link is absent."""
+    order = _captain_submitted_order().model_copy(update={"extra_items": "x" * 9000})
+    mocks = _activate_sheet_backend(mocker, order=order)
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 5}],
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["gmail_compose_url"] is None
+    assert r.json()["status"] == "manager_sent"
+    mocks["update_order"].assert_called_once()

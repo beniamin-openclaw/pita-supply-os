@@ -26,6 +26,7 @@ import type {
 } from "../types";
 import { ManagerFilterBar } from "./manager/ManagerFilterBar";
 import { ManagerQueue, type QueueLane } from "./manager/ManagerQueue";
+import type { DispatchOpts } from "./manager/DispatchPanel";
 import { OrderDetailPane } from "./manager/OrderDetailPane";
 import {
   type DraftMap,
@@ -76,10 +77,29 @@ export function ManagerPage() {
   // order_id — lets us show a clickable "Otwórz email" link on a manager_sent
   // detail (the queue/detail endpoints don't carry the compose URL).
   const [dispatchedLinks, setDispatchedLinks] = useState<Record<string, string>>({});
+  // Orders sent this session through a verified Gmail draft -> the mailbox
+  // holding the draft (order-email-v2). Session-only, like dispatchedLinks:
+  // the DispatchPanel unmounts once the order turns manager_sent.
+  const [draftedOrders, setDraftedOrders] = useState<Record<string, string>>({});
+  // Order with a Gmail draft in progress (order-email-v2). While set, the page
+  // refuses every other action — switching orders mid-draft used to drop the
+  // dispatch silently (or build it from another order's lines).
+  const [draftingId, setDraftingId] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  // True (and says why) while a Gmail draft is being created.
+  const blockedByDraft = useCallback((): boolean => {
+    if (!draftingId) return false;
+    showToast(t("manager.draft.pageLocked"), false);
+    return true;
+  }, [draftingId, showToast, t]);
+
+  const handleDraftingChange = useCallback((orderId: string, drafting: boolean) => {
+    setDraftingId((prev) => (drafting ? orderId : prev === orderId ? null : prev));
   }, []);
 
   const loadQueue = useCallback(() => {
@@ -172,6 +192,7 @@ export function ManagerPage() {
   const handleSelect = useCallback(
     (orderId: string) => {
       if (orderId === selectedId) return;
+      if (blockedByDraft()) return;
       if (!confirmDiscardIfDirty()) return;
       setSelectedId(orderId);
       setDetail(null);
@@ -179,7 +200,7 @@ export function ManagerPage() {
       setOrderableForSelected([]);
       loadDetail(orderId);
     },
-    [selectedId, confirmDiscardIfDirty, loadDetail],
+    [selectedId, blockedByDraft, confirmDiscardIfDirty, loadDetail],
   );
 
   // Browser-level guard for tab close / reload with unsaved edits.
@@ -218,6 +239,7 @@ export function ManagerPage() {
 
   const handleClaim = useCallback(
     async (orderId: string) => {
+      if (blockedByDraft()) return;
       setBusyId(orderId);
       try {
         await api.managerClaim(orderId);
@@ -230,11 +252,12 @@ export function ManagerPage() {
         setBusyId(null);
       }
     },
-    [refreshAll, showToast, t],
+    [blockedByDraft, refreshAll, showToast, t],
   );
 
   const handleRelease = useCallback(
     async (orderId: string) => {
+      if (blockedByDraft()) return;
       if (!confirmDiscardIfDirty()) return;
       const reason = window.prompt(t("manager.releasePrompt"));
       if (!reason || reason.trim() === "") return;
@@ -250,13 +273,14 @@ export function ManagerPage() {
         setBusyId(null);
       }
     },
-    [confirmDiscardIfDirty, refreshAll, showToast, t],
+    [blockedByDraft, confirmDiscardIfDirty, refreshAll, showToast, t],
   );
 
   // Cancel (soft-delete) a pre-dispatch order with a required reason trace.
   // Mirrors release; on success the order leaves the queue (status → cancelled).
   const handleCancel = useCallback(
     async (orderId: string) => {
+      if (blockedByDraft()) return;
       if (!confirmDiscardIfDirty()) return;
       if (!window.confirm(t("manager.cancelConfirm"))) return;
       const reason = window.prompt(t("manager.cancelPrompt"));
@@ -273,7 +297,7 @@ export function ManagerPage() {
         setBusyId(null);
       }
     },
-    [confirmDiscardIfDirty, refreshAll, showToast, t],
+    [blockedByDraft, confirmDiscardIfDirty, refreshAll, showToast, t],
   );
 
   // Save (PATCH) — full read-modify-write payload for DIRTY lines only; stays
@@ -282,6 +306,7 @@ export function ManagerPage() {
   const handleSave = useCallback(
     async (orderId: string) => {
       if (!detail) return;
+      if (blockedByDraft()) return;
       const finals = dirtySavePayload(drafts, detail.lines);
       if (finals.length === 0) return;
       setBusyId(orderId);
@@ -296,7 +321,7 @@ export function ManagerPage() {
         setBusyId(null);
       }
     },
-    [detail, drafts, refreshAll, showToast, t],
+    [blockedByDraft, detail, drafts, refreshAll, showToast, t],
   );
 
   // Dispatch state-write — payload is the FULL draft line set (every line,
@@ -304,8 +329,28 @@ export function ManagerPage() {
   // channel the DispatchPanel already opened the (edited-body) Gmail link via a
   // clicked <a>; this just persists manager_final + status + sent_method.
   const handleDispatch = useCallback(
-    async (orderId: string, sentMethod: OrderingMethod) => {
-      if (!detail) return;
+    async (
+      orderId: string,
+      sentMethod: OrderingMethod,
+      signerEmail?: string | null,
+      opts?: DispatchOpts,
+    ) => {
+      // The draft path calls this after an await, through the closure captured
+      // at click time — so `detail`/`drafts` are the clicked order's. Anything
+      // else (another order loaded, an action already in flight) is refused;
+      // with a draft already in Gmail that must be said, never dropped silently.
+      if (!detail || detail.order_id !== orderId || busyId) {
+        if (opts?.draftMailbox) {
+          showToast(
+            t("manager.draft.dispatchFailed", {
+              mailbox: opts.draftMailbox,
+              detail: t("manager.draft.orderChanged"),
+            }),
+            false,
+          );
+        }
+        return;
+      }
       const manager_finals = dispatchPayload(drafts, detail.lines);
       setBusyId(orderId);
       try {
@@ -313,13 +358,21 @@ export function ManagerPage() {
           order_id: orderId,
           manager_finals,
           sent_method: sentMethod,
+          // The chosen signer, so the server re-open URL signs identically.
+          signer_email: sentMethod === "email" ? signerEmail ?? null : null,
         });
         // Non-email channels have no email artifact — "marked as ordered" is
         // the accurate confirmation there; email keeps the dispatched copy.
-        showToast(
-          t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
-          true,
-        );
+        if (opts?.draftMailbox) {
+          showToast(t("manager.draft.done", { mailbox: opts.draftMailbox }), true);
+          const mailbox = opts.draftMailbox;
+          setDraftedOrders((prev) => ({ ...prev, [orderId]: mailbox }));
+        } else {
+          showToast(
+            t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
+            true,
+          );
+        }
         // Keep any server-built compose URL so "Otwórz email" works on the sent
         // detail (email channel only; null for portal/phone/manual).
         if (resp.gmail_compose_url) {
@@ -328,12 +381,18 @@ export function ManagerPage() {
         refreshAll(orderId);
       } catch (e) {
         const detailMsg = e instanceof ApiError ? e.detail : String(e);
-        showToast(t("manager.actionError", { detail: detailMsg }), false);
+        // A verified draft already exists — say so, it is unsent and harmless.
+        showToast(
+          opts?.draftMailbox
+            ? t("manager.draft.dispatchFailed", { mailbox: opts.draftMailbox, detail: detailMsg })
+            : t("manager.actionError", { detail: detailMsg }),
+          false,
+        );
       } finally {
         setBusyId(null);
       }
     },
-    [detail, drafts, refreshAll, showToast, t],
+    [busyId, detail, drafts, refreshAll, showToast, t],
   );
 
   // Add one ad-hoc product line to the claimed order (add-product-to-order). The
@@ -343,6 +402,7 @@ export function ManagerPage() {
   // save/dispatch flow afterwards.
   const handleAddLine = useCallback(
     async (orderId: string, productId: string, supplierProductId: string) => {
+      if (blockedByDraft()) return;
       setBusyId(orderId);
       try {
         const resp = await api.managerAddLine(orderId, productId, supplierProductId);
@@ -361,7 +421,7 @@ export function ManagerPage() {
         setBusyId(null);
       }
     },
-    [showToast, t],
+    [blockedByDraft, showToast, t],
   );
 
   // Products that can still be added to the selected order: the supplier's
@@ -566,8 +626,10 @@ export function ManagerPage() {
               detail={detail}
               loading={detailLoading}
               busyId={busyId}
+              draftingId={draftingId}
               cutoffIso={selectedCutoffIso}
               dispatchedEmailUrl={selectedId ? dispatchedLinks[selectedId] ?? null : null}
+              draftedMailbox={selectedId ? draftedOrders[selectedId] ?? null : null}
               drafts={drafts}
               availableToAdd={availableToAdd}
               onAddLine={handleAddLine}
@@ -579,6 +641,7 @@ export function ManagerPage() {
               onQtyChange={handleQtyChange}
               onCommentChange={handleCommentChange}
               onToast={showToast}
+              onDraftingChange={handleDraftingChange}
             />
           </div>
         </div>
