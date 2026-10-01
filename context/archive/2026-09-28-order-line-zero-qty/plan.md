@@ -536,12 +536,12 @@ None: one boolean column read with rows already fetched; no new queries.
 #### Automated
 
 - [x] 3.1 prod-sql.sql dry-run on local demo Postgres with ROLLBACK — c0700b5
-- [ ] 3.2 CI green on the PR
+- [x] 3.2 CI green on the PR — 6149dce (PR #39, all checks green)
 
 #### Manual
 
 - [x] 3.3 Operator applied 0024 on prod before merge; audit matches the pre-check — ec1139f
-- [ ] 3.4 New Vercel bundle and Railway commit confirmed live
+- [x] 3.4 New Vercel bundle and Railway commit confirmed live — 3915bab (main includes #39; Vercel production + Railway success, checked 2026-10-01)
 - [ ] 3.5 Prod smoke on a throwaway or nominated stale order: zero sticks, not in e-mail preview, never Wyślij
 - [ ] 3.6 Transport prod smoke only if a captain-origin draft exists
 - [ ] 3.7 Untouched claimed and sent orders unchanged

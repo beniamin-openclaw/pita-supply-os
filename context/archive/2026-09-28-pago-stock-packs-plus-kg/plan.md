@@ -531,5 +531,5 @@ the frontend PR; stored data is unaffected either way.
 #### Manual
 
 - [x] 4.3 Operator confirms thresholds (audit / data session) and approves merge
-- [ ] 4.4 Vercel production bundle for the merge commit is live
+- [x] 4.4 Vercel production bundle for the merge commit is live — 3915bab (main includes #40 / 17a4bb6; Vercel production + Railway success, checked 2026-10-01)
 - [ ] 4.5 Prod, Captain token only: order card and inventory grid show two fields, reading, prompt; no supplier order placed
