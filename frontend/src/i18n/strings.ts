@@ -1690,7 +1690,6 @@ export const STRINGS = {
     pl: "Odbiór własny z magazynu Pita Bros",
     en: "Self pickup from Pita Bros warehouse",
   },
-  "manager.transport.print.pagoDoc.catalogCol": { pl: "Nr katalogowy", en: "Catalog no." },
 
   // v4 — "Zrob draft w Gmailu": creates a real Gmail DRAFT (never sends) in
   // the mailbox of whoever clicks, via Google OAuth (gmail.compose scope).
