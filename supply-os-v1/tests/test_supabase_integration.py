@@ -443,8 +443,8 @@ def test_supplier_product_display_order_and_minimum_flag_roundtrip():
 
 
 def test_supplier_product_case_roundtrip_and_checks():
-    """Migration 0028: a case (skrzynka × 6) survives a write + load, and the two
-    CHECKs refuse a half-set pair and a case of 1 or less."""
+    """Migration 0028: a case (skrzynka × 6) survives a write + load, and the
+    CHECKs refuse a half-set pair, a case of 1 or less and a blank case unit."""
     supabase_backend._insert(
         "supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS,
         SupplierProduct(
@@ -464,6 +464,8 @@ def test_supplier_product_case_roundtrip_and_checks():
             "case_unit = NULL",  # half-set: units_per_case stays 6
             "units_per_case = NULL",  # half-set: case_unit stays skrzynka
             "units_per_case = 1",  # a case must hold more than one purchase unit
+            "case_unit = '  '",  # blank unit: the engine would round to unnamed cases
+            "case_unit = ''",
         ):
             with pytest.raises(IntegrityError):
                 with supabase_backend._get_engine().begin() as conn:

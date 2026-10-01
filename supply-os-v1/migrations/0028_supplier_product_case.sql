@@ -14,7 +14,9 @@
 --                                     units one case holds (karton = 4
 --                                     paczki, skrzynka = 6 kg). Must be > 1.
 --
--- Both columns are set together or not at all (CHECK below). NULL on both
+-- Both columns are set together or not at all, and case_unit is never blank
+-- (CHECKs below): a blank unit would let the engine round to cases that no
+-- screen or e-mail names. NULL on both
 -- keeps today's behaviour byte-for-byte: no two-field order input, no case
 -- rounding of the suggestion, no case wording in the supplier e-mail. Order
 -- lines, receipts, finance and thresholds stay in the purchase unit, so
@@ -33,6 +35,7 @@
 -- dropped if it exists before it is added.
 --
 -- Rollback (loses only the case values, which prod-sql-2-diff.md records):
+--   ALTER TABLE supplier_products DROP CONSTRAINT IF EXISTS supplier_products_case_unit_not_blank_check;
 --   ALTER TABLE supplier_products DROP CONSTRAINT IF EXISTS supplier_products_case_pair_check;
 --   ALTER TABLE supplier_products DROP CONSTRAINT IF EXISTS supplier_products_units_per_case_check;
 --   ALTER TABLE supplier_products DROP COLUMN IF EXISTS units_per_case;
@@ -54,3 +57,8 @@ ALTER TABLE supplier_products DROP CONSTRAINT IF EXISTS supplier_products_units_
 ALTER TABLE supplier_products
     ADD CONSTRAINT supplier_products_units_per_case_check
     CHECK (units_per_case IS NULL OR units_per_case > 1);
+
+ALTER TABLE supplier_products DROP CONSTRAINT IF EXISTS supplier_products_case_unit_not_blank_check;
+ALTER TABLE supplier_products
+    ADD CONSTRAINT supplier_products_case_unit_not_blank_check
+    CHECK (case_unit IS NULL OR btrim(case_unit) <> '');

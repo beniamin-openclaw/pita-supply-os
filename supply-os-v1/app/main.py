@@ -599,15 +599,16 @@ def _evaluate_submit_line(
       (``order_base > max`` and not ``allow_over_max_due_to_packaging``). The line
       persists with ``current_stock_qty_base=0`` (column stays NOT NULL) and
       ``delta_vs_suggestion_pct=None`` (so it never inflates deviation roll-ups).
-    - **Counted, at/above target** (``stock is not None`` and
-      ``suggested_qty_purchase == 0``; week2-feedback-quantities Phase 1): the
-      suggestion is 0, so there is no baseline to deviate from — the deviation
-      and critical-under gates are skipped and NO reason is required. The line
+    - **Counted, at/above target** (``stock is not None`` and the per-rule
+      need is 0 — the suggestion itself without a case;
+      week2-feedback-quantities Phase 1): there is no baseline to deviate
+      from — the deviation and critical-under gates are skipped and NO reason
+      is required. The line
       persists the counted stock and ``delta_vs_suggestion_pct=None`` (so it
       never inflates deviation roll-ups). When a quantity was ordered anyway, an
       informational warning ``"... (info)"`` is returned; a ``reason_code``, if
       the Captain gave one, is stored as before.
-    - **Counted, below target** (a value was given and the suggestion is > 0):
+    - **Counted, below target** (a value was given and the need is > 0):
       the existing critical-under and >25% deviation gates apply
       byte-identically.
 
@@ -787,10 +788,13 @@ def captain_submit(
         without reason_code -> 400. When stock is uncounted the deviation +
         critical gates are skipped (no real suggestion); only over-MAX forces a
         reason. See `_evaluate_submit_line`.
-      - counted line at/above target (suggested_qty_purchase == 0) -> never a
-        400: no reason is required, delta_vs_suggestion_pct is stored as None,
+      - counted line at/above target (need == 0, the suggestion without a
+        case) -> never a 400: no reason is required, delta_vs_suggestion_pct is stored as None,
         and an "(info)" warning names the ordered quantity when it is > 0
         (week2-feedback-quantities Phase 1). See `_evaluate_submit_line`.
+      - bulk pack (supplier_products.units_per_case) -> an order between the
+        need and the case suggestion needs no reason; see D34 in
+        `_evaluate_submit_line`.
       - supplier with `suggestion_alerts_enabled = False` (Pago) -> none of the
         reason gates above fire and no warning is returned; the suggestion and
         deviation are still persisted (pago-suggestion-no-alerts).
