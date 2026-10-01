@@ -105,7 +105,7 @@ Post-plan main-loop decisions were reviewed as the intended behaviour:
   - Tradeoff: a reason the Captain deliberately gave on a non-requiring line (for example the "stock ≥ target, ordered anyway" info branch) is no longer stored. That is a behaviour change to FR-011 history.
   - Confidence: MED.
   - Blind spot: the on-screen sticky-bar `reasonCount` still counts the stale reasons.
-- **Decision**: PENDING
+- **Decision**: FIXED in e3b01cd (Fix A: `reason_auto` flag + `clearStaleAutoReasons`, also after "Wyłącz"; "1" → "12" flow tested on the create screen, the auto clear also on the edit screen)
 
 ### F2 — "Stored deviation wins" relabels 57 legacy order lines from "ponad cel" / "brak bazy" to "+N%"
 
@@ -125,7 +125,7 @@ Post-plan main-loop decisions were reviewed as the intended behaviour:
 
   No line with a case can exist yet, so the new ordering only needs to apply to case lines.
 - **Fix**: Keep the old branch first for lines without a case. In both screens, test `line.suggested_qty_purchase === 0 && caseOf(line) === null` before the stored delta. Add one `OrderLineTable` test: a legacy line with suggestion 0, delta 5 and no case still reads "ponad cel".
-- **Decision**: PENDING
+- **Decision**: FIXED in b0ff862 (suggestion 0 without a case keeps "ponad cel" / "brak bazy" first on both screens; legacy-line test added)
 
 ### F3 — A blank `case_unit` passes the 0028 CHECKs; the engine then rounds to cases that no screen or e-mail shows
 
@@ -139,7 +139,7 @@ Post-plan main-loop decisions were reviewed as the intended behaviour:
 
   The suggestion jumps in steps of 6 with no explanation. 0028 is not yet on prod, so this is cheap to close now.
 - **Fix**: In 0028, add `CHECK (case_unit IS NULL OR btrim(case_unit) <> '')`, using the same drop-if-exists + add pattern and no percent sign, and extend `test_supplier_product_case_roundtrip_and_checks` with a blank-unit case.
-- **Decision**: PENDING
+- **Decision**: FIXED in 439976a (`supplier_products_case_unit_not_blank_check`, re-runnable; integration test refuses '  ' and '')
 
 ### F4 — Small parity and documentation drifts around D34
 
@@ -155,7 +155,7 @@ Post-plan main-loop decisions were reviewed as the intended behaviour:
   - (a) Use `deviationReference(final, s.need, s.purchase) === final` for the green test.
   - (b) Reword both docstrings to "need == 0 (the suggestion without a case)".
   - (c) Optional: leave as is, or format non-case lines with `formatQtyG` too. That second option is a visible change to today's list.
-- **Decision**: PENDING
+- **Decision**: FIXED — (a) b0ff862 (`deviationReference(...) === final`); (b) 439976a (docstrings key on the need); (c) b0ff862 (Polish `formatQtyG` on every copy-list line: whole numbers unchanged, decimals get a comma like the e-mail; e-mail goldens untouched)
 
 ### F5 — The case card hides the per-rule need that D34 accepts without a reason
 
@@ -171,7 +171,7 @@ Post-plan main-loop decisions were reviewed as the intended behaviour:
 
   Related, by design (D34, pinned in the fixture as an operator choice): a critical product whose need is under half a case (for example halloumi with a need of 5 and a karton of 12) gets suggestion 0, and ordering 0 needs no reason. Phase 4 lists only rows whose target is under half a case, not critical rows that often have a small need.
 - **Fix**: Show the need in purchase units in the case line through i18n, for example "brakuje 2,95 kg → 3 kg ≈ 1 skrzynka (6 kg)". In the Phase 4 diff, also list the critical case rows (P006, P016, P015, P021) so the operator confirms the "0 without a reason" consequence.
-- **Decision**: PENDING
+- **Decision**: FIXED in 66d9287 ("brakuje 2,95 kg → 3 kg ≈ 1 skrzynka (6 kg)", PL + EN). The Phase 4 diff listing of critical case rows is left to the prod-sql-2 author.
 
 ### F6 — Progress and change status not updated for work that is done
 
@@ -183,4 +183,4 @@ Post-plan main-loop decisions were reviewed as the intended behaviour:
 
   This review did not stamp `change.md`, because the orchestrator limited this session's commit to the review file. Manual items (2.4, 3.6–3.8) are correctly pending: they need the merge, migration 0028 on prod, and the operator.
 - **Fix**: Tick 2.1, 2.2, 3.1–3.4 and 5.2 with their SHAs (`9dc5b21`/`2d1394d`, `056f7bf`…`2a2ab42`, `ce05824`). Set `change.md` `status: impl_reviewed`, `updated: 2026-10-01`. Tick 2.3 and 3.5 once F1 and F2 are resolved.
-- **Decision**: PENDING
+- **Decision**: FIXED in this docs commit (Progress 2.1–2.3, 3.1–3.5, 5.2 ticked with SHAs; change.md status impl_reviewed)

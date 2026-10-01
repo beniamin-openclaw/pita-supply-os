@@ -745,9 +745,9 @@ There are three parts:
 
 #### Automated
 
-- [ ] 2.1 Frontend build, lint and tests green
-- [ ] 2.2 New/updated tests for overruleAll modes, sticky flow, draft bulkReason, text assertions
-- [ ] 2.3 impl-review with no blocking findings
+- [x] 2.1 Frontend build, lint and tests green — 9dc5b21, 2d1394d
+- [x] 2.2 New/updated tests for overruleAll modes, sticky flow, draft bulkReason, text assertions — 9dc5b21, 2d1394d, e3b01cd
+- [x] 2.3 impl-review with no blocking findings — 08590b0 (review), F1 fixed in e3b01cd
 
 #### Manual
 
@@ -757,11 +757,11 @@ There are three parts:
 
 #### Automated
 
-- [ ] 3.1 Backend ruff and pytest green
-- [ ] 3.2 Integration tests green with 0028
-- [ ] 3.3 Frontend build, lint and tests green
-- [ ] 3.4 Golden e-mail tests green on both sides with the case fixture
-- [ ] 3.5 impl-review with no blocking findings
+- [x] 3.1 Backend ruff and pytest green — 056f7bf, 6ac6dab, 3d4b890, 2a2ab42, 439976a
+- [x] 3.2 Integration tests green with 0028 — 056f7bf, 439976a
+- [x] 3.3 Frontend build, lint and tests green — e77994c, f4979e2, 3d4b890, 2a2ab42, b0ff862, 66d9287
+- [x] 3.4 Golden e-mail tests green on both sides with the case fixture — 3d4b890
+- [x] 3.5 impl-review with no blocking findings — 08590b0 (review), F1–F5 fixed in 439976a, e3b01cd, b0ff862, 66d9287
 
 #### Manual
 
@@ -786,7 +786,7 @@ There are three parts:
 #### Manual
 
 - [ ] 5.1 WESTFIELD mailbox applied; audit saved
-- [ ] 5.2 NEW_LOCATION_CHECKLIST updated
+- [x] 5.2 NEW_LOCATION_CHECKLIST updated — ce05824
 - [ ] 5.3 Staff message sent (operator confirms)
 
 ### Phase 6: 0/0/0 cleanup
