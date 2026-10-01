@@ -23,7 +23,9 @@
 --   * 1.11d (KEN Cappy) is BLOCKED today by the claimed order
 --          ORD-20260930-KEN-COCA-b8acbc (P065 line). Re-run when that order
 --          has left captain_submitted / manager_claimed.
---   * 1.11b..g need 1.11a first.
+--   * 1.11b..g need 1.11a first. 1.11a's v_price is the operator's choice
+--          (75.24 paid netto by default, or 100.32 list price).
+--   * 1.12 (Coca-Cola glass prices) is OPTIONAL: run only on the operator's yes.
 --   * 1.11h (P064/P065 renamed "… 0,33 l PET") runs LAST, only after all
 --          six glass locations have switched (1.11b..g, KEN included). It is
 --          therefore blocked as long as 1.11d is. Until then P064/P065 keep
@@ -34,7 +36,11 @@
 -- ELEKTROWNIA, WESTFIELD). Rows of the 6 inactive locations are untouched.
 -- Target = max unless the step says otherwise (D17, D18).
 -- Moved out of this file on purpose: papryka P017 (name, unit, Helcom row)
--- and the Prymat spice units/prices -> prod-sql-1b.sql (Phase 1b).
+-- and the Prymat spices P050/P051/P052/P055 (names, units, prices) ->
+-- prod-sql-1b.sql (Phase 1b), each name in the same block as its unit, so
+-- no supplier e-mail shows a jar name next to "kg". P054 liść stays here
+-- (it is already opak). P121 "Gąbka do naczyń 10szt" -> Phase 4, with its
+-- opak-10 case (main-loop decision 2026-10-01).
 --
 -- Dry run: see prod-sql-1-diff.md, section "Dry run".
 -- =====================================================================
@@ -118,7 +124,8 @@ SELECT v.step, v.loc,
 -- 1.1 Names, batch N1 (names.md, D1, D20, D28). Screen name
 --     (products.product_name_pl) and supplier name
 --     (supplier_products.supplier_product_name, printed in supplier
---     e-mails). Guarded on the current name. P017 is in Phase 1b.
+--     e-mails). Guarded on the current name. P017, P050, P051, P052 and
+--     P055 are in Phase 1b; P121 is in Phase 4.
 -- ---------------------------------------------------------------------
 DO $$
 DECLARE n int;
@@ -136,24 +143,19 @@ BEGIN
       ('P043','DEVELEY MUSZTARDA 3 kg','Develey Musztarda 3 kg'),
       ('P044','FANEX MAJONEZ 4kg','Fanex Majonez 4kg'),
       ('P046','CIECIORKA','Cieciorka w zalewie 400g/240g'),
-      ('P050','Pieprz','Prymat Pieprz czarny mielony 820g'),
-      ('P051','Oregano','Prymat Oregano 110g'),
-      ('P052','Papryka słodka - mielona','Prymat Papryka słodka mielona 720g'),
       ('P053','Sól 1kg','Sól kamienna 1kg'),
       ('P054','Liść Laurowy','Prymat Liść Laurowy 80g'),
-      ('P055','Ziele Angielskie','Prymat Ziele angielskie 600g'),
       ('P084','Opakowaie sałatki duże jednocześciowe 750ml','Opakowanie sałatki duże jednoczęściowe 750ml'),
       ('P085','Opakowanie sałatki małe jednocześciowe 250ml','Opakowanie sałatki małe jednoczęściowe 250ml'),
       ('P094','Torby fałdowane pojedycze do pity','Torby fałdowane pojedyncze do pity'),
       ('P095','Folia Alumiuniowa','Folia Aluminiowa'),
-      ('P121','Gąbka do naczyń','Gąbka do naczyń 10szt'),
       ('P140','KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6','Kawa Jacobs Cronat Gold Rozpuszczalna 200gr'),
       ('P141','LIPTON HERBATA YELLOW LABEL 100szt./12 koperta','Herbata Lipton Yellow Label 100szt'),
       ('P189','Cukier w kostkach Diament 1kg','Cukier w kostkach Diamant 0,5kg')
     ) AS v(pid, old_name, new_name)
    WHERE p.product_id = v.pid AND p.product_name_pl = v.old_name;
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 25 THEN RAISE EXCEPTION '1.1 products: expected 25 renames, got % — before-state changed', n; END IF;
+  IF n <> 20 THEN RAISE EXCEPTION '1.1 products: expected 20 renames, got % — before-state changed', n; END IF;
 
   UPDATE supplier_products sp SET supplier_product_name = v.new_name
     FROM (VALUES
@@ -174,12 +176,8 @@ BEGIN
       ('SP_INTERMLECZ_P047','Kasza Pęczak Melvit 900g','MELVIT KASZA PĘCZAK 900g/10'),
       ('SP_INTERMLECZ_P048','Sriracha chili 730 ml','ASIA SOS SRIRACHA CHILI PIKANTNY FG 730ml/12'),
       ('SP_INTERMLECZ_P049','Miód 1 kg','CD MIÓD WIELOKWIATOWY 1kg/6'),
-      ('SP_INTERMLECZ_P050','Pieprz','PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet'),
-      ('SP_INTERMLECZ_P051','Oregano','PRYMAT OREGANO 110g/6 pet'),
-      ('SP_INTERMLECZ_P052','Papryka słodka - mielona','PRYMAT PAPRYKA SŁODKA 720g/9 pet'),
       ('SP_INTERMLECZ_P053','Sól 1kg','Sól kamienna 1kg'),
       ('SP_INTERMLECZ_P054','Liść Laurowy 80g','PRYMAT LIŚĆ LAUROWY 80g/10 pudełko'),
-      ('SP_INTERMLECZ_P055','Ziele Angielskie 500g','PRYMAT ZIELE ANGIELSKIE 600g/9 pet'),
       ('SP_INTERMLECZ_P189','Cukier w kostkach Diament 1 kg','DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10'),
       ('SP_BLUESERV_P084','Opakowaie sałatki duże jednocześciowe 750ml','Opakowanie sałatki duże jednoczęściowe 750ml'),
       ('SP_BLUESERV_P085','Opakowanie sałatki małe jednocześciowe 250ml','Opakowanie sałatki małe jednoczęściowe 250ml'),
@@ -189,15 +187,9 @@ BEGIN
    WHERE sp.supplier_product_id = v.spid AND sp.supplier_product_name = v.old_name
      AND sp.active;
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 28 THEN RAISE EXCEPTION '1.1 supplier_products: expected 28 renames, got % — before-state changed', n; END IF;
+  IF n <> 24 THEN RAISE EXCEPTION '1.1 supplier_products: expected 24 renames, got % — before-state changed', n; END IF;
 
-  -- Ziele: Prymat 600 g replaces Kamis 500 g (D28); the per-pack note follows.
-  UPDATE supplier_products SET order_note = '1 opak = 600 g'
-   WHERE supplier_product_id = 'SP_INTERMLECZ_P055' AND order_note = '1 opak = 500 g';
-  GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION '1.1 P055 order_note: expected 1 row, got %', n; END IF;
-
-  RAISE NOTICE '1.1 applied: 25 product names, 28 supplier names, 1 order_note';
+  RAISE NOTICE '1.1 applied: 20 product names, 24 supplier names';
 END $$;
 
 -- ---------------------------------------------------------------------
@@ -479,14 +471,21 @@ END $$;
 --       Copied from P186 / SP_COCACOLA_P186: category, rounding_rule,
 --       counts_toward_minimum, purchase unit skrzynka x 24, order_note.
 --       is_critical = false (same as Cappy PET P064/P065, not Coca-Cola —
---       see prod-sql-1-diff.md). Price 100,32 zł netto per crate (KEN
---       invoice). inventory_order / display_order stay NULL: no Coca-Cola
---       product and no product at all has a position on prod today.
+--       see prod-sql-1-diff.md). Price = v_price, the OPERATOR's choice
+--       from KEN invoice 2424225127 (06.08, 1 CS each): 75,24 = line netto
+--       actually paid (DEFAULT, like every other prod price) or 100,32 = the
+--       list unit price before the discount. inventory_order and
+--       display_order stay NULL: no Coca-Cola product and no product at all
+--       has a position on prod today.
 --       The P064/P065 "… 0,33 l PET" rename moved to 1.11h (runs last).
 -- ---------------------------------------------------------------------
 DO $$
 DECLARE n int;
+        v_price numeric := 75.24;  -- OPERATOR: 75.24 (paid netto, default) or 100.32 (list price)
 BEGIN
+  IF v_price NOT IN (75.24, 100.32) THEN
+    RAISE EXCEPTION '1.11a v_price must be 75.24 or 100.32, got %', v_price;
+  END IF;
   IF EXISTS (SELECT 1 FROM products WHERE product_id IN ('P190','P191'))
      OR EXISTS (SELECT 1 FROM supplier_products
                  WHERE product_id IN ('P190','P191')
@@ -516,8 +515,9 @@ BEGIN
       price_estimate_pln, active, notes, order_note, unit_weight_kg, supplier_sku,
       warehouse_pickup, display_order, counts_toward_minimum)
   SELECT 'SP_COCACOLA_' || v.pid, 'SUP_COCACOLA', v.pid, v.name, 'skrzynka', 24,
-         sp.rounding_rule, 100.32, true,
-         '2026-10-01 feedback-1001 1.11 D26: cena z faktury KEN (100,32 zł netto / skrzynka)',
+         sp.rounding_rule, v_price, true,
+         format('2026-10-01 feedback-1001 1.11 D26: cena z faktury KEN 2424225127 (%s zł netto / skrzynka)',
+                replace(v_price::text, '.', ',')),
          sp.order_note, NULL, NULL, false, NULL, sp.counts_toward_minimum
     FROM supplier_products sp
     CROSS JOIN (VALUES ('P190','Cappy Jabłko 0,25 l szkło'),
@@ -804,6 +804,26 @@ BEGIN
   RAISE NOTICE '1.11h applied: P064/P065 renamed "… 0,33 l PET"';
 END $$;
 
+-- ---------------------------------------------------------------------
+-- 1.12 [OPTIONAL — run only if the operator says yes] Coca-Cola glass
+--      prices. SP_COCACOLA_P186/P187 have no price today, so Coca-Cola
+--      totals and the 500 zł minimum chip skip them. Paid netto per crate
+--      from KEN invoices (line netto / quantity): Coca-Cola 60,67
+--      (2424225127: 121,34 / 2; 2424313581: 182,02 / 3), Coca-Cola Zero
+--      58,87 (2424267367: 176,62 / 3; 2424313581: 235,49 / 4).
+-- ---------------------------------------------------------------------
+DO $$
+DECLARE n int;
+BEGIN
+  UPDATE supplier_products sp SET price_estimate_pln = v.price
+    FROM (VALUES ('SP_COCACOLA_P186', 60.67), ('SP_COCACOLA_P187', 58.87)) AS v(spid, price)
+   WHERE sp.supplier_product_id = v.spid AND sp.price_estimate_pln IS NULL
+     AND sp.purchase_unit = 'skrzynka' AND sp.units_per_purchase_unit = 24 AND sp.active;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 2 THEN RAISE EXCEPTION '1.12 Coca-Cola glass prices: expected 2 rows without price, got %', n; END IF;
+  RAISE NOTICE '1.12 applied: P186 60.67, P187 58.87 per crate';
+END $$;
+
 
 -- =====================================================================
 -- STEP 2 — AUDIT (read-only). Every row must show ok = true, except the
@@ -812,20 +832,19 @@ END $$;
 -- =====================================================================
 
 SELECT n, check_name, ok FROM (
-  SELECT 1 AS n, '1.1 25 new screen names' AS check_name,
+  SELECT 1 AS n, '1.1 20 new screen names' AS check_name,
          (SELECT count(*) FROM products WHERE product_name_pl IN (
             'Tirokafteri 2kg','Oliwki kalamata 2kg Bidon','Halloumi Reha 200gr',
             'Frytki Aviko Super Crunch 9,5mm 2,5kg','Frytki z batatów Aviko 2,27kg',
             'Fasolka Szparagowa mrożona 2,5kg','Frytura Effo 15L','Woda 5L','Develey Musztarda 3 kg',
-            'Fanex Majonez 4kg','Cieciorka w zalewie 400g/240g','Prymat Pieprz czarny mielony 820g',
-            'Prymat Oregano 110g','Prymat Papryka słodka mielona 720g','Sól kamienna 1kg',
-            'Prymat Liść Laurowy 80g','Prymat Ziele angielskie 600g',
+            'Fanex Majonez 4kg','Cieciorka w zalewie 400g/240g','Sól kamienna 1kg',
+            'Prymat Liść Laurowy 80g',
             'Opakowanie sałatki duże jednoczęściowe 750ml','Opakowanie sałatki małe jednoczęściowe 250ml',
-            'Torby fałdowane pojedyncze do pity','Folia Aluminiowa','Gąbka do naczyń 10szt',
+            'Torby fałdowane pojedyncze do pity','Folia Aluminiowa',
             'Kawa Jacobs Cronat Gold Rozpuszczalna 200gr','Herbata Lipton Yellow Label 100szt',
-            'Cukier w kostkach Diamant 0,5kg')) = 25 AS ok
+            'Cukier w kostkach Diamant 0,5kg')) = 20 AS ok
   UNION ALL
-  SELECT 2, '1.1 28 new supplier names (active rows)',
+  SELECT 2, '1.1 24 new supplier names (active rows)',
          (SELECT count(*) FROM supplier_products WHERE active AND supplier_product_name IN (
             'KRUSZWICA MASŁO ROŚLINNE 500g/12 kubek','GREEK OLIWKI KALAMATA Z PESTKĄ 2kg/6 BIDON',
             'EURIAL REHA HALLOUMI SER DO GRILLOWANIA 200g/12','AVIKO FRYTKI SUPER CRUNCH 9,5mm 2,5kg/4',
@@ -835,11 +854,9 @@ SELECT n, check_name, ok FROM (
             'FANEX MAJONEZ 4kg SAŁATKOWY WYŚMIENITY','GREEK OLIWA Z OLIWEK POMACE HELCOM 1L/15 plastik',
             'ROLNIK CIECIORKA W ZALEWIE 400g/240g (12) puszka','MELVIT KASZA PĘCZAK 900g/10',
             'ASIA SOS SRIRACHA CHILI PIKANTNY FG 730ml/12','CD MIÓD WIELOKWIATOWY 1kg/6',
-            'PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet','PRYMAT OREGANO 110g/6 pet',
-            'PRYMAT PAPRYKA SŁODKA 720g/9 pet','Sól kamienna 1kg','PRYMAT LIŚĆ LAUROWY 80g/10 pudełko',
-            'PRYMAT ZIELE ANGIELSKIE 600g/9 pet','DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10',
+            'Sól kamienna 1kg','PRYMAT LIŚĆ LAUROWY 80g/10 pudełko','DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10',
             'Opakowanie sałatki duże jednoczęściowe 750ml','Opakowanie sałatki małe jednoczęściowe 250ml',
-            'Torby fałdowane pojedyncze do pity','Folia Aluminiowa')) = 28
+            'Torby fałdowane pojedyncze do pity','Folia Aluminiowa')) = 24
   UNION ALL
   SELECT 3, '1.1 no "(opakowania)"/"(op.)" left on an active name except Pago P026 Pita',
          NOT EXISTS (SELECT 1 FROM products WHERE active AND product_id <> 'P026'
@@ -901,12 +918,14 @@ SELECT n, check_name, ok FROM (
      AND (SELECT count(*) FROM location_product_settings
            WHERE location_id = 'NORBLIN' AND product_id IN ('P068','P069')) = 2
   UNION ALL
-  SELECT 14, '1.11a P190/P191 + SP_COCACOLA_P190/P191 (skrzynka x24, 100.32)',
+  SELECT 14, '1.11a P190/P191 + SP_COCACOLA_P190/P191 (skrzynka x24, price 75.24 or 100.32)',
          (SELECT count(*) FROM products WHERE product_id IN ('P190','P191') AND active
             AND inventory_unit = 'szt' AND NOT is_critical) = 2
      AND (SELECT count(*) FROM supplier_products WHERE supplier_product_id IN ('SP_COCACOLA_P190','SP_COCACOLA_P191')
             AND active AND purchase_unit = 'skrzynka' AND units_per_purchase_unit = 24
-            AND price_estimate_pln = 100.32 AND rounding_rule = 'up_for_critical') = 2
+            AND price_estimate_pln IN (75.24, 100.32) AND rounding_rule = 'up_for_critical') = 2
+     AND (SELECT count(DISTINCT price_estimate_pln) FROM supplier_products
+           WHERE supplier_product_id IN ('SP_COCACOLA_P190','SP_COCACOLA_P191')) = 1
   UNION ALL
   SELECT 15, '1.11 glass-only (2 glass, 0 PET) at WOLA, BRACKA, WESTFIELD, ELEKTROWNIA, BROWARY',
          (SELECT count(*) FROM (
@@ -943,6 +962,11 @@ SELECT n, check_name, ok FROM (
      AND (SELECT count(*) FROM supplier_products WHERE supplier_product_id IN ('SP_COCACOLA_P064','SP_COCACOLA_P065')
             AND supplier_product_name LIKE '%0,33 l PET') = 2
   UNION ALL
+  SELECT 22, '1.12 Coca-Cola glass prices 60.67 / 58.87 (OPTIONAL: false until 1.12 runs)',
+         (SELECT count(*) FROM supplier_products
+           WHERE (supplier_product_id, price_estimate_pln) IN
+                 (('SP_COCACOLA_P186', 60.67), ('SP_COCACOLA_P187', 58.87))) = 2
+  UNION ALL
   SELECT 21, '1.11 Cappy glass values: min = PET min, target = max, max 24 (WOLA/KEN: 48 or 24 per operator)',
          (SELECT count(*) FROM location_product_settings
            WHERE product_id IN ('P190','P191') AND target_stock_qty_base = max_stock_qty_base
@@ -964,6 +988,10 @@ ORDER BY n;
 -- prod state read on 2026-10-01; check them against the saved STEP 0.
 -- =====================================================================
 
+-- -- R 1.12 (only if it ran)
+-- UPDATE supplier_products SET price_estimate_pln = NULL
+--  WHERE supplier_product_id IN ('SP_COCACOLA_P186','SP_COCACOLA_P187');
+--
 -- -- R 1.11b..g (per location; replace v_loc and the PET values per location:
 -- --   WOLA 12/36/36 aomp true, BRACKA 5/12/12 aomp true, KEN 12/36/36 aomp true,
 -- --   WESTFIELD 10/24/24, ELEKTROWNIA 10/24/24, BROWARY 6/12/12; crit false everywhere)
@@ -1044,17 +1072,16 @@ ORDER BY n;
 -- UPDATE supplier_products SET price_estimate_pln = 13.67 WHERE supplier_product_id = 'SP_INTERMLECZ_P054';
 -- COMMIT;
 --
--- -- R 1.1 (names back; roll back prod-sql-1b.sql first if it ran — it renames P055's note again)
+-- -- R 1.1 (names back; independent of prod-sql-1b.sql, which owns the P017/P050/P051/P052/P055 names)
 -- BEGIN;
 -- UPDATE products p SET product_name_pl = v.old_name FROM (VALUES
 --   ('P012','Hot Feta 2kg'), ('P013','Oliwki kalamata'), ('P015','Halloumi'),
 --   ('P021','Frytki Aviko (opakowania)'), ('P022','Frytki z batatów (opakowania)'),
 --   ('P023','Fasolka Szparagowa (op.)'), ('P038','Frytura Eppo 15L'), ('P040','Woda 5l pracownicza'),
 --   ('P043','DEVELEY MUSZTARDA 3 kg'), ('P044','FANEX MAJONEZ 4kg'), ('P046','CIECIORKA'),
---   ('P050','Pieprz'), ('P051','Oregano'), ('P052','Papryka słodka - mielona'), ('P053','Sól 1kg'),
---   ('P054','Liść Laurowy'), ('P055','Ziele Angielskie'),
+--   ('P053','Sól 1kg'), ('P054','Liść Laurowy'),
 --   ('P084','Opakowaie sałatki duże jednocześciowe 750ml'), ('P085','Opakowanie sałatki małe jednocześciowe 250ml'),
---   ('P094','Torby fałdowane pojedycze do pity'), ('P095','Folia Alumiuniowa'), ('P121','Gąbka do naczyń'),
+--   ('P094','Torby fałdowane pojedycze do pity'), ('P095','Folia Alumiuniowa'),
 --   ('P140','KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6'), ('P141','LIPTON HERBATA YELLOW LABEL 100szt./12 koperta'),
 --   ('P189','Cukier w kostkach Diament 1kg')) AS v(pid, old_name)
 --  WHERE p.product_id = v.pid;
@@ -1067,13 +1094,11 @@ ORDER BY n;
 --   ('SP_INTERMLECZ_P043','DEVELEY MUSZTARDA 3 kg'), ('SP_INTERMLECZ_P044','FANEX MAJONEZ 4kg'),
 --   ('SP_INTERMLECZ_P045','Oliwa z Oliwek 1L'), ('SP_INTERMLECZ_P046','CIECIORKA'),
 --   ('SP_INTERMLECZ_P047','Kasza Pęczak Melvit 900g'), ('SP_INTERMLECZ_P048','Sriracha chili 730 ml'),
---   ('SP_INTERMLECZ_P049','Miód 1 kg'), ('SP_INTERMLECZ_P050','Pieprz'), ('SP_INTERMLECZ_P051','Oregano'),
---   ('SP_INTERMLECZ_P052','Papryka słodka - mielona'), ('SP_INTERMLECZ_P053','Sól 1kg'),
---   ('SP_INTERMLECZ_P054','Liść Laurowy 80g'), ('SP_INTERMLECZ_P055','Ziele Angielskie 500g'),
+--   ('SP_INTERMLECZ_P049','Miód 1 kg'), ('SP_INTERMLECZ_P053','Sól 1kg'),
+--   ('SP_INTERMLECZ_P054','Liść Laurowy 80g'),
 --   ('SP_INTERMLECZ_P189','Cukier w kostkach Diament 1 kg'),
 --   ('SP_BLUESERV_P084','Opakowaie sałatki duże jednocześciowe 750ml'),
 --   ('SP_BLUESERV_P085','Opakowanie sałatki małe jednocześciowe 250ml'),
 --   ('SP_BLUESERV_P094','Torby fałdowane pojedycze do pity'), ('SP_BLUESERV_P095','Folia Alumiuniowa')) AS v(spid, old_name)
 --  WHERE sp.supplier_product_id = v.spid;
--- UPDATE supplier_products SET order_note = '1 opak = 500 g' WHERE supplier_product_id = 'SP_INTERMLECZ_P055';
 -- COMMIT;

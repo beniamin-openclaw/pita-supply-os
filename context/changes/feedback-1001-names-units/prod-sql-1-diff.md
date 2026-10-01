@@ -1,5 +1,16 @@
 # Phase 1 — diff for the operator (`prod-sql-1.sql`)
 
+## Do decyzji operatora
+
+- Cappy szkło: max WOLA/KEN 48 (domyślnie) czy 24 (`v_max` w 1.11b/1.11d); Cappy szkło jako niekrytyczne — OK?
+- Cena Cappy szkło: 75,24 zł (zapłacone netto, domyślnie) czy 100,32 zł (cena katalogowa) — `v_price` w 1.11a.
+- Opcjonalny krok 1.12: ceny Coca-Cola szkło 60,67 / 58,87 zł za skrzynkę (faktury KEN) — tak/nie?
+- Przyprawy KEN (1b.6): przeliczyć progi z kg na słoiki — tak/nie (rekomendacja: tak)?
+- Papryka Helcom (1b.1): cena za opakowanie — podaj albo zostaw pustą; plus dzień pełnej inwentaryzacji dla 1b.
+- P001 masło: KRUSZWICA MASŁO ROŚLINNE 500g (faktura 6,58 zł) to ten sam produkt co obecny (6,27 zł)?
+- BRACKA: przejęte od 02.09 zamówienie Coca-Coli ORD-20260902-BRA-COCA-c673c7 — anulować czy wysłać?
+- Tylko informacja: partia pozycji inventory-card-order musi zmapować Cappy na P190/P191 i puszki na P186/P187.
+
 - **Source:** prod read-only SELECTs, 2026-10-01 ~16:30 CEST. **Nothing has been written to prod.**
 - **Scope:** the 7 active locations (WOLA, BRACKA, KEN, BROWARY, NORBLIN, ELEKTROWNIA, WESTFIELD). The 6 inactive
   locations are not touched.
@@ -8,15 +19,18 @@
   - Each block re-checks the before-state below. If anything changed since this read, that block raises and changes
     nothing.
 - **Held:** 1.5 (gyros nieścięty) waits until you confirm the staff message has gone out.
+- **Optional:** 1.12 (Coca-Cola glass prices) runs only on your yes.
 - **Blocked today:** 1.11d (Cappy at KEN), by a claimed order (see "Open orders"), and therefore 1.11h (the
   P064/P065 "… 0,33 l PET" rename), which runs only after every glass location has switched.
-- **Moved to `prod-sql-1b.sql`:** papryka P017 (name, unit, Helcom row) and the Prymat spice units and prices.
+- **Moved to `prod-sql-1b.sql`:** papryka P017 (name, unit, Helcom row) and the Prymat spices P050/P051/P052/P055
+  (names, units, prices), each name in the same block as its unit. P054 liść stays here (already `opak`).
+- **Moved to Phase 4:** the P121 rename "Gąbka do naczyń 10szt", together with its opak-10 case.
 
 ## Summary (row counts)
 
 | Step | What | Rows |
 |---|---|---|
-| 1.1 | Names N1 | 25 products, 28 supplier rows, 1 order_note (P055 500 g → 600 g) |
+| 1.1 | Names N1 | 20 products, 24 supplier rows |
 | 1.2 | Oliwki P013 → 1/1/2 kg | 7 setting rows |
 | 1.3 | Liść P054 → 0/0/1 opak; price 13,67 → 14,70 | 7 setting rows, 1 supplier row |
 | 1.4 | Gyros `blok` → `szt` (label only) | 3 supplier rows |
@@ -32,6 +46,7 @@
 | 1.11b, c, e, f, g | Cappy glass at WOLA, BRACKA, WESTFIELD, ELEKTROWNIA, BROWARY | +10 / −10 setting rows |
 | 1.11d | **BLOCKED.** Cappy glass at KEN | +2 / −2 when retried |
 | 1.11h | **Waits for 1.11d.** P064/P065 → "… 0,33 l PET" (screen + supplier name) | 2 + 2 renames |
+| 1.12 | **Optional.** Coca-Cola glass prices P186 ∅ → 60,67, P187 ∅ → 58,87 per crate | 2 supplier rows |
 
 ## 1.1 Names (screen name / supplier name in the e-mail)
 
@@ -55,17 +70,17 @@
 | P047 | (no change) | → MELVIT KASZA PĘCZAK 900g/10 |
 | P048 | (no change) | → ASIA SOS SRIRACHA CHILI PIKANTNY FG 730ml/12 |
 | P049 | (no change) | → CD MIÓD WIELOKWIATOWY 1kg/6 |
-| P050 | Pieprz → Prymat Pieprz czarny mielony 820g | → PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet |
-| P051 | Oregano → Prymat Oregano 110g | → PRYMAT OREGANO 110g/6 pet |
-| P052 | Papryka słodka - mielona → Prymat Papryka słodka mielona 720g | → PRYMAT PAPRYKA SŁODKA 720g/9 pet |
+| P050 | **moved to 1b.2** (with the unit kg → szt): Pieprz → Prymat Pieprz czarny mielony 820g | → PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet |
+| P051 | **moved to 1b.3**: Oregano → Prymat Oregano 110g | → PRYMAT OREGANO 110g/6 pet |
+| P052 | **moved to 1b.4**: Papryka słodka - mielona → Prymat Papryka słodka mielona 720g | → PRYMAT PAPRYKA SŁODKA 720g/9 pet |
 | P053 | Sól 1kg → Sól kamienna 1kg | → Sól kamienna 1kg |
 | P054 | Liść Laurowy → Prymat Liść Laurowy 80g | Liść Laurowy 80g → PRYMAT LIŚĆ LAUROWY 80g/10 pudełko |
-| P055 | Ziele Angielskie → Prymat Ziele angielskie 600g | Ziele Angielskie 500g → PRYMAT ZIELE ANGIELSKIE 600g/9 pet; note "1 opak = 500 g" → "1 opak = 600 g" |
+| P055 | **moved to 1b.5**: Ziele Angielskie → Prymat Ziele angielskie 600g | Ziele Angielskie 500g → PRYMAT ZIELE ANGIELSKIE 600g/9 pet (note set in 1b.5) |
 | P084 | Opakowaie … jednocześciowe 750ml → Opakowanie … jednoczęściowe 750ml | same fix |
 | P085 | … jednocześciowe 250ml → … jednoczęściowe 250ml | same fix |
 | P094 | Torby fałdowane pojedycze do pity → … pojedyncze … | same fix |
 | P095 | Folia Alumiuniowa → Folia Aluminiowa | same fix (active Blue Service row) |
-| P121 | Gąbka do naczyń → Gąbka do naczyń 10szt | (no change) |
+| P121 | **moved to Phase 4** (with the opak-10 case): Gąbka do naczyń → Gąbka do naczyń 10szt | (no change) |
 | P140 | KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6 → Kawa Jacobs Cronat Gold Rozpuszczalna 200gr | (no change) |
 | P141 | LIPTON HERBATA YELLOW LABEL 100szt./12 koperta → Herbata Lipton Yellow Label 100szt | (no change) |
 | P189 | Cukier w kostkach Diament 1kg → Cukier w kostkach **Diamant** 0,5kg (brand spelling as on the invoice; the sheet's "Diament" is a typo, like "Eppo") | Cukier w kostkach Diament 1 kg → DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10 |
@@ -126,8 +141,8 @@ locations. Coca-Cola products are critical at product level anyway.
 
 | ID | Screen and supplier name | Supplier row | Unit | Price |
 |---|---|---|---|---|
-| P190 | Cappy Jabłko 0,25 l szkło | SP_COCACOLA_P190 | skrzynka × 24 | 100,32 |
-| P191 | Cappy Pomarańcza 0,25 l szkło | SP_COCACOLA_P191 | skrzynka × 24 | 100,32 |
+| P190 | Cappy Jabłko 0,25 l szkło | SP_COCACOLA_P190 | skrzynka × 24 | **75,24** (`v_price`; or 100,32) |
+| P191 | Cappy Pomarańcza 0,25 l szkło | SP_COCACOLA_P191 | skrzynka × 24 | **75,24** (`v_price`; or 100,32) |
 
 - Copied from P186: category Napoje, `up_for_critical`, counts toward minimum, note "1 skrzynka = 24 szt".
 - `is_critical = false` (see Decisions).
@@ -182,6 +197,7 @@ The PET rows are deleted at the six glass locations.
 2. **Prymat names.**
    - Screen name: "Prymat <name> <weight>".
    - Supplier name: the invoice text verbatim ("PRYMAT … 820g/9 pet"), from `inputs/README.md` and the KEN invoice.
+   - P050/P051/P052/P055 are set in 1b, in the same block as their unit change; only P054 liść is renamed here.
 3. **Typo fixes** (P084, P085, P094, P095) are also applied to the supplier names. Batch N2 is not approved, so
    otherwise the typos would stay in supplier e-mails.
 4. **Cappy glass `is_critical = false`.**
@@ -219,25 +235,28 @@ The PET rows are deleted at the six glass locations.
   1.11h), and new row 21 checks the Cappy glass values (min = PET min, target = max, max 24; WOLA/KEN 48 or 24).
 - Open points added below: Cappy glass price (invoice line netto 75,24 vs list 100,32), the `inventory-card-order`
   positions batch, and the Prymat names reaching the e-mail before the units change in 1b.
+- Main-loop decisions applied afterwards (2026-10-01):
+  - the P050/P051/P052/P055 renames moved from 1.1 into 1b.2–1b.5, next to their unit change (1.1 is now 20 + 24);
+  - the P121 rename moved to Phase 4;
+  - the Cappy glass price is the variable `v_price` in 1.11a, default 75,24 (100,32 allowed, anything else raises);
+  - new optional step 1.12: Coca-Cola glass prices 60,67 / 58,87 (audit row 22, false until it runs).
 
 ## Review open points (operator decisions)
 
-- **Cappy glass price.** KEN invoice 2424225127 (06.08): "0.25 RGB X24 CAPPY APPLE / ORANGE", 1 CS each, unit price
-  100,32 but **line netto 75,24**. 100,32 is the price before the invoice discount. Other prod prices are the paid netto
-  (oliwki 45,31 = line netto). Suggest 75,24. The same invoices give Coca-Cola glass ~60,67 (Cola) and ~58,87 (Zero)
-  netto per crate, from line netto ÷ quantity (the unit-price column varies from 84 to 177 and is not usable). Coca-Cola
-  has a 500 zł minimum, so an overstated price can make the minimum chip read "met" too early.
+- **Cappy glass price** (now `v_price`, default 75,24). KEN invoice 2424225127 (06.08): "0.25 RGB X24 CAPPY APPLE /
+  ORANGE", 1 CS each, unit price 100,32 but **line netto 75,24**. 100,32 is the price before the invoice discount.
+  Other prod prices are the paid netto (oliwki 45,31 = line netto). The same invoices give Coca-Cola glass ~60,67
+  (Cola) and ~58,87 (Zero) netto per crate, from line netto ÷ quantity (the unit-price column varies from 84 to 177 and
+  is not usable); that is optional step 1.12. Coca-Cola has a 500 zł minimum, so an overstated price can make the
+  minimum chip read "met" too early.
 - **`inventory-card-order` positions (pending, `context/changes/inventory-card-order/prod-sql.sql`).** Its card map
   places P064/P065 at every location and P068/P069 at ELEKTROWNIA/BROWARY. After 1.10/1.11 the glass locations have no
   P064/P065 (and ELEKTROWNIA/BROWARY no can) rows. P190/P191 then land at the end of the Napoje section (if that batch
   runs after this one) or at the very end of the grid (if it ran before: a NULL position sorts last). Before that batch
   runs, map those card rows to P190/P191 and P186/P187, or re-run its pipeline after 1.11.
-- **Prymat names before the 1b units.** 1.1 renames P050/P051/P052 to the jar names ("PRYMAT OREGANO 110g/6 pet")
-  while their purchase unit stays `kg` until 1b. Until 1b runs, the Intermlecz e-mail line reads
-  "PRYMAT OREGANO 110g/6 pet | 1 kg", which a supplier can read as 9 jars. Either run 1b soon after 1, or move these
-  three renames into 1b.2–1b.4 (the same reasoning as moving P017 to 1b).
-- **P121 "Gąbka do naczyń 10szt"** while counted per sponge (`szt`, thresholds ×10): staff may count packs into the
-  szt field until Phase 4 adds the opak-10 case. Consider renaming it with Phase 4 instead.
+- **Prymat names before the 1b units: resolved.** The renames now run in 1b, with the unit, so no e-mail line reads
+  "PRYMAT OREGANO 110g/6 pet | 1 kg".
+- **P121 "Gąbka do naczyń 10szt": resolved.** Moved to Phase 4, with the opak-10 case.
 
 ## Dry run (local Postgres 16, 2026-10-01)
 
@@ -266,3 +285,9 @@ The PET rows are deleted at the six glass locations.
   - Template fidelity vs prod (2026-10-01 ~17:30): every guarded or written column matches prod on the touched rows.
     Only `products.gostock_id` and the `notes` of products, supplier rows and inactive-location settings are blank in
     the template; no guard, write or rollback reads them.
+- **Re-run after the main-loop decisions** (fresh template copy; 1.12 run to exercise it):
+  - Run 1: 19 blocks applied; 1.11d and 1.11h raised. Audit 20 of 22 ok; rows 16 and 20 pending.
+  - Run 2: all 21 blocks raised; checksums unchanged.
+  - `v_price` 100.32 applies; 99.99 raises in 1.11a (and 1.11b–g then raise "run 1.11a first").
+  - Unblock (KEN order set to `manager_sent`): 1.11d and 1.11h applied; audit 22 of 22 ok.
+  - STEP R (from R 1.12 down), after STEP R of 1b, restores the template byte-identical on every variant.

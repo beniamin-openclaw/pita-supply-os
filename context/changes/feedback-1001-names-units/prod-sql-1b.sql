@@ -11,8 +11,11 @@
 -- (plan.md Phase 1b). Counts are stored as plain numbers and the unit is
 -- joined live, so from the moment a block runs, earlier counts of that
 -- product are read in the new unit (szt / opak). Nothing in the history
--- is rewritten. Independent of prod-sql-1.sql (names may or may not have
--- run; no guard here depends on them).
+-- is rewritten. Independent of prod-sql-1.sql (no guard here depends on
+-- it). The Prymat names of P050/P051/P052/P055 (screen + supplier name)
+-- are set HERE, in the same block as the unit change, so no screen or
+-- supplier e-mail ever shows a jar name next to "kg" (main-loop decision
+-- 2026-10-01; P054 liść keeps its name step in prod-sql-1.sql 1.1).
 --
 -- Pattern: STEP 0 diff (read-only) -> one guarded DO block per product ->
 -- STEP 2 audit -> STEP R rollback (commented out). One block per
@@ -161,7 +164,8 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 1b.2 Prymat pieprz P050 kg -> szt (1 szt = 820 g jar), price 47,60.
+-- 1b.2 Prymat pieprz P050 kg -> szt (1 szt = 820 g jar), price 47,60,
+--      names "Prymat Pieprz czarny mielony 820g" / invoice name.
 --      Thresholds kept everywhere (already in jars) except BROWARY
 --      (kg, divided by 0,82 kg and rounded to 0,5): 0,2/0,82/0,82 -> 0,5/1/1.
 -- ---------------------------------------------------------------------
@@ -184,13 +188,16 @@ BEGIN
      AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
   IF n <> 6 THEN RAISE EXCEPTION '1b.2 P050: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
 
-  UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P050' AND inventory_unit = 'kg';
+  UPDATE products SET inventory_unit = 'szt', product_name_pl = 'Prymat Pieprz czarny mielony 820g'
+   WHERE product_id = 'P050' AND inventory_unit = 'kg' AND product_name_pl = 'Pieprz';
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION '1b.2 P050 product: expected 1 row in kg, got %', n; END IF;
+  IF n <> 1 THEN RAISE EXCEPTION '1b.2 P050 product: expected 1 row in kg named "Pieprz", got %', n; END IF;
 
   UPDATE supplier_products SET purchase_unit = 'szt', price_estimate_pln = 47.60,
-                               order_note = '1 szt = słoik 820 g'
+                               order_note = '1 szt = słoik 820 g',
+                               supplier_product_name = 'PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet'
    WHERE supplier_product_id = 'SP_INTERMLECZ_P050' AND purchase_unit = 'kg'
+     AND supplier_product_name = 'Pieprz'
      AND units_per_purchase_unit = 1 AND price_estimate_pln = 43.79;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.2 SP_INTERMLECZ_P050: expected 1 row kg/43.79, got %', n; END IF;
@@ -202,11 +209,12 @@ BEGIN
      AND s.min_stock_qty_base = 0.2 AND s.target_stock_qty_base = 0.82 AND s.max_stock_qty_base = 0.82;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.2 BROWARY P050: expected 1, got %', n; END IF;
-  RAISE NOTICE '1b.2 applied: P050 szt, 47.60, BROWARY 0.5/1/1';
+  RAISE NOTICE '1b.2 applied: P050 Prymat name, szt, 47.60, BROWARY 0.5/1/1';
 END $$;
 
 -- ---------------------------------------------------------------------
--- 1b.3 Prymat oregano P051 kg -> szt (1 szt = 110 g jar), price 11,30.
+-- 1b.3 Prymat oregano P051 kg -> szt (1 szt = 110 g jar), price 11,30,
+--      names "Prymat Oregano 110g" / invoice name.
 --      BROWARY 0,5/1/1 kg / 0,11 -> 4,5/9/9 jars (see diff: check).
 -- ---------------------------------------------------------------------
 DO $$
@@ -228,13 +236,16 @@ BEGIN
      AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
   IF n <> 6 THEN RAISE EXCEPTION '1b.3 P051: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
 
-  UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P051' AND inventory_unit = 'kg';
+  UPDATE products SET inventory_unit = 'szt', product_name_pl = 'Prymat Oregano 110g'
+   WHERE product_id = 'P051' AND inventory_unit = 'kg' AND product_name_pl = 'Oregano';
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION '1b.3 P051 product: expected 1 row in kg, got %', n; END IF;
+  IF n <> 1 THEN RAISE EXCEPTION '1b.3 P051 product: expected 1 row in kg named "Oregano", got %', n; END IF;
 
   UPDATE supplier_products SET purchase_unit = 'szt', price_estimate_pln = 11.30,
-                               order_note = '1 szt = słoik 110 g'
+                               order_note = '1 szt = słoik 110 g',
+                               supplier_product_name = 'PRYMAT OREGANO 110g/6 pet'
    WHERE supplier_product_id = 'SP_INTERMLECZ_P051' AND purchase_unit = 'kg'
+     AND supplier_product_name = 'Oregano'
      AND units_per_purchase_unit = 1 AND price_estimate_pln = 30.71;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.3 SP_INTERMLECZ_P051: expected 1 row kg/30.71, got %', n; END IF;
@@ -246,11 +257,12 @@ BEGIN
      AND s.min_stock_qty_base = 0.5 AND s.target_stock_qty_base = 1 AND s.max_stock_qty_base = 1;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.3 BROWARY P051: expected 1, got %', n; END IF;
-  RAISE NOTICE '1b.3 applied: P051 szt, 11.30, BROWARY 4.5/9/9';
+  RAISE NOTICE '1b.3 applied: P051 Prymat name, szt, 11.30, BROWARY 4.5/9/9';
 END $$;
 
 -- ---------------------------------------------------------------------
--- 1b.4 Prymat papryka słodka P052 kg -> szt (1 szt = 720 g jar), price
+-- 1b.4 Prymat papryka słodka P052 kg -> szt (1 szt = 720 g jar), names
+--      "Prymat Papryka słodka mielona 720g" / invoice name, price
 --      unchanged 25,76. BROWARY 0,36/0,72/0,72 kg / 0,72 -> 0,5/1/1.
 --      BLOCKED on 2026-10-01 by ORD-20261001-WOL-INTE-8971b4 (sent today).
 -- ---------------------------------------------------------------------
@@ -273,12 +285,15 @@ BEGIN
      AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
   IF n <> 6 THEN RAISE EXCEPTION '1b.4 P052: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
 
-  UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P052' AND inventory_unit = 'kg';
+  UPDATE products SET inventory_unit = 'szt', product_name_pl = 'Prymat Papryka słodka mielona 720g'
+   WHERE product_id = 'P052' AND inventory_unit = 'kg' AND product_name_pl = 'Papryka słodka - mielona';
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION '1b.4 P052 product: expected 1 row in kg, got %', n; END IF;
+  IF n <> 1 THEN RAISE EXCEPTION '1b.4 P052 product: expected 1 row in kg named "Papryka słodka - mielona", got %', n; END IF;
 
-  UPDATE supplier_products SET purchase_unit = 'szt', order_note = '1 szt = słoik 720 g'
+  UPDATE supplier_products SET purchase_unit = 'szt', order_note = '1 szt = słoik 720 g',
+                               supplier_product_name = 'PRYMAT PAPRYKA SŁODKA 720g/9 pet'
    WHERE supplier_product_id = 'SP_INTERMLECZ_P052' AND purchase_unit = 'kg'
+     AND supplier_product_name = 'Papryka słodka - mielona'
      AND units_per_purchase_unit = 1 AND price_estimate_pln = 25.76;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.4 SP_INTERMLECZ_P052: expected 1 row kg/25.76, got %', n; END IF;
@@ -290,13 +305,15 @@ BEGIN
      AND s.min_stock_qty_base = 0.36 AND s.target_stock_qty_base = 0.72 AND s.max_stock_qty_base = 0.72;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.4 BROWARY P052: expected 1, got %', n; END IF;
-  RAISE NOTICE '1b.4 applied: P052 szt, BROWARY 0.5/1/1';
+  RAISE NOTICE '1b.4 applied: P052 Prymat name, szt, BROWARY 0.5/1/1';
 END $$;
 
 -- ---------------------------------------------------------------------
 -- 1b.5 Prymat ziele angielskie P055 opak -> szt (label only; 1 szt =
---      600 g jar), price 43,90. BROWARY values are kg typed into the
---      opak field (0,01/0,1/0,1): / 0,6 -> 0,5 min; target = max = 1 jar
+--      600 g jar; Prymat 600 g replaces Kamis 500 g, names "Prymat Ziele
+--      angielskie 600g" / invoice name), price 43,90. BROWARY values are kg
+--      typed into the opak field (0,01/0,1/0,1): / 0,6 -> 0,5 min; target =
+--      max = 1 jar
 --      (review 2026-10-01: a max below one jar makes every uncounted
 --      1-jar order a 400 "over MAX without reason"; same as KEN 1b.6).
 -- ---------------------------------------------------------------------
@@ -319,13 +336,16 @@ BEGIN
      AND s.target_stock_qty_base = v.tg AND s.max_stock_qty_base = v.mx;
   IF n <> 6 THEN RAISE EXCEPTION '1b.5 P055: expected 6 kept threshold rows as reviewed, got % — re-read the diff', n; END IF;
 
-  UPDATE products SET inventory_unit = 'szt' WHERE product_id = 'P055' AND inventory_unit = 'opak';
+  UPDATE products SET inventory_unit = 'szt', product_name_pl = 'Prymat Ziele angielskie 600g'
+   WHERE product_id = 'P055' AND inventory_unit = 'opak' AND product_name_pl = 'Ziele Angielskie';
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 1 THEN RAISE EXCEPTION '1b.5 P055 product: expected 1 row in opak, got %', n; END IF;
+  IF n <> 1 THEN RAISE EXCEPTION '1b.5 P055 product: expected 1 row in opak named "Ziele Angielskie", got %', n; END IF;
 
   UPDATE supplier_products SET purchase_unit = 'szt', price_estimate_pln = 43.90,
-                               order_note = '1 szt = słoik 600 g'
+                               order_note = '1 szt = słoik 600 g',
+                               supplier_product_name = 'PRYMAT ZIELE ANGIELSKIE 600g/9 pet'
    WHERE supplier_product_id = 'SP_INTERMLECZ_P055' AND purchase_unit = 'opak'
+     AND supplier_product_name = 'Ziele Angielskie 500g' AND order_note = '1 opak = 500 g'
      AND units_per_purchase_unit = 1 AND price_estimate_pln = 40.83;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.5 SP_INTERMLECZ_P055: expected 1 row opak/40.83, got %', n; END IF;
@@ -337,7 +357,7 @@ BEGIN
      AND s.min_stock_qty_base = 0.01 AND s.target_stock_qty_base = 0.1 AND s.max_stock_qty_base = 0.1;
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION '1b.5 BROWARY P055: expected 1, got %', n; END IF;
-  RAISE NOTICE '1b.5 applied: P055 szt, 43.90, BROWARY 0.5/1/1';
+  RAISE NOTICE '1b.5 applied: P055 Prymat name, szt, 43.90, BROWARY 0.5/1/1';
 END $$;
 
 -- ---------------------------------------------------------------------
@@ -428,6 +448,16 @@ SELECT n, check_name, ok FROM (
                         AND product_id IN ('P050','P051','P052','P055')
                         AND notes LIKE '%feedback-1001 1b%')
   UNION ALL
+  SELECT 11, '1b.2-1b.5 Prymat names on screen and supplier row (pending: 1b.4 until WOLA receipt)',
+         (SELECT count(*) FROM products WHERE (product_id, product_name_pl) IN
+            (('P050','Prymat Pieprz czarny mielony 820g'), ('P051','Prymat Oregano 110g'),
+             ('P052','Prymat Papryka słodka mielona 720g'), ('P055','Prymat Ziele angielskie 600g'))) = 4
+     AND (SELECT count(*) FROM supplier_products WHERE active AND (supplier_product_id, supplier_product_name) IN
+            (('SP_INTERMLECZ_P050','PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet'),
+             ('SP_INTERMLECZ_P051','PRYMAT OREGANO 110g/6 pet'),
+             ('SP_INTERMLECZ_P052','PRYMAT PAPRYKA SŁODKA 720g/9 pet'),
+             ('SP_INTERMLECZ_P055','PRYMAT ZIELE ANGIELSKIE 600g/9 pet'))) = 4
+  UNION ALL
   SELECT 10, 'min <= target <= max and max > 0 on every row 1b wrote',
          NOT EXISTS (SELECT 1 FROM location_product_settings
                       WHERE notes LIKE '%2026-10-01 feedback-1001 1b%'
@@ -452,18 +482,20 @@ ORDER BY n;
 --  WHERE s.location_id = 'KEN' AND s.product_id = v.pid AND s.notes LIKE '%feedback-1001 1b.6%';
 -- COMMIT;
 --
--- -- R 1b.2..1b.5 (spices back to kg / opak; BROWARY thresholds back)
+-- -- R 1b.2..1b.5 (spices back to kg / opak and their old names; BROWARY thresholds back)
 -- BEGIN;
--- UPDATE products SET inventory_unit = 'kg' WHERE product_id IN ('P050','P051','P052') AND inventory_unit = 'szt';
--- UPDATE products SET inventory_unit = 'opak' WHERE product_id = 'P055' AND inventory_unit = 'szt';
--- UPDATE supplier_products SET purchase_unit = 'kg', price_estimate_pln = 43.79, order_note = NULL
+-- UPDATE products SET inventory_unit = 'kg', product_name_pl = 'Pieprz' WHERE product_id = 'P050' AND inventory_unit = 'szt';
+-- UPDATE products SET inventory_unit = 'kg', product_name_pl = 'Oregano' WHERE product_id = 'P051' AND inventory_unit = 'szt';
+-- UPDATE products SET inventory_unit = 'kg', product_name_pl = 'Papryka słodka - mielona' WHERE product_id = 'P052' AND inventory_unit = 'szt';
+-- UPDATE products SET inventory_unit = 'opak', product_name_pl = 'Ziele Angielskie' WHERE product_id = 'P055' AND inventory_unit = 'szt';
+-- UPDATE supplier_products SET purchase_unit = 'kg', price_estimate_pln = 43.79, order_note = NULL, supplier_product_name = 'Pieprz'
 --  WHERE supplier_product_id = 'SP_INTERMLECZ_P050' AND purchase_unit = 'szt';
--- UPDATE supplier_products SET purchase_unit = 'kg', price_estimate_pln = 30.71, order_note = NULL
+-- UPDATE supplier_products SET purchase_unit = 'kg', price_estimate_pln = 30.71, order_note = NULL, supplier_product_name = 'Oregano'
 --  WHERE supplier_product_id = 'SP_INTERMLECZ_P051' AND purchase_unit = 'szt';
--- UPDATE supplier_products SET purchase_unit = 'kg', order_note = NULL
+-- UPDATE supplier_products SET purchase_unit = 'kg', order_note = NULL, supplier_product_name = 'Papryka słodka - mielona'
 --  WHERE supplier_product_id = 'SP_INTERMLECZ_P052' AND purchase_unit = 'szt';
--- -- P055 note: '1 opak = 600 g' if prod-sql-1.sql step 1.1 ran, else '1 opak = 500 g'
--- UPDATE supplier_products SET purchase_unit = 'opak', price_estimate_pln = 40.83, order_note = '1 opak = 600 g'
+-- UPDATE supplier_products SET purchase_unit = 'opak', price_estimate_pln = 40.83, order_note = '1 opak = 500 g',
+--        supplier_product_name = 'Ziele Angielskie 500g'
 --  WHERE supplier_product_id = 'SP_INTERMLECZ_P055' AND purchase_unit = 'szt';
 -- UPDATE location_product_settings s
 --    SET min_stock_qty_base = v.mn, target_stock_qty_base = v.tg, max_stock_qty_base = v.mx,

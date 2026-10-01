@@ -170,7 +170,7 @@ the read values) and raises on a mismatch or an unexpected row count.
 - **1.1 Names N1.** Apply `names.md` batch N1 to `products.product_name_pl` and
   `supplier_products.supplier_product_name`, guarded on the current "Now" name. Resolved rows:
   - P017: "Helcom Papryka Grillowana Czerwona 4,2kg/2,5kg" (D27);
-  - P189: "Cukier w kostkach Diament 0,5kg", supplier name "DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10" (D20);
+  - P189: "Cukier w kostkach Diamant 0,5kg", supplier name "DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10" (D20);
   - P050/P051/P052/P054/P055: Prymat names from D28, with Ziele angielskie now Prymat 600 g.
 - **Scope.** "All locations" means the 7 active ones: WOLA, BRACKA, KEN, BROWARY, NORBLIN, ELEKTROWNIA and
   WESTFIELD. Rows on the 6 inactive locations are left untouched.

@@ -217,6 +217,30 @@ None.
 - The ELEKTROWNIA Mory order `c48d59` is now `manager_claimed`, not `captain_submitted`.
 - Thresholds only (1.9), so it is information only.
 
+## Follow-up: main-loop decisions applied (2026-10-01)
+
+- **S8 resolved.** The P050/P051/P052/P055 renames (screen and supplier name) moved from 1.1 into 1b.2–1b.5. Each
+  block now sets the name in the same UPDATE as the unit, guarded on the old name. 1b.5 also guards the Kamis note
+  "1 opak = 500 g", because Phase 1 no longer touches it.
+  - P054 liść stays in 1.1 (already `opak`), so 1.1 is now 20 product and 24 supplier renames.
+  - The 1b audit gains row 11 (names); the 1b rollback restores the old names and the P055 note.
+  - The Phase 1 rollback no longer touches these four products, so the two rollbacks are independent.
+- **S9 resolved.** The P121 rename left 1.1; it goes to Phase 4 with the opak-10 case.
+- **S5 resolved as a variable.** `v_price` in 1.11a, default 75.24 (paid netto); 100.32 is allowed, any other value
+  raises. Audit row 14 accepts either value, but both rows must carry the same one.
+- **New optional step 1.12:** Coca-Cola glass prices 60.67 / 58.87 per crate. It is guarded on "no price yet", has
+  audit row 22 (false until it runs) and a rollback.
+- **`plan.md:173`:** "Diament" → "Diamant".
+- **Operator list:** `prod-sql-1-diff.md` opens with a Polish "Do decyzji operatora" list (8 one-line bullets).
+- **Dry run repeated** on a fresh template copy:
+  - Phase 1 run 1: 19 blocks applied; 1.11d and 1.11h raised.
+  - Phase 1 run 2: all 21 blocks raised, checksums unchanged.
+  - `v_price`: 100.32 applies; 99.99 raises.
+  - Phase 1 unblock: audit 22 of 22.
+  - 1b run 1: audit 8 of 11; run 2 raises everywhere; unblock: 11 of 11.
+  - 1b also runs alone on an untouched copy.
+  - Both rollbacks restore the template byte-identical on all four variants.
+
 ## Files changed by this review
 
 - `prod-sql-1.sql`: S1, S2 (new block 1.11h, header, STEP 0 and rollback comments), S3 (audit rows 20 and 21).

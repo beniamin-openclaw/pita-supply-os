@@ -17,10 +17,10 @@
 | Block | What | Rows | Today |
 |---|---|---|---|
 | 1b.1 | P017 → Helcom per opak; new row SP_INTERMLECZ_P017_H, old Florinis row retired | +1 supplier row, 1 retired, 1 product, 7 thresholds | runs |
-| 1b.2 | P050 pieprz kg → szt, 43,79 → 47,60 | 1 product, 1 supplier row, BROWARY 1 threshold | runs |
-| 1b.3 | P051 oregano kg → szt, 30,71 → 11,30 | same | runs |
-| 1b.4 | P052 papryka słodka kg → szt, 25,76 unchanged | same | **blocked** (see below) |
-| 1b.5 | P055 ziele `opak` → `szt` (label only), 40,83 → 43,90 | same | runs |
+| 1b.2 | P050 pieprz kg → szt, 43,79 → 47,60, Prymat names | 1 product, 1 supplier row, BROWARY 1 threshold | runs |
+| 1b.3 | P051 oregano kg → szt, 30,71 → 11,30, Prymat names | same | runs |
+| 1b.4 | P052 papryka słodka kg → szt, 25,76 unchanged, Prymat names | same | **blocked** (see below) |
+| 1b.5 | P055 ziele `opak` → `szt` (label only), 40,83 → 43,90, Prymat names (replaces Kamis) | same | runs |
 | 1b.6 | **Optional:** KEN spice thresholds read as kg | 4 thresholds | only if you choose it |
 
 ## 1b.1 Papryka P017 (D27)
@@ -51,14 +51,16 @@ Consequence: until the recount, WOLA, BROWARY and ELEKTROWNIA read as 3,6 / 3,8 
 
 ## 1b.2–1b.5 Prymat spices (D28)
 
-| Product | Unit | Price | Supplier-row note |
-|---|---|---|---|
-| P050 Pieprz (820 g) | kg → szt | 43,79 → **47,60** | ∅ → "1 szt = słoik 820 g" |
-| P051 Oregano (110 g) | kg → szt | 30,71 → **11,30** | ∅ → "1 szt = słoik 110 g" |
-| P052 Papryka słodka (720 g) | kg → szt | 25,76 (unchanged) | ∅ → "1 szt = słoik 720 g" |
-| P055 Ziele angielskie (600 g) | opak → szt | 40,83 → **43,90** | "1 opak = 600 g" → "1 szt = słoik 600 g" |
+| Product | Screen name → | Supplier name → | Unit | Price | Supplier-row note |
+|---|---|---|---|---|---|
+| P050 | Pieprz → Prymat Pieprz czarny mielony 820g | Pieprz → PRYMAT PIEPRZ CZARNY MIELONY 820g/9 pet | kg → szt | 43,79 → **47,60** | ∅ → "1 szt = słoik 820 g" |
+| P051 | Oregano → Prymat Oregano 110g | Oregano → PRYMAT OREGANO 110g/6 pet | kg → szt | 30,71 → **11,30** | ∅ → "1 szt = słoik 110 g" |
+| P052 | Papryka słodka - mielona → Prymat Papryka słodka mielona 720g | Papryka słodka - mielona → PRYMAT PAPRYKA SŁODKA 720g/9 pet | kg → szt | 25,76 (unchanged) | ∅ → "1 szt = słoik 720 g" |
+| P055 | Ziele Angielskie → Prymat Ziele angielskie 600g | Ziele Angielskie 500g → PRYMAT ZIELE ANGIELSKIE 600g/9 pet | opak → szt | 40,83 → **43,90** | "1 opak = 500 g" → "1 szt = słoik 600 g" |
 
-Upp stays 1. The names were already set in Phase 1 step 1.1.
+Upp stays 1. Each name changes in the same block as its unit (main-loop decision 2026-10-01), so no screen or
+supplier e-mail shows a jar name next to "kg". Each block guards on the old names. P054 liść is renamed in Phase 1
+(1.1), because it is already `opak`.
 
 **Thresholds per location (min / target / max):**
 
@@ -158,6 +160,10 @@ Same copy as Phase 1 (see `prod-sql-1-diff.md`), with `prod-sql-1.sql` applied f
   - 1b.4 applied, then 1b.6 (KEN, kg) applied.
   - Audit: 10 of 10 ok.
 - **Literal guard (`interval '100 years'`):** 1b.1–1b.5 all raise, as described above.
+- **Re-run after the main-loop decisions (names in 1b):** run 1 applies 1b.1/1b.2/1b.3/1b.5 (P052 keeps its old name
+  while 1b.4 is blocked), audit 8 of 11 ok (rows 5, 7 and 11 pending on 1b.4); run 2 raises in every block
+  ("expected 1 row in kg named …"), checksums unchanged; unblock gives 11 of 11. 1b still runs alone on an untouched
+  copy, and STEP R of 1b, then of Phase 1, restores the template byte-identical on every variant.
 - **Reviewer re-run (after the review changes):** same results (run 1: 1b.4 and 1b.6 raise, audit 8 of 10; run 2:
   every block raises, checksums unchanged; unblock with a receipt: 10 of 10). Moving NORBLIN P050 max to 2 makes 1b.2
   raise "expected 6 kept threshold rows as reviewed, got 5". STEP R of 1b then of Phase 1 restores the template
