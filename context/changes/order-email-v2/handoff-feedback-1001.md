@@ -1,6 +1,6 @@
 # Handoff: order-email-v2 → feedback-1001-names-units
 
-Date: 2026-10-01. From the order-email-v2 lane (PR #43, roadmap R-32) to the
+Date: 2026-10-01. From the order-email-v2 lane (PR #43, roadmap R-33) to the
 feedback-1001-names-units lane.
 
 ## What order-email-v2 already covers
