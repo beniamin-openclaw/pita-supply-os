@@ -32,8 +32,9 @@ From `feedback-r7-tushar` (archived `context/archive/2026-07-25-feedback-r7-tush
 
 From the Connecteam group "Pita Supply OS", 21–27.09 (read 2026-09-28; prod values checked read-only
 the same day):
-- [ ] KEN, 21.09: add Bakoma jogurt typ grecki 370 g (pack of 12) to Intermlecz, max 2. Operator replied
-  "ok" on 21.09; not in `products` on 2026-09-28.
+- [x] KEN, 21.09: add Bakoma jogurt typ grecki 370 g (pack of 12) to Intermlecz, max 2. Operator replied
+  "ok" on 21.09; not in `products` on 2026-09-28. Done 2026-10-01 together with Ser Gouda Polmlek
+  (P162 / P172 renamed + activated, KEN yogurt max 2 jars) — `context/archive/2026-10-01-ken-intermlecz-yogurt-gouda/`.
 - [ ] KEN, 25.09: Souvlaki Kurczak target 6 kg → "6 boxes, or 36 kg"; same for Souvlaki Wieprz (now 3 kg).
   Prod has 1 karton = 5 kg (`upp` 5), which disagrees with "6 boxes = 36 kg": confirm the carton weight first.
 - [ ] KEN, 25.09: Koperty (SUP_MORY) target 60 "box" → 60 packs or pieces (unit label, `upp` 1).
