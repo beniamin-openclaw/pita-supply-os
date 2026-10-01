@@ -1,9 +1,9 @@
 ---
 change_id: master-data-followups
 title: Master-data follow-ups carried forward from archived lanes (operator decisions + prod SQL)
-status: new
+status: implementing
 created: 2026-09-13
-updated: 2026-09-13
+updated: 2026-10-01
 archived_at: null
 ---
 
@@ -208,3 +208,20 @@ Questions to Marek 2026-09-28 (Gmail draft to marek@pitabros.pl, not sent yet; f
 - STEP 1 ran in one transaction, no error. STEP 2 audit: 0 settings with min > target or target > max; 39 settings tagged `[2026-09-28 kg->pojemnik]`; products P011 Tzatzyki 3kg / P012 Hot Feta 2kg / P014 Feta blok 2kg = `pojemnik`, P007 Rucola 100 gr; Bukat supplier_products `pojemnik` × 1. Max historical count after conversion: P011 15 (WOLA 01.09, 45 kg), P012 3.35, P014 3.5 (WOLA 22.06, 7 kg). WOLA 27.09 count now Tzatzyki 9 / Hot Feta 1.5 / Feta 1.5.
 - Generic conversion (no explicit row): FORUM 5/14/14, 1.5/4/4.5, 0.5/2/2; zero rows stay 0.
 - Left as is: inactive SP_PAGO_P011/P012/P014 still carry `units_per_purchase_unit` 3/2/2 (kg/wiadro); harmless while inactive, fix if they are ever re-activated. Closed order_lines history not rewritten (purchase quantities keep their meaning).
+
+### Status 2026-10-01 (WIP cleanup)
+
+- WOLA Pago thresholds (gyros 10 → 150, pita 5 → 60, souvlaki 4 → 20): these come from the pago-stock-packs-plus-kg lane. It converted 14 pack-count thresholds on prod on 28.09 (blocks/cartons → kg/opak, audit clean; archived `context/archive/2026-09-28-pago-stock-packs-plus-kg/`). Not an unknown edit. The mixed-unit finding above is resolved for those 14 rows.
+- Lanes closed alongside this one: pago-data-unity (R-28), order-line-zero-qty (R-29), pago-stock-packs-plus-kg (R-25), delivery-calendar (R-26), elektrownia-westfield-rollout (R-27).
+- Still open here, in order:
+  - Marek questions 1–6. The draft was not sent; the operator sends it.
+  - KEN Hot Feta max: 2 vs 1.5 pojemnik.
+  - Batches 2–5.
+  - Souvlaki carton 5 vs 6 kg.
+  - Bakoma: only inactive P161/P162 exist.
+  - Gouda, Koperty, Cappy 12/24.
+  - C-1 and C-3.
+  - Stale orders: BRA-COCA 02.09 `manager_claimed` (cancel); WOL-MORY 21.09 (waits on Marek).
+  - J2: 18 old `manager_sent` orders.
+  - Token rotation.
+  - Naming pass.
