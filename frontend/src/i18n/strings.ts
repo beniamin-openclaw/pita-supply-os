@@ -611,6 +611,68 @@ export const STRINGS = {
   "manager.dispatch.transport": { pl: "Wysyłka: przez Transport", en: "Dispatch: via Transport" },
   "manager.dispatch.emailTo": { pl: "Do:", en: "To:" },
   "manager.dispatch.emailCc": { pl: "DW:", en: "CC:" },
+  // order-email-v2 — sender, signature and the verified Gmail draft path.
+  "manager.dispatch.emailFrom": { pl: "Od:", en: "From:" },
+  "manager.dispatch.signer": { pl: "Podpis:", en: "Signature:" },
+  "manager.draft.create": { pl: "Zrób draft w Gmailu", en: "Create Gmail draft" },
+  "manager.draft.working": { pl: "Tworzę szkic…", en: "Creating draft…" },
+  "manager.draft.fallbackHint": {
+    pl: "Zapasowo: „Otwórz w Gmail” otwiera okno nowej wiadomości — nadawcę wybierasz tam ręcznie, a w DW jest też {office}.",
+    en: "Fallback: “Open in Gmail” opens a compose window — pick the sender there by hand; CC also includes {office}.",
+  },
+  "manager.draft.done": {
+    pl: "Szkic utworzony w {mailbox} — zamówienie oznaczone jako wysłane.",
+    en: "Draft created in {mailbox} — order marked as sent.",
+  },
+  "manager.draft.doneResend": {
+    pl: "Szkic dosyłki utworzony w {mailbox}.",
+    en: "Top-up draft created in {mailbox}.",
+  },
+  "manager.draft.dispatchFailed": {
+    pl: "Szkic jest w {mailbox} (niewysłany), ale nie udało się oznaczyć zamówienia: {detail}",
+    en: "The draft is in {mailbox} (unsent), but the order could not be marked as sent: {detail}",
+  },
+  "manager.draft.sentLine": {
+    pl: "Szkic w Gmailu ({mailbox})",
+    en: "Gmail draft ({mailbox})",
+  },
+  "manager.draft.openDrafts": { pl: "Otwórz szkice", en: "Open drafts" },
+  "manager.draft.errWrongMailbox": {
+    pl: "Zalogowano jako {actual}. Szkic musi powstać w {mailbox} — wybierz to konto w okienku Google. Nic nie zostało utworzone.",
+    en: "Signed in as {actual}. The draft must be created in {mailbox} — pick that account in the Google window. Nothing was created.",
+  },
+  "manager.draft.errSenderRewritten": {
+    pl: "Gmail nie przyjął nadawcy {sender} (wstawił {actual}) — ten alias nie jest ustawiony w {mailbox}. Szkic usunięty, zamówienie bez zmian.",
+    en: "Gmail rejected the sender {sender} (used {actual}) — the alias is not set up in {mailbox}. Draft deleted, order unchanged.",
+  },
+  "manager.draft.errSessionExpired": {
+    pl: "Sesja Google wygasła — kliknij ponownie.",
+    en: "Google session expired — click again.",
+  },
+  "manager.draft.errPopupBlocked": {
+    pl: "Przeglądarka zablokowała okienko Google — zezwól na wyskakujące okna dla tej strony i kliknij ponownie.",
+    en: "The browser blocked the Google window — allow pop-ups for this site and click again.",
+  },
+  "manager.draft.errSignInTimeout": {
+    pl: "Logowanie Google nie zakończyło się w ciągu 90 sekund — kliknij ponownie i dokończ logowanie w okienku.",
+    en: "Google sign-in did not finish within 90 seconds — click again and complete the sign-in window.",
+  },
+  "manager.draft.errNoToken": {
+    pl: "Google nie dał dostępu do Gmaila (logowanie przerwane albo brak zgody) — kliknij ponownie.",
+    en: "Google did not grant Gmail access (sign-in cancelled or consent refused) — click again.",
+  },
+  "manager.draft.pageLocked": {
+    pl: "Trwa tworzenie szkicu w Gmailu — poczekaj, aż się skończy.",
+    en: "A Gmail draft is being created — wait until it finishes.",
+  },
+  "manager.draft.orderChanged": {
+    pl: "w trakcie trwała inna akcja na zamówieniu. Odśwież stronę; jeśli zamówienie nadal nie jest wysłane, usuń zbędny szkic w Gmailu przed ponownym kliknięciem",
+    en: "another action on the order was running meanwhile. Reload the page; if the order is still not sent, delete the extra Gmail draft before clicking again",
+  },
+  "manager.draft.errGeneric": {
+    pl: "Nie udało się utworzyć szkicu: {detail}",
+    en: "Could not create the draft: {detail}",
+  },
   "manager.dispatch.emailSubject": { pl: "Temat:", en: "Subject:" },
   "manager.dispatch.emailBody": { pl: "Treść:", en: "Body:" },
   "manager.openGmail": { pl: "Otwórz w Gmail", en: "Open in Gmail" },
@@ -1700,7 +1762,6 @@ export const STRINGS = {
     pl: "Odbiór własny z magazynu Pita Bros",
     en: "Self pickup from Pita Bros warehouse",
   },
-  "manager.transport.print.pagoDoc.catalogCol": { pl: "Nr katalogowy", en: "Catalog no." },
 
   // v4 — "Zrob draft w Gmailu": creates a real Gmail DRAFT (never sends) in
   // the mailbox of whoever clicks, via Google OAuth (gmail.compose scope).

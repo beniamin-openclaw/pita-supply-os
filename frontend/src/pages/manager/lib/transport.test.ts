@@ -888,7 +888,7 @@ describe("buildTransportPagoPrintDoc", () => {
     expect(doc.isPago).toBe(false);
     expect(doc.entity).toBeNull();
     expect(doc.products).toEqual([
-      { productId: "P1", name: "Pomidory malinowe", catalogNo: "Pomidory malinowe", unit: "kg", qty: 12 },
+      { productId: "P1", name: "Pomidory malinowe", unit: "kg", qty: 12 },
     ]);
 
     // The no-location-leak assertion (product table only — the document-data
@@ -962,42 +962,24 @@ describe("buildTransportPagoPrintDoc", () => {
     expect(buildTransportPagoPrintDoc(b, "Bukat").products).toEqual([]);
   });
 
-  it("uses supplier_sku as catalogNo when set", () => {
+  it("names the product, never the supplier_sku placeholder code", () => {
     const b = batch({
       lines: [
         {
           product_id: "P1",
-          product_name_pl: "Gyros wieprzowy",
-          supplier_product_id: "SP1",
-          supplier_product_name: "Gyros wieprzowy 15kg",
-          purchase_unit: "kg",
-          total_qty_purchase: 15,
+          product_name_pl: "Gyros 15 KG",
+          supplier_product_id: "SP_PAGO_P024",
+          supplier_product_name: "Gyros 15 KG",
+          purchase_unit: "blok",
+          total_qty_purchase: 10,
           per_location: [],
-          supplier_sku: "GYRSW15KG",
+          supplier_sku: "PAGO-001",
         },
       ],
     });
-    const doc = buildTransportPagoPrintDoc(b, "Bukat");
-    expect(doc.products[0].catalogNo).toBe("GYRSW15KG");
-    expect(doc.products[0].name).toBe("Gyros wieprzowy 15kg");
-  });
-
-  it("falls back catalogNo to the friendly name when supplier_sku is unset", () => {
-    const b = batch({
-      lines: [
-        {
-          product_id: "P1",
-          product_name_pl: "Pomidory",
-          supplier_product_id: "SP1",
-          supplier_product_name: "Pomidory malinowe",
-          purchase_unit: "kg",
-          total_qty_purchase: 3,
-          per_location: [],
-        },
-      ],
-    });
-    const doc = buildTransportPagoPrintDoc(b, "Bukat");
-    expect(doc.products[0].catalogNo).toBe("Pomidory malinowe");
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.products[0].name).toBe("Gyros 15 KG");
+    expect(JSON.stringify(doc.products)).not.toContain("PAGO-001");
   });
 
   // --- warehouse_pickup filter (training-feedback-0901 Phase 4) ---
@@ -1394,7 +1376,7 @@ describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
 
   it("the Pago print doc lists Pago warehouse lines only; the exclusion notice ignores Mory", () => {
     const doc = buildTransportPagoPrintDoc(mixedBatch(), "Pago");
-    expect(doc.products.map((p) => p.catalogNo)).toEqual(["Souvlaki karton"]);
+    expect(doc.products.map((p) => p.name)).toEqual(["Souvlaki karton"]);
     expect(doc.excludedProducts).toEqual([]);
     expect(computePagoWarehouseExclusion(mixedBatch()).excludedProducts).toEqual([]);
   });

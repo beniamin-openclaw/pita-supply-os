@@ -78,6 +78,7 @@ from .models import (
     Order,
     OrderEvent,
     OrderLine,
+    OrderEmailSigner,
     OrderLineSubmit,
     OrderingMethod,
     OrderStatus,
@@ -868,6 +869,30 @@ def _join_cc(*parts: Optional[str]) -> Optional[str]:
     return ",".join(kept) if kept else None
 
 
+def _order_sender_email(location: Optional[Location]) -> Optional[str]:
+    """From address of the supplier e-mail (order-email-v2): the location's
+    send-as alias when it carries an "@", else the order mailbox itself."""
+    alias = (location.sender_email or "").strip() if location else ""
+    if "@" in alias:
+        return alias
+    return settings.order_mailbox or None
+
+
+def _load_email_signers(backend) -> list[OrderEmailSigner]:
+    """Signers for the supplier e-mail from ``_meta.order_email_signers``.
+    Degrades to [] on ANY failure (seed has no ``load_meta``, sheets raises
+    RuntimeError without a sheet id, a missing table …) — mirrors
+    ``manager_transport_draft_config``; the e-mail then signs "Pita Bros"."""
+    try:
+        meta = backend.load_meta()
+        return gmail_url.parse_order_email_signers(meta.get("order_email_signers"))
+    except Exception:
+        log.warning(
+            "order e-mail signers unavailable — degrading to []", exc_info=True
+        )
+        return []
+
+
 def _deviation_threshold() -> float:
     return _DEVIATION_THRESHOLD
 
@@ -1317,6 +1342,11 @@ def manager_order_detail(
         supplier_email=supplier.email if supplier else None,
         cc_email=settings.order_cc_email or None,
         location_email=location.email if location else None,
+        sender_email=_order_sender_email(location),
+        order_mailbox=settings.order_mailbox or None,
+        location_phone=(location.phone or None) if location else None,
+        delivery_date_in_email=settings.order_email_delivery_date_enabled,
+        email_signers=_load_email_signers(backend),
         ordering_method=supplier.ordering_method if supplier else OrderingMethod.EMAIL,
         supplier_notes=supplier.notes if supplier else "",
         order_date=order.order_date,
@@ -2315,7 +2345,17 @@ def manager_dispatch(
                 cc_email=_join_cc(
                     settings.order_cc_email, location.email if location else None
                 ),
+                signer=gmail_url.resolve_signer(
+                    _load_email_signers(backend), req.signer_email
+                ),
+                include_delivery_date=settings.order_email_delivery_date_enabled,
             )
+        except gmail_url.GmailUrlTooLongError:
+            # Non-fatal (order-email-v2 D12): the draft path has no URL limit,
+            # so a long order still dispatches — only the session re-open link
+            # is absent. Must stay BEFORE `except ValueError` (it subclasses it).
+            log.info("Order %s too long for a Gmail URL — no re-open link", req.order_id)
+            url = None
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Gmail URL build failed: {e}")
 

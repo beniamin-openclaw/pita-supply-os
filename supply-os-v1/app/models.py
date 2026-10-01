@@ -128,6 +128,14 @@ class Location(BaseModel):
     # (week2-feedback-quantities Phase 2, migration 0019). Nullable — a
     # location without one simply gets no extra CC.
     email: Optional[str] = None
+    # Send-as alias of the order mailbox (settings.order_mailbox) used as From
+    # on this location's supplier e-mail, e.g. bracka@pitabros.pl
+    # (order-email-v2, migration 0026). None -> the e-mail is sent from the
+    # order mailbox itself (WOLA).
+    sender_email: Optional[str] = None
+    # Location phone in display form ("600 722 252"), printed as
+    # "Telefon lokalu:" in the supplier e-mail. None -> no phone line.
+    phone: Optional[str] = None
 
 
 class SupplierProduct(BaseModel):
@@ -352,6 +360,15 @@ class OrderLineManagerFinal(BaseModel):
     manager_comment: str = ""
 
 
+class OrderEmailSigner(BaseModel):
+    """One manager who can sign the supplier order e-mail (order-email-v2).
+    Configured in `_meta.order_email_signers` as a JSON list; the first entry
+    is the default. A per-browser preference, not an identity."""
+    name: str
+    phone: str = ""
+    email: str = ""
+
+
 class ManagerDispatchRequest(BaseModel):
     order_id: str
     manager_finals: list[OrderLineManagerFinal] = Field(min_length=1)
@@ -362,6 +379,10 @@ class ManagerDispatchRequest(BaseModel):
     # manager_dispatch 409s it), and a batch finalize writes sent_method
     # ="transport" on the order directly.
     sent_method: str = "email"
+    # E-mail of the OrderEmailSigner the manager picked in the dispatch panel
+    # (order-email-v2), so the backend re-open URL carries the same signature
+    # as the client-side draft. None/unknown -> the first configured signer.
+    signer_email: Optional[str] = None
 
 
 class ManagerDispatchResponse(BaseModel):
@@ -554,6 +575,16 @@ class ManagerOrderDetail(BaseModel):
     # The location's own mailbox (locations.email, migration 0019), joined from the
     # location — the dispatch panel CCs it next to cc_email. None when unset.
     location_email: Optional[str] = None
+    # order-email-v2: the From address of this order's e-mail (the location's
+    # send-as alias, else settings.order_mailbox), the mailbox the Gmail draft
+    # must be created in, the location phone, whether the delivery date is
+    # printed (settings.order_email_delivery_date_enabled), and the configured
+    # signers (`_meta.order_email_signers`, [] when unset/unreadable).
+    sender_email: Optional[str] = None
+    order_mailbox: Optional[str] = None
+    location_phone: Optional[str] = None
+    delivery_date_in_email: bool = False
+    email_signers: list[OrderEmailSigner] = Field(default_factory=list)
     # Channel the dispatch panel must branch on (email|portal|phone|manual).
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
     supplier_notes: str = ""  # fallback source for a phone number etc.

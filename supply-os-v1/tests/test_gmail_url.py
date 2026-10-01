@@ -6,6 +6,7 @@ from datetime import date
 
 import pytest
 
+from app import gmail_url
 from app.gmail_url import (
     GMAIL_COMPOSE_BASE,
     build_draft_url,
@@ -361,27 +362,62 @@ def test_build_url_raises_when_every_line_explicitly_zeroed():
         build_draft_url(_make_order(lines=[line]), _make_supplier(), [line], products, None)
 
 
-def test_build_url_shows_fixed_delivery_window():
+def test_build_url_date_switch_off_prints_blank_date():
+    """Switch off (default): the requested date is a guess (a "tomorrow"
+    default) and must never reach the supplier — blank line, no date in the
+    subject, same for an order without a date."""
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     products = {"P027": _make_product("P027", "Souvlaki")}
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
     supplier = _make_supplier()
+    for delivery in (date(2026, 5, 25), None):
+        order = _make_order(delivery_date=delivery, lines=[line])
+        url = build_draft_url(order, supplier, [line], products, None)
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        assert "Dostawa: __________, od godziny 11:00" in q["body"][0]
+        assert "25.05" not in q["body"][0]
+        assert q["su"][0] == "Zamówienie ORD-20260520-WOL-PAGO-abc123"
 
-    # A requested date no longer appears in the supplier email — the body carries
-    # a fixed "from 11:00" window instead, and the date / old fallback are gone.
-    order_with = _make_order(delivery_date=date(2026, 5, 25), lines=[line])
-    url_with = build_draft_url(order_with, supplier, [line], products, None)
-    body_with = urllib.parse.parse_qs(urllib.parse.urlparse(url_with).query)["body"][0]
-    assert "Dostawa możliwa od godziny 11:00" in body_with
-    assert "Data dostawy" not in body_with
-    assert "2026-05-25" not in body_with
 
-    # Same fixed line when no date was requested (no "do potwierdzenia" fallback).
-    order_without = _make_order(delivery_date=None, lines=[line])
-    url_without = build_draft_url(order_without, supplier, [line], products, None)
-    body_without = urllib.parse.parse_qs(urllib.parse.urlparse(url_without).query)["body"][0]
-    assert "Dostawa możliwa od godziny 11:00" in body_without
-    assert "do potwierdzenia" not in body_without
+def test_build_url_date_switch_on_prints_date_in_body_and_subject():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    loc = Location(location_id="BRACKA", location_name="Pita Bros Bracka")
+    # 2026-09-29 is a Tuesday.
+    order = _make_order(delivery_date=date(2026, 9, 29), lines=[line])
+    url = build_draft_url(
+        order, _make_supplier(), [line], products, loc, include_delivery_date=True
+    )
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert "Dostawa: wtorek 29.09.2026, od godziny 11:00" in q["body"][0]
+    assert q["su"][0] == "Zamówienie Pita Bros Bracka – dostawa wt 29.09"
+
+
+def test_build_url_date_switch_on_without_date_stays_blank():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+    order = _make_order(delivery_date=None, lines=[line])
+    url = build_draft_url(
+        order, _make_supplier(), [line], products, None, include_delivery_date=True
+    )
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert "Dostawa: __________, od godziny 11:00" in q["body"][0]
+    assert "dostawa" not in q["su"][0]
+
+
+@pytest.mark.parametrize(
+    "day,long,short",
+    [
+        (date(2026, 9, 28), "poniedziałek 28.09.2026", "pon 28.09"),  # Monday
+        (date(2026, 10, 4), "niedziela 04.10.2026", "nd 04.10"),  # Sunday
+        (date(2026, 10, 2), "piątek 02.10.2026", "pt 02.10"),
+    ],
+)
+def test_delivery_day_weekday_edges(day, long, short):
+    assert gmail_url._delivery_day_long(day) == long
+    assert gmail_url._delivery_day_short(day) == short
 
 
 def test_build_url_combines_name_address_city():
@@ -457,14 +493,15 @@ def test_company_footer_appended_when_present():
     )
     assert (
         "Pozdrawiam,\nPita Bros\nPita Bros sp. z o.o.\n"
-        "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633"
+        "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633\n"
+        "(zamówienie #"
     ) in with_company
 
     without_company = _body_of(
         Location(location_id="WOLA", location_name="Pita Bros Wola")
     )
     assert "NIP:" not in without_company
-    assert "Pozdrawiam,\nPita Bros\n(zamowienie" in without_company
+    assert "Pozdrawiam,\nPita Bros\n(zamówienie" in without_company
 
 
 # ---------- feedback r7: empty delivery-date line + standing office CC ----------
@@ -483,17 +520,90 @@ def _url_and_body(cc_email=None):
     return url, body
 
 
-def test_body_has_empty_delivery_date_line_for_manual_fill():
-    """The operator fills the date by hand — we must NOT inject the derived one."""
+def test_body_blank_date_line_by_default():
+    """Switch off (default): no auto-filled date, fixed 11:00 window."""
     _, body = _url_and_body()
-    assert "Proszę o dostawę w dniu:" in body
-    # No date is auto-filled, and the fixed window still follows it.
-    assert "2026-05-25" not in body
-    assert "Dostawa możliwa od godziny 11:00" in body
-    lines = body.split("\n")
-    assert lines.index("Proszę o dostawę w dniu:") + 1 == lines.index(
-        "Dostawa możliwa od godziny 11:00"
+    assert "2026-05-25" not in body and "25.05" not in body
+    assert "Dostawa: __________, od godziny 11:00" in body
+
+
+# ---------- order-email-v2: layout, phone, signer, declension, comma ----------
+
+
+def _body_with(line, products, location=None, signer=None, order=None) -> str:
+    order = order or _make_order(lines=[line])
+    url = build_draft_url(order, _make_supplier(), [line], products, location, signer=signer)
+    return urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+
+
+def _one_line(qty: float, unit: str = "karton"):
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=qty)
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027").model_copy(
+        update={"purchase_unit": unit}
     )
+    return line, products
+
+
+def test_body_polish_greeting_and_header():
+    line, products = _one_line(1)
+    body = _body_with(line, products)
+    assert body.startswith(
+        "Dzień dobry,\n\nproszę o przygotowanie zamówienia:\n\nLp. | Produkt | Ilość\n"
+    )
+    assert body.endswith("(zamówienie #ORD-20260520-WOL-PAGO-abc123)")
+
+
+@pytest.mark.parametrize(
+    "qty,unit,expected",
+    [
+        (1, "karton", "1 karton"),
+        (3, "karton", "3 kartony"),
+        (5, "karton", "5 kartonów"),
+        (12, "karton", "12 kartonów"),
+        (22, "wiadro", "22 wiadra"),
+        (1.5, "kg", "1,5 kg"),
+        (2.5, "blok", "2,5 bloku"),
+        (6, "pojemnik", "6 pojemników"),
+        (4, "Karton", "4 kartony"),
+        (2, "tacka", "2 tacka"),
+    ],
+)
+def test_body_declined_units_and_decimal_comma(qty, unit, expected):
+    line, products = _one_line(qty, unit)
+    assert f"1.  | P027 karton | {expected}" in _body_with(line, products)
+
+
+def test_body_location_phone_line_only_when_present():
+    line, products = _one_line(1)
+    loc = Location(location_id="WOLA", location_name="Pita Bros Wola", phone="662 015 470")
+    assert "Telefon lokalu: 662 015 470" in _body_with(line, products, loc)
+    loc_nophone = Location(location_id="WOLA", location_name="Pita Bros Wola")
+    assert "Telefon lokalu" not in _body_with(line, products, loc_nophone)
+
+
+def test_body_signer_variants():
+    from app.models import OrderEmailSigner
+
+    line, products = _one_line(1)
+    full = OrderEmailSigner(name="Marek Złotopolski", phone="+48 662 184 258", email="marek@pitabros.pl")
+    assert (
+        "Pozdrawiam,\nMarek Złotopolski\ntel. +48 662 184 258 · marek@pitabros.pl\n"
+    ) in _body_with(line, products, signer=full)
+    phone_only = OrderEmailSigner(name="Ola", phone="600 000 000")
+    assert "Pozdrawiam,\nOla\ntel. 600 000 000\n(" in _body_with(line, products, signer=phone_only)
+    email_only = OrderEmailSigner(name="Ola", email="ola@pitabros.pl")
+    assert "Pozdrawiam,\nOla\nola@pitabros.pl\n(" in _body_with(line, products, signer=email_only)
+    name_only = OrderEmailSigner(name="Ola")
+    assert "Pozdrawiam,\nOla\n(" in _body_with(line, products, signer=name_only)
+
+
+def test_too_long_url_raises_subclass_of_value_error():
+    line, products = _one_line(1)
+    order = _make_order(lines=[line], extra_items="x" * 9000)
+    with pytest.raises(gmail_url.GmailUrlTooLongError):
+        build_draft_url(order, _make_supplier(), [line], products, None)
+    assert issubclass(gmail_url.GmailUrlTooLongError, ValueError)
 
 
 def test_cc_parameter_present_when_configured():

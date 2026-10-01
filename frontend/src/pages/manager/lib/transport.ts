@@ -965,11 +965,11 @@ export function computePagoWarehouseExclusion(fullDetail: TransportBatchDetail):
 
 export interface PrintPagoProductLine {
   productId: string;
+  // Product cell — the supplier-facing name (falls back to product_name_pl).
+  // The pickup document used to print supplier_sku here ("Nr katalogowy"),
+  // but on prod those are our own placeholder codes (PAGO-001…), which told
+  // the driver and the warehouse nothing (operator feedback 2026-10-01).
   name: string;
-  // "Nr katalogowy" cell — the supplier's own catalog code (e.g. Pago
-  // 'GYRSW15KG') when master data has one, else the same friendly name as
-  // `name` (no code configured yet).
-  catalogNo: string;
   unit: string;
   qty: number;
 }
@@ -1064,19 +1064,12 @@ export function buildTransportPagoPrintDoc(
         (line) =>
           line.total_qty_purchase > 0 && (!isPago || line.warehouse_pickup === true),
       )
-      .map((line) => {
-        const name = line.supplier_product_name || line.product_name_pl;
-        return {
-          productId: line.product_id,
-          name,
-          // "Nr katalogowy" — the supplier's real catalog code when master
-          // data has one (line.supplier_sku); otherwise fall back to the
-          // same friendly name shown in the "Nazwa" column.
-          catalogNo: line.supplier_sku ?? name,
-          unit: line.purchase_unit,
-          qty: line.total_qty_purchase,
-        };
-      }),
+      .map((line) => ({
+        productId: line.product_id,
+        name: line.supplier_product_name || line.product_name_pl,
+        unit: line.purchase_unit,
+        qty: line.total_qty_purchase,
+      })),
     excludedProducts,
     warehousePickupDataMissing,
   };

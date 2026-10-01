@@ -1,0 +1,26 @@
+Zamówienie Pita Bros KEN
+---
+Dzień dobry,
+
+proszę o przygotowanie zamówienia:
+
+Lp. | Produkt | Ilość
+1.  | Pomidor | 1,5 kg
+2.  | Tzatzyki | 3 pojemniki
+3.  | Feta blok | 2,5 bloku
+4.  | Pita | 22 kartony
+5.  | Kubki | 2 tacka
+6.  | Sól | 12 worków
+
+Pozycje spoza katalogu:
+Mięta 2 pęczki
+
+Komentarz:
+Proszę o świeże pomidory.
+
+Dostawa: __________, od godziny 11:00
+ADRES DOSTAWY: Pita Bros KEN
+
+Pozdrawiam,
+Pita Bros
+(zamówienie #ORD-20261004-KEN-BUKA-000001)

@@ -1,7 +1,11 @@
 // Channel-aware dispatch panel (Phase G3). Branches on detail.ordering_method:
-//   email  → editable subject + textarea body; Gmail URL built IN TS from the
-//            EDITED text; 8000-char check hides "Otwórz w Gmail"; clicking the
-//            link ALSO fires the dispatch state-write. Copy body / address.
+//   email  → editable subject + textarea body + "Podpis" select. Primary:
+//            "Zrób draft w Gmailu" creates a VERIFIED draft in the order
+//            mailbox with From = the location alias (lib/orderEmailDraft.ts),
+//            then dispatches (order-email-v2). Fallback: Gmail URL built IN TS
+//            from the EDITED text; 8000-char check hides "Otwórz w Gmail";
+//            clicking the link ALSO fires the dispatch state-write. Copy body /
+//            address.
 //   portal → no email; portal link parsed from supplier_notes (never hardcoded),
 //            copy-paste list, "Oznacz jako zamówione ✓" behind a two-step
 //            confirm ("czy na pewno złożyłeś zamówienie w portalu?") so a
@@ -38,8 +42,32 @@ import {
   buildEmailBody,
   buildEmailSubject,
   buildGmailComposeUrl,
-  joinCc,
+  draftCc,
+  fallbackCc,
 } from "./lib/emailBody";
+import {
+  createVerifiedOrderDraft,
+  describeDraftError,
+  getGoogleClientId,
+} from "./lib/orderEmailDraft";
+import { splitRecipients } from "./lib/transport";
+import { useOrderEmailSigner } from "./lib/useOrderEmailSigner";
+import { SignerSelect } from "./SignerSelect";
+
+/** Extra facts about a dispatch the parent needs for its confirmation. */
+export interface DispatchOpts {
+  /** Set when a verified Gmail draft was created before the dispatch — the
+   *  mailbox that now holds it (order-email-v2). */
+  draftMailbox?: string;
+}
+
+/** Dispatch callback: channel, the chosen e-mail signer (email channel only)
+ *  and optional extras. */
+export type DispatchHandler = (
+  sentMethod: OrderingMethod,
+  signerEmail?: string | null,
+  opts?: DispatchOpts,
+) => void;
 
 interface DispatchPanelProps {
   detail: ManagerOrderDetail;
@@ -47,9 +75,12 @@ interface DispatchPanelProps {
   /** True while a dispatch is in flight for this order. */
   busy: boolean;
   /** Fire the dispatch state-write with the full draft line set + sent_method. */
-  onDispatch: (sentMethod: OrderingMethod) => void;
+  onDispatch: DispatchHandler;
   /** Surface a toast (copy success/failure). */
   onToast: (msg: string, ok: boolean) => void;
+  /** Reports a Gmail draft in progress so the page locks every other action
+   *  (queue selection, save, release, cancel) until it settles. */
+  onDraftingChange?: (drafting: boolean) => void;
 }
 
 // Best-effort phone extraction from free-text supplier_notes for a tel: link.
@@ -69,7 +100,14 @@ function parsePortalUrl(notes: string): string | null {
   return m[0].replace(/[.,;"'\]}]+$/, "");
 }
 
-export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: DispatchPanelProps) {
+export function DispatchPanel({
+  detail,
+  drafts,
+  busy,
+  onDispatch,
+  onToast,
+  onDraftingChange,
+}: DispatchPanelProps) {
   const { t } = useT();
   const method = detail.ordering_method;
 
@@ -155,6 +193,7 @@ export function DispatchPanel({ detail, drafts, busy, onDispatch, onToast }: Dis
           busy={busy}
           onDispatch={onDispatch}
           onCopy={copy}
+          onDraftingChange={onDraftingChange}
         />
       )}
 
@@ -212,8 +251,9 @@ interface EmailDispatchProps {
   effQty: (line: ManagerOrderLineDetail) => number;
   empty: boolean;
   busy: boolean;
-  onDispatch: (sentMethod: OrderingMethod) => void;
+  onDispatch: DispatchHandler;
   onCopy: (text: string) => void;
+  onDraftingChange?: (drafting: boolean) => void;
 }
 
 function EmailDispatch({
@@ -223,16 +263,20 @@ function EmailDispatch({
   busy,
   onDispatch,
   onCopy,
+  onDraftingChange,
 }: EmailDispatchProps) {
   const { t } = useT();
+  const { signer, setSignerEmail } = useOrderEmailSigner(detail.email_signers);
 
   // Seed subject/body from the draft on mount; the manager then edits freely.
   // DispatchPanel is keyed by order id at the parent, so a new order remounts
-  // this and re-seeds. "Odśwież" re-seeds from the current draft qty on demand.
+  // this and re-seeds. "Odśwież" re-seeds from the current draft qty on demand,
+  // and so does picking another signer (the signature is in the body).
   const [subject, setSubject] = useState(() => buildEmailSubject(detail));
   const [body, setBody] = useState(() =>
-    buildEmailBody(detail, effQty),
+    buildEmailBody(detail, effQty, signer),
   );
+  const signerEmail = signer?.email ?? null;
 
   const to = detail.supplier_email ?? "";
   // "@" check (not bare non-empty): master data used placeholders like 'TBD'
@@ -240,16 +284,55 @@ function EmailDispatch({
   // recipient in a normal-looking Gmail draft. Mirrors the backend gate.
   const noEmail = !to.includes("@");
 
-  // DW (CC) from the backend — the standing office copy + the location's own
-  // mailbox (week2-feedback-quantities Phase 2), one source of truth shared with
-  // the server-side re-open URL (main.py `_join_cc`). Shown below so the operator
-  // SEES both copies going out; the "@" gate mirrors the recipient check
+  // DW (CC) for the compose-link path — the standing office copy + the
+  // location's own mailbox, one source of truth shared with the server-side
+  // re-open URL (main.py `_join_cc`). The "@" gate mirrors the recipient check
   // (feedback r7) — placeholders like 'TBD' are dropped by joinCc.
-  const cc = joinCc(detail.cc_email, detail.location_email);
-  const hasCc = cc.includes("@");
+  const cc = fallbackCc(detail);
 
   const { url, tooLong } = buildGmailComposeUrl({ to, subject, body, cc });
   const canOpenGmail = !noEmail && !empty && !tooLong;
+
+  // Verified Gmail draft (order-email-v2): offered when the OAuth client is
+  // configured and the backend named the mailbox + sender. The compose link
+  // above stays as the fallback.
+  const clientId = getGoogleClientId();
+  const mailbox = (detail.order_mailbox ?? "").trim();
+  const sender = (detail.sender_email ?? "").trim();
+  const draftAvailable = Boolean(clientId && mailbox && sender);
+  const ccDraft = draftCc(detail);
+  // DW shown for the primary path: the draft's when available, else the link's.
+  const ccShown = draftAvailable ? ccDraft : cc;
+  const hasCcShown = ccShown.includes("@");
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const canDraft = draftAvailable && !noEmail && !empty && !busy && !drafting;
+
+  const handleDraft = async (): Promise<void> => {
+    if (!canDraft) return;
+    setDraftError(null);
+    setDrafting(true);
+    onDraftingChange?.(true);
+    try {
+      // First call of the handler — it opens the Google popup synchronously.
+      await createVerifiedOrderDraft({
+        clientId,
+        mailbox,
+        from: { name: detail.location_name, email: sender },
+        to: splitRecipients(to).join(","),
+        cc: ccDraft,
+        subject,
+        body,
+      });
+      // Only a verified draft marks the order sent (draft first, then dispatch).
+      onDispatch("email", signerEmail, { draftMailbox: mailbox });
+    } catch (e) {
+      setDraftError(describeDraftError(e, t, { mailbox, sender }));
+    } finally {
+      setDrafting(false);
+      onDraftingChange?.(false);
+    }
+  };
 
   return (
     <div className="space-y-3 text-sm">
@@ -257,6 +340,18 @@ function EmailDispatch({
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
           {t("manager.noEmail")}
         </p>
+      )}
+
+      {/* From — the location's send-as alias of the order mailbox. */}
+      {draftAvailable && (
+        <div className="flex items-center gap-2">
+          <span className="w-16 shrink-0 text-xs font-semibold text-slate-500">
+            {t("manager.dispatch.emailFrom")}
+          </span>
+          <span className="font-mono text-slate-800">
+            {detail.location_name} &lt;{sender}&gt;
+          </span>
+        </div>
       )}
 
       {/* To */}
@@ -267,14 +362,26 @@ function EmailDispatch({
 
       {/* DW (CC) — the office copy that rides on every order email. Rendered only
           when configured, so an empty setting leaves the panel exactly as before. */}
-      {hasCc && (
+      {hasCcShown && (
         <div className="flex items-center gap-2">
           <span className="w-16 shrink-0 text-xs font-semibold text-slate-500">
             {t("manager.dispatch.emailCc")}
           </span>
-          <span className="font-mono text-slate-800">{cc.split(",").join(", ")}</span>
+          <span className="font-mono text-slate-800">{ccShown.split(",").join(", ")}</span>
         </div>
       )}
+
+      <SignerSelect
+        id="dispatch-signer"
+        signers={detail.email_signers}
+        value={signer}
+        disabled={busy}
+        onChange={(email) => {
+          const next = setSignerEmail(email);
+          setSubject(buildEmailSubject(detail));
+          setBody(buildEmailBody(detail, effQty, next));
+        }}
+      />
 
       {/* Subject (editable) */}
       <div className="flex items-center gap-2">
@@ -300,7 +407,7 @@ function EmailDispatch({
             type="button"
             onClick={() => {
               setSubject(buildEmailSubject(detail));
-              setBody(buildEmailBody(detail, effQty));
+              setBody(buildEmailBody(detail, effQty, signer));
             }}
             className="text-[11px] text-blue-700 underline hover:text-blue-900"
           >
@@ -323,22 +430,53 @@ function EmailDispatch({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        {draftAvailable && (
+          <button
+            type="button"
+            disabled={!canDraft}
+            onClick={() => void handleDraft()}
+            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+          >
+            {drafting || busy ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                {t("manager.draft.working")}
+              </span>
+            ) : (
+              t("manager.draft.create")
+            )}
+          </button>
+        )}
         {/* Real <a> — clicking opens Gmail AND fires the dispatch state-write.
             We do NOT preventDefault so the browser navigates the link normally;
-            window.open is deliberately avoided (popup blockers). */}
-        {canOpenGmail && (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => {
-              if (!busy) onDispatch("email");
-            }}
-            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-          >
-            {t("manager.openGmail")}
-          </a>
-        )}
+            window.open is deliberately avoided (popup blockers). While a draft
+            is being created or a dispatch is in flight it is inert (no href),
+            so it cannot open a stray compose window or dispatch twice. */}
+        {canOpenGmail &&
+          (drafting || busy ? (
+            <span
+              aria-disabled="true"
+              className="cursor-not-allowed rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-400"
+            >
+              {t("manager.openGmail")}
+            </span>
+          ) : (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                if (!busy) onDispatch("email", signerEmail);
+              }}
+              className={
+                draftAvailable
+                  ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                  : "rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+              }
+            >
+              {t("manager.openGmail")}
+            </a>
+          ))}
         <button
           type="button"
           onClick={() => onCopy(body)}
@@ -357,6 +495,20 @@ function EmailDispatch({
         )}
       </div>
 
+      {draftError && (
+        <p
+          role="alert"
+          className="rounded border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800"
+        >
+          {draftError}
+        </p>
+      )}
+      {draftAvailable && canOpenGmail && (
+        <p className="text-[11px] text-slate-500">
+          {t("manager.draft.fallbackHint", { office: detail.cc_email || "—" })}
+        </p>
+      )}
+
       {empty && <p className="text-xs font-semibold text-amber-700">{t("manager.emptyOrder")}</p>}
     </div>
   );
@@ -371,7 +523,7 @@ interface PortalDispatchProps {
   emptyNote: ReactNode;
   busy: boolean;
   empty: boolean;
-  onDispatch: (sentMethod: OrderingMethod) => void;
+  onDispatch: DispatchHandler;
 }
 
 function PortalDispatch({
