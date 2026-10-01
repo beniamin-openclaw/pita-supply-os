@@ -76,3 +76,18 @@ UPDATE location_product_settings SET min_stock_qty_base = 1, target_stock_qty_ba
 UPDATE products SET product_name_pl = 'Jogurt naturalny' WHERE product_id = 'P162';
 UPDATE products SET product_name_pl = 'Ser Gouda' WHERE product_id = 'P172';
 ```
+
+## Follow-up: spices — not found (2026-10-01)
+
+Operator asked for the exact invoice names and prices of Prymat Pieprz, Prymat Oregano,
+Prymat Liść Laurowy and Kamis Ziele Angielskie (Intermlecz). No change was made.
+
+- The eBiuro mirror holds only Pita Bros KEN sp. z o.o. (NIP 5223241275): 27 documents,
+  issued 2026-08-03 to 2026-09-07, two of them from Intermlecz (FS 88654/01/08/2026,
+  FS 94420/01/08/2026).
+- None of the four products is on those documents. The only Prymat/Kamis line in the
+  mirror is `PRYMAT PAPRYKA SŁODKA 720g/9 pet`, szt., 25,76 zł netto (FS 88654/01/08/2026).
+- Invoices of Pita Bros sp. z o.o. (NIP 9522100633: Wola, Westfield, Browary, Norblin)
+  are not in the mirror, so they could not be checked. Next step: the operator pastes the
+  invoice lines, or adds that company's eBiuro id to `SUPPLY_OS_EBIURO_COMPANY_IDS` on
+  Railway and runs the sync on `/manager/finance`.
