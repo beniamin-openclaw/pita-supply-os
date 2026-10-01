@@ -295,3 +295,56 @@ describe("InventoryCountGrid toolbar", () => {
     }
   });
 });
+
+describe("InventoryCountGrid bulk pack (feedback-1001 D22)", () => {
+  const HALLOUMI: InventoryProduct = {
+    product_id: "P015",
+    product_name_pl: "Halloumi",
+    product_category: "Chłodnia",
+    inventory_unit: "szt",
+    is_critical: true,
+    purchase_unit: "szt",
+    units_per_purchase_unit: 1,
+    order_note: null,
+    supplier_id: "SUP_INTERMLECZ",
+    supplier_name: "Intermlecz",
+    min_stock_qty_base: 12,
+    target_stock_qty_base: 24,
+    max_stock_qty_base: 36,
+    case_unit: "karton",
+    units_per_case: 12,
+  };
+
+  function renderHalloumi(
+    lines: Record<string, InventoryLineInput>,
+    onStockChange = vi.fn(),
+  ) {
+    render(
+      <LangProvider>
+        <InventoryCountGrid
+          groupedProducts={[{ category: "Chłodnia", items: [HALLOUMI] }]}
+          lines={lines}
+          collapsedCategories={new Set()}
+          onToggleCategory={vi.fn()}
+          onStockChange={onStockChange}
+          onCommentChange={vi.fn()}
+        />
+      </LangProvider>,
+    );
+    return onStockChange;
+  }
+
+  it("a case takes the count to [kartony] + [szt] even with upp 1", () => {
+    renderHalloumi({ P015: line(26) });
+    expect(screen.getByTestId("pack-P015")).toHaveTextContent("1 karton = 12 szt");
+    expect(document.getElementById("stock-P015-reading")).toHaveTextContent(
+      "= 2 kartony + 2 szt (26 szt)",
+    );
+  });
+
+  it("typing 3 cartons emits 36 base units", () => {
+    const onStockChange = renderHalloumi({});
+    fireEvent.change(document.getElementById("stock-P015-packs")!, { target: { value: "3" } });
+    expect(onStockChange).toHaveBeenLastCalledWith("P015", 36);
+  });
+});

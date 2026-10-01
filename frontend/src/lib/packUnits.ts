@@ -68,3 +68,35 @@ export function packHint(
 export function isPackBased(unitsPerPurchase: number): boolean {
   return Number.isFinite(unitsPerPurchase) && unitsPerPurchase > 1;
 }
+
+/**
+ * Purchase units per bulk pack ("opakowanie zbiorcze", migration 0028), or null
+ * when the entity has no valid case (absent, null, or ≤ 1). Twin of
+ * `has_case` in supply-os-v1/app/suggestion.py. Works on any API row that
+ * carries `units_per_case` (OrderableItem, ManagerOrderLineDetail,
+ * InventoryProduct).
+ */
+export function caseSizeOf(entity: { units_per_case?: number | null }): number | null {
+  const upc = entity.units_per_case;
+  return typeof upc === "number" && Number.isFinite(upc) && upc > 1 ? upc : null;
+}
+
+/** The case (unit + size) when both are set, else null — what the screens and
+ *  documents print. */
+export function caseOf(entity: {
+  case_unit?: string | null;
+  units_per_case?: number | null;
+}): { unit: string; size: number } | null {
+  const size = caseSizeOf(entity);
+  const unit = (entity.case_unit ?? "").trim();
+  return size !== null && unit !== "" ? { unit, size } : null;
+}
+
+/**
+ * Python `f"{qty:g}"` (six significant digits, no trailing zeros) with a
+ * decimal comma: 1.5 -> "1,5", 0.30000000000000004 -> "0,3". The supplier
+ * e-mail's number format — twin of gmail_url._format_qty.
+ */
+export function formatQtyG(qty: number): string {
+  return String(Number(qty.toPrecision(6))).replace(".", ",");
+}

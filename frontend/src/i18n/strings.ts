@@ -164,6 +164,13 @@ export const STRINGS = {
   "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
   "stock.didYouMeanNo": { pl: "Nie", en: "No" },
 
+  // Two-field ORDER input for a product with a bulk pack (feedback-1001 D22):
+  // "[cases] + [loose purchase units]". Own keys so the order wording can move
+  // independently of the stock input above.
+  "orderPack.fieldAria": { pl: "{label}, {unit}", en: "{label}, {unit}" },
+  "orderPack.reading": { pl: "= {split} ({total})", en: "= {split} ({total})" },
+  "orderPack.readingBase": { pl: "= {total}", en: "= {total}" },
+
   // ProductCard — pack-unit variants (units_per_purchase_unit > 1) ----------
   // Rendered as three no-wrap segments joined by " · " so a phone breaks the
   // line only between them, never inside "(5 zgrzewek)".
@@ -185,6 +192,17 @@ export const STRINGS = {
   "card.suggestionNeed": {
     pl: "brakuje {base} {inventoryUnit}",
     en: "need {base} {inventoryUnit}",
+  },
+  // Suggestion tile, bulk-pack variant (feedback-1001 D33): the suggestion in
+  // whole cases, "→ 1 skrzynka (6 kg)"; "→ 0 skrzynek" when the need is under
+  // half a case.
+  "card.suggestionCase": {
+    pl: "→ {packs} ({total})",
+    en: "→ {packs} ({total})",
+  },
+  "card.suggestionCaseNone": {
+    pl: "→ {packs}",
+    en: "→ {packs}",
   },
 
   // Row state messages (compute.ts) -----------------------------------------
@@ -728,6 +746,9 @@ export const STRINGS = {
   },
   "manager.transportOnlyLink": { pl: "Przejdź do ekranu Transport", en: "Go to the Transport screen" },
   "manager.copyList.header": { pl: "Produkt | Ilość | Kod", en: "Product | Qty | Code" },
+  // Read-only bulk-pack hint next to a quantity in the invoice unit
+  // (feedback-1001 D36): "= 6 kartonów + 2 paczki".
+  "manager.caseHint": { pl: "= {split}", en: "= {split}" },
 
   // Captain "My orders" view (Phase E4) -------------------------------------
   "orders.title": { pl: "Moje zamówienia", en: "My orders" },

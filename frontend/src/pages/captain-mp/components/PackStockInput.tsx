@@ -3,6 +3,10 @@
 // state and the API contract never leave inventory units. Shows a live reading
 // and a soft "did you mean N packs?" prompt when a small loose value looks
 // like a pack count; the prompt never blocks anything.
+//
+// Also the Captain's ORDER input for a product with a bulk pack (feedback-1001
+// D22, `copy="order"`): "[cases] + [loose purchase units]", emitting one
+// combined purchase quantity, so drafts and buildPayloadLines never change.
 
 import { useState, type FocusEvent, type ReactNode } from "react";
 
@@ -27,6 +31,13 @@ interface PackStockInputProps {
   /** Visible field label text (used in the per-field aria-label). */
   label: string;
   references?: Array<number | null | undefined>;
+  /** Which copy family to read: the stock input (default) or the bulk-pack
+   *  order input (`orderPack.*` keys, bold numbers like the single order field). */
+  copy?: "stock" | "order";
+  /** Red state: both fields get the error style and `aria-invalid`. */
+  invalid?: boolean;
+  /** Extra ids for both fields' aria-describedby (e.g. the card's state pill). */
+  describedBy?: string;
 }
 
 interface Pair {
@@ -69,6 +80,8 @@ function renderSplit(
 
 const FIELD_CLASS =
   "w-20 bg-white border border-gray-300 rounded-lg py-3 px-2 min-h-[44px] text-right text-[16px] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-500";
+const FIELD_CLASS_INVALID =
+  "w-20 bg-red-50 border border-red-500 rounded-lg py-3 px-2 min-h-[44px] text-right text-[16px] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
 
 export function PackStockInput({
   idPrefix,
@@ -79,8 +92,26 @@ export function PackStockInput({
   baseUnit,
   label,
   references = [],
+  copy = "stock",
+  invalid = false,
+  describedBy,
 }: PackStockInputProps) {
   const { t, tParts, lang } = useT();
+  const keys =
+    copy === "order"
+      ? ({
+          fieldAria: "orderPack.fieldAria",
+          reading: "orderPack.reading",
+          readingBase: "orderPack.readingBase",
+        } as const)
+      : ({
+          fieldAria: "stock.fieldAria",
+          reading: "stock.reading",
+          readingBase: "stock.readingBase",
+        } as const);
+  const fieldClass = `${invalid ? FIELD_CLASS_INVALID : FIELD_CLASS}${
+    copy === "order" ? " font-bold" : ""
+  }`;
   const [pair, setPair] = useState<Pair>(() => seed(value, upp));
   const [syncedValue, setSyncedValue] = useState<number | "">(value);
   const [focused, setFocused] = useState(false);
@@ -109,6 +140,7 @@ export function PackStockInput({
   const packsId = `${idPrefix}-packs`;
   const looseId = `${idPrefix}-loose`;
   const readingId = `${idPrefix}-reading`;
+  const ariaDescribedBy = describedBy ? `${readingId} ${describedBy}` : readingId;
 
   let reading: ReactNode[] | null = null;
   if (combined !== "") {
@@ -119,11 +151,11 @@ export function PackStockInput({
     );
     reading =
       splitPackStock(combined, upp).packs >= 1
-        ? tParts("stock.reading", {
+        ? tParts(keys.reading, {
             split: renderSplit(combined, upp, packUnit, baseUnit, lang),
             total,
           })
-        : tParts("stock.readingBase", { total });
+        : tParts(keys.readingBase, { total });
   }
 
   const suggested = suggestPackCount({
@@ -157,9 +189,10 @@ export function PackStockInput({
               setTouched(true);
               emit({ ...pair, packs: v });
             }}
-            aria-label={t("stock.fieldAria", { label, unit: packUnitLabel(1, packUnit, lang) })}
-            aria-describedby={readingId}
-            className={FIELD_CLASS}
+            aria-label={t(keys.fieldAria, { label, unit: packUnitLabel(1, packUnit, lang) })}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={invalid || undefined}
+            className={fieldClass}
             placeholder="0"
           />
           <div className="mt-0.5 text-[11px] leading-tight text-right">
@@ -178,9 +211,10 @@ export function PackStockInput({
               setTouched(true);
               emit({ ...pair, loose: v });
             }}
-            aria-label={t("stock.fieldAria", { label, unit: packUnitLabel(1, baseUnit, lang) })}
-            aria-describedby={readingId}
-            className={FIELD_CLASS}
+            aria-label={t(keys.fieldAria, { label, unit: packUnitLabel(1, baseUnit, lang) })}
+            aria-describedby={ariaDescribedBy}
+            aria-invalid={invalid || undefined}
+            className={fieldClass}
             placeholder="0"
           />
           <div className="mt-0.5 text-[11px] leading-tight text-right">

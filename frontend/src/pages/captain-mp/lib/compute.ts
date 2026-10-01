@@ -3,6 +3,7 @@
 
 import type { OrderableItem, OrderLine, CardState } from "../types";
 import type { StringKey } from "../../../i18n/strings";
+import { caseSizeOf } from "../../../lib/packUnits";
 
 /** Round to 6 decimals to suppress IEEE-754 artefacts — twin of `_clean`. */
 function clean(x: number): number {
@@ -26,13 +27,6 @@ export function roundingStep(rule: OrderableItem["rounding_rule"]): number {
   if (rule === "half_allowed") return 0.5;
   if (rule === "tenth_kg") return 0.1;
   return 1;
-}
-
-/** Purchase units per bulk pack, or null when the item has no (valid) case —
- *  twin of `has_case` (migration 0028). */
-export function caseSize(item: Pick<OrderableItem, "units_per_case">): number | null {
-  const upc = item.units_per_case;
-  return typeof upc === "number" && Number.isFinite(upc) && upc > 1 ? upc : null;
 }
 
 /** D33: the need rounded to the nearest whole case, half up (need 2 kg of a
@@ -96,7 +90,7 @@ export function computeSuggestion(
   const suggestedBase = Math.max(0, item.target_stock_qty_base - currentStock);
   const raw = suggestedBase / item.units_per_purchase_unit;
   const need = roundPerRule(raw, item.rounding_rule, item.is_critical);
-  const suggestedPurchase = caseSuggestion(need, caseSize(item));
+  const suggestedPurchase = caseSuggestion(need, caseSizeOf(item));
   return { base: suggestedBase, purchase: suggestedPurchase, need };
 }
 
@@ -185,7 +179,7 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     const maxAllowed = caseRoundedMax(
       item.max_stock_qty_base,
       item.units_per_purchase_unit,
-      caseSize(item),
+      caseSizeOf(item),
     );
     const overMax =
       item.max_stock_qty_base > 0 &&

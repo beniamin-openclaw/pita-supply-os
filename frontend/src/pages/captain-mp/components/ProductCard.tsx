@@ -18,7 +18,9 @@ import { computeRowState, computeSuggestion } from "../lib/compute";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
-import { baseToPacks, isPackBased } from "../../../lib/packUnits";
+import { baseToPacks, caseOf, isPackBased } from "../../../lib/packUnits";
+import { formatBaseQty } from "../../../lib/packStock";
+import { packUnitLabel } from "../../../i18n/packUnits";
 import { PackStockInput } from "./PackStockInput";
 import { PackQty, UnitLabel } from "./UnitLabel";
 
@@ -104,8 +106,18 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
   // Pack-unit display (pack-units-display-mobile-wrap Track A) — only when the
   // purchase unit actually packs multiple inventory units (e.g. a "zgrzewka"
   // of 24 szt). A ×1 SKU renders exactly as before this change.
-  const packBased = isPackBased(item.units_per_purchase_unit);
+  //
+  // A bulk pack ("opakowanie zbiorcze", feedback-1001 D22) takes precedence:
+  // stock is entered as [cases] + [loose inventory units] (one case =
+  // units_per_case × upp inventory units), the order as [cases] + [loose
+  // purchase units], and the thresholds read in cases. Without a case the card
+  // renders exactly as before.
   const upp = item.units_per_purchase_unit;
+  const itemCase = caseOf(item);
+  const packBased = itemCase !== null || isPackBased(upp);
+  // Pack used by the stock field + the threshold header (inventory units).
+  const stockPackSize: number = itemCase ? itemCase.size * upp : upp;
+  const stockPackUnit: string = itemCase ? itemCase.unit : item.purchase_unit;
 
   const handleCurrentChange = (v: number | "") => {
     onChange({ ...line, current_stock_qty_base: v });
@@ -115,6 +127,8 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
   // "= 3 zgrzewki → 3 zgrzewki" would be redundant — use the "Exact" template.
   const packsExactRaw = packBased ? suggestedBase / upp : 0;
   const isExactPacks = packBased && Math.abs(packsExactRaw - suggestedPurchase) < 1e-9;
+  // Bulk-pack suggestion in whole cases (D33): "→ 1 skrzynka (6 kg)".
+  const suggestedCases: number = itemCase ? suggestedPurchase / itemCase.size : 0;
   const handleFinalChange = (v: number | "") => {
     onChange({ ...line, captain_final_qty_purchase: v });
   };
@@ -133,6 +147,7 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
   const currentLabelId = `current-label-${item.product_id}`;
   const finalInputId = `final-${item.product_id}`;
   const finalUnitId = `final-unit-${item.product_id}`;
+  const finalLabelId = `final-label-${item.product_id}`;
   const suggestId = `suggest-${item.product_id}`;
   const pillId = `pill-${item.product_id}`;
 
@@ -163,8 +178,8 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
                   inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                   packs: (
                     <PackQty
-                      n={baseToPacks(item.target_stock_qty_base, upp)}
-                      unit={item.purchase_unit}
+                      n={baseToPacks(item.target_stock_qty_base, stockPackSize)}
+                      unit={stockPackUnit}
                       lang={lang}
                     />
                   ),
@@ -177,8 +192,8 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
                   inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                   packs: (
                     <PackQty
-                      n={baseToPacks(item.max_stock_qty_base, upp)}
-                      unit={item.purchase_unit}
+                      n={baseToPacks(item.max_stock_qty_base, stockPackSize)}
+                      unit={stockPackUnit}
                       lang={lang}
                     />
                   ),
@@ -187,8 +202,8 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
               {" · "}
               <span className="inline-block whitespace-nowrap">
                 {tParts("card.ratioPart", {
-                  purchaseUnit: <UnitLabel>{item.purchase_unit}</UnitLabel>,
-                  unitsPerPurchase: upp,
+                  purchaseUnit: <UnitLabel>{stockPackUnit}</UnitLabel>,
+                  unitsPerPurchase: stockPackSize,
                   inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                 })}
               </span>
@@ -220,8 +235,8 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
                   ? tParts("card.belowMinPacks", {
                       packs: (
                         <PackQty
-                          n={baseToPacks(item.min_stock_qty_base, upp)}
-                          unit={item.purchase_unit}
+                          n={baseToPacks(item.min_stock_qty_base, stockPackSize)}
+                          unit={stockPackUnit}
                           lang={lang}
                         />
                       ),
@@ -252,15 +267,21 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
               idPrefix={currentInputId}
               value={line.current_stock_qty_base}
               onChange={handleCurrentChange}
-              unitsPerPack={upp}
-              packUnit={item.purchase_unit}
+              unitsPerPack={stockPackSize}
+              packUnit={stockPackUnit}
               baseUnit={item.inventory_unit}
               label={t("card.currentStock")}
               references={[previousStock, item.target_stock_qty_base]}
             />
           </div>
         )}
-        <div className={`grid ${packBased ? "grid-cols-2" : "grid-cols-3"} gap-3 mb-3`}>
+        {/* Bulk pack: the order is two fields too, so the suggestion tile takes
+            the full row and the order block sits under it. */}
+        <div
+          className={`grid ${
+            itemCase ? "grid-cols-1" : packBased ? "grid-cols-2" : "grid-cols-3"
+          } gap-3 mb-3`}
+        >
           {/* Current stock (×1 only) */}
           {!packBased && (
           <div>
@@ -328,7 +349,35 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
             </div>
             {line.current_stock_qty_base !== "" && (
               <div className="text-xs text-slate-700 mt-0.5 text-center leading-tight">
-                {packBased ? (
+                {itemCase ? (
+                  <>
+                    <span className="inline-block whitespace-nowrap">
+                      {tParts("card.suggestionNeed", {
+                        base: suggestedBase,
+                        inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
+                      })}
+                    </span>{" "}
+                    <span className="inline-block whitespace-nowrap">
+                      {suggestedPurchase > 0
+                        ? tParts("card.suggestionCase", {
+                            packs: (
+                              <PackQty n={suggestedCases} unit={itemCase.unit} lang={lang} />
+                            ),
+                            total: (
+                              <>
+                                {formatBaseQty(suggestedPurchase, lang)}{" "}
+                                <UnitLabel>
+                                  {packUnitLabel(suggestedPurchase, item.purchase_unit, lang)}
+                                </UnitLabel>
+                              </>
+                            ),
+                          })
+                        : tParts("card.suggestionCaseNone", {
+                            packs: <PackQty n={0} unit={itemCase.unit} lang={lang} />,
+                          })}
+                    </span>
+                  </>
+                ) : packBased ? (
                   <>
                     <span className="inline-block whitespace-nowrap">
                       {tParts("card.suggestionNeed", {
@@ -366,7 +415,8 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
             )}
           </button>
 
-          {/* Final order */}
+          {/* Final order (single field; a bulk pack renders its own block below) */}
+          {!itemCase && (
           <div>
             <label
               htmlFor={finalInputId}
@@ -402,7 +452,31 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
               <UnitLabel>{item.purchase_unit}</UnitLabel>
             </div>
           </div>
+          )}
         </div>
+
+        {itemCase && (
+          <div className="mb-3" role="group" aria-labelledby={finalLabelId}>
+            <div
+              id={finalLabelId}
+              className="block text-[10px] font-semibold text-slate-700 uppercase tracking-wider mb-1"
+            >
+              {t("card.order")}
+            </div>
+            <PackStockInput
+              idPrefix={finalInputId}
+              value={line.captain_final_qty_purchase}
+              onChange={handleFinalChange}
+              unitsPerPack={itemCase.size}
+              packUnit={itemCase.unit}
+              baseUnit={item.purchase_unit}
+              label={t("card.order")}
+              copy="order"
+              invalid={state === "red"}
+              describedBy={pillId}
+            />
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Tag pill — primary state signal (stays first / left) */}

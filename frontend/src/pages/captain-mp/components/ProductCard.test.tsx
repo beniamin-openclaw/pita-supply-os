@@ -179,3 +179,63 @@ describe("ProductCard — suggestion 0 is information (week2-feedback-quantities
     expect(document.getElementById("suggest-P1")).toHaveTextContent("4");
   });
 });
+
+describe("ProductCard — bulk pack (feedback-1001 D22/D33)", () => {
+  // SP_BUKAT_P006 shape: kg, tenth_kg, critical, skrzynka of 6 kg.
+  const pomidor = (): OrderableItem =>
+    makeItem({
+      product_name_pl: "Pomidor",
+      inventory_unit: "kg",
+      purchase_unit: "kg",
+      units_per_purchase_unit: 1,
+      rounding_rule: "tenth_kg",
+      is_critical: true,
+      target_stock_qty_base: 42,
+      max_stock_qty_base: 42,
+      case_unit: "skrzynka",
+      units_per_case: 6,
+    });
+
+  it("reads thresholds in crates and splits stock as [skrzynki] + [kg]", () => {
+    renderCard(pomidor(), makeLine({ current_stock_qty_base: 14 }));
+
+    expect(screen.getByText(innermostText(/Cel: 7 skrzynek \(42 kg\)/))).toBeInTheDocument();
+    expect(screen.getByText(innermostText("1 skrzynka = 6 kg"))).toBeInTheDocument();
+    expect((screen.getByLabelText("Obecny stan, skrzynka") as HTMLInputElement).value).toBe("2");
+    expect((screen.getByLabelText("Obecny stan, kg") as HTMLInputElement).value).toBe("2");
+    // Need 28 kg -> 4,67 crates -> 5 crates (30 kg).
+    expect(screen.getByText(innermostText("→ 5 skrzynek (30 kg)"))).toBeInTheDocument();
+  });
+
+  it("the order is [skrzynki] + [kg] and emits one combined purchase quantity", () => {
+    const { onChangeSpy } = renderCard(pomidor(), makeLine({ current_stock_qty_base: 14 }));
+
+    fireEvent.change(screen.getByLabelText("Zamawiasz, skrzynka"), { target: { value: "4" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, kg"), { target: { value: "4" } });
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 28 }),
+    );
+    expect(document.getElementById("final-P1-reading")).toHaveTextContent(
+      "= 4 skrzynki + 4 kg (28 kg)",
+    );
+    // Ordering the raw need (28 kg) is a green match — no reason picker.
+    expect(screen.getByRole("status")).toHaveTextContent("Zgodnie z sugestią");
+  });
+
+  it("tapping the suggestion fills whole crates into both fields", () => {
+    renderCard(pomidor(), makeLine({ current_stock_qty_base: 14 }));
+    fireEvent.click(screen.getByRole("button", { name: /Zaakceptuj sugestię: 30 kg/ }));
+    expect((screen.getByLabelText("Zamawiasz, skrzynka") as HTMLInputElement).value).toBe("5");
+    expect((screen.getByLabelText("Zamawiasz, kg") as HTMLInputElement).value).toBe("0");
+  });
+
+  it("a need under half a crate suggests 0 crates; a big order still asks for a reason", () => {
+    renderCard(
+      pomidor(),
+      makeLine({ current_stock_qty_base: 40, captain_final_qty_purchase: 18 }),
+    );
+    expect(screen.getByText(innermostText("→ 0 skrzynek"))).toBeInTheDocument();
+    expect(screen.getByLabelText("Zamawiasz, skrzynka")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("+800% odchylenia — wymagany powód");
+  });
+});
