@@ -58,5 +58,5 @@ job never blocks a merge; without the secret it skips visibly; `ai-cr:review` re
 
 #### Manual
 
-- [ ] 3.1 Operator adds OPENROUTER_API_KEY and labels the PR ai-cr:review
-- [ ] 3.2 Evidence screenshots captured (run, log, comment)
+- [x] 3.1 Operator adds OPENROUTER_API_KEY and labels the PR ai-cr:review — OPENROUTER_API_KEY secret added 2026-09-14 (gh secret list); live reviews post comments on PRs, e.g. #42 "AI code review — PASS"
+- [x] 3.2 Evidence screenshots captured (run, log, comment) — screenshots in ~/Desktop/10xDEVS/certyfikacja/screenshots/champion/ (01 run, 02 log, 03 PR #31 comment)

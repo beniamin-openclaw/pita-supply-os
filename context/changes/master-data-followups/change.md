@@ -194,7 +194,7 @@ Questions to Marek 2026-09-28 (Gmail draft to marek@pitabros.pl, not sent yet; f
 
 ### Applied 2026-09-28 — pago-data-unity cleanup (lane 4 SQL, run by the coordinator)
 
-- Operator go in chat on 28.09. Script: `.claude/worktrees/fervent-cohen-63df85/context/changes/pago-data-unity/prod-sql.sql`.
+- Operator go in chat on 28.09. Script: `context/archive/2026-09-28-pago-data-unity/prod-sql.sql`.
 - STEP 0 matched `cleanup-diff.md` row for row; saved as `cleanup-diff-before.md` next to it (the rollback source for STEP R).
 - STEP 1 ran as the one `DO $$ … $$` statement, with no error. STEP 2 audit: 13/13 `ok = true`. After-state: `cleanup-diff-after.md`.
 - Result: 8 manager-created orders of the 2 abandoned draft transports (02.09, 25.09) cancelled and both headers cancelled; 5 historical Pago orders (KEN 04.09, KEN 07.09, BRA 07.09, KEN 14.09, WOL 14.09) closed as `manager_sent` / `transport` with the sheet ODB times; KEN 07.09 Pita 1 → 2; BRA 07.09 Bifteki commented; BRA 14.09 moved to the revised 16.09 sheet version (G15 8, Pita 8, SK 12, + Gyros 25 KG 1; total 3879.00 → 6457.48).
