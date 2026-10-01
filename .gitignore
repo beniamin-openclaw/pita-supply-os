@@ -22,3 +22,6 @@ service_account*.json
 
 # GoStock analysis inputs/outputs (purchase prices, stock values) — confidential, stay local
 docs/pita-supply-os-v1/analysis/
+
+# Devin local overrides (secrets)
+.devin/*.local.json
