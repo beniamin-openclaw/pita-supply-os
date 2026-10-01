@@ -42,6 +42,7 @@ import {
   buildEmailBody,
   buildEmailSubject,
   buildGmailComposeUrl,
+  copyListQty,
   draftCc,
   fallbackCc,
 } from "./lib/emailBody";
@@ -134,7 +135,7 @@ export function DispatchPanel({
       .sort(compareProductOrder)
       .map((ln) => {
         const code = ln.supplier_product_name || "";
-        return `${ln.product_name_pl} | ${effQty(ln)} ${ln.purchase_unit} | ${code}`.replace(/\s*\|\s*$/, "");
+        return `${ln.product_name_pl} | ${copyListQty(ln, effQty(ln))} | ${code}`.replace(/\s*\|\s*$/, "");
       });
     return [t("manager.copyList.header"), ...rows].join("\n");
   }, [detail.lines, effQty, t]);

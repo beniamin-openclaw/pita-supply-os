@@ -15,6 +15,7 @@ turns those into 4xx.
 from __future__ import annotations
 
 import json
+import math
 import urllib.parse
 from datetime import date
 from typing import Optional
@@ -22,6 +23,7 @@ from typing import Optional
 from .models import Location, Order, OrderEmailSigner, OrderLine, Product, Supplier
 from .order_qty import effective_ordered_qty
 from .product_order import line_sort_key
+from .suggestion import has_case
 
 
 GMAIL_COMPOSE_BASE = "https://mail.google.com/mail/"
@@ -157,6 +159,65 @@ def _format_qty(qty: float) -> str:
     return f"{qty:g}".replace(".", ",")
 
 
+# ---------- Bulk packs (feedback-1001 D35, twins in frontend lib/packStock.ts) ----------
+
+_PACK_SPLIT_EPS = 1e-6
+
+
+def _round3(n: float) -> float:
+    """3-decimal round, halves up — twin of packStock.ts ``round3``
+    (``Math.round(n * 1000) / 1000``)."""
+    return math.floor(n * 1000 + 0.5) / 1000
+
+
+def _split_pack(qty: float, size: float) -> tuple[int, float]:
+    """Whole packs + loose remainder (0 <= loose < size, 3 dp) — twin of
+    ``splitPackStock``: an EPS on the division so 17.999999 reads as 3 x 6,
+    the remainder rounded to 3 decimals."""
+    if qty <= 0:
+        return 0, qty
+    packs = math.floor(qty / size + _PACK_SPLIT_EPS)
+    loose = _round3(qty - packs * size)
+    if loose <= 0:
+        loose = 0.0
+    if loose >= size:
+        packs += 1
+        loose = _round3(loose - size)
+    return packs, loose
+
+
+def _format_case_qty(qty: float, units_per_case: float, case_unit: str, unit: str) -> str:
+    """D35 wording of a purchase quantity with a bulk pack — twin of
+    ``formatCaseQty`` (frontend/src/lib/packStock.ts):
+
+    - whole cases   -> "6 kartonów (24 paczki)"
+    - cases + loose -> "6 kartonów + 2 paczki (26 paczek)"
+    - under 1 case  -> "2 paczki" (no case part)
+    """
+
+    def label(n: float, u: str) -> str:
+        return _pl_unit_label(n, u) if u else ""
+
+    total = f"{_format_qty(qty)} {label(qty, unit)}".rstrip()
+    packs, loose = _split_pack(qty, units_per_case)
+    if packs < 1:
+        return total
+    out = f"{_format_qty(packs)} {label(packs, case_unit)}"
+    if loose > 0:
+        out += f" + {_format_qty(loose)} {label(loose, unit)}".rstrip()
+    return f"{out} ({total})"
+
+
+def _line_case(sp_entry: object) -> Optional[tuple[str, float]]:
+    """(case_unit, units_per_case) of a line's supplier product when both are
+    set and valid (migration 0028), else None — twin of ``caseOf``."""
+    case_unit = (getattr(sp_entry, "case_unit", None) or "").strip()
+    units_per_case = getattr(sp_entry, "units_per_case", None)
+    if not case_unit or not has_case(units_per_case):
+        return None
+    return case_unit, float(units_per_case)
+
+
 def _delivery_day_long(day: date) -> str:
     """"wtorek 29.09.2026"."""
     return f"{_PL_WEEKDAY_LONG[day.weekday()]} {day.strftime('%d.%m.%Y')}"
@@ -264,10 +325,14 @@ def _build_body(
             unit = ""
 
         qty = _effective_qty(line)
-        unit_label = _pl_unit_label(qty, unit) if unit else ""
-        body_lines.append(
-            f"{idx}.  | {product_name} | {_format_qty(qty)} {unit_label}".rstrip()
-        )
+        line_case = _line_case(sp_entry)
+        if line_case is not None:
+            # Bulk pack (D35): "6 kartonów + 2 paczki (26 paczek)".
+            qty_text = _format_case_qty(qty, line_case[1], line_case[0], unit)
+        else:
+            unit_label = _pl_unit_label(qty, unit) if unit else ""
+            qty_text = f"{_format_qty(qty)} {unit_label}"
+        body_lines.append(f"{idx}.  | {product_name} | {qty_text}".rstrip())
 
     body_lines.append("")
     # Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b), own section,

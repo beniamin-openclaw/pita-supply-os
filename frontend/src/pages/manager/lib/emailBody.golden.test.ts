@@ -29,6 +29,9 @@ interface FixtureLine {
   purchase_unit: string;
   display_order: number | null;
   qty: number;
+  // Bulk pack (feedback-1001 D35); absent from the older fixtures.
+  case_unit?: string | null;
+  units_per_case?: number | null;
 }
 
 interface Fixture {
@@ -64,6 +67,8 @@ function toDetail(fx: Fixture): ManagerOrderDetail {
         supplier_product_name: ln.supplier_product_name,
         purchase_unit: ln.purchase_unit,
         display_order: ln.display_order,
+        case_unit: ln.case_unit ?? null,
+        units_per_case: ln.units_per_case ?? null,
         captain_final_qty_purchase: ln.qty,
         manager_final_qty_purchase: 0,
       }) as ManagerOrderLineDetail,
@@ -94,9 +99,9 @@ const scenarios = readdirSync(FIXTURES)
   .sort();
 
 describe("order e-mail golden fixtures (shared with the backend)", () => {
-  it("finds the three scenarios", () => {
+  it("finds the scenarios", () => {
     expect(scenarios).toEqual(
-      expect.arrayContaining(["bracka_bukat", "ken_edge_cases", "wola_intermlecz"]),
+      expect.arrayContaining(["bracka_bukat", "case_lines", "ken_edge_cases", "wola_intermlecz"]),
     );
   });
 

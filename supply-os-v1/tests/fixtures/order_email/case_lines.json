@@ -1,0 +1,117 @@
+{
+  "_comment": "Bulk packs (feedback-1001 D35): whole cases, cases + loose, under one case, a kg remainder with a decimal, an opak case, and a line without a case (byte-identical to today). case_unit / units_per_case are read with .get / optional chaining, so the older fixtures carry neither.",
+  "include_delivery_date": false,
+  "signer": {
+    "name": "Marek Złotopolski",
+    "phone": "+48 662 184 258",
+    "email": "marek@pitabros.pl"
+  },
+  "order": {
+    "order_id": "ORD-20261002-WOL-INTE-c45e01",
+    "requested_delivery_date": "2026-10-03",
+    "extra_items": "",
+    "captain_note": ""
+  },
+  "location": {
+    "location_name": "Pita Bros Wola",
+    "delivery_address": "ul. Wolska 165",
+    "city": "01-258 Warszawa",
+    "phone": "662 015 470",
+    "company_name": "Pita Bros sp. z o.o.",
+    "company_address": "ul. W. Laskonogiego 9, 02-496 Warszawa",
+    "company_nip": "9522100633"
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P006",
+      "product_name_pl": "Pomidor",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_BUKAT_P006",
+      "supplier_product_name": "Pomidor",
+      "purchase_unit": "kg",
+      "display_order": 1,
+      "qty": 26,
+      "case_unit": "skrzynka",
+      "units_per_case": 6
+    },
+    {
+      "order_line_id": "OL-002",
+      "product_id": "P016",
+      "product_name_pl": "Cebula czerwona",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_BUKAT_P016",
+      "supplier_product_name": "Cebula czerwona",
+      "purchase_unit": "kg",
+      "display_order": 2,
+      "qty": 12.5,
+      "case_unit": "worek",
+      "units_per_case": 5
+    },
+    {
+      "order_line_id": "OL-003",
+      "product_id": "P021",
+      "product_name_pl": "Frytki Aviko",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTERMLECZ_P021",
+      "supplier_product_name": "Frytki Aviko 2,5 kg",
+      "purchase_unit": "paczka",
+      "display_order": 3,
+      "qty": 24,
+      "case_unit": "karton",
+      "units_per_case": 4
+    },
+    {
+      "order_line_id": "OL-004",
+      "product_id": "P015",
+      "product_name_pl": "Halloumi",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTERMLECZ_P015",
+      "supplier_product_name": "Ser Halloumi",
+      "purchase_unit": "szt",
+      "display_order": 4,
+      "qty": 6,
+      "case_unit": "karton",
+      "units_per_case": 12
+    },
+    {
+      "order_line_id": "OL-005",
+      "product_id": "P129",
+      "product_name_pl": "Rolki 80/80",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_MORY_P129",
+      "supplier_product_name": "Rolka termiczna 80/80",
+      "purchase_unit": "szt",
+      "display_order": 5,
+      "qty": 13,
+      "case_unit": "opak",
+      "units_per_case": 6
+    },
+    {
+      "order_line_id": "OL-006",
+      "product_id": "P022",
+      "product_name_pl": "Frytki z batatów",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTERMLECZ_P022",
+      "supplier_product_name": "Frytki z batatów",
+      "purchase_unit": "paczka",
+      "display_order": 6,
+      "qty": 3,
+      "case_unit": null,
+      "units_per_case": null
+    },
+    {
+      "order_line_id": "OL-007",
+      "product_id": "P018",
+      "product_name_pl": "Cebula biała",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_BUKAT_P018",
+      "supplier_product_name": "Cebula biała",
+      "purchase_unit": "kg",
+      "display_order": 7,
+      "qty": 0,
+      "case_unit": "worek",
+      "units_per_case": 5
+    }
+  ]
+}
