@@ -173,12 +173,27 @@ export function OrderLineTable({
 
                 {/* Δ vs sug. + reason badge (captain's deviation) */}
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {line.suggested_qty_purchase === 0 ? (
-                    // Suggestion 0: a counted stock at/above target was ordered
-                    // as information ("ponad cel"); only an uncounted line
-                    // (stock stored 0 below a positive target) is "brak bazy".
-                    // A qty-0 line (manager add-line / transport prefill
-                    // skeleton, nobody counted or ordered) shows a dash.
+                  {typeof line.delta_vs_suggestion_pct === "number" ? (
+                    // A stored deviation always wins (plan-review F1): a bulk-pack
+                    // line whose case suggestion is 0 but whose need was not
+                    // carries one, measured against the need.
+                    Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
+                      <span
+                        className={`font-semibold tabular-nums ${
+                          line.delta_vs_suggestion_pct > 0 ? "text-orange-700" : "text-red-700"
+                        }`}
+                      >
+                        {formatPct(line.delta_vs_suggestion_pct)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )
+                  ) : line.suggested_qty_purchase === 0 ? (
+                    // No stored deviation + suggestion 0: a counted stock at/above
+                    // target was ordered as information ("ponad cel"); only an
+                    // uncounted line (stock stored 0 below a positive target) is
+                    // "brak bazy". A qty-0 line (manager add-line / transport
+                    // prefill skeleton, nobody counted or ordered) shows a dash.
                     <span className="text-slate-400">
                       {line.captain_final_qty_purchase === 0
                         ? "—"
@@ -187,15 +202,6 @@ export function OrderLineTable({
                               ? "deviation.aboveTarget"
                               : "deviation.noBaseline",
                           )}
-                    </span>
-                  ) : typeof line.delta_vs_suggestion_pct === "number" &&
-                    Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
-                    <span
-                      className={`font-semibold tabular-nums ${
-                        line.delta_vs_suggestion_pct > 0 ? "text-orange-700" : "text-red-700"
-                      }`}
-                    >
-                      {formatPct(line.delta_vs_suggestion_pct)}
                     </span>
                   ) : (
                     <span className="text-slate-400">—</span>

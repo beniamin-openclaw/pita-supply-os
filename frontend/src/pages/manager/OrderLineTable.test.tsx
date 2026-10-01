@@ -80,3 +80,34 @@ describe("OrderLineTable — read-only row state (order-line-zero-qty)", () => {
     expect(row?.className).not.toContain("bg-amber-50");
   });
 });
+
+describe("OrderLineTable — Δ vs sugestia with a stored deviation (plan-review F1)", () => {
+  it("shows the stored deviation even when the (case) suggestion is 0", () => {
+    // Bulk pack: need 2 kg, crate 6 → case suggestion 0; the Captain ordered
+    // 18 with a reason, so the backend stored 800 % against the need.
+    renderTable([
+      makeLine({
+        suggested_qty_purchase: 0,
+        captain_final_qty_purchase: 18,
+        current_stock_qty_base: 8,
+        target_stock_qty_base: 10,
+        delta_vs_suggestion_pct: 8,
+      }),
+    ]);
+    expect(screen.getByText("+800%")).toBeInTheDocument();
+    expect(screen.queryByText("brak bazy")).not.toBeInTheDocument();
+  });
+
+  it("keeps 'brak bazy' for a suggestion-0 line without a stored deviation", () => {
+    renderTable([
+      makeLine({
+        suggested_qty_purchase: 0,
+        captain_final_qty_purchase: 2,
+        current_stock_qty_base: 0,
+        target_stock_qty_base: 10,
+        delta_vs_suggestion_pct: undefined,
+      }),
+    ]);
+    expect(screen.getByText("brak bazy")).toBeInTheDocument();
+  });
+});

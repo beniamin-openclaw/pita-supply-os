@@ -2,7 +2,15 @@
 import pytest
 
 from app.models import RoundingRule
-from app.suggestion import SuggestionInput, compute_suggestion, rounding_step
+from app.suggestion import (
+    SuggestionInput,
+    case_rounded_max,
+    case_suggestion,
+    compute_suggestion,
+    deviation_reference,
+    round_half_up,
+    rounding_step,
+)
 
 
 def _inp(**kwargs) -> SuggestionInput:
@@ -91,6 +99,99 @@ def test_half_allowed_rule():
         rounding_rule=RoundingRule.HALF_ALLOWED,
     ))
     assert out.suggested_qty_purchase == 2.5
+
+
+# ---------- Half-up rounding (plan-review F4) ----------
+
+@pytest.mark.parametrize(
+    ("x", "expected"), [(0.5, 1), (1.5, 2), (2.5, 3), (0.49, 0), (2.4999999999999996, 3)]
+)
+def test_round_half_up_pins_halves(x: float, expected: int):
+    """Halves go UP, unlike Python's banker's round() (0.5 -> 0, 2.5 -> 2) —
+    the frontend's roundHalfUp pins the same numbers."""
+    assert round_half_up(x) == expected
+
+
+@pytest.mark.parametrize(("target", "expected"), [(12, 1), (36, 2), (60, 3)])
+def test_up_for_critical_non_critical_rounds_halves_up(target: float, expected: float):
+    """raw 0.5 / 1.5 / 2.5 zgrzewki (24 szt): 1 / 2 / 3. Before the F4 fix the
+    backend said 0 / 2 / 2 while the Captain's screen said 1 / 2 / 3."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=target,
+        max_stock_qty_base=100, units_per_purchase_unit=24,
+        rounding_rule=RoundingRule.UP_FOR_CRITICAL,
+    ))
+    assert out.suggested_qty_purchase == expected
+
+
+# ---------- Bulk packs (feedback-1001 D33/D34) ----------
+# The full example table lives in the shared fixture
+# (test_case_suggestion_fixture.py); these pin the helpers and the explanation.
+
+def test_no_case_need_equals_suggestion():
+    out = compute_suggestion(_inp(current_stock_qty_base=3, target_stock_qty_base=10))
+    assert out.need_qty_purchase == out.suggested_qty_purchase == 7
+
+
+@pytest.mark.parametrize(
+    ("need", "expected"), [(0, 0), (2, 0), (3, 6), (4, 6), (9, 12), (10, 12)]
+)
+def test_case_suggestion_nearest_whole_case(need: float, expected: float):
+    assert case_suggestion(need, 6) == expected
+
+
+@pytest.mark.parametrize("upc", [None, 1, 0.5])
+def test_case_suggestion_without_a_real_case_is_the_need(upc):
+    assert case_suggestion(4, upc) == 4
+
+
+def test_deviation_reference_picks_the_nearer_and_ties_to_the_need():
+    assert deviation_reference(5, 4, 6) == 4  # tie -> need
+    assert deviation_reference(5.5, 4, 6) == 6
+    assert deviation_reference(0, 2, 0) == 0
+    assert deviation_reference(3, 3, 3) == 3  # no case
+
+
+def test_case_rounded_max():
+    assert case_rounded_max(20, 1, 6) == 24
+    assert case_rounded_max(24, 1, 6) == 24
+    assert case_rounded_max(1, 1, 5) == 5  # cebula: max 1 kg, worek 5 kg
+    assert case_rounded_max(20, 1, None) == 20
+    assert case_rounded_max(0, 1, 6) == 0
+
+
+def test_case_rounding_over_max_is_packaging_not_a_note():
+    """Stock 7 kg, target 10, max 12: the need 3 kg fits (10 <= 12), but it
+    rounds to a 6 kg crate -> 13 kg > 12. Over max ONLY because of the case,
+    so no "exceeds max" note (D34)."""
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=7, target_stock_qty_base=10, max_stock_qty_base=12,
+        rounding_rule=RoundingRule.TENTH_KG, units_per_case=6,
+    ))
+    assert out.need_qty_purchase == 3
+    assert out.suggested_qty_purchase == 6
+    assert out.over_max_qty_base == 1
+    assert "exceeds" not in out.explanation
+    assert "whole cases of 6" in out.explanation
+
+
+def test_need_over_max_keeps_the_note_with_a_case():
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=0, target_stock_qty_base=10, max_stock_qty_base=8,
+        rounding_rule=RoundingRule.TENTH_KG, units_per_case=6,
+    ))
+    assert out.suggested_qty_purchase == 12
+    assert "exceeds max by 4" in out.explanation
+
+
+def test_case_zero_with_a_need_does_not_claim_stock_at_target():
+    out = compute_suggestion(_inp(
+        current_stock_qty_base=8, target_stock_qty_base=10, units_per_case=6,
+        rounding_rule=RoundingRule.TENTH_KG,
+    ))
+    assert out.need_qty_purchase == 2
+    assert out.suggested_qty_purchase == 0
+    assert "at or above target" not in out.explanation
 
 
 # ---------- Input validation ----------

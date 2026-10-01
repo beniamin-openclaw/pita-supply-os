@@ -344,20 +344,10 @@ export function OrderDetailPage() {
                               })}
                             </div>
                           )}
-                          {line.suggested_qty_purchase === 0 ? (
-                            // Stock ≥ target → "ponad cel" (information); an
-                            // uncounted line (stock 0, target > 0) → "brak bazy".
-                            <div className="text-xs font-semibold text-slate-500">
-                              {line.captain_final_qty_purchase === 0
-                                ? "—"
-                                : t(
-                                    line.current_stock_qty_base >= line.target_stock_qty_base
-                                      ? "deviation.aboveTarget"
-                                      : "deviation.noBaseline",
-                                  )}
-                            </div>
-                          ) : (
-                            typeof line.delta_vs_suggestion_pct === "number" &&
+                          {typeof line.delta_vs_suggestion_pct === "number" ? (
+                            // A stored deviation always wins (plan-review F1): a
+                            // bulk-pack line whose case suggestion is 0 but whose
+                            // need was not carries one, measured against the need.
                             Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
                               <div
                                 className={`text-xs font-semibold ${
@@ -368,6 +358,21 @@ export function OrderDetailPage() {
                               >
                                 {line.delta_vs_suggestion_pct > 0 ? "+" : ""}
                                 {Math.round(line.delta_vs_suggestion_pct * 100)}%
+                              </div>
+                            )
+                          ) : (
+                            line.suggested_qty_purchase === 0 && (
+                              // No stored deviation + suggestion 0: stock ≥ target →
+                              // "ponad cel" (information); an uncounted line
+                              // (stock 0, target > 0) → "brak bazy".
+                              <div className="text-xs font-semibold text-slate-500">
+                                {line.captain_final_qty_purchase === 0
+                                  ? "—"
+                                  : t(
+                                      line.current_stock_qty_base >= line.target_stock_qty_base
+                                        ? "deviation.aboveTarget"
+                                        : "deviation.noBaseline",
+                                    )}
                               </div>
                             )
                           )}
