@@ -16,8 +16,13 @@
 --     the separate inactive KAMIENICA row gets no alias
 --   * Marek's signature e-mail: marek@pitabros.pl
 --   * Marek and Sławek can both sign in as biuro@ in their Chrome
+-- Confirmed by the operator 2026-10-01:
+--   * WESTFIELD phone +48 784 984 092 (stored in display form "784 984 092");
+--     sender alias mokotow@pitabros.pl (also D12 in feedback-1001-names-units)
 -- Still open (non-blocking):
---   * BROWARY / WESTFIELD phone: unknown -> left NULL (no phone line)
+--   * BROWARY phone: unknown -> left NULL (no phone line)
+--   * WESTFIELD location mailbox (DW) westfieldpitabros@gmail.com is set by the
+--     feedback-1001-names-units lane (its step 1.7), not here
 --
 -- Rollback:
 --   restore sender_email/phone from the A snapshot (UPDATE per row), and
@@ -44,9 +49,11 @@ UPDATE locations SET sender_email = 'norblin@pitabros.pl',     phone = '535 300 
 -- WOLA sends from the order mailbox itself (brief) -> sender_email NULL.
 UPDATE locations SET sender_email = NULL,                      phone = '662 015 470' WHERE location_id = 'WOLA';
 
--- Inactive / later locations (harmless until they go live).
+-- ELEKTROWNIA and WESTFIELD went live 2026-09-29.
 UPDATE locations SET sender_email = 'elektrownia@pitabros.pl', phone = '608 037 499' WHERE location_id = 'ELEKTROWNIA';
-UPDATE locations SET sender_email = 'mokotow@pitabros.pl',     phone = NULL          WHERE location_id = 'WESTFIELD';
+UPDATE locations SET sender_email = 'mokotow@pitabros.pl',     phone = '784 984 092' WHERE location_id = 'WESTFIELD';
+
+-- Inactive / later locations (harmless until they go live).
 UPDATE locations SET sender_email = 'forum@pitabros.pl'                              WHERE location_id = 'FORUM';
 UPDATE locations SET sender_email = 'poznan@pitabros.pl'                             WHERE location_id = 'STARY_BROWAR';
 UPDATE locations SET sender_email = 'slony@pitabros.pl'                              WHERE location_id = 'SLONY';
