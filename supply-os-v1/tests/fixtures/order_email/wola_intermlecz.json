@@ -1,0 +1,92 @@
+{
+  "_comment": "Wola x Intermlecz, date switch off (STOP example 2026-09-28).",
+  "include_delivery_date": false,
+  "signer": {
+    "name": "Marek Złotopolski",
+    "phone": "+48 662 184 258",
+    "email": "marek@pitabros.pl"
+  },
+  "order": {
+    "order_id": "ORD-20260928-WOL-INTE-5d23c4",
+    "requested_delivery_date": "2026-09-29",
+    "extra_items": "",
+    "captain_note": ""
+  },
+  "location": {
+    "location_name": "Pita Bros Wola",
+    "delivery_address": "ul. Wolska 165",
+    "city": "01-258 Warszawa",
+    "phone": "662 015 470",
+    "company_name": "Pita Bros sp. z o.o.",
+    "company_address": "ul. W. Laskonogiego 9, 02-496 Warszawa",
+    "company_nip": "9522100633"
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-006",
+      "product_id": "P206",
+      "product_name_pl": "CIECIORKA",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_06",
+      "supplier_product_name": "CIECIORKA",
+      "purchase_unit": "szt",
+      "display_order": null,
+      "qty": 6
+    },
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P201",
+      "product_name_pl": "Masło MR 500g",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_01",
+      "supplier_product_name": "Masło MR 500g",
+      "purchase_unit": "szt",
+      "display_order": null,
+      "qty": 6
+    },
+    {
+      "order_line_id": "OL-002",
+      "product_id": "P202",
+      "product_name_pl": "Halloumi",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_02",
+      "supplier_product_name": "Halloumi",
+      "purchase_unit": "szt",
+      "display_order": null,
+      "qty": 48
+    },
+    {
+      "order_line_id": "OL-003",
+      "product_id": "P203",
+      "product_name_pl": "Frytki Aviko (opakowania)",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_03",
+      "supplier_product_name": "Frytki Aviko (opakowania)",
+      "purchase_unit": "opak",
+      "display_order": null,
+      "qty": 32
+    },
+    {
+      "order_line_id": "OL-004",
+      "product_id": "P204",
+      "product_name_pl": "Frytki z batatów (opakowania)",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_04",
+      "supplier_product_name": "Frytki z batatów (opakowania)",
+      "purchase_unit": "opak",
+      "display_order": null,
+      "qty": 5
+    },
+    {
+      "order_line_id": "OL-005",
+      "product_id": "P205",
+      "product_name_pl": "Oliwa z Oliwek 1L",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_05",
+      "supplier_product_name": "Oliwa z Oliwek 1L",
+      "purchase_unit": "szt",
+      "display_order": null,
+      "qty": 3
+    }
+  ]
+}

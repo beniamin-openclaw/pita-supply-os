@@ -14,6 +14,12 @@
 //      config (`_meta.transport_driver_recipients`, via
 //      `api.transportDraftConfig()`); attachment = the driver-list PDF.
 //
+// order-email-v2 reuses the same primitives for the per-order supplier e-mail
+// (see orderEmailDraft.ts): an optional From (location send-as alias) and Cc
+// in the MIME, `login_hint`, a short-lived in-memory token cache, and three
+// thin Gmail API reads/deletes used to VERIFY the draft. Transport calls pass
+// none of the new options, so its output is unchanged.
+//
 // This module is split into MIME/base64 mechanics (pure, unit-tested) and
 // two thin browser-only wrappers (requestGmailAccessToken, createGmailDraft)
 // that are deliberately NOT unit-tested (they need a live GIS script + a
@@ -79,8 +85,28 @@ export interface MimeAttachment {
   mimeType: string;
 }
 
+/** Sender for the `From:` header (order-email-v2). Must be the authorized
+ * mailbox or one of its send-as aliases, else Gmail silently replaces it. */
+export interface MimeFrom {
+  name: string;
+  email: string;
+}
+
+/** `From:` value: RFC 2047 encoded display name when non-ASCII, else quoted. */
+function encodeFromHeader(from: MimeFrom): string {
+  const name = from.name.trim();
+  if (!name) return from.email;
+  // eslint-disable-next-line no-control-regex -- ASCII range check, not a control-char strip
+  if (/^[\x00-\x7F]*$/.test(name)) return `"${name.replace(/(["\\])/g, "\\$1")}" <${from.email}>`;
+  return `=?UTF-8?B?${utf8ToBase64(name)}?= <${from.email}>`;
+}
+
 export interface BuildMimeMessageOptions {
+  /** Optional sender (order-email-v2); omitted -> no From header (Transport). */
+  from?: MimeFrom;
   to: string;
+  /** Optional comma-joined CC; omitted/empty -> no Cc header (Transport). */
+  cc?: string;
   subject: string;
   bodyText: string;
   attachments: MimeAttachment[];
@@ -99,7 +125,9 @@ export function buildMimeMessage(opts: BuildMimeMessageOptions): string {
   const boundary = opts.boundary ?? "pitabros-mime-boundary";
   const lines: string[] = [];
 
+  if (opts.from) lines.push(`From: ${encodeFromHeader(opts.from)}`);
   lines.push(`To: ${opts.to}`);
+  if (opts.cc) lines.push(`Cc: ${opts.cc}`);
   lines.push(`Subject: ${encodeSubjectHeader(opts.subject)}`);
   lines.push("MIME-Version: 1.0");
   lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
@@ -245,6 +273,8 @@ export interface GmailAuthUrlOptions {
   clientId: string;
   redirectUri: string;
   state: string;
+  /** Pre-selects this account in Google's chooser (does not force it). */
+  loginHint?: string;
 }
 
 /** Build the Google OAuth 2.0 implicit-grant consent URL
@@ -262,6 +292,7 @@ export function buildGmailAuthUrl(opts: GmailAuthUrlOptions): string {
     prompt: "select_account",
     state: opts.state,
   });
+  if (opts.loginHint) params.set("login_hint", opts.loginHint);
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
@@ -305,6 +336,54 @@ export interface GmailTokenMessage {
   error?: string;
 }
 
+export interface RequestTokenOptions {
+  /** Pre-select this Google account in the popup (`login_hint`). */
+  loginHint?: string;
+  /** Reuse a token remembered (rememberGmailToken) within TOKEN_CACHE_MS for
+   *  the same loginHint instead of opening the popup again. Transport keeps
+   *  per-click popups. The caller remembers a token only after it verified the
+   *  account (order-email-v2), so an unverified token is never reused. */
+  reuse?: boolean;
+}
+
+/** How long an access token is reused. Google issues ~60 min tokens; the
+ * margin keeps a cached token from expiring between the check and the call. */
+export const TOKEN_CACHE_MS = 50 * 60 * 1000;
+
+// In-memory only (never localStorage): a page reload forgets the token.
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+function cacheKey(loginHint?: string): string {
+  return (loginHint ?? "").trim().toLowerCase();
+}
+
+function readCachedToken(loginHint?: string): string | null {
+  const hit = tokenCache.get(cacheKey(loginHint));
+  if (!hit) return null;
+  if (Date.now() >= hit.expiresAt) {
+    tokenCache.delete(cacheKey(loginHint));
+    return null;
+  }
+  return hit.token;
+}
+
+/** Remember a token for `loginHint` for TOKEN_CACHE_MS. Call it only after the
+ * token was verified to belong to that account (users.getProfile). */
+export function rememberGmailToken(loginHint: string | undefined, token: string): void {
+  tokenCache.set(cacheKey(loginHint), { token, expiresAt: Date.now() + TOKEN_CACHE_MS });
+}
+
+/** Drop the cached token for one account, or every cached token. */
+export function clearGmailTokenCache(loginHint?: string): void {
+  if (loginHint === undefined) tokenCache.clear();
+  else tokenCache.delete(cacheKey(loginHint));
+}
+
+/** Test seam: whether a token is cached for `loginHint`. */
+export function hasCachedGmailToken(loginHint?: string): boolean {
+  return readCachedToken(loginHint) !== null;
+}
+
 /**
  * Request a short-lived OAuth access token (scope: gmail.compose) for the
  * CURRENT user via a classic OAuth 2.0 implicit-grant popup — this is the
@@ -312,10 +391,19 @@ export interface GmailTokenMessage {
  * the access token; rejects on a Google/user error, a blocked popup, or the
  * popup being closed before completion.
  */
-export async function requestGmailAccessToken(clientId: string): Promise<string> {
+export async function requestGmailAccessToken(
+  clientId: string,
+  opts: RequestTokenOptions = {},
+): Promise<string> {
+  // A reused token skips the popup entirely (order-email-v2 D9). The check is
+  // synchronous so a cache miss still opens the popup inside the click gesture.
+  if (opts.reuse) {
+    const cached = readCachedToken(opts.loginHint);
+    if (cached) return cached;
+  }
   const state = generateOAuthState();
   const redirectUri = `${window.location.origin}/oauth/gmail-callback`;
-  const url = buildGmailAuthUrl({ clientId, redirectUri, state });
+  const url = buildGmailAuthUrl({ clientId, redirectUri, state, loginHint: opts.loginHint });
 
   const popup = window.open(url, "supplyos-gmail-auth", "popup,width=520,height=680");
   if (!popup) {
@@ -397,10 +485,67 @@ export async function createGmailDraft(
     },
     body: JSON.stringify({ message: { raw: rawBase64Url } }),
   });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => resp.statusText);
-    throw new Error(`Gmail API error ${resp.status}: ${text}`);
-  }
+  await throwIfNotOk(resp);
   const data = (await resp.json()) as { id: string };
   return data;
+}
+
+/** The access token was rejected (expired or revoked). The token cache is
+ * already cleared when this is thrown; the next click signs in again. */
+export class GmailAuthExpiredError extends Error {
+  constructor() {
+    super("gmail_auth_expired");
+    this.name = "GmailAuthExpiredError";
+  }
+}
+
+async function throwIfNotOk(resp: Response): Promise<void> {
+  if (resp.ok) return;
+  if (resp.status === 401) {
+    clearGmailTokenCache();
+    throw new GmailAuthExpiredError();
+  }
+  const text = await resp.text().catch(() => resp.statusText);
+  throw new Error(`Gmail API error ${resp.status}: ${text}`);
+}
+
+const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
+
+/** E-mail address of the mailbox that authorized `accessToken`
+ * (`users.getProfile`, allowed under the gmail.compose scope). */
+export async function getGmailProfileEmail(accessToken: string): Promise<string> {
+  const resp = await fetch(`${GMAIL_API}/profile`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  await throwIfNotOk(resp);
+  const data = (await resp.json()) as { emailAddress?: string };
+  return data.emailAddress ?? "";
+}
+
+/** The `From` header Gmail actually stored on a draft — it silently replaces
+ * a From that is not a send-as alias of the mailbox, so this is the check. */
+export async function getGmailDraftFrom(accessToken: string, draftId: string): Promise<string> {
+  const resp = await fetch(
+    // format=metadata returns every header; `metadataHeaders` is documented
+    // for messages.get only, so it is not relied on here.
+    `${GMAIL_API}/drafts/${encodeURIComponent(draftId)}?format=metadata`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  await throwIfNotOk(resp);
+  const data = (await resp.json()) as {
+    message?: { payload?: { headers?: Array<{ name: string; value: string }> } };
+  };
+  const header = (data.message?.payload?.headers ?? []).find(
+    (h) => h.name.toLowerCase() === "from",
+  );
+  return header?.value ?? "";
+}
+
+/** Delete a draft (only ever one this app just created and rejected). */
+export async function deleteGmailDraft(accessToken: string, draftId: string): Promise<void> {
+  const resp = await fetch(`${GMAIL_API}/drafts/${encodeURIComponent(draftId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  await throwIfNotOk(resp);
 }

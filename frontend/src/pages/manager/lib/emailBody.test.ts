@@ -1,11 +1,17 @@
 import { describe, it, expect } from "vitest";
 
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../../types";
+import { effectiveOrderedQtyPurchase } from "../../../lib/orderQty";
 import {
   buildEmailBody,
   buildEmailSubject,
   buildGmailComposeUrl,
   buildResendSubject,
+  draftCc,
+  fallbackCc,
+  formatDeliveryDayLong,
+  formatDeliveryDayShort,
+  formatEmailQty,
   joinCc,
   MAX_GMAIL_URL_LENGTH,
 } from "./emailBody";
@@ -75,22 +81,20 @@ describe("buildEmailBody — delivery address line (email-delivery-address)", ()
       manager_final_qty_purchase: 2,
       captain_final_qty_purchase: 1,
     } as ManagerOrderLineDetail;
-    const body = buildEmailBody(detail({ lines: [line] }), (l) =>
-      l.manager_final_qty_purchase > 0
-        ? l.manager_final_qty_purchase
-        : l.captain_final_qty_purchase,
-    );
-    expect(body).toContain("Tzatzyki | 2 wiadro");
+    const body = buildEmailBody(detail({ lines: [line] }), effectiveOrderedQtyPurchase);
+    expect(body).toContain("Tzatzyki | 2 wiadra");
   });
 
-  it("shows the fixed delivery-window line and drops the delivery date", () => {
+  it("keeps the delivery date blank while the switch is off (default)", () => {
     const body = buildEmailBody(
       detail({ requested_delivery_date: "2026-06-27" }),
       noLines,
     );
-    expect(body).toContain("Dostawa możliwa od godziny 11:00");
-    expect(body).not.toContain("Data dostawy");
-    expect(body).not.toContain("2026-06-27");
+    expect(body).toContain("Dostawa: __________, od godziny 11:00");
+    expect(body).not.toContain("27.06");
+    expect(buildEmailSubject(detail({ requested_delivery_date: "2026-06-27" }))).toBe(
+      "Zamówienie Pita Bros Wola",
+    );
   });
 });
 
@@ -113,23 +117,18 @@ describe("company footer (feedback r5)", () => {
   it("skips the footer block entirely when company data is absent", () => {
     const body = buildEmailBody(detail(), noLines);
     expect(body).not.toContain("NIP:");
-    expect(body).toContain("Pozdrawiam,\nPita Bros\n(zamowienie");
+    expect(body).toContain("Pozdrawiam,\nPita Bros\n(zamówienie");
   });
 });
 
 describe("feedback r7 — empty delivery-date line + standing office CC", () => {
-  it("adds an empty 'Proszę o dostawę w dniu:' line right above the fixed window", () => {
+  it("never injects the derived date while the switch is off", () => {
     const body = buildEmailBody(
       detail({ requested_delivery_date: "2026-06-27" }),
       noLines,
     );
-    const lines = body.split("\n");
-    expect(body).toContain("Proszę o dostawę w dniu:");
-    // The derived date must NOT be injected — the operator fills it by hand.
     expect(body).not.toContain("2026-06-27");
-    expect(lines.indexOf("Proszę o dostawę w dniu:") + 1).toBe(
-      lines.indexOf("Dostawa możliwa od godziny 11:00"),
-    );
+    expect(body.split("\n")).toContain("Dostawa: __________, od godziny 11:00");
   });
 
   it("emits cc only for an address carrying '@'", () => {
@@ -339,5 +338,85 @@ describe("buildEmailBody — canonical supplier order (supplier-product-order-mi
       "OL-ORD-003",
       "OL-ORD-M-a1b2c3",
     ]);
+  });
+});
+
+
+describe("order-email-v2 — date switch, weekdays, quantities", () => {
+  it("prints the date in body and subject when the switch is on", () => {
+    const d = detail({
+      location_name: "Pita Bros Bracka",
+      requested_delivery_date: "2026-09-29",
+      delivery_date_in_email: true,
+    });
+    expect(buildEmailBody(d, noLines)).toContain(
+      "Dostawa: wtorek 29.09.2026, od godziny 11:00",
+    );
+    expect(buildEmailSubject(d)).toBe("Zamówienie Pita Bros Bracka – dostawa wt 29.09");
+    expect(buildResendSubject(d)).toBe(
+      "Dosyłka — Zamówienie Pita Bros Bracka – dostawa wt 29.09",
+    );
+  });
+
+  it("stays blank with the switch on but no date", () => {
+    const d = detail({ delivery_date_in_email: true });
+    expect(buildEmailBody(d, noLines)).toContain("Dostawa: __________, od godziny 11:00");
+    expect(buildEmailSubject(d)).toBe("Zamówienie Pita Bros Wola");
+  });
+
+  it.each([
+    ["2026-09-28", "poniedziałek 28.09.2026", "pon 28.09"],
+    ["2026-10-04", "niedziela 04.10.2026", "nd 04.10"],
+    ["2026-10-02", "piątek 02.10.2026", "pt 02.10"],
+  ])("formats %s without a timezone shift", (iso, long, short) => {
+    expect(formatDeliveryDayLong(iso)).toBe(long);
+    expect(formatDeliveryDayShort(iso)).toBe(short);
+  });
+
+  it.each([
+    [1, "1"],
+    [1.5, "1,5"],
+    [18, "18"],
+    [0.1 + 0.2, "0,3"],
+  ])("formats quantity %s as %s", (qty, out) => {
+    expect(formatEmailQty(qty)).toBe(out);
+  });
+
+  it("prints the location phone only when present", () => {
+    expect(buildEmailBody(detail({ location_phone: "600 722 252" }), noLines)).toContain(
+      "Telefon lokalu: 600 722 252",
+    );
+    expect(buildEmailBody(detail(), noLines)).not.toContain("Telefon lokalu");
+  });
+
+  it("signs with the chosen manager", () => {
+    const body = buildEmailBody(detail(), noLines, {
+      name: "Sławomir Glanowski",
+      phone: "+48 692 840 194",
+      email: "slawek@pitabros.pl",
+    });
+    expect(body).toContain(
+      "Pozdrawiam,\nSławomir Glanowski\ntel. +48 692 840 194 · slawek@pitabros.pl\n(",
+    );
+  });
+});
+
+describe("order-email-v2 — DW per delivery path", () => {
+  it("draft: location mailbox only, never the sender", () => {
+    expect(
+      draftCc(detail({ cc_email: "biuro@pitabros.pl", location_email: "bracka@gmail.com" })),
+    ).toBe("bracka@gmail.com");
+    expect(
+      draftCc(
+        detail({ location_email: "Bracka@pitabros.pl", sender_email: "bracka@pitabros.pl" }),
+      ),
+    ).toBe("");
+    expect(draftCc(detail({ location_email: "TBD" }))).toBe("");
+  });
+
+  it("fallback link: office copy + location mailbox", () => {
+    expect(
+      fallbackCc(detail({ cc_email: "biuro@pitabros.pl", location_email: "wola@gmail.com" })),
+    ).toBe("biuro@pitabros.pl,wola@gmail.com");
   });
 });

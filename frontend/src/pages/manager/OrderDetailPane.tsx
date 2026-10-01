@@ -21,7 +21,8 @@ import { statusVisual } from "../captain-mp/lib/orderStatus";
 import { DeliverySection } from "./DeliverySection";
 import { DeliveryDateMarker } from "./DeliveryDateMarker";
 import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
-import { DispatchPanel } from "./DispatchPanel";
+import { DispatchPanel, type DispatchOpts } from "./DispatchPanel";
+import { gmailDraftsUrl } from "./lib/orderEmailDraft";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
 import { ResendPanel } from "./ResendPanel";
@@ -43,10 +44,16 @@ interface OrderDetailPaneProps {
   loading: boolean;
   /** Order id currently running an action (claim/release/dispatch/save), or null. */
   busyId: string | null;
+  /** Order id with a Gmail draft in progress (order-email-v2), or null — every
+   *  other action on it stays disabled until the draft settles. */
+  draftingId?: string | null;
   /** cutoff_iso from the selected queue item — not carried by ManagerOrderDetail. */
   cutoffIso?: string | null;
   /** Compose URL from a dispatch done this session — clickable on a sent order. */
   dispatchedEmailUrl?: string | null;
+  /** Mailbox holding the verified Gmail draft created this session for this
+   *  order (order-email-v2) — shows "Szkic w Gmailu (…) — Otwórz szkice". */
+  draftedMailbox?: string | null;
   /** Live per-line draft state (qty + comment), keyed by order_line_id. */
   drafts: DraftMap;
   /** Orderable products that can still be added to this order (claimed only). */
@@ -60,10 +67,17 @@ interface OrderDetailPaneProps {
   /** Save (PATCH) the dirty draft lines without dispatching. */
   onSave: (orderId: string) => void;
   /** Dispatch with the full draft line set + the channel sent_method. */
-  onDispatch: (orderId: string, sentMethod: OrderingMethod) => void;
+  onDispatch: (
+    orderId: string,
+    sentMethod: OrderingMethod,
+    signerEmail?: string | null,
+    opts?: DispatchOpts,
+  ) => void;
   onQtyChange: (orderLineId: string, qty: number) => void;
   onCommentChange: (orderLineId: string, comment: string) => void;
   onToast: (msg: string, ok: boolean) => void;
+  /** A Gmail draft started/settled for this order (page lock, order-email-v2). */
+  onDraftingChange?: (orderId: string, drafting: boolean) => void;
 }
 
 export function OrderDetailPane({
@@ -71,8 +85,10 @@ export function OrderDetailPane({
   detail,
   loading,
   busyId,
+  draftingId,
   cutoffIso,
   dispatchedEmailUrl,
+  draftedMailbox,
   drafts,
   availableToAdd,
   onAddLine,
@@ -84,6 +100,7 @@ export function OrderDetailPane({
   onQtyChange,
   onCommentChange,
   onToast,
+  onDraftingChange,
 }: OrderDetailPaneProps) {
   const { t, formatDateTime } = useT();
 
@@ -120,6 +137,8 @@ export function OrderDetailPane({
     : managerSummary(detail.lines);
   const dirty = editable && hasDirtyDrafts(drafts, detail.lines);
   const busy = busyId === detail.order_id;
+  // Disabled-but-not-spinning while a Gmail draft is being created.
+  const locked = busy || draftingId === detail.order_id;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -218,7 +237,7 @@ export function OrderDetailPane({
           <div className="mt-3">
             <AddProductPicker
               items={availableToAdd}
-              disabled={busy}
+              disabled={locked}
               onSelect={(item) =>
                 onAddLine(detail.order_id, item.product_id, item.supplier_product_id)
               }
@@ -243,7 +262,7 @@ export function OrderDetailPane({
           {editable && dirty && (
             <button
               type="button"
-              disabled={busy}
+              disabled={locked}
               onClick={() => onSave(detail.order_id)}
               className="sticky bottom-4 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
@@ -320,19 +339,28 @@ export function OrderDetailPane({
            compose link (when this session just dispatched it) plus the
            "dosyłka" rebuild from the current quantities (Phase 6). */
         <>
-          {dispatchedEmailUrl && (
+          {(dispatchedEmailUrl || draftedMailbox) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-              <a
-                href={dispatchedEmailUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-green-400 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-              >
-                {t("manager.action.openEmail")}
-              </a>
+              {draftedMailbox && <DraftedLine mailbox={draftedMailbox} />}
+              {dispatchedEmailUrl && !draftedMailbox && (
+                <a
+                  href={dispatchedEmailUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-green-400 bg-white px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+                >
+                  {t("manager.action.openEmail")}
+                </a>
+              )}
             </div>
           )}
-          <ResendPanel detail={detail} drafts={drafts} dirty={dirty} onToast={onToast} />
+          <ResendPanel
+            detail={detail}
+            drafts={drafts}
+            dirty={dirty}
+            onToast={onToast}
+            onDraftingChange={(on) => onDraftingChange?.(detail.order_id, on)}
+          />
         </>
       ) : editable ? (
         <>
@@ -340,7 +368,7 @@ export function OrderDetailPane({
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
             <button
               type="button"
-              disabled={busy}
+              disabled={locked}
               onClick={() => onRelease(detail.order_id)}
               className="rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
             >
@@ -348,7 +376,7 @@ export function OrderDetailPane({
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={locked}
               onClick={() => onCancel(detail.order_id)}
               className="rounded-lg border border-red-400 bg-white px-4 py-2 text-sm font-semibold text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
             >
@@ -360,13 +388,18 @@ export function OrderDetailPane({
             detail={detail}
             drafts={drafts}
             busy={busy}
-            onDispatch={(sentMethod) => onDispatch(detail.order_id, sentMethod)}
+            onDispatch={(sentMethod, signerEmail, opts) =>
+              onDispatch(detail.order_id, sentMethod, signerEmail, opts)
+            }
             onToast={onToast}
+            onDraftingChange={(on) => onDraftingChange?.(detail.order_id, on)}
           />
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-          {dispatchedEmailUrl ? (
+          {draftedMailbox ? (
+            <DraftedLine mailbox={draftedMailbox} />
+          ) : dispatchedEmailUrl ? (
             <a
               href={dispatchedEmailUrl}
               target="_blank"
@@ -389,5 +422,24 @@ export function OrderDetailPane({
         </div>
       )}
     </div>
+  );
+}
+
+/** "Szkic w Gmailu (biuro@…) — Otwórz szkice" on an order this session just
+ *  sent through a verified Gmail draft (order-email-v2). */
+function DraftedLine({ mailbox }: { mailbox: string }) {
+  const { t } = useT();
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2 text-sm text-green-800">
+      <span className="font-semibold">{t("manager.draft.sentLine", { mailbox })}</span>
+      <a
+        href={gmailDraftsUrl(mailbox)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="rounded-lg border border-green-400 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+      >
+        {t("manager.draft.openDrafts")}
+      </a>
+    </span>
   );
 }

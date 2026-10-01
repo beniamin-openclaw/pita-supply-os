@@ -198,6 +198,12 @@ def _schema():
     delivery_calendar = (
         MIGRATIONS_DIR / "0025_delivery_calendar.sql"
     ).read_text()
+    # 0026 adds locations.sender_email + locations.phone (order-email-v2);
+    # _LOCATION_COLUMNS references both, so the locations insert below errors
+    # against a pre-0026 schema.
+    sender_and_phone = (
+        MIGRATIONS_DIR / "0026_location_sender_and_phone.sql"
+    ).read_text()
     # 0027 adds products.inventory_order + location_product_settings.
     # inventory_order (inventory-card-order); _PRODUCT_COLUMNS and
     # _LOCATION_PRODUCT_SETTING_COLUMNS reference them, so the master-data
@@ -229,6 +235,7 @@ def _schema():
         conn.exec_driver_sql(display_order_minimum)
         conn.exec_driver_sql(manager_final_set)
         conn.exec_driver_sql(delivery_calendar)
+        conn.exec_driver_sql(sender_and_phone)
         conn.exec_driver_sql(inventory_order)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
@@ -318,6 +325,31 @@ def _make_order(
 
 
 # ---------- round-trips ----------
+
+def test_location_sender_and_phone_roundtrip():
+    """Migration 0026: locations.sender_email + phone bind and read back; the
+    fixture's WOLA row never set them, so its defaults read as None."""
+    wola = next(loc for loc in supabase_backend.load_locations() if loc.location_id == "WOLA")
+    assert wola.sender_email is None
+    assert wola.phone is None
+    supabase_backend._insert(
+        "locations", supabase_backend._LOCATION_COLUMNS,
+        Location(
+            location_id="BRACKA_IT", location_name="Bracka",
+            sender_email="bracka@pitabros.pl", phone="600 722 252",
+        ),
+    )
+    try:
+        bracka = next(
+            loc for loc in supabase_backend.load_locations()
+            if loc.location_id == "BRACKA_IT"
+        )
+        assert bracka.sender_email == "bracka@pitabros.pl"
+        assert bracka.phone == "600 722 252"
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql("DELETE FROM locations WHERE location_id = 'BRACKA_IT'")
+
 
 def test_master_data_roundtrip():
     products = supabase_backend.load_products()

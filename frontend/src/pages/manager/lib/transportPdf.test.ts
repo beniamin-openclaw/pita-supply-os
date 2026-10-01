@@ -166,7 +166,7 @@ describe("buildPagoPdfDocDefinition", () => {
   it("never leaks a location name into the product table (no-location-leak invariant)", () => {
     const doc = buildTransportPagoPrintDoc(batch(), "Bukat");
     const pdfDoc = buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT);
-    // Find the product table specifically (headerRows: 1, 4 columns: Lp/Nr katalogowy/Jm/Ilość).
+    // Find the product table specifically (headerRows: 1, 4 columns: Lp/Produkt/Jm/Ilość).
     const productTable = pdfDoc.content.find(
       (node): node is { table: { body: unknown[][] } } =>
         typeof node === "object" &&
@@ -214,33 +214,28 @@ describe("buildPagoPdfDocDefinition", () => {
     expect(flattenText(pdfDoc.content)).toContain("TRN-20260821-BUKA-abc123");
   });
 
-  it("renders the supplier_sku catalog code in the Nr katalogowy column when set", () => {
+  it("prints the product name, not the supplier_sku code, in the product column", () => {
     const b = batch({
       lines: [
         {
           product_id: "P1",
-          product_name_pl: "Gyros wieprzowy",
-          supplier_product_id: "SP1",
-          supplier_product_name: "Gyros wieprzowy 15kg",
-          purchase_unit: "kg",
-          total_qty_purchase: 15,
+          product_name_pl: "Gyros 15 KG",
+          supplier_product_id: "SP_PAGO_P024",
+          supplier_product_name: "Gyros 15 KG",
+          purchase_unit: "blok",
+          total_qty_purchase: 10,
           per_location: [],
-          supplier_sku: "GYRSW15KG",
+          supplier_sku: "PAGO-001",
+          warehouse_pickup: true,
         },
       ],
     });
-    const doc = buildTransportPagoPrintDoc(b, "Bukat");
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
     const pdfDoc = buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT);
     const text = flattenText(pdfDoc.content);
-    expect(text).toContain("GYRSW15KG");
-    expect(text).not.toContain("Gyros wieprzowy 15kg");
-  });
-
-  it("falls back to the friendly name in the Nr katalogowy column when supplier_sku is unset", () => {
-    const doc = buildTransportPagoPrintDoc(batch(), "Bukat");
-    const pdfDoc = buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT);
-    const text = flattenText(pdfDoc.content);
-    expect(text).toContain("Pomidory malinowe");
+    expect(text).toContain("Gyros 15 KG");
+    expect(text).not.toContain("PAGO-001");
+    expect(text).not.toContain("Nr katalogowy");
   });
 });
 
