@@ -45,13 +45,17 @@ export function emailQtyText(line: ManagerOrderLineDetail, qty: number, unit: st
 
 /**
  * The quantity column of the portal/phone/manual copy list (DispatchPanel,
- * ResendPanel): the D35 case wording when the line has a bulk pack, else the
- * raw "<qty> <purchase_unit>" the list has always printed.
+ * ResendPanel): the D35 case wording when the line has a bulk pack, else
+ * "<qty> <purchase_unit>" (the unit as stored, as the list has always
+ * printed it). Numbers use the e-mail's Polish format (`formatQtyG`) on every
+ * line so one list never mixes "2.5" and "2,5" (impl-review F4c): whole
+ * numbers print exactly as before, a decimal gets a comma like in the
+ * supplier e-mail, and a float artefact (0.30000000000000004) prints "0,3".
  */
 export function copyListQty(line: ManagerOrderLineDetail, qty: number): string {
   const lineCase = caseOf(line);
   if (lineCase) return formatCaseQty(qty, lineCase.size, lineCase.unit, line.purchase_unit);
-  return `${qty} ${line.purchase_unit}`;
+  return `${formatQtyG(qty)} ${line.purchase_unit}`;
 }
 
 // NOTE (S-02): this is the AUTHORITATIVE builder for the email the operator

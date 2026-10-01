@@ -178,3 +178,23 @@ describe("rounding + case helpers (twins of app/suggestion.py)", () => {
     expect(rs.messageKey).toBe("state.match");
   });
 });
+
+describe("alerts-off pill with a case (impl-review F4a)", () => {
+  it("an order inside [need, case] is a green match, outside it a neutral grey", () => {
+    const base: GateRow = {
+      name: "alerts off",
+      item: "pomidor",
+      item_overrides: { suggestion_alerts_enabled: false },
+      current: 6, // need 4, case 6
+      ordered: 5,
+      reason_required: false,
+      kind: "none",
+      delta: 0,
+    };
+    expect(computeRowState(itemFor(base), lineFor(base)).state).toBe("green");
+    const outside: GateRow = { ...base, ordered: 7 };
+    const rs = computeRowState(itemFor(outside), lineFor(outside));
+    expect(rs.state).toBe("grey");
+    expect(rs.requiresReason).toBe(false);
+  });
+});

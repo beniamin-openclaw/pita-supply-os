@@ -19,6 +19,7 @@ import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import { effectiveOrderedQtyPurchase, isManagerFinalSet } from "../../lib/orderQty";
 import { roundQty } from "../../components/ui/number";
+import { caseOf } from "../../lib/packUnits";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import type {
   CaptainOrderDetail,
@@ -344,10 +345,14 @@ export function OrderDetailPage() {
                               })}
                             </div>
                           )}
-                          {typeof line.delta_vs_suggestion_pct === "number" ? (
-                            // A stored deviation always wins (plan-review F1): a
-                            // bulk-pack line whose case suggestion is 0 but whose
-                            // need was not carries one, measured against the need.
+                          {!(line.suggested_qty_purchase === 0 && caseOf(line) === null) &&
+                          typeof line.delta_vs_suggestion_pct === "number" ? (
+                            // A stored deviation is shown — also on a bulk-pack
+                            // line whose case suggestion is 0 but whose need was
+                            // not (plan-review F1). Suggestion 0 WITHOUT a case
+                            // keeps the old reading below even with a stored
+                            // delta: legacy lines stored qty / step there
+                            // (impl-review F2).
                             Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
                               <div
                                 className={`text-xs font-semibold ${
@@ -362,7 +367,8 @@ export function OrderDetailPage() {
                             )
                           ) : (
                             line.suggested_qty_purchase === 0 && (
-                              // No stored deviation + suggestion 0: stock ≥ target →
+                              // Suggestion 0 (no case, or a case line without a
+                              // stored deviation): stock ≥ target →
                               // "ponad cel" (information); an uncounted line
                               // (stock 0, target > 0) → "brak bazy".
                               <div className="text-xs font-semibold text-slate-500">

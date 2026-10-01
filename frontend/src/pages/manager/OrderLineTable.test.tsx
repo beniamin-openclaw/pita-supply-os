@@ -92,10 +92,32 @@ describe("OrderLineTable — Δ vs sugestia with a stored deviation (plan-review
         current_stock_qty_base: 8,
         target_stock_qty_base: 10,
         delta_vs_suggestion_pct: 8,
+        purchase_unit: "kg",
+        units_per_purchase_unit: 1,
+        case_unit: "skrzynka",
+        units_per_case: 6,
       }),
     ]);
     expect(screen.getByText("+800%")).toBeInTheDocument();
     expect(screen.queryByText("brak bazy")).not.toBeInTheDocument();
+  });
+
+  it("a legacy line without a case (suggestion 0, stored delta) still reads 'ponad cel' (impl-review F2)", () => {
+    // Before week2-feedback-quantities a counted suggestion-0 line stored
+    // delta = qty / step (5 szt -> 5.0); 57 such lines exist on prod.
+    renderTable([
+      makeLine({
+        purchase_unit: "szt",
+        units_per_purchase_unit: 1,
+        suggested_qty_purchase: 0,
+        captain_final_qty_purchase: 5,
+        current_stock_qty_base: 12,
+        target_stock_qty_base: 12,
+        delta_vs_suggestion_pct: 5,
+      }),
+    ]);
+    expect(screen.getByText("ponad cel")).toBeInTheDocument();
+    expect(screen.queryByText("+500%")).not.toBeInTheDocument();
   });
 
   it("keeps 'brak bazy' for a suggestion-0 line without a stored deviation", () => {

@@ -457,4 +457,12 @@ describe("bulk-pack quantity wording (feedback-1001 D35)", () => {
     expect(copyListQty(frytki(), 26)).toBe("6 kartonów + 2 paczki (26 paczek)");
     expect(copyListQty(frytki({ case_unit: null, units_per_case: null }), 26)).toBe("26 paczka");
   });
+
+  it("copyListQty uses the Polish decimal comma on every line (impl-review F4c)", () => {
+    const kg = frytki({ case_unit: null, units_per_case: null, purchase_unit: "kg" });
+    expect(copyListQty(kg, 2.5)).toBe("2,5 kg");
+    expect(copyListQty(kg, 0.1 + 0.2)).toBe("0,3 kg");
+    expect(copyListQty(frytki({ purchase_unit: "kg", case_unit: "skrzynka", units_per_case: 6 }), 14.5))
+      .toBe("2 skrzynki + 2,5 kg (14,5 kg)");
+  });
 });

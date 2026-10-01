@@ -158,8 +158,10 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
       line.current_stock_qty_base !== ""
         ? computeSuggestion(item, Number(line.current_stock_qty_base))
         : null;
-    // With a case, ordering the need is as "matching" as ordering the case.
-    if (s !== null && (final === s.purchase || final === s.need)) {
+    // With a case, anything between the need and the case suggestion matches
+    // (D34 interval rule — the backend stores delta 0 there); without a case
+    // that is exactly the suggestion.
+    if (s !== null && deviationReference(final, s.need, s.purchase) === final) {
       return { state: "green", messageKey: "state.match", requiresReason: false, deviationPct: 0 };
     }
     return {

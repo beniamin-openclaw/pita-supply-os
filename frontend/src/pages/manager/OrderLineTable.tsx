@@ -125,6 +125,12 @@ export function OrderLineTable({
             const qtyStrike = visual === "cancelled" ? "line-through text-amber-700" : "";
             const commentValue = editable && drafts ? draftComment(drafts, line) : line.manager_comment;
             const suggestionCaseHint = caseSplitText(line, line.suggested_qty_purchase, lang);
+            // Suggestion 0 on a line WITHOUT a case keeps the "ponad cel" / "brak
+            // bazy" reading even when a delta is stored: legacy lines from before
+            // week2-feedback-quantities stored delta = qty / step there
+            // (impl-review F2). Only a case line puts its stored delta first.
+            const zeroSuggestionInfo =
+              line.suggested_qty_purchase === 0 && caseOf(line) === null;
             const managerCaseHint =
               visual === "cancelled" ? null : caseSplitText(line, managerQty, lang);
 
@@ -197,10 +203,9 @@ export function OrderLineTable({
 
                 {/* Δ vs sug. + reason badge (captain's deviation) */}
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {typeof line.delta_vs_suggestion_pct === "number" ? (
-                    // A stored deviation always wins (plan-review F1): a bulk-pack
-                    // line whose case suggestion is 0 but whose need was not
-                    // carries one, measured against the need.
+                  {!zeroSuggestionInfo && typeof line.delta_vs_suggestion_pct === "number" ? (
+                    // A stored deviation is shown — also on a bulk-pack line whose
+                    // case suggestion is 0 but whose need was not (plan-review F1).
                     Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
                       <span
                         className={`font-semibold tabular-nums ${
@@ -213,7 +218,8 @@ export function OrderLineTable({
                       <span className="text-slate-400">—</span>
                     )
                   ) : line.suggested_qty_purchase === 0 ? (
-                    // No stored deviation + suggestion 0: a counted stock at/above
+                    // Suggestion 0 without a case, or a case line without a stored
+                    // deviation: a counted stock at/above
                     // target was ordered as information ("ponad cel"); only an
                     // uncounted line (stock stored 0 below a positive target) is
                     // "brak bazy". A qty-0 line (manager add-line / transport
