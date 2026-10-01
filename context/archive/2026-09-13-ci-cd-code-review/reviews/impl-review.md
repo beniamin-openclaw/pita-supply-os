@@ -1,7 +1,7 @@
 # Implementation review — ci-cd-code-review (2026-09-13)
 
 Reviewed as part of the independent review of branch `cert/builder-readiness`
-(`context/changes/builder-certification-readiness/reviews/impl-review.md`, reviewer: Claude Fable 5.1 subagent, base `main`).
+(`context/archive/2026-09-12-builder-certification-readiness/reviews/impl-review.md`, reviewer: Claude Fable 5.1 subagent, base `main`).
 
 Scorecard for this change: correctness 8 · idiomaticity 8 · complexity 9 · test/risk coverage 8 · documentation 7 · security/safety 10.
 

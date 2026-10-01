@@ -163,5 +163,5 @@ Out of scope (explicitly): E2E/Playwright, hard DELETE endpoint, PRD rewrite, br
 
 #### Manual
 
-- [ ] 6.3 Operator submits both forms; confirmation e-mail received
-- [ ] 6.4 Changes archived after merge
+- [x] 6.3 Operator submits both forms; confirmation e-mail received — closed by the operator 2026-10-01: one form was submitted and a positive answer received; the second form was not sent
+- [x] 6.4 Changes archived after merge — ci-cd-code-review archived 2026-10-01 (b7884c7); this folder archived 2026-10-01

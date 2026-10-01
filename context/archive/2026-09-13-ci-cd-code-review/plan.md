@@ -33,7 +33,7 @@ job never blocks a merge; without the secret it skips visibly; `ai-cr:review` re
 ## References
 
 - `requirements.md`, `research.md` (this folder); parent plan
-  `context/changes/builder-certification-readiness/plan.md` Phase 4.
+  `context/archive/2026-09-12-builder-certification-readiness/plan.md` Phase 4.
 
 ## Progress
 
