@@ -146,6 +146,9 @@ export interface InventoryProduct {
   min_stock_qty_base?: number;
   target_stock_qty_base?: number;
   max_stock_qty_base?: number;
+  // inventory-card-order: effective card position; the backend returns the
+  // list sorted by it and the grid renders it as returned. null = none.
+  inventory_order?: number | null;
 }
 
 export interface InventoryLatestLine {
@@ -231,6 +234,12 @@ export interface InventoryCountDetailLine {
   units_per_purchase_unit?: number | null;
   supplier_id?: string | null;
   supplier_name?: string | null;
+  // inventory-card-order: effective card position (the backend returns lines
+  // sorted by it) + the primary supplier_product's position and id for the
+  // "Kolejność zamawiania" sort. Optional[...] = None on the backend.
+  inventory_order?: number | null;
+  display_order?: number | null;
+  supplier_product_id?: string | null;
 }
 
 export interface InventoryCountDetail {

@@ -38,6 +38,8 @@ const GROUP_BY_OPTIONS: { value: ProductListGroupBy; labelKey: StringKey }[] = [
 ];
 
 const SORT_OPTIONS: { value: ProductListSort; labelKey: StringKey }[] = [
+  { value: "card", labelKey: "productList.sort.card" },
+  { value: "supplier", labelKey: "productList.sort.supplier" },
   { value: "name", labelKey: "productList.sort.name" },
   { value: "stock", labelKey: "productList.sort.stock" },
   { value: "delta", labelKey: "productList.sort.delta" },

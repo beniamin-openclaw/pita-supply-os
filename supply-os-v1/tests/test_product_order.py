@@ -6,7 +6,12 @@ frontend/src/lib/productOrder.test.ts — keep both in sync.
 from types import SimpleNamespace
 
 from app.models import Product, SupplierProduct
-from app.product_order import line_sort_key, supplier_product_sort_key
+from app.product_order import (
+    effective_inventory_order,
+    inventory_sort_key,
+    line_sort_key,
+    supplier_product_sort_key,
+)
 
 # (display_order, supplier_product_id) — shared with productOrder.test.ts.
 FIXTURE = [
@@ -72,4 +77,35 @@ def test_line_sort_key_resolves_position_through_sps_and_tolerates_unknown():
         "SP_BUKAT_P002",
         "P999",
         "SP_UNKNOWN",
+    ]
+
+
+# ---------- Inventory card order (inventory-card-order) ----------
+
+
+def test_effective_inventory_order_prefers_the_location_override():
+    assert effective_inventory_order(15, 40) == 15
+    assert effective_inventory_order(None, 40) == 40
+    assert effective_inventory_order(None, None) is None
+    # 0 is a real override, not "unset".
+    assert effective_inventory_order(0, 40) == 0
+
+
+def test_inventory_sort_key_positions_first_then_product_id():
+    rows = [
+        (None, "P010"),
+        (40, "P005"),
+        (10, "P009"),
+        (40, "P003"),  # equal position -> tie by product_id
+        (None, "P002"),
+        (0, "P100"),
+    ]
+    ordered = sorted(rows, key=lambda r: inventory_sort_key(*r))
+    assert ordered == [
+        (0, "P100"),
+        (10, "P009"),
+        (40, "P003"),
+        (40, "P005"),
+        (None, "P002"),
+        (None, "P010"),
     ]

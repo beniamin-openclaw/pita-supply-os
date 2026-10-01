@@ -4,6 +4,7 @@ import {
   DEFAULT_PRODUCT_LIST_VIEW,
   applyProductListView,
   attentionReason,
+  defaultInventoryListView,
   filterProductRows,
   groupProductRows,
   sortProductRows,
@@ -192,6 +193,56 @@ describe("sortProductRows", () => {
     ]);
   });
 
+  it("card: card position ascending, unpositioned last, ties keep input order", () => {
+    const rows = [
+      row({ product_id: "N1", inventory_order: null }),
+      row({ product_id: "C30", inventory_order: 30 }),
+      row({ product_id: "T20b", inventory_order: 20 }),
+      row({ product_id: "C10", inventory_order: 10 }),
+      row({ product_id: "T20a", inventory_order: 20 }),
+      row({ product_id: "N0" }),
+    ];
+    // Equal positions and the unpositioned rows keep their input order
+    // (stable sort): the backend already tie-broke them by product_id.
+    expect(sortProductRows(rows, "card").map((r) => r.product_id)).toEqual([
+      "C10",
+      "T20b",
+      "T20a",
+      "C30",
+      "N1",
+      "N0",
+    ]);
+  });
+
+  it("card: identity on rows already in card order", () => {
+    const rows = [
+      row({ product_id: "P9", inventory_order: 10 }),
+      row({ product_id: "P1", inventory_order: 20 }),
+      row({ product_id: "P5", inventory_order: 20 }),
+      row({ product_id: "P2", inventory_order: null }),
+    ];
+    expect(sortProductRows(rows, "card")).toEqual(rows);
+  });
+
+  it("supplier: supplier name, then the supplier's product order, no supplier last", () => {
+    const rows = [
+      row({ product_id: "NS", supplier_id: null, supplier_name: null }),
+      row({ product_id: "P_POS30", supplier_name: "Pago", display_order: 30, supplier_product_id: "SP_PAGO_P9" }),
+      row({ product_id: "B_NOPOS", supplier_name: "Bukat", display_order: null, supplier_product_id: "SP_BUKAT_P1" }),
+      row({ product_id: "P_POS10", supplier_name: "Pago", display_order: 10, supplier_product_id: "SP_PAGO_P5" }),
+      row({ product_id: "B_POS", supplier_name: "Bukat", display_order: 50, supplier_product_id: "SP_BUKAT_P7" }),
+      row({ product_id: "P_NOPOS", supplier_name: "Pago", display_order: null, supplier_product_id: "SP_PAGO_P1" }),
+    ];
+    expect(sortProductRows(rows, "supplier").map((r) => r.product_id)).toEqual([
+      "B_POS",
+      "B_NOPOS",
+      "P_POS10",
+      "P_POS30",
+      "P_NOPOS",
+      "NS",
+    ]);
+  });
+
   it("does not mutate the input", () => {
     const rows = [POMIDOR, LIMONKA];
     sortProductRows(rows, "name");
@@ -225,7 +276,72 @@ describe("groupProductRows", () => {
   });
 });
 
+describe("groupProductRows with a sort", () => {
+  const CARD_ROWS = [
+    row({ product_id: "A", product_category: "Mrożonki", supplier_id: "SUP_PAGO", supplier_name: "Pago", inventory_order: 10 }),
+    row({ product_id: "B", product_category: "Chłodnia", supplier_id: "SUP_BUKAT", supplier_name: "Bukat", inventory_order: 20 }),
+    row({ product_id: "X", product_category: "", supplier_id: null, supplier_name: null, inventory_order: 5 }),
+    row({ product_id: "C", product_category: "Chemia", supplier_id: "SUP_BLUE", supplier_name: "Blue Service", inventory_order: 30 }),
+  ];
+
+  it("category + card: groups in first-seen (card section) order, label-less last", () => {
+    expect(groupProductRows(CARD_ROWS, "category", "card").map((g) => g.key)).toEqual([
+      "Mrożonki",
+      "Chłodnia",
+      "Chemia",
+      "",
+    ]);
+  });
+
+  it("supplier + card: supplier groups stay alphabetical, no-supplier last", () => {
+    expect(groupProductRows(CARD_ROWS, "supplier", "card").map((g) => g.label)).toEqual([
+      "Blue Service",
+      "Bukat",
+      "Pago",
+      "",
+    ]);
+  });
+
+  it("category + supplier: category groups stay alphabetical", () => {
+    expect(groupProductRows(CARD_ROWS, "category", "supplier").map((g) => g.key)).toEqual([
+      "Chemia",
+      "Chłodnia",
+      "Mrożonki",
+      "",
+    ]);
+  });
+});
+
+describe("defaultInventoryListView", () => {
+  it("opens in card order when any row carries a card position", () => {
+    const v = defaultInventoryListView([row({ product_id: "A" }), row({ product_id: "B", inventory_order: 10 })]);
+    expect(v).toEqual({ ...DEFAULT_PRODUCT_LIST_VIEW, sort: "card" });
+  });
+
+  it("keeps the name sort when nothing is positioned", () => {
+    expect(defaultInventoryListView([row({ product_id: "A", inventory_order: null }), row({ product_id: "B" })])).toEqual(
+      DEFAULT_PRODUCT_LIST_VIEW,
+    );
+    expect(defaultInventoryListView([])).toEqual(DEFAULT_PRODUCT_LIST_VIEW);
+  });
+
+  it("does not change the shared default the Captain grid uses", () => {
+    expect(DEFAULT_PRODUCT_LIST_VIEW.sort).toBe("name");
+  });
+});
+
 describe("applyProductListView", () => {
+  it("card view: flat rows in card order and category groups in card section order", () => {
+    const rows = [
+      row({ product_id: "W1", product_category: "Warzywa", inventory_order: 30 }),
+      row({ product_id: "M1", product_category: "Mrożonki", inventory_order: 10 }),
+      row({ product_id: "M2", product_category: "Mrożonki", inventory_order: 20 }),
+    ];
+    const { rows: flat, groups } = applyProductListView(rows, view({ sort: "card" }));
+    expect(flat.map((r) => r.product_id)).toEqual(["M1", "M2", "W1"]);
+    expect(groups.map((g) => g.key)).toEqual(["Mrożonki", "Warzywa"]);
+  });
+
   it("filters, sorts, then groups", () => {
     const rows = [POMIDOR, LOSOS, LIMONKA, LODY];
     const { rows: flat, groups } = applyProductListView(rows, view({ query: "l", sort: "name" }));

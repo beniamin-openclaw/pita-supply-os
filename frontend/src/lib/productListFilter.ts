@@ -5,8 +5,13 @@
 // it. No React, no i18n — labels are raw values the caller translates at
 // render time (categoryLabel / supplier_name), mirroring inventoryGrouping.ts.
 
+import { compareProductOrder } from "./productOrder";
+
 export type ProductListGroupBy = "category" | "supplier";
-export type ProductListSort = "name" | "stock" | "delta" | "category";
+// "card" = the location's printed inventory card (backend `inventory_order`),
+// "supplier" = ordering order: supplier, then the supplier's own product order
+// (inventory-card-order).
+export type ProductListSort = "card" | "supplier" | "name" | "stock" | "delta" | "category";
 
 export interface ProductListView {
   query: string;
@@ -31,6 +36,11 @@ export interface ProductListRow {
   target_stock_qty_base?: number | null;
   max_stock_qty_base?: number | null;
   current_stock_qty_base?: number | null;
+  /** Effective inventory-card position (inventory-card-order); null = none. */
+  inventory_order?: number | null;
+  /** Primary supplier product's position + id, for the "supplier" sort. */
+  display_order?: number | null;
+  supplier_product_id?: string | null;
 }
 
 export interface ProductListGroup<T extends ProductListRow> {
@@ -61,6 +71,17 @@ export const DEFAULT_PRODUCT_LIST_VIEW: ProductListView = {
   onlyCritical: false,
   onlyUncounted: false,
 };
+
+/** The Manager inventory detail's starting view (inventory-card-order): the
+ *  card order when any row carries a card position, else the default (name)
+ *  — e.g. a location whose positions are not loaded yet. The Captain grid keeps
+ *  `DEFAULT_PRODUCT_LIST_VIEW`; it only filters and shows backend order. */
+export function defaultInventoryListView(rows: ProductListRow[]): ProductListView {
+  const positioned = rows.some(
+    (row) => row.inventory_order !== null && row.inventory_order !== undefined,
+  );
+  return positioned ? { ...DEFAULT_PRODUCT_LIST_VIEW, sort: "card" } : DEFAULT_PRODUCT_LIST_VIEW;
+}
 
 function stockOf(row: ProductListRow): number | null {
   const v = row.current_stock_qty_base;
@@ -140,9 +161,28 @@ function byNullableAsc(a: number | null, b: number | null): number {
   return a - b;
 }
 
+/** Supplier name (Polish collation), rows without a supplier last. */
+function bySupplierName(a: ProductListRow, b: ProductListRow): number {
+  const sa = a.supplier_name ?? "";
+  const sb = b.supplier_name ?? "";
+  if (sa === "" && sb !== "") return 1;
+  if (sb === "" && sa !== "") return -1;
+  return collator(sa, sb);
+}
+
 export function sortProductRows<T extends ProductListRow>(rows: T[], sort: ProductListSort): T[] {
   const out = [...rows];
   switch (sort) {
+    case "card":
+      // Card position ascending, unpositioned last; ties keep the input order
+      // (Array.prototype.sort is stable). The backend already returns the
+      // lines in card order with its own product_id tie-break, so on backend
+      // output this is the identity — the two orders cannot disagree.
+      out.sort((a, b) => byNullableAsc(a.inventory_order ?? null, b.inventory_order ?? null));
+      break;
+    case "supplier":
+      out.sort((a, b) => bySupplierName(a, b) || compareProductOrder(a, b) || byName(a, b));
+      break;
     case "stock":
       out.sort((a, b) => byNullableAsc(stockOf(a), stockOf(b)) || byName(a, b));
       break;
@@ -162,6 +202,7 @@ export function sortProductRows<T extends ProductListRow>(rows: T[], sort: Produ
 export function groupProductRows<T extends ProductListRow>(
   rows: T[],
   groupBy: ProductListGroupBy,
+  sort?: ProductListSort,
 ): ProductListGroup<T>[] {
   const order: string[] = [];
   const groups = new Map<string, ProductListGroup<T>>();
@@ -177,22 +218,27 @@ export function groupProductRows<T extends ProductListRow>(
     group.items.push(row);
   });
   const out = order.map((k) => groups.get(k)!);
-  // Groups alphabetical (Polish collation), the label-less bucket last so
-  // "Bez dostawcy" / "Bez kategorii" never sits on top of the real groups.
+  // Category groups under the card sort keep first-seen order: the card's
+  // sections (inventory-card-order). Every other combination: groups
+  // alphabetical (Polish collation). In every mode the label-less bucket goes
+  // last so "Bez dostawcy" / "Bez kategorii" never sits on top of the real
+  // groups (Array.prototype.sort is stable, so first-seen survives the move).
+  const firstSeen = groupBy === "category" && sort === "card";
   out.sort((a, b) => {
     if (a.label === "" && b.label !== "") return 1;
     if (b.label === "" && a.label !== "") return -1;
-    return collator(a.label, b.label);
+    return firstSeen ? 0 : collator(a.label, b.label);
   });
   return out;
 }
 
 /** Filter -> sort -> group. `rows` is the flat sorted+filtered list; `groups`
- *  the same rows bucketed per `view.groupBy`, groups alphabetical. */
+ *  the same rows bucketed per `view.groupBy` — alphabetical, except category
+ *  groups under the card sort, which keep the card's section order. */
 export function applyProductListView<T extends ProductListRow>(
   rows: T[],
   view: ProductListView,
 ): ProductListResult<T> {
   const sorted = sortProductRows(filterProductRows(rows, view), view.sort);
-  return { rows: sorted, groups: groupProductRows(sorted, view.groupBy) };
+  return { rows: sorted, groups: groupProductRows(sorted, view.groupBy, view.sort) };
 }
