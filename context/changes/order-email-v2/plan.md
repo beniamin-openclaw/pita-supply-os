@@ -542,7 +542,7 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Manual
 
-- [ ] 1.5 prod-sql.sql reviewed by the operator
+- [x] 1.5 prod-sql.sql reviewed by the operator
 
 ### Phase 2: E-mail content v2 in both builders
 
@@ -577,7 +577,7 @@ merging before `delivery-calendar` never sends a guessed date.
 
 #### Manual
 
-- [ ] 4.2 Operator applies 0026 then prod-sql.sql before merge
+- [x] 4.2 Operator applies 0026 then prod-sql.sql before merge
 - [ ] 4.3 New bundle and Railway commit confirmed live
 - [ ] 4.4 Live E2E of the draft in the operator's browser
 - [ ] 4.5 Dosyłka draft and fallback link checked
