@@ -236,7 +236,7 @@ Notes carried from shaping: the operator reviewed a fuller role→capability mat
 - **Auto-ordering without a human final** — the system only suggests; the Captain and Manager always commit (governing rule).
 - **Auto-generating draft orders from an inventory count** — the Location Inventory Count change only *pre-fills* the stock field; it never creates orders automatically (consistent with the suggest-only governing rule).
 - **Guest / customer-facing restaurant ordering** — Supply OS is internal supplier ordering only.
-- **GoStock integration, receiving/WZ, finance/KSeF, predictive AI** — per existing roadmap postponements. Horizon 1 non-goal, partially taken up in Horizon 3: the finance mirror shipped 2026-09-07 (`finance-invoice-reconciliation`) and GoStock-seeded usage feeds the dynamic target (`dynamic-target-wola`, PR #30).
+- **GoStock integration, receiving/WZ, finance/KSeF, predictive AI** — per existing roadmap postponements. Horizon 1 non-goal, partially taken up in Horizon 3: the finance mirror shipped 2026-09-07 (`finance-invoice-reconciliation`); a GoStock-seeded dynamic target (`dynamic-target-wola`, PR #30) was closed unmerged on 2026-10-01 and will be rebuilt on the GoStock usage method.
 
 **Non-functional non-goals (quality dimensions week 1 will NOT aim for):**
 
@@ -256,11 +256,11 @@ Notes carried from shaping: the operator reviewed a fuller role→capability mat
 
 ## Scope since v2 (2026-09-13)
 
-- Locations: Bracka, Norblin, KEN, Browary added beyond the Wola-only baseline (7 more staged, unmerged, on PR #27).
+- Locations: Bracka, Norblin, KEN, Browary, Elektrownia Powiśle and Westfield Mokotów (2026-09-29) added beyond the Wola-only baseline (7 more staged, unmerged, on PR #27).
 - Manager Transport: combines several locations' orders into one supplier pickup, with driver logistics docs and per-user Gmail drafts.
 - Goods receiving: Captain confirms deliveries with WZ delivery-note photos and ordered-vs-received variance.
 - Inventory: a post-submit confirmation card and a combined Orders/Inventories history view.
-- Dynamic target: Wola's Pago/Coca-Cola targets from usage × days-to-delivery, replacing a static number (PR #30, open).
+- Dynamic target: Wola's Pago/Coca-Cola targets from usage × days-to-delivery, replacing a static number (PR #30, closed unmerged 2026-10-01; to be rebuilt on the GoStock usage method).
 - Finance: a KEN-pilot receipts-vs-invoices reconciliation mirror ("Faktury vs dostawy").
 
 Requirements for these live in their change folders (`context/archive/`, `context/changes/`); the PRD body above is the v2 baseline and is intentionally not rewritten.

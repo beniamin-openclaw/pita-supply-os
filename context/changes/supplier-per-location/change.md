@@ -84,4 +84,6 @@ Data section, which today states plainly "no schema change in the baseline pilot
   filters `sp.active` and `product.active`). Corrected 2026-10-01. Five real
   per-location candidates (P088/P095/P096/P097/P102) wait for an operator decision (Selgros vs Allegro).
 - Follow-up lane `claude/multi-location-master-data` (PR #27) builds on this branch; both PRs parked.
+- 2026-10-01: PR #26 closed unmerged (operator decision). Migration 0008 was never applied to prod.
+  The branch is kept because PR #27 is based on it; #27 stays open only as the source for H-01.
 - Status set to `blocked` (operator decision) on 2026-09-13; this folder stays in `context/changes/`.
