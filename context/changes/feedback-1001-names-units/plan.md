@@ -112,10 +112,13 @@ sections. The planning session on 2026-10-01 added D31–D36 below.
 
 ## Implementation Approach
 
-Data first, because it is independent of code and fixes most of the visible complaints. Then two PRs:
+Data first, because it is independent of code and fixes most of the visible complaints. Then the code, as **one PR**
+from `claude/feedback-1001-names-units-safzk7` with separate commits:
 
-- **readability** — frontend only, low risk;
-- **bulk packs** — migration, engine, UI, e-mail.
+- **readability** (Phase 2) — frontend only, low risk;
+- **bulk packs** (Phase 3) — migration, engine, UI, e-mail.
+
+Why one PR: the cloud session may push only to this branch. Merge waits for migration 0028 on prod.
 
 The bulk-pack data batch runs only after migration 0028 is on prod and the PR is merged and live.
 
@@ -169,8 +172,11 @@ the read values) and raises on a mismatch or an unexpected row count.
   - P017: "Helcom Papryka Grillowana Czerwona 4,2kg/2,5kg" (D27);
   - P189: "Cukier w kostkach Diament 0,5kg", supplier name "DIAMANT CUKIER KOSTKA BIAŁY 0,5kg/10" (D20);
   - P050/P051/P052/P054/P055: Prymat names from D28, with Ziele angielskie now Prymat 600 g.
-- **1.2 Oliwki P013**, all 7 locations: min 1 / target 1 / max 2 (D17).
-- **1.3 Liść laurowy P054**, all 7 locations: min 0 / target 0 / max 1 opak (D18).
+- **Scope.** "All locations" means the 7 active ones: WOLA, BRACKA, KEN, BROWARY, NORBLIN, ELEKTROWNIA and
+  WESTFIELD. Rows on the 6 inactive locations are left untouched.
+- **Targets.** Target = max unless a step says otherwise (D17 and D18 are the exceptions).
+- **1.2 Oliwki P013**, at the 7 active locations: min 1 / target 1 / max 2 (D17).
+- **1.3 Liść laurowy P054**, at the 7 active locations: min 0 / target 0 / max 1 opak (D18).
 - **1.4 Gyros unit** `blok` → `szt` on SP_PAGO_P024, SP_PAGO_P025 and SP_SPEC_P179 (D9). Label only.
 - **1.5 Gyros nieścięty.** `products.active = false` for P177 and P185 (D8). Applied only after the staff message
   (Phase 5) has been sent; the operator confirms that in chat.
@@ -191,35 +197,41 @@ the read values) and raises on a mismatch or an unexpected row count.
   - BROWARY (D31): P186 24/72, P187 48/96; P068/P069 rows deleted.
 - **1.11 Cappy** (D26):
   - two new products "Cappy Jabłko 0,25 l szkło" and "Cappy Pomarańcza 0,25 l szkło";
+  - IDs: the next free `P…` numbers, read from prod at dry-run time;
   - supplier Coca-Cola, purchase unit skrzynka, upp 24, 100.32 zł;
+  - copied from P186/P187: `rounding_rule`, `is_critical`, `counts_toward_minimum`, category;
+  - positions: `inventory_order` and `display_order` placed right after P064/P065;
   - P064/P065 renamed "… 0,33 l PET";
   - glass rows at WOLA, BRACKA, KEN, WESTFIELD, ELEKTROWNIA and BROWARY, with max rounded to a whole crate
     (never 0) and min ≤ max; the PET rows there are deleted;
   - NORBLIN keeps PET;
   - ambiguous roundings are listed separately in the diff for the operator.
-- **1.12 Papryka P017** (D27): unit `opak`, min 0,5 / target 1,5 / max 1,5 at every location that has the row.
-- **1.13 Prymat spices** (D28):
-  - P050 pieprz, P051 oregano, P052 papryka słodka, P055 ziele: inventory and purchase unit `szt`, upp 1;
-  - prices 47.60 / 11.30 / KEN mirror / 43.90;
-  - P054 liść 14.70.
-  - Thresholds converted from kg to jars. The conversion per location is listed in the diff, and any non-obvious
-    one is flagged for the operator.
+- **Moved to Phase 1b:** papryka P017 and the Prymat spice units. Both change what stored counts mean.
+
+Guards (plan-review F3):
+
+- **1.4 and 1.8** are label-only, so they get no open-order guard. The diff lists the open lines for information.
+- **1.10 and 1.11 deletes.** A setting row is deleted only when no `captain_submitted` or `manager_claimed` order at
+  that location has a line for that product. Otherwise the step raises.
+  - Reason: a sent-back order whose setting row is gone cannot be edited by the Captain (400).
+  - Today this blocks KEN (P065 claimed) and BRACKA (P068/P069 claimed) until those orders leave the queue.
+  - The step is retried when the queue is clear. Its other rows do not wait: the block is split per location.
 
 Audit:
 
 - every touched row equals its target;
-- `min ≤ target ≤ max`;
-- no active location row on an inactive product;
+- `min ≤ target ≤ max` on every active location row touched;
+- P139, P177 and P185 are `active = false`; their setting rows are kept on purpose (history, no `active` column
+  there);
 - no "(opakowania)" left on an active name;
-- no placeholder e-mails;
-- no `captain_submitted` order line depends on a changed unit (checked before 1.4, 1.8 and 1.13).
+- no placeholder e-mails.
 
 ### Success Criteria:
 
 #### Automated Verification:
 
-- `prod-sql-1.sql` runs clean twice on a local Postgres loaded with a prod schema + master-data dump. The second run
-  raises on its guards, which proves the guards work.
+- `prod-sql-1.sql` runs clean once on a local Postgres loaded with the prod schema + master data + open
+  orders/order_lines (so the open-order guards are exercised); a second run raises on its guards.
 - Opus xhigh review of `prod-sql-1.sql` + diff: no blocking findings.
 
 #### Manual Verification:
@@ -230,6 +242,63 @@ Audit:
 
 **Implementation Note**: Steps 1.5 and 1.13 can be held back without blocking the rest. The diff marks them as
 separable.
+
+---
+
+## Phase 1b: Units that change what stored counts mean (papryka, Prymat spices)
+
+### Overview
+
+These are steps 1.12 and 1.13 of the draft. Counts are stored as plain numbers and the unit is joined live, so
+changing `inventory_unit` re-reads old counts in the new unit (plan-review F2). Approach:
+
+- no history rewrite;
+- the old papryka row is retired, not edited;
+- per-location threshold decisions in the diff;
+- applied on the day of a full inventory count, with the staff message.
+
+### Changes Required:
+
+#### 1. Prepared SQL
+
+**File**: `prod-sql-1b.sql`, `prod-sql-1b-diff.md`, `prod-sql-1b-audit.md`
+
+**Intent**: Move papryka and four Prymat spices to per-jar/per-pack counting without corrupting thresholds or
+re-labelling past order lines.
+
+**Contract**:
+
+- **Papryka P017** (D27, history-safe technique from `plan-draft.md` Phase 2):
+  - new supplier row `SP_INTERMLECZ_P017_H`, named "Helcom Papryka Grillowana Czerwona 4,2kg/2,5kg", `opak`, upp 1;
+  - the old `SP_INTERMLECZ_P017` (`opak × 3,6`) set `active = false`, so its 10 order lines keep reading in kg;
+  - `products.inventory_unit` kg → `opak`;
+  - thresholds min 0,5 / target 1,5 / max 1,5 at the 7 active locations;
+  - guard: no `captain_submitted` or `manager_claimed` line on the old row, and no `manager_sent` one without a
+    receipt.
+- **Prymat spices** (D28):
+  - P050 pieprz, P051 oregano and P052 papryka słodka: inventory and purchase unit kg → `szt`, upp 1;
+  - P055 ziele is already `opak` → `szt` (label only);
+  - prices 47.60 / 11.30 / 25.76 (unchanged) / 43.90; P054 liść 14.70 (in Phase 1).
+- **Per-location thresholds.**
+  - Already in packs (copied from Marek's sheet), so they stay: WOLA, BRACKA, ELEKTROWNIA, NORBLIN, WESTFIELD.
+  - Clearly kg, so they are divided by the jar weight and rounded to 0,5: BROWARY.
+  - KEN: shown in the diff with both readings; the operator decides.
+- **Diff contents.** Every active location's last count of P017/P050/P051/P052/P055, with its date and the unit
+  it was really entered in.
+- **Same guard as P017** on the spice supplier rows: no line in `captain_submitted` or `manager_claimed`, and none
+  `manager_sent` without a receipt.
+
+### Success Criteria:
+
+#### Automated Verification:
+
+- `prod-sql-1b.sql` runs clean once on the local copy; a second run raises on its guards.
+
+#### Manual Verification:
+
+- The operator approves the diff, including the per-location choices, and names the full-count day.
+- The staff message (part 1b) has gone out before apply.
+- Applied, and the audit is saved.
 
 ---
 
@@ -346,12 +415,16 @@ and case formatting in the e-mail and copy lists.
 - `supply-os-v1/migrations/0028_supplier_product_case.sql` (new);
 - `tests/test_supabase_integration.py` (fixture :207-211/:239);
 - `app/supabase_backend.py` `_SUPPLIER_PRODUCT_COLUMNS`;
-- `app/models.py`: `SupplierProduct`, `ManagerOrderLineDetail`, `InventoryProduct`, `InventoryCountDetailLine`,
-  `TransportAggregateLine`;
-- `app/main.py` builders listed in Key Discoveries;
+- `app/models.py`: `SupplierProduct`, `ManagerOrderLineDetail`, `InventoryProduct`;
+- `app/main.py`: `_build_orderable_item`, both `ManagerOrderLineDetail` builders, `captain_inventory_products`.
+  `InventoryCountDetailLine` and `TransportAggregateLine` are NOT threaded: no reader exists (plan-review F10).
 - `frontend/src/types.ts`;
 - `OrderEditPage.lineToItem`;
-- `docs/pita-supply-os-v1/seed/supplier_products.csv`, with the stale P021/P129 rows fixed to match prod (P183 added).
+- seed CSVs under `docs/pita-supply-os-v1/seed/` (plan-review F6):
+  - P021: inventory `szt`, purchase `paczka`, upp 1;
+  - P129 stays on `SP_PAGO_P129`, so the Mory move is not mirrored in seed and
+    `test_captain_orderable_wola_pago_returns_18_items` stays valid;
+  - one seed row gets a case (Bukat P006, skrzynka 6) so seed-mode tests exercise the path.
 
 **Intent**: Carry `case_unit` and `units_per_case` from master data to every screen and builder that prints or
 inputs quantities.
@@ -363,6 +436,9 @@ inputs quantities.
 - Pydantic: `Optional[str] = None` and `Optional[float] = None`. TS: optional fields.
 - The header comment gives the rollback (`ALTER TABLE … DROP COLUMN …`) and says the migration is applied on prod
   before the code.
+- No `%` character anywhere in the file.
+- `ADD COLUMN IF NOT EXISTS`, and the CHECKs are added in a re-runnable way (drop-if-exists then add, or guarded
+  by a `pg_constraint` lookup).
 
 #### 2. Engine + gates (backend and frontend parity)
 
@@ -370,7 +446,10 @@ inputs quantities.
 - `app/suggestion.py`;
 - `app/main.py` `_evaluate_submit_line` (and the `/api/captain/suggest` input);
 - `frontend/src/pages/captain-mp/lib/compute.ts`;
-- tests `tests/test_suggestion.py`, `tests/test_captain_submit.py`, `compute.test.ts`.
+- `pages/manager/components/OrderLineTable.tsx` :176 and `OrderDetailPage.tsx` :337 (the "no baseline" branch);
+- tests `tests/test_suggestion.py`, `tests/test_captain_submit.py`, `compute.test.ts`;
+- a shared fixture `docs/pita-supply-os-v1/fixtures/case_suggestion_cases.json`, read by both pytest and vitest
+  (F9).
 
 **Intent**: D33 rounding and D34 gates.
 
@@ -378,10 +457,17 @@ inputs quantities.
 - `SuggestionInput.units_per_case: Optional[float]`.
 - The output keeps `suggested_qty_purchase` (the case suggestion) and adds `need_qty_purchase` (the per-rule
   rounded need; equal to the suggestion when there is no case).
-- Case suggestion = `round_half_up(need / upc) × upc`.
+- Case suggestion = `round_half_up(need / upc) × upc`, where `round_half_up(x) = floor(x + 0.5)` on both sides.
+- **Half-up fix (plan-review F4).** The `up_for_critical` rule switches from Python `round()` (banker's rounding)
+  to `floor(x + 0.5)`, matching the frontend. 0.5, 1.5 and 2.5 are pinned on both sides. This fixes an existing
+  drift.
+- **"No baseline" branch (plan-review F1).** It keys on `need == 0`, not `suggested_qty_purchase == 0`:
+  - `main.py:649`, `compute.ts:145`;
+  - on the two detail screens: show the stored deviation whenever it is set; "brak bazy" only when it is null.
+  - When the case suggestion is 0 but the need is not, the normal D34 gates apply.
 - Gates:
   - `ref = need` if `|final − need| ≤ |final − case|`, else `case`;
-  - `delta = |final − ref| / max(ref, step)`;
+  - `delta = |final − ref| / max(ref, step)`; the frontend gets the same `step` floor, so no "+∞%" (F9);
   - the critical gate fires when `final < min(need, case)`;
   - the uncounted over-MAX gate allows up to `ceil(max / (upc·upp)) · upc·upp`.
 - When the case suggestion exceeds max only because of case rounding, the "exceeds max" note is dropped.
@@ -394,6 +480,8 @@ inputs quantities.
   | 4 | 6 | 4 or 6 | no |
   | 4 | 6 | 1 | yes, critical |
   | 10 | 12 | 18 | yes, >25% |
+  | 2 | 0 | 18 | yes, >25% (F1) |
+  | 3 | 6 | 3 or 6 | no (half-up boundary) |
 
 #### 3. Captain inputs
 
@@ -405,6 +493,7 @@ case equivalent.
 
 **Contract**:
 - The pack size for stock is `units_per_case × upp` in inventory units, with `packUnit = case_unit`.
+- The split reuses `splitPackStock` (`lib/packStock.ts`), and so does `formatCaseQty` (F9).
 - For the order, the pack size is `units_per_case` in purchase units.
 - The component still emits one combined number, so drafts and `buildPayloadLines` are unchanged.
 - A case takes precedence over `upp > 1`.
@@ -430,8 +519,10 @@ case equivalent.
 
 **Intent**: D35. Quantities still go through `effective_ordered_qty` / `lib/orderQty.ts` only.
 
-**Contract**: Python and TS produce identical strings for the shared fixture. Lines without a case are
-byte-identical to today, so the existing fixtures are unchanged.
+**Contract**:
+- Python and TS produce identical strings for the shared fixture.
+- Lines without a case are byte-identical to today, so the existing fixtures are unchanged.
+- The golden tests read the new case keys with `.get` / optional chaining, so the old fixtures need no edit (F9).
 
 ### Success Criteria:
 
@@ -463,7 +554,8 @@ Set `case_unit` / `units_per_case` on the eight supplier_products. Runs only aft
 
 **File**: `prod-sql-2-cases.sql`, `prod-sql-2-diff.md`, `prod-sql-2-audit.md` (all in this folder)
 
-**Intent**: Write the cases with a guard that both columns are NULL before and that upp = 1.
+**Intent**: Write the cases with a guard that both columns are NULL before, upp = 1, and the purchase unit is as
+expected (`paczka` on SP_INTERMLECZ_P021, so Phase 1 step 1.8 has run).
 
 **Contract**:
 
@@ -481,6 +573,16 @@ Set `case_unit` / `units_per_case` on the eight supplier_products. Runs only aft
 `order_note` is cleared where it only restated the case ("opak. zbiorcze 12 szt", "worek 5 kg"). This is listed in
 the diff.
 
+**Rows where the case suggestion is always 0 (plan-review F5).** The diff lists every active location whose target
+is under half a case. Today these are P018 cebula biała (target 0,5–1 kg vs worek 5 kg) and BRACKA P129 (target 2 vs
+opak 6). Ordering one real pack on such a row always asks for a reason. For each listed row the operator picks one:
+
+- raise the thresholds to at least one pack;
+- drop the case on that product;
+- keep it as it is.
+
+The choice is applied in the same block.
+
 ### Success Criteria:
 
 #### Automated Verification:
@@ -491,8 +593,8 @@ the diff.
 
 - The operator approves the diff in chat. After apply, the audit is saved.
 - On prod with a Captain token, the Bukat card for Pomidor shows `[skrzynki] + [kg]` and the suggestion in whole
-  crates.
-- The Manager dispatch preview shows "N skrzynek (… kg)". The order is backed out, never sent.
+  crates. The order is backed out.
+- The Manager dispatch preview shows "N skrzynek (… kg)". Never sent.
 
 ---
 
@@ -510,7 +612,7 @@ the diff.
 
 **File**: `docs/pita-supply-os-v1/NEW_LOCATION_CHECKLIST.md`
 
-**Intent**: Add these lines:
+**Intent**: Add these lines (the doc commit lands with the Phase 3 PR):
 - set `locations.sender_email` (send-as alias of biuro@), `locations.phone` and `locations.email`;
 - pick glass or PET for Coca-Cola and Cappy;
 - set roll sizes from Sławek's table.
@@ -526,9 +628,17 @@ the diff.
 - the new names;
 - sticky bulk reason;
 - `[skrzynka] + [kg]` for pomidory and cebula, `[karton] + [szt]` for halloumi, `[opak] + [szt]` for rolls and
-  gąbka.
+  gąbka;
+- miód w saszetkach removed (F7);
+- Coca-Cola now in glass at ELEKTROWNIA and BROWARY (F7);
+- Cappy split into glass 0,25 and PET 0,33 (F7);
+- (part 1b) spices counted per jar (szt) and papryka per opak, with a full count that day — do not pre-fill these
+  products from earlier counts (F7).
 
-It goes out before Phase 1 step 1.5 and again (part 2) when Phase 4 is live.
+There are three parts:
+- part 1 goes out before Phase 1 is applied;
+- part 1b on the full-count day;
+- part 2 when Phase 4 is live.
 
 ### Success Criteria:
 
@@ -536,6 +646,7 @@ It goes out before Phase 1 step 1.5 and again (part 2) when Phase 4 is live.
 
 - The operator approves and applies 5.1. The audit shows the mailbox set.
 - The operator confirms the staff message was sent.
+- The NEW_LOCATION_CHECKLIST lines are committed.
 
 ---
 
@@ -618,6 +729,18 @@ It goes out before Phase 1 step 1.5 and again (part 2) when Phase 4 is live.
 - [ ] 1.4 Applied; prod-sql-1-audit.md saved, all assertions green
 - [ ] 1.5 Operator spot-check on prod (Intermlecz order screen, inventory list)
 
+### Phase 1b: Units that change stored meaning
+
+#### Automated
+
+- [ ] 1b.1 prod-sql-1b.sql dry-run clean; guards re-raise on second run
+
+#### Manual
+
+- [ ] 1b.2 Operator approves diff and names the full-count day
+- [ ] 1b.3 Staff message part 1b sent before apply
+- [ ] 1b.4 Applied; audit saved
+
 ### Phase 2: PR readability
 
 #### Automated
@@ -655,7 +778,8 @@ It goes out before Phase 1 step 1.5 and again (part 2) when Phase 4 is live.
 #### Manual
 
 - [ ] 4.2 Operator approves diff; applied; audit saved
-- [ ] 4.3 Captain Pomidor card and Manager e-mail preview verified on prod, backed out
+- [ ] 4.3 Captain Pomidor card verified on prod, backed out
+- [ ] 4.4 Manager e-mail preview verified on prod, not sent
 
 ### Phase 5: Leftovers and staff message
 

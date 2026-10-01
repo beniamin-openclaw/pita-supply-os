@@ -1,7 +1,7 @@
 ---
 change_id: feedback-1001-names-units
 title: Operator feedback 2026-09-30/10-01 — product names, units, gyros, bulk reason, Elektrownia/Norblin follow-ups
-status: planned
+status: plan_reviewed
 created: 2026-10-01
 updated: 2026-10-01
 archived_at: null
