@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import { overruleAll } from "./overruleAll";
 import type { OrderableItem, OrderLine } from "../types";
 
+// The automatic sticky pass; "overwrite" cases below say so explicitly.
+const FILL = "fillMissing" as const;
+const OVERWRITE = "overwrite" as const;
+
 // Minimal fixtures — mirrors compute.test.ts's makeItem/makeLine so the two
 // suites stay easy to cross-reference.
 function makeItem(overrides: Partial<OrderableItem> = {}): OrderableItem {
@@ -62,7 +66,7 @@ describe("overruleAll — applies to deviating lines", () => {
     const items = [makeItem({ product_id: "P001" })];
     const lines = { P001: deviatingLine() };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P001.reason_code).toBe("LOW_STORAGE");
     expect(result).not.toBe(lines); // patched -> new object
@@ -78,7 +82,7 @@ describe("overruleAll — applies to deviating lines", () => {
       P003: deviatingLine({ product_id: "P003", supplier_product_id: "SP001" }),
     };
 
-    const result = overruleAll(items, lines, "WEEKEND_HIGH_TRAFFIC", "");
+    const result = overruleAll(items, lines, { code: "WEEKEND_HIGH_TRAFFIC", comment: "" }, FILL);
 
     expect(result.P001.reason_code).toBe("WEEKEND_HIGH_TRAFFIC");
     expect(result.P003.reason_code).toBe("WEEKEND_HIGH_TRAFFIC");
@@ -88,19 +92,19 @@ describe("overruleAll — applies to deviating lines", () => {
     const items = [makeItem({ product_id: "P001" })];
     const lines = { P001: deviatingLine() };
 
-    const result = overruleAll(items, lines, "OTHER", "Explained once for all lines");
+    const result = overruleAll(items, lines, { code: "OTHER", comment: "Explained once for all lines" }, FILL);
 
     expect(result.P001.reason_code).toBe("OTHER");
     expect(result.P001.captain_comment).toBe("Explained once for all lines");
   });
 });
 
-describe("overruleAll — never replaces an existing reason", () => {
+describe("overruleAll fillMissing — never replaces an existing reason", () => {
   it("skips a line that already has a reason set, even a different one", () => {
     const items = [makeItem({ product_id: "P001" })];
     const lines = { P001: deviatingLine({ reason_code: "SUPPLIER_UNDERDELIVERS" }) };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P001.reason_code).toBe("SUPPLIER_UNDERDELIVERS");
     expect(result).toBe(lines); // nothing changed -> same reference
@@ -112,7 +116,7 @@ describe("overruleAll — never replaces an existing reason", () => {
       P001: deviatingLine({ reason_code: "OTHER", captain_comment: "" }),
     };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P001.reason_code).toBe("OTHER");
     expect(result.P001.captain_comment).toBe("");
@@ -128,7 +132,7 @@ describe("overruleAll — never replaces an existing reason", () => {
       P003: deviatingLine({ product_id: "P003" }),
     };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P001.reason_code).toBe("OTHER");
     expect(result.P001.captain_comment).toBe("already explained");
@@ -141,7 +145,7 @@ describe("overruleAll — skips lines that don't require a reason", () => {
     const items = [makeItem({ product_id: "P002" })];
     const lines = { P002: matchingLine() };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P002.reason_code).toBe("");
     expect(result).toBe(lines);
@@ -159,7 +163,7 @@ describe("overruleAll — skips lines that don't require a reason", () => {
       }),
     };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P005.reason_code).toBe("");
     expect(result).toBe(lines);
@@ -169,7 +173,7 @@ describe("overruleAll — skips lines that don't require a reason", () => {
     const items = [makeItem({ product_id: "P004" })];
     const lines = { P004: makeLine({ product_id: "P004" }) };
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result.P004.reason_code).toBe("");
     expect(result).toBe(lines);
@@ -181,7 +185,7 @@ describe("overruleAll — OTHER without a comment is a no-op", () => {
     const items = [makeItem({ product_id: "P001" })];
     const lines = { P001: deviatingLine() };
 
-    const result = overruleAll(items, lines, "OTHER", "");
+    const result = overruleAll(items, lines, { code: "OTHER", comment: "" }, FILL);
 
     expect(result).toBe(lines);
     expect(result.P001.reason_code).toBe("");
@@ -191,7 +195,7 @@ describe("overruleAll — OTHER without a comment is a no-op", () => {
     const items = [makeItem({ product_id: "P001" })];
     const lines = { P001: deviatingLine() };
 
-    const result = overruleAll(items, lines, "OTHER", "   ");
+    const result = overruleAll(items, lines, { code: "OTHER", comment: "   " }, FILL);
 
     expect(result).toBe(lines);
   });
@@ -206,7 +210,7 @@ describe("overruleAll — OTHER without a comment is a no-op", () => {
       P003: deviatingLine({ product_id: "P003" }),
     };
 
-    const result = overruleAll(items, lines, "OTHER", "");
+    const result = overruleAll(items, lines, { code: "OTHER", comment: "" }, FILL);
 
     expect(result).toBe(lines);
     expect(result.P001.reason_code).toBe("");
@@ -219,7 +223,7 @@ describe("overruleAll — defensive edge cases", () => {
     const items = [makeItem({ product_id: "P999" })];
     const lines: Record<string, OrderLine> = {};
 
-    const result = overruleAll(items, lines, "LOW_STORAGE", "");
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result).toBe(lines);
   });
@@ -227,8 +231,118 @@ describe("overruleAll — defensive edge cases", () => {
   it("returns the same reference when items is empty", () => {
     const lines = { P001: deviatingLine() };
 
-    const result = overruleAll([], lines, "LOW_STORAGE", "");
+    const result = overruleAll([], lines, { code: "LOW_STORAGE", comment: "" }, FILL);
 
     expect(result).toBe(lines);
+  });
+});
+
+describe("overruleAll overwrite — explicit Apply replaces earlier picks", () => {
+  it("replaces a different existing reason", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = { P001: deviatingLine({ reason_code: "SUPPLIER_UNDERDELIVERS" }) };
+
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, OVERWRITE);
+
+    expect(result.P001.reason_code).toBe("LOW_STORAGE");
+    expect(result).not.toBe(lines);
+  });
+
+  it("replaces an OTHER pick and drops its stale comment when switching away", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = {
+      P001: deviatingLine({ reason_code: "OTHER", captain_comment: "old explanation" }),
+    };
+
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, OVERWRITE);
+
+    expect(result.P001.reason_code).toBe("LOW_STORAGE");
+    expect(result.P001.captain_comment).toBe("");
+  });
+
+  it("writes a trimmed comment when the new reason is OTHER, replacing an older one", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = {
+      P001: deviatingLine({ reason_code: "OTHER", captain_comment: "old" }),
+    };
+
+    const result = overruleAll(items, lines, { code: "OTHER", comment: "  new  " }, OVERWRITE);
+
+    expect(result.P001.captain_comment).toBe("new");
+  });
+
+  it("still skips lines that do not require a reason", () => {
+    const items = [makeItem({ product_id: "P002" })];
+    const lines = { P002: matchingLine({ reason_code: "LOW_STORAGE" }) };
+
+    const result = overruleAll(items, lines, { code: "OTHER", comment: "x" }, OVERWRITE);
+
+    expect(result).toBe(lines);
+  });
+
+  it("returns the same reference when every line already carries exactly this reason", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = { P001: deviatingLine({ reason_code: "LOW_STORAGE" }) };
+
+    expect(overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, OVERWRITE)).toBe(lines);
+  });
+
+  it("OTHER with a blank comment is a no-op in overwrite mode too", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const lines = { P001: deviatingLine({ reason_code: "LOW_STORAGE" }) };
+
+    expect(overruleAll(items, lines, { code: "OTHER", comment: " " }, OVERWRITE)).toBe(lines);
+  });
+});
+
+describe("overruleAll fillMissing — sticky pass", () => {
+  it("fills a line that starts requiring a reason later, keeps hand-picked ones", () => {
+    const items = [
+      makeItem({ product_id: "P001" }),
+      makeItem({ product_id: "P003" }),
+    ];
+    const lines = {
+      P001: deviatingLine({ product_id: "P001", reason_code: "SUPPLIER_UNDERDELIVERS" }),
+      P003: deviatingLine({ product_id: "P003" }),
+    };
+
+    const result = overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL);
+
+    expect(result.P001.reason_code).toBe("SUPPLIER_UNDERDELIVERS");
+    expect(result.P003.reason_code).toBe("LOW_STORAGE");
+  });
+
+  it("is idempotent: a second pass returns the same reference (no effect loop)", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const once = overruleAll(
+      items,
+      { P001: deviatingLine() },
+      { code: "OTHER", comment: "why" },
+      FILL,
+    );
+
+    expect(overruleAll(items, once, { code: "OTHER", comment: "why" }, FILL)).toBe(once);
+  });
+
+  it("writes the OTHER comment on the filled line", () => {
+    const items = [makeItem({ product_id: "P001" })];
+    const result = overruleAll(
+      items,
+      { P001: deviatingLine() },
+      { code: "OTHER", comment: "why" },
+      FILL,
+    );
+
+    expect(result.P001.captain_comment).toBe("why");
+  });
+});
+
+describe("overruleAll — supplier with alerts off", () => {
+  it("never applies a reason (no line requires one)", () => {
+    const items = [makeItem({ product_id: "P001", suggestion_alerts_enabled: false })];
+    const lines = { P001: deviatingLine() };
+
+    expect(overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, OVERWRITE)).toBe(lines);
+    expect(overruleAll(items, lines, { code: "LOW_STORAGE", comment: "" }, FILL)).toBe(lines);
   });
 });

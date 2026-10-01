@@ -3,13 +3,13 @@
 // order-line list) — but applies a Captain-picked reason across the whole
 // order instead of pre-filling stock from a count.
 //
-// Behaviour: the Captain picks ONE reason, then Apply sets it on every line
-// that currently requires a reason and doesn't have one yet. A line where a
-// reason was already picked is never touched — there is deliberately no
-// "overwrite all" mode (mirrors the fill-empties-only PrefillControl action,
-// not its destructive overwrite/clear ones). The actual line-selection logic
-// lives in the pure, unit-tested `overruleAll` (lib/overruleAll.ts); this
-// component only collects the reason + comment and calls `onApply`.
+// Behaviour (sticky, feedback-1001 D10): the Captain picks ONE reason; Apply
+// sets it on every line that currently requires a reason (replacing any earlier
+// pick) and the parent keeps filling lines that start requiring one later, until
+// the Captain presses "Wyłącz". The active reason is shown even while the
+// control is collapsed. The line-selection logic lives in the pure, unit-tested
+// `overruleAll` (lib/overruleAll.ts); this component only collects the reason +
+// comment and calls `onApply` / `onDisable`.
 //
 // OTHER requires a comment (mirrors ReasonPicker.tsx:32-33) — Apply stays
 // disabled until one is typed, so a batch action can never produce an
@@ -21,20 +21,23 @@
 // would push the first product card down the screen on every single order.
 
 import { useState } from "react";
-import type { ReasonCode } from "../types";
+import type { BulkReason, ReasonCode } from "../types";
 import { REASON_CODES } from "../types";
 import { useT } from "../../../i18n";
 import type { StringKey } from "../../../i18n/strings";
 
 interface OverruleAllControlProps {
+  /** The sticky reason currently in force, if any. */
+  active?: BulkReason | null;
   onApply: (reason: ReasonCode, comment: string) => void;
+  onDisable?: () => void;
 }
 
 function reasonLabelKey(code: ReasonCode): StringKey {
   return `reason.codes.${code}` as StringKey;
 }
 
-export function OverruleAllControl({ onApply }: OverruleAllControlProps) {
+export function OverruleAllControl({ active = null, onApply, onDisable }: OverruleAllControlProps) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReasonCode | "">("");
@@ -75,6 +78,25 @@ export function OverruleAllControl({ onApply }: OverruleAllControlProps) {
           {open ? "▾" : "▸"}
         </span>
       </button>
+
+      {active && (
+        <div className="flex items-center justify-between gap-2 px-3 pb-2 text-xs text-violet-900">
+          <span className="min-w-0 break-words">
+            {t("captain.overruleAllActive", {
+              reason: t(reasonLabelKey(active.code)),
+            })}
+          </span>
+          {onDisable && (
+            <button
+              type="button"
+              onClick={onDisable}
+              className="shrink-0 rounded-full border border-violet-400 bg-white px-3 py-1.5 text-xs font-semibold text-violet-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+            >
+              {t("captain.overruleAllDisable")}
+            </button>
+          )}
+        </div>
+      )}
 
       {!open ? null : (
       <div id="overrule-all-body" className="px-3 pb-3">

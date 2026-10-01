@@ -28,6 +28,7 @@ import type {
   ReceiptSummary,
 } from "../../types";
 import { statusVisual } from "./lib/orderStatus";
+import { UnitLabel } from "./components/UnitLabel";
 
 // "Manager changed this line" (Phase 7, week2-feedback-quantities): the
 // Manager set the line (lib/orderQty.ts isManagerFinalSet — an explicit 0
@@ -43,7 +44,7 @@ function managerChangedLine(line: ManagerOrderLineDetail): boolean {
 }
 
 export function OrderDetailPage() {
-  const { t, tPlural, formatDateTime } = useT();
+  const { t, tParts, tPlural, formatDateTime } = useT();
   const navigate = useNavigate();
   const { order_id } = useParams<{ order_id: string }>();
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
@@ -268,8 +269,12 @@ export function OrderDetailPage() {
                         <span className="break-words">{line.product_name_pl}</span>
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
-                        stan: {line.current_stock_qty_base} {line.inventory_unit} ·
-                        sugestia: {line.suggested_qty_purchase} {line.purchase_unit}
+                        {tParts("orders.detail.stockSuggestion", {
+                          stock: line.current_stock_qty_base,
+                          inventoryUnit: <UnitLabel>{line.inventory_unit}</UnitLabel>,
+                          suggested: line.suggested_qty_purchase,
+                          purchaseUnit: <UnitLabel>{line.purchase_unit}</UnitLabel>,
+                        })}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -284,14 +289,14 @@ export function OrderDetailPage() {
                           </div>
                           <div className="text-lg font-bold text-slate-900 tabular-nums">
                             {roundQty(receiptLine.received_qty_purchase)}{" "}
-                            <span className="text-xs font-normal text-slate-600">
-                              {line.purchase_unit}
+                            <span className="text-xs">
+                              <UnitLabel>{line.purchase_unit}</UnitLabel>
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-500 mt-0.5">
-                            {t("orders.detail.orderedSecondary", {
+                            {tParts("orders.detail.orderedSecondary", {
                               value: roundQty(receiptLine.ordered_qty_purchase),
-                              unit: line.purchase_unit,
+                              unit: <UnitLabel>{line.purchase_unit}</UnitLabel>,
                             })}
                           </div>
                           {variance !== 0 && (
@@ -303,8 +308,13 @@ export function OrderDetailPage() {
                                 variance > 0 ? "text-sky-700" : "text-indigo-700"
                               }`}
                             >
-                              {t("delivery.variance", {
-                                value: `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`,
+                              {tParts("delivery.variance", {
+                                value: (
+                                  <>
+                                    {variance > 0 ? "+" : ""}
+                                    {variance} <UnitLabel>{line.purchase_unit}</UnitLabel>
+                                  </>
+                                ),
                               })}
                             </div>
                           )}
@@ -319,8 +329,8 @@ export function OrderDetailPage() {
                           </div>
                           <div className="text-lg font-bold text-slate-900 tabular-nums">
                             {effectiveOrderedQtyPurchase(line)}{" "}
-                            <span className="text-xs font-normal text-slate-600">
-                              {line.purchase_unit}
+                            <span className="text-xs">
+                              <UnitLabel>{line.purchase_unit}</UnitLabel>
                             </span>
                           </div>
                           {/* Hint only when the manager's final differs from the

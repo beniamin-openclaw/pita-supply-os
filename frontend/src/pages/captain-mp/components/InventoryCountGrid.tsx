@@ -22,6 +22,7 @@ import {
 import type { InventoryProduct } from "../../../types";
 import { groupProductsByCategory, type InventoryProductGroup } from "../lib/inventoryGrouping";
 import { PackStockInput } from "./PackStockInput";
+import { UnitLabel } from "./UnitLabel";
 import { blankInventoryLine, type InventoryLineInput } from "../lib/inventoryLines";
 
 /** Typed stock above this multiple of the location max shows the yellow
@@ -58,7 +59,7 @@ export function InventoryCountGrid({
   onCommentChange,
   previousByProduct,
 }: InventoryCountGridProps) {
-  const { t, lang } = useT();
+  const { t, tParts, lang } = useT();
 
   // Search + "tylko nieliczone" / "tylko krytyczne" (week2-feedback-quantities
   // Phase 4). Ephemeral (no localStorage). Filtering runs over the flat
@@ -212,7 +213,9 @@ export function InventoryCountGrid({
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-slate-500">{p.inventory_unit}</div>
+                          <div className="text-[11px]">
+                            <UnitLabel>{p.inventory_unit}</UnitLabel>
+                          </div>
                         </div>
                         {showPack ? (
                           <PackStockInput
@@ -246,10 +249,10 @@ export function InventoryCountGrid({
                         <div className="mt-1.5 space-y-0.5 text-xs text-slate-500">
                           {showPack && (
                             <div className="break-words" data-testid={`pack-${p.product_id}`}>
-                              {t("inventory.packHint", {
-                                packUnit: packUnitLabel(1, packUnit, lang),
+                              {tParts("inventory.packHint", {
+                                packUnit: <UnitLabel>{packUnitLabel(1, packUnit, lang)}</UnitLabel>,
                                 upp,
-                                unit: p.inventory_unit,
+                                unit: <UnitLabel>{p.inventory_unit}</UnitLabel>,
                               })}
                             </div>
                           )}
@@ -261,8 +264,9 @@ export function InventoryCountGrid({
                           )}
                           {previous && (
                             <div className="tabular-nums" data-testid={`prev-${p.product_id}`}>
-                              {t("inventory.previousCount", {
+                              {tParts("inventory.previousCount", {
                                 qty: previous.qty,
+                                unit: <UnitLabel>{p.inventory_unit}</UnitLabel>,
                                 date: previous.date,
                               })}
                             </div>

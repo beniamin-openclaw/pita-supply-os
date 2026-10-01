@@ -38,6 +38,16 @@ export function formatPacks(n: number, unit: string, lang: Lang): string {
   return `${formatPackQty(n, lang)} ${packUnitLabel(n, unit, lang)}`;
 }
 
+/** Same as `formatPacks` but split so a caller can style the unit (bold) — the
+ *  pieces joined with a space equal `formatPacks(n, unit, lang)`. */
+export function formatPacksParts(
+  n: number,
+  unit: string,
+  lang: Lang,
+): { qty: string; unit: string } {
+  return { qty: formatPackQty(n, lang), unit: packUnitLabel(n, unit, lang) };
+}
+
 /**
  * Pack-unit hint string for a base-unit quantity, or `null` when the
  * purchase unit carries no real pack conversion (`unitsPerPurchase <= 1`, or

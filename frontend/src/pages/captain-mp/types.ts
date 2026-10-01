@@ -22,6 +22,14 @@ export interface OrderLine {
   captain_comment?: string;
 }
 
+/** The sticky "Powód zbiorczo" selection: applied now and to lines that start
+ *  requiring a reason later, until the Captain turns it off. `comment` is only
+ *  meaningful for OTHER. */
+export interface BulkReason {
+  code: ReasonCode;
+  comment: string;
+}
+
 /** Draft persistence shape (localStorage).
  *
  * `extraItems` / `captainNote` are OPTIONAL on purpose: a draft written before
@@ -34,6 +42,8 @@ export interface DraftState {
   timestamp: number;
   extraItems?: ExtraItemRow[];
   captainNote?: string;
+  /** Optional like the two above: older drafts carry none. */
+  bulkReason?: BulkReason | null;
 }
 
 export const REASON_CODES: readonly ReasonCode[] = [

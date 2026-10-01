@@ -157,7 +157,7 @@ describe("InventoryCountGrid information layer", () => {
 
   it("renders 'ostatnio' from the previous-count map, only for mapped products", () => {
     renderGrid({}, { P040: { qty: 36, date: "13.09.2026" } });
-    expect(screen.getByTestId("prev-P040")).toHaveTextContent("ostatnio 36 · 13.09.2026");
+    expect(screen.getByTestId("prev-P040")).toHaveTextContent("ostatnio 36 kg · 13.09.2026");
     expect(screen.queryByTestId("prev-P170")).not.toBeInTheDocument();
   });
 

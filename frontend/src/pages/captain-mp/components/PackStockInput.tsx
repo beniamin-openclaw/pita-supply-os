@@ -4,16 +4,15 @@
 // and a soft "did you mean N packs?" prompt when a small loose value looks
 // like a pack count; the prompt never blocks anything.
 
-import { useState, type FocusEvent } from "react";
+import { useState, type FocusEvent, type ReactNode } from "react";
 
 import { DecimalInput } from "../../../components/ui/DecimalInput";
-import { useT } from "../../../i18n";
+import { useT, type Lang } from "../../../i18n";
 import { packUnitLabel } from "../../../i18n/packUnits";
-import { formatPacks } from "../../../lib/packUnits";
+import { PackQty, UnitLabel } from "./UnitLabel";
 import {
   combinePackStock,
   formatBaseQty,
-  formatPackStock,
   splitPackStock,
   suggestPackCount,
 } from "../../../lib/packStock";
@@ -40,6 +39,34 @@ function seed(value: number | "", upp: number): Pair {
   return splitPackStock(value, upp);
 }
 
+/** Styled twin of `formatPackStock`: "1 blok + 5 kg" with the units in bold. */
+function renderSplit(
+  base: number,
+  upp: number,
+  packUnit: string,
+  baseUnit: string,
+  lang: Lang,
+): ReactNode {
+  const { packs, loose } = splitPackStock(base, upp);
+  const showPacks = packs > 0;
+  const showLoose = loose !== 0 || packs === 0;
+  return (
+    <>
+      {showPacks && (
+        <>
+          {formatBaseQty(packs, lang)} <UnitLabel>{packUnitLabel(packs, packUnit, lang)}</UnitLabel>
+        </>
+      )}
+      {showPacks && showLoose && " + "}
+      {showLoose && (
+        <>
+          {formatBaseQty(loose, lang)} <UnitLabel>{packUnitLabel(loose, baseUnit, lang)}</UnitLabel>
+        </>
+      )}
+    </>
+  );
+}
+
 const FIELD_CLASS =
   "w-20 bg-white border border-gray-300 rounded-lg py-3 px-2 min-h-[44px] text-right text-[16px] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-500";
 
@@ -53,7 +80,7 @@ export function PackStockInput({
   label,
   references = [],
 }: PackStockInputProps) {
-  const { t, lang } = useT();
+  const { t, tParts, lang } = useT();
   const [pair, setPair] = useState<Pair>(() => seed(value, upp));
   const [syncedValue, setSyncedValue] = useState<number | "">(value);
   const [focused, setFocused] = useState(false);
@@ -83,16 +110,20 @@ export function PackStockInput({
   const looseId = `${idPrefix}-loose`;
   const readingId = `${idPrefix}-reading`;
 
-  let reading: string | null = null;
+  let reading: ReactNode[] | null = null;
   if (combined !== "") {
-    const total = `${formatBaseQty(combined, lang)} ${baseUnit}`;
+    const total = (
+      <>
+        {formatBaseQty(combined, lang)} <UnitLabel>{baseUnit}</UnitLabel>
+      </>
+    );
     reading =
       splitPackStock(combined, upp).packs >= 1
-        ? t("stock.reading", {
-            split: formatPackStock(combined, upp, packUnit, baseUnit, lang),
+        ? tParts("stock.reading", {
+            split: renderSplit(combined, upp, packUnit, baseUnit, lang),
             total,
           })
-        : t("stock.readingBase", { total });
+        : tParts("stock.readingBase", { total });
   }
 
   const suggested = suggestPackCount({
@@ -131,8 +162,8 @@ export function PackStockInput({
             className={FIELD_CLASS}
             placeholder="0"
           />
-          <div className="mt-0.5 text-[10px] leading-tight text-right text-slate-500">
-            {packUnitLabel(pair.packs || 0, packUnit, lang)}
+          <div className="mt-0.5 text-[11px] leading-tight text-right">
+            <UnitLabel>{packUnitLabel(pair.packs || 0, packUnit, lang)}</UnitLabel>
           </div>
         </div>
         <span className="py-3 text-slate-500" aria-hidden="true">
@@ -152,8 +183,8 @@ export function PackStockInput({
             className={FIELD_CLASS}
             placeholder="0"
           />
-          <div className="mt-0.5 text-[10px] leading-tight text-right text-slate-500">
-            {packUnitLabel(pair.loose || 0, baseUnit, lang)}
+          <div className="mt-0.5 text-[11px] leading-tight text-right">
+            <UnitLabel>{packUnitLabel(pair.loose || 0, baseUnit, lang)}</UnitLabel>
           </div>
         </div>
         <div
@@ -170,9 +201,13 @@ export function PackStockInput({
           className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >
           <span>
-            {t("stock.didYouMean", {
-              packs: formatPacks(suggested, packUnit, lang),
-              total: `${formatBaseQty(suggested * upp, lang)} ${baseUnit}`,
+            {tParts("stock.didYouMean", {
+              packs: <PackQty n={suggested} unit={packUnit} lang={lang} />,
+              total: (
+                <>
+                  {formatBaseQty(suggested * upp, lang)} <UnitLabel>{baseUnit}</UnitLabel>
+                </>
+              ),
             })}
           </span>
           <button

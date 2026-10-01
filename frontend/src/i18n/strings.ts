@@ -804,6 +804,10 @@ export const STRINGS = {
   },
   "orders.detail.orderedLabel": { pl: "Zamówiono", en: "Ordered" },
   "orders.detail.receivedLabel": { pl: "Dostarczono", en: "Delivered" },
+  "orders.detail.stockSuggestion": {
+    pl: "stan: {stock} {inventoryUnit} · sugestia: {suggested} {purchaseUnit}",
+    en: "stock: {stock} {inventoryUnit} · suggestion: {suggested} {purchaseUnit}",
+  },
   "orders.detail.orderedSecondary": {
     pl: "Zamówiono: {value} {unit}",
     en: "Ordered: {value} {unit}",
@@ -907,8 +911,8 @@ export const STRINGS = {
     en: "1 {packUnit} = {upp} {unit}",
   },
   "inventory.previousCount": {
-    pl: "ostatnio {qty} · {date}",
-    en: "last {qty} · {date}",
+    pl: "ostatnio {qty} {unit} · {date}",
+    en: "last {qty} {unit} · {date}",
   },
   "inventory.checkUnitHint": {
     pl: "sprawdź jednostkę",
@@ -975,17 +979,23 @@ export const STRINGS = {
   },
   "captain.prefillClearConfirm": { pl: "Wyczyść wszystko", en: "Clear all" },
 
-  // Overrule-all reason control (training-feedback-0901 Phase 1a) — applies one
-  // reason to every line that requires one and has none yet; never replaces an
-  // already-picked reason (fill-empties only, no destructive overwrite mode).
+  // Overrule-all reason control (training-feedback-0901 Phase 1a, sticky since
+  // feedback-1001 Phase 2) — Apply sets one reason on every line that requires
+  // one (replacing earlier picks) and keeps filling lines that start requiring
+  // one until "Wyłącz".
   "captain.overruleAllTitle": {
     pl: "Powód zbiorczo",
     en: "Bulk reason",
   },
   "captain.overruleAllHint": {
-    pl: "Wybierz powód — zostanie ustawiony na każdej pozycji, która go wymaga i jeszcze go nie ma. Ustawiony wcześniej powód nigdy nie zostanie zastąpiony.",
-    en: "Pick a reason — it is applied to every line that requires one and doesn't have one yet. A reason you already picked is never replaced.",
+    pl: "Wybierz powód — zostanie ustawiony na każdej pozycji, która go wymaga, także na dodanych później, dopóki go nie wyłączysz. Zastępuje powody wybrane wcześniej; powód wybrany ręcznie po zastosowaniu zostaje.",
+    en: "Pick a reason — it is set on every line that requires one, including lines added later, until you turn it off. It replaces reasons picked earlier; a reason you pick by hand afterwards is kept.",
   },
+  "captain.overruleAllActive": {
+    pl: "Aktywny powód zbiorczy: {reason}",
+    en: "Bulk reason active: {reason}",
+  },
+  "captain.overruleAllDisable": { pl: "Wyłącz", en: "Turn off" },
   "captain.overruleAllApply": { pl: "Zastosuj", en: "Apply" },
   "captain.overruleAllAppliedToast": {
     pl: "Zastosowano powód do {count} pozycji",

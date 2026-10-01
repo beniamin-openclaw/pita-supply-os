@@ -26,12 +26,14 @@ import { StickyActionBar } from "./components/StickyActionBar";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
 import { ExtraItemsControl } from "./components/ExtraItemsControl";
+import { OverruleAllControl } from "./components/OverruleAllControl";
 import { OrderCommentField } from "./components/OrderCommentField";
 import { computeRowState } from "./lib/compute";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
+import { overruleAll } from "./lib/overruleAll";
 import { parseExtraItems, serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
-import type { OrderLine } from "./types";
+import type { BulkReason, OrderLine, ReasonCode } from "./types";
 
 /** Translate an enriched detail line into the shape ProductCard expects. */
 function lineToItem(
@@ -88,6 +90,9 @@ export function OrderEditPage() {
   // edit can revise both instead of losing them.
   const [extraItemRows, setExtraItemRows] = useState<ExtraItemRow[]>([]);
   const [captainNote, setCaptainNote] = useState("");
+  // Sticky bulk reason (feedback-1001 D10) — same behaviour as the create
+  // screen, but no draft: it only lives while the edit screen is open.
+  const [bulkReason, setBulkReason] = useState<BulkReason | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
@@ -159,6 +164,30 @@ export function OrderEditPage() {
   const handleLineChange = useCallback((newLine: OrderLine) => {
     setLines((prev) => ({ ...prev, [newLine.product_id]: newLine }));
   }, []);
+
+  const handleOverruleAllApply = useCallback(
+    (reason: ReasonCode, comment: string) => {
+      const bulk: BulkReason = { code: reason, comment: reason === "OTHER" ? comment.trim() : "" };
+      const patched = overruleAll(items, lines, bulk, "overwrite");
+      const patchedCount = items.filter(
+        (item) => patched[item.product_id] !== lines[item.product_id],
+      ).length;
+      setLines((prev) => overruleAll(items, prev, bulk, "overwrite"));
+      setBulkReason(bulk);
+      showToast(t("captain.overruleAllAppliedToast", { count: patchedCount }), "success");
+    },
+    [items, lines, showToast, t],
+  );
+
+  const handleOverruleAllDisable = useCallback(() => setBulkReason(null), []);
+
+  // Sticky pass — see CaptainMP: fills only lines without a reason; an
+  // unchanged result keeps the same reference, so this cannot loop.
+  useEffect(() => {
+    if (!bulkReason) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLines((prev) => overruleAll(items, prev, bulkReason, "fillMissing"));
+  }, [bulkReason, lines, items]);
 
   const handleScrollToRed = useCallback(() => {
     const firstRed = items.find((item) => {
@@ -278,6 +307,14 @@ export function OrderEditPage() {
           >
             {t("orders.sendBackBanner", { reason: order.notes })}
           </div>
+        )}
+
+        {order && items.some((it) => it.suggestion_alerts_enabled !== false) && (
+          <OverruleAllControl
+            active={bulkReason}
+            onApply={handleOverruleAllApply}
+            onDisable={handleOverruleAllDisable}
+          />
         )}
 
         {!order && !loadError ? (

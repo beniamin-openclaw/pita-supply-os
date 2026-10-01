@@ -18,8 +18,9 @@ import { computeRowState, computeSuggestion } from "../lib/compute";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
-import { baseToPacks, formatPacks, isPackBased } from "../../../lib/packUnits";
+import { baseToPacks, isPackBased } from "../../../lib/packUnits";
 import { PackStockInput } from "./PackStockInput";
+import { PackQty, UnitLabel } from "./UnitLabel";
 
 interface ProductCardProps {
   item: OrderableItem;
@@ -82,7 +83,7 @@ function StateIcon({ state }: { state: CardState }) {
 }
 
 export function ProductCard({ item, line, onChange, previousStock }: ProductCardProps) {
-  const { t, lang } = useT();
+  const { t, tParts, lang } = useT();
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
   const colors = STATE_STYLES[state];
@@ -157,44 +158,48 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
           {packBased ? (
             <>
               <span className="inline-block whitespace-nowrap">
-                {t("card.targetPart", {
+                {tParts("card.targetPart", {
                   target: item.target_stock_qty_base,
-                  inventoryUnit: item.inventory_unit,
-                  packs: formatPacks(
-                    baseToPacks(item.target_stock_qty_base, upp),
-                    item.purchase_unit,
-                    lang,
+                  inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
+                  packs: (
+                    <PackQty
+                      n={baseToPacks(item.target_stock_qty_base, upp)}
+                      unit={item.purchase_unit}
+                      lang={lang}
+                    />
                   ),
                 })}
               </span>
               {" · "}
               <span className="inline-block whitespace-nowrap">
-                {t("card.maxPart", {
+                {tParts("card.maxPart", {
                   max: item.max_stock_qty_base,
-                  inventoryUnit: item.inventory_unit,
-                  packs: formatPacks(
-                    baseToPacks(item.max_stock_qty_base, upp),
-                    item.purchase_unit,
-                    lang,
+                  inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
+                  packs: (
+                    <PackQty
+                      n={baseToPacks(item.max_stock_qty_base, upp)}
+                      unit={item.purchase_unit}
+                      lang={lang}
+                    />
                   ),
                 })}
               </span>
               {" · "}
               <span className="inline-block whitespace-nowrap">
-                {t("card.ratioPart", {
-                  purchaseUnit: item.purchase_unit,
+                {tParts("card.ratioPart", {
+                  purchaseUnit: <UnitLabel>{item.purchase_unit}</UnitLabel>,
                   unitsPerPurchase: upp,
-                  inventoryUnit: item.inventory_unit,
+                  inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                 })}
               </span>
             </>
           ) : (
-            t("card.targetLine", {
-                target: item.target_stock_qty_base,
-                inventoryUnit: item.inventory_unit,
-                max: item.max_stock_qty_base,
-                purchaseUnit: item.purchase_unit,
-                unitsPerPurchase: upp,
+            tParts("card.targetLine", {
+              target: item.target_stock_qty_base,
+              inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
+              max: item.max_stock_qty_base,
+              purchaseUnit: <UnitLabel>{item.purchase_unit}</UnitLabel>,
+              unitsPerPurchase: upp,
             })
           )}
         </div>
@@ -212,18 +217,20 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
               <div className="flex items-center gap-1 text-xs font-semibold text-red-700">
                 <AlertTriangle size={12} aria-hidden="true" className="shrink-0" />
                 {packBased
-                  ? t("card.belowMinPacks", {
-                      packs: formatPacks(
-                        baseToPacks(item.min_stock_qty_base, upp),
-                        item.purchase_unit,
-                        lang,
+                  ? tParts("card.belowMinPacks", {
+                      packs: (
+                        <PackQty
+                          n={baseToPacks(item.min_stock_qty_base, upp)}
+                          unit={item.purchase_unit}
+                          lang={lang}
+                        />
                       ),
                       min: item.min_stock_qty_base,
-                      unit: item.inventory_unit,
+                      unit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                     })
-                  : t("card.belowMin", {
+                  : tParts("card.belowMin", {
                       min: item.min_stock_qty_base,
-                      unit: item.inventory_unit,
+                      unit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                     })}
               </div>
             )}
@@ -279,9 +286,9 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
                 number on a 375 px phone (mobile-wrap review). */}
             <div
               id={currentUnitId}
-              className="mt-0.5 text-[10px] leading-tight text-right text-slate-500"
+              className="mt-0.5 text-[11px] leading-tight text-right"
             >
-              {item.inventory_unit}
+              <UnitLabel>{item.inventory_unit}</UnitLabel>
             </div>
           </div>
           )}
@@ -324,30 +331,36 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
                 {packBased ? (
                   <>
                     <span className="inline-block whitespace-nowrap">
-                      {t("card.suggestionNeed", {
+                      {tParts("card.suggestionNeed", {
                         base: suggestedBase,
-                        inventoryUnit: item.inventory_unit,
+                        inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
                       })}
                     </span>{" "}
                     <span className="inline-block whitespace-nowrap">
-                      {`= ${formatPacks(baseToPacks(suggestedBase, upp), item.purchase_unit, lang)}`}
+                      {"= "}
+                      <PackQty
+                        n={baseToPacks(suggestedBase, upp)}
+                        unit={item.purchase_unit}
+                        lang={lang}
+                      />
                     </span>
                     {!isExactPacks && (
                       <>
                         {" "}
                         <span className="inline-block whitespace-nowrap">
-                          {`→ ${formatPacks(suggestedPurchase, item.purchase_unit, lang)}`}
+                          {"→ "}
+                          <PackQty n={suggestedPurchase} unit={item.purchase_unit} lang={lang} />
                         </span>
                       </>
                     )}
                   </>
                 ) : (
-                  t("card.suggestionDetail", {
-                      base: suggestedBase,
-                      inventoryUnit: item.inventory_unit,
-                      purchase: suggestedPurchase,
-                      purchaseUnit: item.purchase_unit,
-                    })
+                  tParts("card.suggestionDetail", {
+                    base: suggestedBase,
+                    inventoryUnit: <UnitLabel>{item.inventory_unit}</UnitLabel>,
+                    purchase: suggestedPurchase,
+                    purchaseUnit: <UnitLabel>{item.purchase_unit}</UnitLabel>,
+                  })
                 )}
               </div>
             )}
@@ -384,9 +397,9 @@ export function ProductCard({ item, line, onChange, previousStock }: ProductCard
             </div>
             <div
               id={finalUnitId}
-              className="mt-0.5 text-[10px] leading-tight text-right text-slate-500"
+              className="mt-0.5 text-[11px] leading-tight text-right"
             >
-              {item.purchase_unit}
+              <UnitLabel>{item.purchase_unit}</UnitLabel>
             </div>
           </div>
         </div>
