@@ -11,7 +11,7 @@
 - BRACKA: przejęte od 02.09 zamówienie Coca-Coli ORD-20260902-BRA-COCA-c673c7 — anulować czy wysłać?
 - Tylko informacja: partia pozycji inventory-card-order musi zmapować Cappy na P190/P191 i puszki na P186/P187.
 
-- **Source:** prod read-only SELECTs, 2026-10-01 ~16:30 CEST. **Nothing has been written to prod.**
+- **Source:** prod read-only SELECTs, 2026-10-01 ~16:30 CEST. Nothing was written when this diff was prepared. **Partly applied on 2026-10-02 — see `prod-run-2026-10-02.md`.**
 - **Scope:** the 7 active locations (WOLA, BRACKA, KEN, BROWARY, NORBLIN, ELEKTROWNIA, WESTFIELD). The 6 inactive
   locations are not touched.
 - **How it runs:**

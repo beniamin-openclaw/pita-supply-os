@@ -164,6 +164,13 @@ export const STRINGS = {
   "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
   "stock.didYouMeanNo": { pl: "Nie", en: "No" },
 
+  // Grams typed for a piece-counted product (name carries the weight).
+  "gramsHint.didYouMean": {
+    pl: "Czy chodziło o {n} {unit}? (1 {unit} = {g} g)",
+    en: "Did you mean {n} {unit}? (1 {unit} = {g} g)",
+  },
+  "gramsHint.yes": { pl: "Tak, wpisz {n} {unit}", en: "Yes, enter {n} {unit}" },
+
   // Two-field ORDER input for a product with a bulk pack (feedback-1001 D22):
   // "[cases] + [loose purchase units]". Own keys so the order wording can move
   // independently of the stock input above.

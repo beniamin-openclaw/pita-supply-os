@@ -720,20 +720,20 @@ There are three parts:
 
 #### Automated
 
-- [ ] 1.1 prod-sql-1.sql dry-run clean on local Postgres; guards re-raise on second run
-- [ ] 1.2 Opus xhigh review of prod-sql-1 + diff with no blocking findings
+- [x] 1.1 prod-sql-1.sql dry-run clean on local Postgres; guards re-raise on second run — b18d17f
+- [x] 1.2 Opus xhigh review of prod-sql-1 + diff with no blocking findings — b18d17f
 
 #### Manual
 
-- [ ] 1.3 Operator approves prod-sql-1-diff.md in chat
-- [ ] 1.4 Applied; prod-sql-1-audit.md saved, all assertions green
+- [x] 1.3 Operator approves prod-sql-1-diff.md in chat — f7b960b
+- [ ] 1.4 Applied; prod-sql-1-audit.md saved, all assertions green (partial 2026-10-02, see prod-run-2026-10-02.md: DELETE blocks, 1.5, 1.11d/h pending)
 - [ ] 1.5 Operator spot-check on prod (Intermlecz order screen, inventory list)
 
 ### Phase 1b: Units that change stored meaning
 
 #### Automated
 
-- [ ] 1b.1 prod-sql-1b.sql dry-run clean; guards re-raise on second run
+- [x] 1b.1 prod-sql-1b.sql dry-run clean; guards re-raise on second run — b18d17f
 
 #### Manual
 
@@ -765,19 +765,19 @@ There are three parts:
 
 #### Manual
 
-- [ ] 3.6 Operator approves 0028; applied on prod before merge; columns verified
-- [ ] 3.7 After merge: Railway health and new Vercel bundle confirmed
+- [x] 3.6 Operator approves 0028; applied on prod before merge; columns verified — f7b960b
+- [ ] 3.7 After merge: Railway health and new Vercel bundle confirmed (Vercel READY on ec58b78; Railway /health for the operator)
 - [ ] 3.8 Order screens unchanged on prod before case data
 
 ### Phase 4: Prod bulk-pack data
 
 #### Automated
 
-- [ ] 4.1 prod-sql-2 dry-run clean; guards re-raise on second run
+- [x] 4.1 prod-sql-2 dry-run clean; guards re-raise on second run — f7b960b
 
 #### Manual
 
-- [ ] 4.2 Operator approves diff; applied; audit saved
+- [x] 4.2 Operator approves diff; applied; audit saved — f7b960b
 - [ ] 4.3 Captain Pomidor card verified on prod, backed out
 - [ ] 4.4 Manager e-mail preview verified on prod, not sent
 
@@ -785,7 +785,7 @@ There are three parts:
 
 #### Manual
 
-- [ ] 5.1 WESTFIELD mailbox applied; audit saved
+- [x] 5.1 WESTFIELD mailbox applied; audit saved — see prod-run-2026-10-02.md
 - [x] 5.2 NEW_LOCATION_CHECKLIST updated — ce05824
 - [ ] 5.3 Staff message sent (operator confirms)
 

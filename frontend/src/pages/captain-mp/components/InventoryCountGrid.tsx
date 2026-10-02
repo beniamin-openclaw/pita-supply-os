@@ -22,6 +22,7 @@ import {
 import type { InventoryProduct } from "../../../types";
 import { groupProductsByCategory, type InventoryProductGroup } from "../lib/inventoryGrouping";
 import { PackStockInput } from "./PackStockInput";
+import { GramsHint } from "./GramsHint";
 import { UnitLabel } from "./UnitLabel";
 import { blankInventoryLine, type InventoryLineInput } from "../lib/inventoryLines";
 
@@ -202,6 +203,14 @@ export function InventoryCountGrid({
                     >
                       {/* Pack-based rows (pago-stock-packs-plus-kg): name on its own line,
                           then [packs] + [loose] below; ×1 rows keep name + one field side by side. */}
+                      <GramsHint
+                        value={line.current_stock_qty_base}
+                        onChange={(v) => onStockChange(p.product_id, v)}
+                        names={[p.product_name_pl]}
+                        unit={p.inventory_unit}
+                        maxStock={p.max_stock_qty_base}
+                        inputId={`stock-${p.product_id}`}
+                      >
                       <div
                         className={
                           showPack ? "space-y-2" : "flex items-center justify-between gap-3"
@@ -248,6 +257,7 @@ export function InventoryCountGrid({
                           </div>
                         )}
                       </div>
+                      </GramsHint>
                       {/* Information layer (Phase 3): pack hint, master-data note,
                           previous count, 3 x max unit warning. Never blocks. */}
                       {(showPack || p.order_note || previous || checkUnit) && (

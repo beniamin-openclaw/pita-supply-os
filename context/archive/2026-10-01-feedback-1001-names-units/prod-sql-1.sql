@@ -2,7 +2,9 @@
 -- feedback-1001-names-units — Phase 1: prod master-data batch
 -- Project: Supabase lpzhphufjwrndfogkfub
 --
--- PREPARED 2026-10-01, NOT RUN ON PROD. Before-state read from prod with
+-- STATUS 2026-10-02: PARTLY APPLIED — see prod-run-2026-10-02.md (applied:
+-- 1.1-1.4, 1.6-1.9, 1.10b, 1.11a, 1.12; pending: 1.5, 1.10a, 1.10c,
+-- 1.11b-h). PREPARED 2026-10-01. Before-state read from prod with
 -- SELECT only on 2026-10-01 (~16:30 CEST). Human-readable diff:
 -- prod-sql-1-diff.md. Run nothing until the operator approves that diff.
 --
