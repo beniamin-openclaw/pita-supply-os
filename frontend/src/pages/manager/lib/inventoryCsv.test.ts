@@ -41,8 +41,8 @@ function detail(overrides: Partial<InventoryCountDetail> = {}): InventoryCountDe
   };
 }
 
-/** The TOTAL row: the label + 10 empty cells (11 columns, matching the header). */
-const PADDED_TOTAL = (label: string): string => [label, ...Array<string>(10).fill("")].join(";");
+/** The TOTAL row: the label + 12 empty cells (13 columns, matching the header). */
+const PADDED_TOTAL = (label: string): string => [label, ...Array<string>(12).fill("")].join(";");
 
 /** Strip the leading BOM and split into rows — the shape every test below
  * inspects. */
@@ -67,7 +67,7 @@ describe("buildInventoryCsv", () => {
     expect(rows[3]).toBe("Korygowano;Nie");
     expect(rows[4]).toBe("");
     expect(rows[5]).toBe(
-      "Produkt;Kategoria;Jednostka;Ilość;Min;Cel;Max;Krytyczny;Cena jedn. (PLN);Wartość (PLN);Komentarz",
+      "Produkt;Kategoria;Jednostka;Ilość;Min;Cel;Max;Krytyczny;Cena netto jedn. (PLN);Wartość netto (PLN);VAT;Wartość brutto (PLN);Komentarz",
     );
   });
 
@@ -111,13 +111,13 @@ describe("buildInventoryCsv", () => {
 
   it("is language-aware for the header row (en)", () => {
     const rows = rowsOf(buildInventoryCsv(detail(), makeT("en")));
-    expect(rows[5]).toBe("Product;Category;Unit;Quantity;Min;Target;Max;Critical;Unit price (PLN);Value (PLN);Comment");
+    expect(rows[5]).toBe("Product;Category;Unit;Quantity;Min;Target;Max;Critical;Net unit price (PLN);Net value (PLN);VAT;Gross value (PLN);Comment");
   });
 
   it("renders a normal product row with a comma decimal separator and empty price/value cells", () => {
     const rows = rowsOf(buildInventoryCsv(detail({ lines: [line()] }), makeT()));
     // header at index 5 -> the one product row is index 6.
-    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Nie;;;");
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Nie;;;;;");
   });
 
   it("renders the Min/Cel/Max threshold columns with comma decimals (Phase 4)", () => {
@@ -131,7 +131,7 @@ describe("buildInventoryCsv", () => {
         makeT(),
       ),
     );
-    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;2,5;10;12;Nie;;;");
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;2,5;10;12;Nie;;;;;");
   });
 
   it("leaves a null threshold empty, never 0, and a configured 0 as 0", () => {
@@ -145,21 +145,21 @@ describe("buildInventoryCsv", () => {
         makeT(),
       ),
     );
-    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;0;;Nie;;;");
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;0;;Nie;;;;;");
   });
 
   it("marks a critical product as Tak in the Krytyczny column", () => {
     const rows = rowsOf(
       buildInventoryCsv(detail({ lines: [line({ is_critical: true })] }), makeT()),
     );
-    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Tak;;;");
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Tak;;;;;");
   });
 
   it("renders a whole-number quantity without a trailing comma", () => {
     const rows = rowsOf(
       buildInventoryCsv(detail({ lines: [line({ current_stock_qty_base: 8 })] }), makeT()),
     );
-    expect(rows[6]).toBe("Pomidory;Warzywa;kg;8;;;;Nie;;;");
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;8;;;;Nie;;;;;");
   });
 
   it("escapes a comment containing a semicolon and a double quote", () => {
@@ -169,7 +169,7 @@ describe("buildInventoryCsv", () => {
         makeT(),
       ),
     );
-    expect(rows[6]).toBe('Pomidory;Warzywa;kg;12,5;;;;Nie;;;"Braki 5 szt; sprawdzić ""dostawcę"""');
+    expect(rows[6]).toBe('Pomidory;Warzywa;kg;12,5;;;;Nie;;;;;"Braki 5 szt; sprawdzić ""dostawcę"""');
   });
 
   it("renders one row per counted product, in the given order", () => {
@@ -202,6 +202,38 @@ describe("buildInventoryCsv", () => {
   it("handles a snapshot with no counted lines (header immediately followed by the TOTAL row)", () => {
     const rows = rowsOf(buildInventoryCsv(detail({ lines: [], line_count: 0 }), makeT()));
     expect(rows[6]).toBe(PADDED_TOTAL("RAZEM"));
+  });
+});
+
+describe("buildInventoryCsv — stock value (inventory-value)", () => {
+  it("fills price, net value, VAT and gross value, and the TOTAL row", () => {
+    const rows = rowsOf(
+      buildInventoryCsv(
+        detail({
+          lines: [
+            line({
+              current_stock_qty_base: 12,
+              unit_price_netto_pln: 10.5,
+              value_netto_pln: 126,
+              vat_rate: 0.05,
+              value_brutto_pln: 132.3,
+            }),
+          ],
+          total_value_netto_pln: 126,
+          total_value_brutto_pln: 132.3,
+        }),
+        makeT(),
+      ),
+    );
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12;;;;Nie;10,50;126,00;5%;132,30;");
+    expect(rows[7]).toBe("RAZEM;;;;;;;;;126,00;;132,30;");
+  });
+
+  it("leaves an unpriced line's price and value cells empty, never 0", () => {
+    const rows = rowsOf(
+      buildInventoryCsv(detail({ lines: [line({ vat_rate: 0.23, unit_price_netto_pln: null })] }), makeT()),
+    );
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Nie;;;23%;;");
   });
 });
 

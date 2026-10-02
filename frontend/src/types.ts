@@ -250,6 +250,13 @@ export interface InventoryCountDetailLine {
   inventory_order?: number | null;
   display_order?: number | null;
   supplier_product_id?: string | null;
+  // Stock value (inventory-value): net price of one inventory unit, the
+  // ESTIMATED VAT rate (0.05/0.08/0.23) and the line values. Optional[...] =
+  // None on the backend; null when the product has no priced supplier_product.
+  unit_price_netto_pln?: number | null;
+  vat_rate?: number | null;
+  value_netto_pln?: number | null;
+  value_brutto_pln?: number | null;
 }
 
 export interface InventoryCountDetail {
@@ -267,6 +274,11 @@ export interface InventoryCountDetail {
   // Correction history, newest first, capped 100 by the backend. Backend
   // Field(default_factory=list) → optional here (lessons.md).
   events?: InventoryCountEvent[];
+  // Stock value totals (inventory-value) — sums of the priced lines; gross is
+  // an estimate. Optional[...] = None / int = 0 on the backend.
+  total_value_netto_pln?: number | null;
+  total_value_brutto_pln?: number | null;
+  unpriced_line_count?: number;
 }
 
 // Suggestion learning-loop review (S-03 / FR-012) — match supply-os-v1/app/models.py.

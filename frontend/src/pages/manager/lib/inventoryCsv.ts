@@ -7,23 +7,11 @@
 // ManagerInventoryPage.tsx (mirrors transportPdf.ts's split: pure builder here,
 // thin browser-download wrapper in the component/page).
 //
-// THE PRICE GAP (read before touching this file): the operator asked for
-// "kwoty i wartość" (unit prices + stock value). `InventoryCountDetail` /
-// `InventoryCountDetailLine` (supply-os-v1/app/models.py) carry no price —
-// price only exists on `SupplierProduct.price_estimate_pln`, which is keyed by
-// (supplier_id, product_id). An inventory count is LOCATION-WIDE across every
-// supplier (captain_inventory_products spans suppliers), so a counted product
-// may map to zero, one, or several supplier_products with different prices —
-// there is no single "the" price to join here even in principle, and no
-// Manager-callable endpoint returns one against a plain product_id today
-// (`GET /api/manager/orderable` needs a supplier_id and still returns
-// `OrderableItem`, which itself carries no price field — see types.ts).
-// So: the "Cena jedn." / "Wartość" columns below are ALWAYS emitted empty.
-// Do NOT hardcode or guess a price here — the exact required backend follow-up
-// is: add `price_estimate_pln` (or an equivalent per-supplier join) to
-// `InventoryCountDetailLine` / `InventoryCountDetail` in
-// supply-os-v1/app/models.py + the `_enrich_inventory_count_detail` join in
-// supply-os-v1/app/main.py. Until that lands, this module has nothing to add.
+// Prices (inventory-value, 2026-10-02): the backend now joins a net price
+// per inventory unit, an ESTIMATED VAT rate and the line values onto
+// `InventoryCountDetailLine` (supply-os-v1/app/inventory_value.py), plus the
+// totals on `InventoryCountDetail`. A line without a price keeps its price and
+// value cells empty — never "0", which would claim a computed zero.
 
 import type { StringKey } from "../../../i18n/strings";
 import type { InventoryCountDetail } from "../../../types";
@@ -62,7 +50,17 @@ function formatCsvNumber(n: number): string {
 
 /** Number of columns in the header / product / TOTAL rows (kept in one place
  *  so the TOTAL row's padding can never drift from the header). */
-const CSV_COLUMN_COUNT = 11;
+const CSV_COLUMN_COUNT = 13;
+
+/** Money with two decimals and a comma ("12,50"); empty for a missing value. */
+function formatCsvMoney(n: number | null | undefined): string {
+  return n === null || n === undefined ? "" : n.toFixed(2).replace(".", ",");
+}
+
+/** VAT rate as a whole percent ("5%"); empty when the backend sent none. */
+function formatCsvVat(rate: number | null | undefined): string {
+  return rate === null || rate === undefined ? "" : `${Math.round(rate * 100)}%`;
+}
 
 /** A threshold the backend could not join (no location setting) is `null` /
  *  absent — emitted as an empty cell, never "0" (which would falsely claim a
@@ -117,13 +115,12 @@ function formatIsoForCsv(iso: string): string {
  * row. Returns a single string, BOM-prefixed, ready to hand to a `Blob`.
  *
  * Column order: Produkt, Kategoria, Jednostka, Ilość, Min, Cel, Max, Krytyczny,
- * Cena jedn. (PLN), Wartość (PLN), Komentarz. Min/Cel/Max are the location
- * thresholds joined by the backend (week2-feedback-quantities Phase 4); a
- * line without a setting leaves them empty. "Cena jedn." and "Wartość" are ALWAYS
- * empty — see the file-level comment for why, and what backend change would
- * be needed to fill them in. The TOTAL row's value cell is likewise left
- * empty rather than "0" — there is nothing to sum, and writing "0" would
- * falsely claim a computed total of zero.
+ * Cena netto jedn. (PLN), Wartość netto (PLN), VAT, Wartość brutto (PLN),
+ * Komentarz. Min/Cel/Max are the location thresholds joined by the backend
+ * (week2-feedback-quantities Phase 4); a line without a setting leaves them
+ * empty. Price/value cells come from the backend (see the file-level comment)
+ * and stay empty for an unpriced line. The TOTAL row carries the backend's
+ * net and gross totals, or empty cells when the backend sent none.
  *
  * Pure and DOM-free (no `Blob`/`document` access) so it is directly
  * unit-testable; the caller triggers the actual browser download.
@@ -157,6 +154,8 @@ export function buildInventoryCsv(detail: InventoryCountDetail, t: TFunc): strin
     t("manager.inventory.csv.colCritical"),
     t("manager.inventory.csv.colPrice"),
     t("manager.inventory.csv.colValue"),
+    t("manager.inventory.csv.colVat"),
+    t("manager.inventory.csv.colValueGross"),
     t("manager.inventory.csv.colComment"),
   ]);
 
@@ -170,16 +169,19 @@ export function buildInventoryCsv(detail: InventoryCountDetail, t: TFunc): strin
       formatCsvThreshold(line.target_stock_qty_base),
       formatCsvThreshold(line.max_stock_qty_base),
       line.is_critical ? yes : no,
-      "", // Cena jedn. (PLN) — not reachable; see file-level comment.
-      "", // Wartość (PLN) — not reachable; see file-level comment.
+      formatCsvMoney(line.unit_price_netto_pln),
+      formatCsvMoney(line.value_netto_pln),
+      formatCsvVat(line.vat_rate),
+      formatCsvMoney(line.value_brutto_pln),
       line.count_comment,
     ]),
   );
 
-  const totalRow = csvRow([
-    t("manager.inventory.csv.totalLabel"),
-    ...Array<string>(CSV_COLUMN_COUNT - 1).fill(""),
-  ]);
+  const totalCells = Array<string>(CSV_COLUMN_COUNT).fill("");
+  totalCells[0] = t("manager.inventory.csv.totalLabel");
+  totalCells[9] = formatCsvMoney(detail.total_value_netto_pln);
+  totalCells[11] = formatCsvMoney(detail.total_value_brutto_pln);
+  const totalRow = csvRow(totalCells);
 
   const lines = [...metaRows, "", header, ...productRows, totalRow];
   return BOM + lines.join(CSV_NEWLINE);

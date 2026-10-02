@@ -24,6 +24,7 @@ import type {
   InventoryCountDetailLine,
   InventoryCountManagerItem,
 } from "../../types";
+import { formatMoney } from "./finance/financeFormat";
 import { buildInventoryCsv, inventoryCsvFilename } from "./lib/inventoryCsv";
 
 /** Sticky group header offset = the page header's height (px-4 py-3 + text-lg). */
@@ -190,6 +191,37 @@ export function ManagerInventoryPage() {
                 )}
               </div>
 
+              {detail.total_value_netto_pln != null && (
+                <section
+                  aria-label={t("manager.inventory.value.title")}
+                  className="mb-4 rounded-xl border border-gray-200 bg-white p-4"
+                >
+                  <h2 className="text-sm font-semibold text-slate-700">
+                    {t("manager.inventory.value.title")}
+                  </h2>
+                  <dl className="mt-2 grid grid-cols-2 gap-3">
+                    <div>
+                      <dt className="text-xs text-slate-500">{t("manager.inventory.value.netto")}</dt>
+                      <dd className="text-xl font-bold text-slate-900">
+                        {formatMoney(detail.total_value_netto_pln)} zł
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">{t("manager.inventory.value.brutto")}</dt>
+                      <dd className="text-xl font-bold text-slate-900">
+                        {formatMoney(detail.total_value_brutto_pln)} zł
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-2 text-xs text-slate-500">{t("manager.inventory.value.note")}</p>
+                  {(detail.unpriced_line_count ?? 0) > 0 && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      {t("manager.inventory.value.unpriced", { n: detail.unpriced_line_count ?? 0 })}
+                    </p>
+                  )}
+                </section>
+              )}
+
               <div className="mb-4">
                 <button
                   type="button"
@@ -199,9 +231,6 @@ export function ManagerInventoryPage() {
                   <Download size={16} aria-hidden="true" />
                   {t("manager.inventory.csvButton")}
                 </button>
-                <p className="mt-1.5 text-xs text-slate-500">
-                  {t("manager.inventory.csvPriceNote")}
-                </p>
               </div>
 
               <ProductListToolbar

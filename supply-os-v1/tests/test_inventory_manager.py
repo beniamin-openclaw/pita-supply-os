@@ -409,3 +409,42 @@ def test_manager_count_detail_rejects_captain_token(mocker):
 def test_manager_count_detail_unauthorized_no_token():
     r = client.get("/api/manager/inventory/count/INV-X")
     assert r.status_code == 401
+
+
+# ---------- Stock value (inventory-value) ----------
+
+def test_manager_count_detail_stock_value(mocker):
+    """Each line carries the net price of one inventory unit (purchase price /
+    units_per_purchase_unit), the estimated VAT and net/gross values; the
+    detail sums them and counts counted lines that have no price."""
+    c = _count(
+        "INV-VAL", "WOLA",
+        datetime(2026, 9, 27, 9, 0, tzinfo=timezone.utc), date(2026, 9, 27),
+        lines=[_line("INV-VAL", "P027", 12), _line("INV-VAL", "P026", 6, idx=2)],
+    )
+    _activate_sheet(mocker, [c])
+    priced = [
+        sp.model_copy(update={"price_estimate_pln": 63.0})
+        if sp.supplier_product_id == "SP_BUK_P027" else sp
+        for sp in SUPPLIER_PRODUCTS
+    ]
+    mocker.patch.object(sheets, "load_supplier_products", return_value=priced)
+
+    r = client.get("/api/manager/inventory/count/INV-VAL", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    by_pid = {ln["product_id"]: ln for ln in body["lines"]}
+
+    pomidor = by_pid["P027"]  # 63 zł / karton of 6 kg = 10.5 zł/kg; "Warzywa" -> 23%
+    assert pomidor["unit_price_netto_pln"] == 10.5
+    assert pomidor["value_netto_pln"] == 126.0
+    assert pomidor["vat_rate"] == 0.23
+    assert pomidor["value_brutto_pln"] == 154.98
+
+    feta = by_pid["P026"]  # no supplier_product -> no price, never a silent 0
+    assert feta["unit_price_netto_pln"] is None
+    assert feta["value_netto_pln"] is None
+
+    assert body["total_value_netto_pln"] == 126.0
+    assert body["total_value_brutto_pln"] == 154.98
+    assert body["unpriced_line_count"] == 1

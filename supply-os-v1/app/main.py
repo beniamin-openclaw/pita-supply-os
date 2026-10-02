@@ -121,6 +121,7 @@ from .models import (
     TransportSkippedOrder,
     TransportSupplierRef,
 )
+from .inventory_value import estimated_vat_rate, inventory_unit_price
 from .product_order import (
     effective_inventory_order,
     inventory_sort_key,
@@ -3492,6 +3493,7 @@ def _enrich_inventory_count_detail(
     settings_by_pid: Optional[dict[str, LocationProductSetting]] = None,
     primary_sp_by_pid: Optional[dict[str, SupplierProduct]] = None,
     suppliers_by_id: Optional[dict[str, Supplier]] = None,
+    unit_price_by_pid: Optional[dict[str, Optional[float]]] = None,
 ) -> InventoryCountDetail:
     """Join product master-data + location_name onto a snapshot for the
     Manager/owner read view (S-08). Mirrors `manager_order_detail`'s line
@@ -3513,16 +3515,37 @@ def _enrich_inventory_count_detail(
     then ``product_id`` — the location's printed card order, whatever the stored
     line ids (a corrected count's ids are random). Each line carries that
     ``inventory_order`` plus its primary supplier_product's ``display_order`` and
-    ``supplier_product_id`` for the Manager's "Kolejność zamawiania" sort."""
+    ``supplier_product_id`` for the Manager's "Kolejność zamawiania" sort.
+
+    Stock value (inventory-value): when ``unit_price_by_pid`` is given (net
+    price of one inventory unit per product, ``inventory_value``), each line
+    carries its price, estimated VAT and net/gross value, and the detail its
+    totals plus the number of counted lines without a price. Without it the
+    value fields stay None, as before."""
     settings_by_pid = settings_by_pid or {}
     primary_sp_by_pid = primary_sp_by_pid or {}
     suppliers_by_id = suppliers_by_id or {}
+    priced = unit_price_by_pid is not None
+    total_netto = 0.0
+    total_brutto = 0.0
+    unpriced = 0
     enriched: list[InventoryCountDetailLine] = []
     for line in count.lines:
         product = products_by_id.get(line.product_id)
         setting = settings_by_pid.get(line.product_id)
         sp = primary_sp_by_pid.get(line.product_id)
         supplier = suppliers_by_id.get(sp.supplier_id) if sp else None
+        unit_price = unit_price_by_pid.get(line.product_id) if priced else None
+        vat = estimated_vat_rate(product) if priced else None
+        value_netto: Optional[float] = None
+        value_brutto: Optional[float] = None
+        if unit_price is not None and vat is not None:
+            value_netto = round(line.current_stock_qty_base * unit_price, 2)
+            value_brutto = round(value_netto * (1 + vat), 2)
+            total_netto += value_netto
+            total_brutto += value_brutto
+        elif priced and line.current_stock_qty_base > 0:
+            unpriced += 1
         enriched.append(
             InventoryCountDetailLine(
                 product_id=line.product_id,
@@ -3544,6 +3567,12 @@ def _enrich_inventory_count_detail(
                 ),
                 display_order=sp.display_order if sp else None,
                 supplier_product_id=sp.supplier_product_id if sp else None,
+                unit_price_netto_pln=(
+                    round(unit_price, 4) if unit_price is not None else None
+                ),
+                vat_rate=vat,
+                value_netto_pln=value_netto,
+                value_brutto_pln=value_brutto,
             )
         )
     enriched.sort(key=lambda ln: inventory_sort_key(ln.inventory_order, ln.product_id))
@@ -3559,6 +3588,9 @@ def _enrich_inventory_count_detail(
         notes=count.notes,
         lines=enriched,
         events=events or [],
+        total_value_netto_pln=round(total_netto, 2) if priced else None,
+        total_value_brutto_pln=round(total_brutto, 2) if priced else None,
+        unpriced_line_count=unpriced,
     )
 
 
@@ -3678,6 +3710,11 @@ def manager_inventory_count_detail(
         sp = _primary_supplier_product(line.product_id, sps, suppliers_by_id)
         if sp is not None:
             primary_sp_by_pid[line.product_id] = sp
+    # Stock value (inventory-value): net price per inventory unit, Manager only.
+    unit_price_by_pid = {
+        line.product_id: inventory_unit_price(line.product_id, sps, suppliers_by_id)
+        for line in count.lines
+    }
 
     # Correction history (Phase 2, training-feedback-0901) — degrades to []
     # on a missing worksheet, never a 500 (mirrors the receipts/transport-
@@ -3692,6 +3729,7 @@ def manager_inventory_count_detail(
         settings_by_pid=settings_by_pid,
         primary_sp_by_pid=primary_sp_by_pid,
         suppliers_by_id=suppliers_by_id,
+        unit_price_by_pid=unit_price_by_pid,
     )
 
 
