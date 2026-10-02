@@ -25,6 +25,12 @@ def test_vat_name_exceptions_win_over_category():
     assert estimated_vat_rate(_p("Rękawiczki jednorazowe L", "Chemia")) == 0.08
 
 
+def test_vat_name_match_starts_at_a_word():
+    # "kawa" must not catch "Kawałki" (food stays 5%).
+    assert estimated_vat_rate(_p("Kawałki kurczaka", "Mrożonki")) == 0.05
+    assert estimated_vat_rate(_p("Kawa Jacobs Cronat Gold", "Spożywcze")) == 0.23
+
+
 def test_vat_unknown_defaults_to_23():
     assert estimated_vat_rate(None) == 0.23
     assert estimated_vat_rate(_p("X", "Inne")) == 0.23

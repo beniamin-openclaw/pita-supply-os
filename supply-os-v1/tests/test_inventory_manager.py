@@ -444,6 +444,7 @@ def test_manager_count_detail_stock_value(mocker):
     feta = by_pid["P026"]  # no supplier_product -> no price, never a silent 0
     assert feta["unit_price_netto_pln"] is None
     assert feta["value_netto_pln"] is None
+    assert feta["vat_rate"] is None
 
     assert body["total_value_netto_pln"] == 126.0
     assert body["total_value_brutto_pln"] == 154.98

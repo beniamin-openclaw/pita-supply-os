@@ -231,9 +231,9 @@ describe("buildInventoryCsv — stock value (inventory-value)", () => {
 
   it("leaves an unpriced line's price and value cells empty, never 0", () => {
     const rows = rowsOf(
-      buildInventoryCsv(detail({ lines: [line({ vat_rate: 0.23, unit_price_netto_pln: null })] }), makeT()),
+      buildInventoryCsv(detail({ lines: [line({ vat_rate: null, unit_price_netto_pln: null })] }), makeT()),
     );
-    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Nie;;;23%;;");
+    expect(rows[6]).toBe("Pomidory;Warzywa;kg;12,5;;;;Nie;;;;;");
   });
 });
 

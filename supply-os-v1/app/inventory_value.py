@@ -12,6 +12,7 @@ guess.
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from .models import Product, Supplier, SupplierProduct
@@ -31,18 +32,23 @@ _VAT_BY_CATEGORY: dict[str, float] = {
     "biurowe": 0.23,
     "gaz": 0.23,
 }
-# Name keyword → rate, checked before the category (first match wins).
-_VAT_BY_NAME: tuple[tuple[str, float], ...] = (
-    ("cappy", 0.05),  # fruit juice
-    ("kawa", 0.23),
-    ("woda", 0.23),
-    ("ketchup", 0.08),
-    ("majonez", 0.08),
-    ("sriracha", 0.08),
-    ("papryka słodka", 0.08),
-    ("musztard", 0.08),
-    ("domestos", 0.08),
-    ("rękawiczk", 0.08),
+# Name pattern → rate, checked before the category (first match wins). Each
+# pattern starts at a word boundary, so "kawa" never matches "Kawałki"; stems
+# ("musztard", "rękawiczk") match any word that starts with them.
+_VAT_BY_NAME: tuple[tuple[re.Pattern[str], float], ...] = tuple(
+    (re.compile(pattern), rate)
+    for pattern, rate in (
+        (r"\bcappy\b", 0.05),  # fruit juice
+        (r"\bkawa\b", 0.23),
+        (r"\bwoda\b", 0.23),
+        (r"\bketchup", 0.08),
+        (r"\bmajonez", 0.08),
+        (r"\bsriracha", 0.08),
+        (r"\bpapryka słodka", 0.08),
+        (r"\bmusztard", 0.08),
+        (r"\bdomestos", 0.08),
+        (r"\brękawiczk", 0.08),
+    )
 )
 _DEFAULT_VAT = 0.23
 
@@ -52,8 +58,8 @@ def estimated_vat_rate(product: Optional[Product]) -> float:
     if product is None:
         return _DEFAULT_VAT
     name = product.product_name_pl.lower()
-    for keyword, rate in _VAT_BY_NAME:
-        if keyword in name:
+    for pattern, rate in _VAT_BY_NAME:
+        if pattern.search(name):
             return rate
     return _VAT_BY_CATEGORY.get(product.product_category.strip().lower(), _DEFAULT_VAT)
 

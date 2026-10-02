@@ -3536,7 +3536,8 @@ def _enrich_inventory_count_detail(
         sp = primary_sp_by_pid.get(line.product_id)
         supplier = suppliers_by_id.get(sp.supplier_id) if sp else None
         unit_price = unit_price_by_pid.get(line.product_id) if priced else None
-        vat = estimated_vat_rate(product) if priced else None
+        # VAT only next to a price: an unpriced line shows no rate either.
+        vat = estimated_vat_rate(product) if unit_price is not None else None
         value_netto: Optional[float] = None
         value_brutto: Optional[float] = None
         if unit_price is not None and vat is not None:
