@@ -141,8 +141,14 @@ export function ReceiveDeliveryPage() {
         addNameSuggestion("received_by", receivedBy);
         setReceivedBySuggestions(getNameSuggestions("received_by"));
       }
-      if (photos.length > 0) {
-        await api.receiptUploadPhotos(receiptId, photos);
+      // One photo per request: keeps each body well under the proxy's request
+      // size limit on slow phone links, and a photo drops out of the list as
+      // soon as it is stored, so a retry re-sends only the ones that failed.
+      const pending: File[] = [...photos];
+      while (pending.length > 0) {
+        await api.receiptUploadPhotos(receiptId, [pending[0]]);
+        pending.shift();
+        setPhotos([...pending]);
       }
       showToast(t("delivery.successToast"), "success");
       setTimeout(() => navigate(`/captain-v2/orders/${order.order_id}`), 700);

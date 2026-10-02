@@ -140,6 +140,72 @@ def test_photos_rejects_non_image(mocker):
     assert "not an image" in r.json()["detail"]
 
 
+def test_photos_octet_stream_jpeg_accepted_by_extension(mocker):
+    """An Android picker can send a JPEG as application/octet-stream — accept it
+    by extension and store it as image/jpeg."""
+    _sheet_and_storage(mocker)
+    mocker.patch.object(sheets, "get_receipt", return_value=_fake_receipt())
+    up = mocker.patch.object(ss, "upload_photo")
+    mocker.patch.object(ss, "create_signed_url", return_value="https://s/1")
+    mocker.patch.object(sheets, "update_receipt")
+    r = client.post(
+        f"/api/captain/receipt/{RECEIPT_ID}/photos",
+        files=[("files", _img("IMG_1.JPG", ctype="application/octet-stream"))],
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    path, _content, ctype = up.call_args.args
+    assert path == f"wz/ORD-1/{RECEIPT_ID}-01.jpg"
+    assert ctype == "image/jpeg"
+
+
+def test_photos_untyped_heic_accepted_by_magic_bytes(mocker):
+    """An iOS HEIC with no type and no extension is recognised by its ftyp box."""
+    _sheet_and_storage(mocker)
+    mocker.patch.object(sheets, "get_receipt", return_value=_fake_receipt())
+    up = mocker.patch.object(ss, "upload_photo")
+    mocker.patch.object(ss, "create_signed_url", return_value="https://s/1")
+    mocker.patch.object(sheets, "update_receipt")
+    heic = b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00heicmif1"
+    r = client.post(
+        f"/api/captain/receipt/{RECEIPT_ID}/photos",
+        files=[("files", ("blob", io.BytesIO(heic), "application/octet-stream"))],
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    path, _content, ctype = up.call_args.args
+    assert ctype == "image/heic"
+    assert path.endswith("-01.heic")
+
+
+def test_photos_octet_stream_unknown_rejected(mocker):
+    _sheet_and_storage(mocker)
+    mocker.patch.object(sheets, "get_receipt", return_value=_fake_receipt())
+    mocker.patch.object(ss, "upload_photo")
+    r = client.post(
+        f"/api/captain/receipt/{RECEIPT_ID}/photos",
+        files=[("files", ("data.bin", io.BytesIO(b"hello"), "application/octet-stream"))],
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 400, r.text
+
+
+def test_photos_second_batch_does_not_overwrite_first(mocker):
+    """A later batch is numbered after the photos already attached."""
+    _sheet_and_storage(mocker)
+    mocker.patch.object(sheets, "get_receipt", return_value=_fake_receipt(wz_photo_count=2))
+    up = mocker.patch.object(ss, "upload_photo")
+    mocker.patch.object(ss, "create_signed_url", return_value="https://s/3")
+    mocker.patch.object(sheets, "update_receipt")
+    r = client.post(
+        f"/api/captain/receipt/{RECEIPT_ID}/photos",
+        files={"files": _img("c.jpg")},
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    assert up.call_args.args[0] == f"wz/ORD-1/{RECEIPT_ID}-03.jpg"
+
+
 def test_photos_wrong_location_404(mocker):
     _sheet_and_storage(mocker)
     mocker.patch.object(sheets, "get_receipt", return_value=_fake_receipt(location_id="KEN"))
