@@ -22,6 +22,7 @@ import { baseToPacks, caseOf, isPackBased } from "../../../lib/packUnits";
 import { formatBaseQty } from "../../../lib/packStock";
 import { packUnitLabel } from "../../../i18n/packUnits";
 import { PackStockInput } from "./PackStockInput";
+import { GramsHint } from "./GramsHint";
 import { PackQty, UnitLabel } from "./UnitLabel";
 
 interface ProductCardProps {
@@ -290,6 +291,14 @@ export function ProductCard({
         )}
         {/* Bulk pack: the order is two fields too, so the suggestion tile takes
             the full row and the order block sits under it. */}
+        <GramsHint
+          value={line.current_stock_qty_base}
+          onChange={handleCurrentChange}
+          names={[item.product_name_pl, item.supplier_product_name]}
+          unit={item.inventory_unit}
+          maxStock={item.max_stock_qty_base}
+          inputId={currentInputId}
+        >
         <div
           className={`grid ${
             itemCase ? "grid-cols-1" : packBased ? "grid-cols-2" : "grid-cols-3"
@@ -481,6 +490,7 @@ export function ProductCard({
           </div>
           )}
         </div>
+        </GramsHint>
 
         {itemCase && (
           <div className="mb-3" role="group" aria-labelledby={finalLabelId}>
