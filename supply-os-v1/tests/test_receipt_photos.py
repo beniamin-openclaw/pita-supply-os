@@ -293,3 +293,13 @@ def test_photo_urls_wrong_location_404(mocker):
     mocker.patch.object(sheets, "get_receipt", return_value=_fake_receipt(location_id="KEN"))
     r = client.get(f"/api/captain/receipt/{RECEIPT_ID}/photos", headers=WOLA_AUTH)
     assert r.status_code == 404, r.text
+
+
+def test_photo_content_type_refuses_non_raster_image_types():
+    """A declared svg/bmp is not stored under an image type (AI review, PR #56)."""
+    from app.main import _photo_content_type
+
+    assert _photo_content_type("image/svg+xml", "x.svg", b"<svg/>") is None
+    assert _photo_content_type("image/bmp", "x.bmp", b"BM") is None
+    assert _photo_content_type("image/jpg", "x.jpg", b"") == "image/jpeg"
+    assert _photo_content_type("image/png", "x.png", b"") == "image/png"

@@ -4216,12 +4216,16 @@ def _photo_content_type(
 ) -> Optional[str]:
     """Content type to store a WZ photo under, or None when it is not an image.
 
-    Trust a declared ``image/*`` type; otherwise (some Android pickers and in-app
+    A declared raster type from ``_PHOTO_EXT_BY_TYPE`` is trusted; any other
+    ``image/*`` (svg, bmp, tiff …) is refused, so nothing is ever stored and served
+    under a type outside that set. Otherwise (some Android pickers and in-app
     browsers send ``application/octet-stream`` or no type at all for a JPEG/HEIC)
     fall back to the file extension, then to the magic bytes."""
     ctype = (declared or "").split(";", 1)[0].strip().lower()
+    if ctype in ("image/jpg", "image/pjpeg"):
+        ctype = "image/jpeg"
     if ctype.startswith("image/"):
-        return "image/jpeg" if ctype in ("image/jpg", "image/pjpeg") else ctype
+        return ctype if ctype in _PHOTO_EXT_BY_TYPE else None
     if ctype not in ("", "application/octet-stream", "binary/octet-stream"):
         return None
     ext = (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
