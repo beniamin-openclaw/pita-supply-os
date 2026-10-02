@@ -17,8 +17,13 @@ do dostawcy, więc muszą być poprawne przed pierwszą wysyłką.
 - [ ] Wskazówki dla dostawcy, jeśli lokal jest w galerii (rampa, wejście dla dostaw, godziny).
 - [ ] Spółka prowadząca lokal: nazwa, adres rejestrowy, NIP (stopka maila). Źródło:
       `docs/pita-supply-os-v1/COMPANY_ENTITIES.md`.
-- [ ] E-mail lokalu (skrzynka czytana na telefonie lokalu) — dodawany do DW maili do dostawców.
-- [ ] Telefon lokalu (dla dostawców; na razie tylko w `COMPANY_ENTITIES.md`).
+- [ ] E-mail lokalu (skrzynka czytana na telefonie lokalu) → `locations.email` — dodawany do DW maili
+      do dostawców.
+- [ ] Alias nadawcy → `locations.sender_email`: adres „send-as” skrzynki biuro@ (np. `bracka@pitabros.pl`),
+      z którego wychodzi mail do dostawcy. Alias musi być dodany i zweryfikowany w Gmailu biuro@
+      przed pierwszą wysyłką; bez niego mail idzie z samego biuro@.
+- [ ] Telefon lokalu → `locations.phone` (forma do wyświetlenia, np. „600 722 252”) — drukowany w mailu
+      jako „Telefon lokalu:”.
 
 ## 2. Produkty i progi min/max
 
@@ -28,9 +33,15 @@ do dostawcy, więc muszą być poprawne przed pierwszą wysyłką.
       bidon, zgrzewka, paczka), wiadomo, ile w nim kg lub sztuk — aplikacja trzyma stan w kg / szt / opak.
 - [ ] Produkty spoza katalogu aplikacji: nazwa, dostawca, jednostka zakupu, ile w opakowaniu, cena.
       Bez tego pozycja zostaje wstrzymana.
-- [ ] Rolki do kas i drukarek: rozmiary zgodne ze sprzętem lokalu (tabela Sławka) i liczba rolek w opakowaniu.
+- [ ] Rolki do kas i drukarek: rozmiary z tabeli Sławka dla sprzętu lokalu (np. Sunmi V3 Mix: kasa 80/20,
+      drukarka 80/80; 57/50 zostaje nieaktywne) i liczba rolek w opakowaniu. Progi w rolkach (szt).
 - [ ] Produkcja własna (sosy, kasza, gyros ścięty): progi albo świadoma decyzja „0”.
-- [ ] Napoje Coca-Cola: puszka 0,33 czy szkło 0,25.
+- [ ] Napoje Coca-Cola i Cappy: szkło czy plastik/puszka. Coca-Cola: szkło 0,25 (skrzynka 24) czy puszka
+      0,33; Cappy: szkło 0,25 (skrzynka 24) czy PET 0,33 (zgrzewka 12). Lokal dostaje tylko wybrany
+      wariant, a max jest zaokrąglony do pełnej skrzynki / zgrzewki.
+- [ ] Opakowania zbiorcze (`supplier_products.case_unit` / `units_per_case`, np. pomidory skrzynka 6 kg,
+      halloumi karton 12) są wspólne dla wszystkich lokali. Sprawdź, że cel lokalu to co najmniej pół
+      opakowania — inaczej sugestia wynosi zawsze 0 opakowań i zamówienie pełnego opakowania wymaga powodu.
 - [ ] Nazwa firmy dostawcy w arkuszu = nazwa dostawcy w aplikacji („Magazyn” = Magazyn własny Mory).
 
 ## 3. Dostawcy i terminy

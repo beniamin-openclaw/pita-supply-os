@@ -3,6 +3,58 @@
 
 import type { OrderableItem, OrderLine, CardState } from "../types";
 import type { StringKey } from "../../../i18n/strings";
+import { caseSizeOf } from "../../../lib/packUnits";
+
+/** Round to 6 decimals to suppress IEEE-754 artefacts — twin of `_clean`. */
+function clean(x: number): number {
+  return Number(x.toFixed(6));
+}
+
+/**
+ * Nearest integer, halves UP (0.5 → 1, 1.5 → 2, 2.5 → 3), pre-cleaned to 6
+ * decimals — twin of `round_half_up` in suggestion.py (plan-review F4: the
+ * backend used banker's rounding before).
+ */
+export function roundHalfUp(x: number): number {
+  return Math.floor(clean(x) + 0.5);
+}
+
+/**
+ * Smallest purchase-unit increment a rule can emit — twin of `rounding_step`;
+ * the deviation denominator floor (`max(reference, step)`).
+ */
+export function roundingStep(rule: OrderableItem["rounding_rule"]): number {
+  if (rule === "half_allowed") return 0.5;
+  if (rule === "tenth_kg") return 0.1;
+  return 1;
+}
+
+/** D33: the need rounded to the nearest whole case, half up (need 2 kg of a
+ *  6 kg crate → 0, 3 → 6, 4 → 6, 10 → 12); the need itself without a case.
+ *  Twin of `case_suggestion`. */
+export function caseSuggestion(needPurchase: number, unitsPerCase: number | null): number {
+  if (unitsPerCase === null || needPurchase <= 0) return needPurchase;
+  return clean(roundHalfUp(needPurchase / unitsPerCase) * unitsPerCase);
+}
+
+/** D34 interval rule — twin of `deviation_reference`: an order anywhere in
+ *  [min(need, case), max(need, case)] is its own reference (zero deviation);
+ *  outside it, the nearer end. That is `final` clamped to the interval. Without
+ *  a case the interval is one point (the suggestion). */
+export function deviationReference(final: number, need: number, suggested: number): number {
+  const low = Math.min(need, suggested);
+  const high = Math.max(need, suggested);
+  return Math.min(Math.max(final, low), high);
+}
+
+/** D34: the uncounted over-MAX ceiling — max rounded UP to a whole case
+ *  (`ceil(max / (upc·upp)) · upc·upp`); max itself without a case. Twin of
+ *  `case_rounded_max`. */
+export function caseRoundedMax(maxBase: number, upp: number, unitsPerCase: number | null): number {
+  if (unitsPerCase === null || maxBase <= 0) return maxBase;
+  const packBase = unitsPerCase * upp;
+  return clean(Math.ceil(clean(maxBase / packBase)) * packBase);
+}
 
 /**
  * Mirror of the backend `_round_per_rule` (supply-os-v1/app/suggestion.py) so the
@@ -16,9 +68,10 @@ function roundPerRule(
   if (raw <= 0) return 0;
   switch (rule) {
     case "half_allowed":
-      return Math.round(raw * 2) / 2;
+      // Nearest half, halves up — the same cleaned helper as the backend.
+      return roundHalfUp(raw * 2) / 2;
     case "up_for_critical":
-      return isCritical ? Math.ceil(raw) : Math.round(raw);
+      return isCritical ? Math.ceil(raw) : roundHalfUp(raw);
     case "tenth_kg":
       // Ceil to the next 0.1. Pre-clean to dodge float artifacts
       // (2.3 * 10 === 23.000000000000004 would ceil to the wrong tenth).
@@ -29,27 +82,40 @@ function roundPerRule(
   }
 }
 
+/**
+ * `base` — the raw need in inventory units (target − stock, the "brakuje" the
+ * card shows); `need` — that need in purchase units, rounded per rule;
+ * `purchase` — the suggestion: `need` rounded to the nearest whole case when
+ * the item has one (D33), else `need` itself (byte-identical to before).
+ */
 export function computeSuggestion(
   item: OrderableItem,
   currentStock: number,
-): { base: number; purchase: number } {
+): { base: number; purchase: number; need: number } {
   const suggestedBase = Math.max(0, item.target_stock_qty_base - currentStock);
   const raw = suggestedBase / item.units_per_purchase_unit;
-  const suggestedPurchase = roundPerRule(raw, item.rounding_rule, item.is_critical);
-  return { base: suggestedBase, purchase: suggestedPurchase };
+  const need = roundPerRule(raw, item.rounding_rule, item.is_critical);
+  const suggestedPurchase = caseSuggestion(need, caseSizeOf(item));
+  return { base: suggestedBase, purchase: suggestedPurchase, need };
 }
 
-// Backend-parity note: suggested=0 returns Infinity for a positive order so a
-// caller can never divide by zero. Since week2-feedback-quantities Phase 1 the
-// suggestion-0 case is handled BEFORE this is consulted in computeRowState
-// (the backend `_evaluate_submit_line` likewise skips its deviation gate and
-// stores delta=None there), so the ∞ never reaches a gate or a pill. Keep them
-// in sync if the backend formula changes.
-export function computeDeviation(suggestedPurchase: number, finalPurchase: number): number {
-  if (suggestedPurchase === 0) {
+/**
+ * Signed % deviation of `finalPurchase` from `reference`. With `step` (the
+ * rule's rounding step) the denominator is `max(reference, step)` — the
+ * backend's stored delta (F9), so a reference of 0 gives a finite %. Without
+ * `step` the legacy form: a reference of 0 returns Infinity for a positive
+ * order (computeRowState always passes the step).
+ */
+export function computeDeviation(
+  reference: number,
+  finalPurchase: number,
+  step?: number,
+): number {
+  const denominator = step === undefined ? reference : Math.max(reference, step);
+  if (denominator === 0) {
     return finalPurchase > 0 ? Infinity : 0;
   }
-  return ((finalPurchase - suggestedPurchase) / suggestedPurchase) * 100;
+  return ((finalPurchase - reference) / denominator) * 100;
 }
 
 export interface RowState {
@@ -88,10 +154,14 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   // with alerts_enabled=False. Green when the order equals the suggestion,
   // otherwise a neutral grey pill.
   if (item.suggestion_alerts_enabled === false) {
-    if (
-      line.current_stock_qty_base !== "" &&
-      final === computeSuggestion(item, Number(line.current_stock_qty_base)).purchase
-    ) {
+    const s =
+      line.current_stock_qty_base !== ""
+        ? computeSuggestion(item, Number(line.current_stock_qty_base))
+        : null;
+    // With a case, anything between the need and the case suggestion matches
+    // (D34 interval rule — the backend stores delta 0 there); without a case
+    // that is exactly the suggestion.
+    if (s !== null && deviationReference(final, s.need, s.purchase) === final) {
       return { state: "green", messageKey: "state.match", requiresReason: false, deviationPct: 0 };
     }
     return {
@@ -112,10 +182,16 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   // uncounted branch; no "%" (nothing to compare against).
   if (line.current_stock_qty_base === "") {
     const orderBase = final * item.units_per_purchase_unit;
+    // With a case the ceiling is max rounded up to a whole case (D34).
+    const maxAllowed = caseRoundedMax(
+      item.max_stock_qty_base,
+      item.units_per_purchase_unit,
+      caseSizeOf(item),
+    );
     const overMax =
       item.max_stock_qty_base > 0 &&
       !item.allow_over_max_due_to_packaging &&
-      orderBase > item.max_stock_qty_base;
+      orderBase > maxAllowed;
     if (overMax) {
       return {
         state: hasReason ? "orange" : "red",
@@ -134,15 +210,16 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
 
   // Counted path.
   const current = Number(line.current_stock_qty_base);
-  const { purchase: suggested } = computeSuggestion(item, current);
+  const { purchase: suggested, need } = computeSuggestion(item, current);
 
   // Counted stock at/above target → suggestion 0 is INFORMATION, not a gate
   // (week2-feedback-quantities Phase 1; mirrors the backend
   // `_evaluate_submit_line` third branch). There is no baseline to express a
   // % against, so no reason is ever required here: nothing ordered → green
   // match as before; something ordered → a yellow informational pill naming
-  // the stock vs target, no % and no ReasonPicker.
-  if (suggested === 0) {
+  // the stock vs target, no % and no ReasonPicker. Keyed on the NEED
+  // (plan-review F1): a case suggestion of 0 with a need above 0 still gates.
+  if (need === 0) {
     if (final === 0) {
       return {
         state: "green",
@@ -170,7 +247,10 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
     };
   }
 
-  const deviation = computeDeviation(suggested, final);
+  // D34: zero inside [need, case suggestion], else measured against the
+  // nearer end (one point without a case), with the backend's step floor.
+  const reference = deviationReference(final, need, suggested);
+  const deviation = computeDeviation(reference, final, roundingStep(item.rounding_rule));
   const absDeviation = Math.abs(deviation);
 
   // Reason-required result (>25% deviation, or a critical under-order).
@@ -187,13 +267,15 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
   }
 
   // Critical products: any under-order (even ≤25%) requires a reason —
-  // mirrors the backend gate in captain_submit / captain_order_edit.
-  // (suggested === 0 already returned above.)
-  if (item.is_critical && final < suggested) {
+  // mirrors the backend gate in captain_submit / captain_order_edit. With a
+  // case only below the smaller of need and case suggestion (D34).
+  if (item.is_critical && final < Math.min(need, suggested)) {
     return reasonResult();
   }
 
-  if (final === suggested) {
+  // Green when the order equals the reference: the suggestion, or (with a
+  // case) anything between the need and the case suggestion (D34).
+  if (final === reference) {
     return {
       state: "green",
       messageKey: "state.match",

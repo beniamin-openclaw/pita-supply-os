@@ -7,7 +7,9 @@ import {
   buildEmailSubject,
   buildGmailComposeUrl,
   buildResendSubject,
+  copyListQty,
   draftCc,
+  emailQtyText,
   fallbackCc,
   formatDeliveryDayLong,
   formatDeliveryDayShort,
@@ -418,5 +420,49 @@ describe("order-email-v2 — DW per delivery path", () => {
     expect(
       fallbackCc(detail({ cc_email: "biuro@pitabros.pl", location_email: "wola@gmail.com" })),
     ).toBe("biuro@pitabros.pl,wola@gmail.com");
+  });
+});
+
+describe("bulk-pack quantity wording (feedback-1001 D35)", () => {
+  const frytki = (overrides: Partial<ManagerOrderLineDetail> = {}): ManagerOrderLineDetail =>
+    ({
+      order_line_id: "OL-1",
+      product_id: "P021",
+      product_name_pl: "Frytki Aviko",
+      inventory_unit: "szt",
+      supplier_product_id: "SP_INTERMLECZ_P021",
+      supplier_product_name: "Frytki Aviko 2,5 kg",
+      purchase_unit: "paczka",
+      units_per_purchase_unit: 1,
+      captain_final_qty_purchase: 26,
+      manager_final_qty_purchase: 0,
+      case_unit: "karton",
+      units_per_case: 4,
+      ...overrides,
+    }) as ManagerOrderLineDetail;
+
+  it("emailQtyText prints cases + loose + the total", () => {
+    expect(emailQtyText(frytki(), 26, "paczka")).toBe("6 kartonów + 2 paczki (26 paczek)");
+    expect(emailQtyText(frytki(), 24, "paczka")).toBe("6 kartonów (24 paczki)");
+    expect(emailQtyText(frytki(), 2, "paczka")).toBe("2 paczki");
+  });
+
+  it("emailQtyText without a case is today's wording", () => {
+    const noCase = frytki({ case_unit: null, units_per_case: null });
+    expect(emailQtyText(noCase, 26, "paczka")).toBe("26 paczek");
+    expect(emailQtyText(noCase, 1.5, "kg")).toBe("1,5 kg");
+  });
+
+  it("copyListQty uses the case wording, else the raw qty + purchase unit", () => {
+    expect(copyListQty(frytki(), 26)).toBe("6 kartonów + 2 paczki (26 paczek)");
+    expect(copyListQty(frytki({ case_unit: null, units_per_case: null }), 26)).toBe("26 paczka");
+  });
+
+  it("copyListQty uses the Polish decimal comma on every line (impl-review F4c)", () => {
+    const kg = frytki({ case_unit: null, units_per_case: null, purchase_unit: "kg" });
+    expect(copyListQty(kg, 2.5)).toBe("2,5 kg");
+    expect(copyListQty(kg, 0.1 + 0.2)).toBe("0,3 kg");
+    expect(copyListQty(frytki({ purchase_unit: "kg", case_unit: "skrzynka", units_per_case: 6 }), 14.5))
+      .toBe("2 skrzynki + 2,5 kg (14,5 kg)");
   });
 });

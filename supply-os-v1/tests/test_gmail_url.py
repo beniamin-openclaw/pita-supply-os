@@ -709,3 +709,25 @@ def test_ad_hoc_items_and_captain_note_both_present_are_separately_sectioned():
     assert lines_.index("Pozycje spoza katalogu:") < lines_.index("Komentarz:")
     assert "1 karton serwetek" in body
     assert "poprawiona ilość" in body
+
+
+# ---------- Bulk packs (feedback-1001 D35) — twin of packStock.test.ts formatCaseQty ----------
+
+
+@pytest.mark.parametrize(
+    ("qty", "upc", "case_unit", "unit", "expected"),
+    [
+        (24, 4, "karton", "paczka", "6 kartonów (24 paczki)"),
+        (26, 4, "karton", "paczka", "6 kartonów + 2 paczki (26 paczek)"),
+        (2, 4, "karton", "paczka", "2 paczki"),
+        (4, 4, "karton", "paczka", "1 karton (4 paczki)"),
+        (30, 6, "skrzynka", "kg", "5 skrzynek (30 kg)"),
+        (14.5, 6, "skrzynka", "kg", "2 skrzynki + 2,5 kg (14,5 kg)"),
+        (2.5, 6, "skrzynka", "kg", "2,5 kg"),
+        (36, 12, "karton", "szt", "3 kartony (36 szt)"),
+        (7, 6, "opak", "szt", "1 opak + 1 szt (7 szt)"),
+        (0.1 * 3 * 60, 6, "skrzynka", "kg", "3 skrzynki (18 kg)"),
+    ],
+)
+def test_format_case_qty(qty, upc, case_unit, unit, expected):
+    assert gmail_url._format_case_qty(qty, upc, case_unit, unit) == expected

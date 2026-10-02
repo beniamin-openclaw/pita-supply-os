@@ -347,3 +347,39 @@ def test_master_data_reads_through_choose_backend(monkeypatch):
     )
     assert r.status_code == 200
     assert [i["product_id"] for i in r.json()] == ["PZZZ"]
+
+
+def test_captain_suggest_with_a_case_returns_need_and_case_suggestion():
+    """Bulk pack (feedback-1001 D33): need 3 kg of a 6 kg crate rounds half up
+    to one crate; the response carries both numbers."""
+    r = client.post(
+        "/api/captain/suggest",
+        json={
+            "current_stock_qty_base": 7,
+            "target_stock_qty_base": 10,
+            "max_stock_qty_base": 20,
+            "units_per_purchase_unit": 1,
+            "rounding_rule": "tenth_kg",
+            "units_per_case": 6,
+        },
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert out["need_qty_purchase"] == 3
+    assert out["suggested_qty_purchase"] == 6
+
+
+def test_captain_suggest_rejects_a_case_of_one():
+    r = client.post(
+        "/api/captain/suggest",
+        json={
+            "current_stock_qty_base": 0,
+            "target_stock_qty_base": 10,
+            "max_stock_qty_base": 20,
+            "units_per_purchase_unit": 1,
+            "units_per_case": 1,
+        },
+        headers=WOLA_AUTH,
+    )
+    assert r.status_code == 422

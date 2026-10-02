@@ -26,12 +26,14 @@ import { StickyActionBar } from "./components/StickyActionBar";
 import { SkeletonCard } from "./components/SkeletonCard";
 import { Toast, type ToastProps } from "./components/Toast";
 import { ExtraItemsControl } from "./components/ExtraItemsControl";
+import { OverruleAllControl } from "./components/OverruleAllControl";
 import { OrderCommentField } from "./components/OrderCommentField";
 import { computeRowState } from "./lib/compute";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
+import { clearStaleAutoReasons, overruleAll } from "./lib/overruleAll";
 import { parseExtraItems, serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
-import type { OrderLine } from "./types";
+import type { BulkReason, OrderLine, ReasonCode } from "./types";
 
 /** Translate an enriched detail line into the shape ProductCard expects. */
 function lineToItem(
@@ -58,6 +60,10 @@ function lineToItem(
     supplier_product_name: line.supplier_product_name,
     suggestion_alerts_enabled: suggestionAlertsEnabled,
     display_order: line.display_order ?? null,
+    // Bulk pack (migration 0028) so a card rebuilt from the order line keeps
+    // the two-field input and the case-aware suggestion.
+    case_unit: line.case_unit ?? null,
+    units_per_case: line.units_per_case ?? null,
   };
 }
 
@@ -88,6 +94,14 @@ export function OrderEditPage() {
   // edit can revise both instead of losing them.
   const [extraItemRows, setExtraItemRows] = useState<ExtraItemRow[]>([]);
   const [captainNote, setCaptainNote] = useState("");
+  // Sticky bulk reason (feedback-1001 D10) — same behaviour as the create
+  // screen, but no draft: it only lives while the edit screen is open.
+  const [bulkReason, setBulkReason] = useState<BulkReason | null>(null);
+  // Lines whose reason the Captain changed or cleared by hand since the last
+  // Apply — the sticky pass leaves them alone (see CaptainMP).
+  const [handEditedReasons, setHandEditedReasons] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
@@ -159,6 +173,43 @@ export function OrderEditPage() {
   const handleLineChange = useCallback((newLine: OrderLine) => {
     setLines((prev) => ({ ...prev, [newLine.product_id]: newLine }));
   }, []);
+
+  const handleOverruleAllApply = useCallback(
+    (reason: ReasonCode, comment: string) => {
+      const bulk: BulkReason = { code: reason, comment: reason === "OTHER" ? comment.trim() : "" };
+      const patched = overruleAll(items, lines, bulk, "overwrite");
+      const patchedCount = items.filter(
+        (item) => patched[item.product_id] !== lines[item.product_id],
+      ).length;
+      setLines((prev) => overruleAll(items, prev, bulk, "overwrite"));
+      setBulkReason(bulk);
+      setHandEditedReasons(new Set<string>());
+      showToast(t("captain.overruleAllAppliedToast", { count: patchedCount }), "success");
+    },
+    [items, lines, showToast, t],
+  );
+
+  const handleOverruleAllDisable = useCallback(() => {
+    setBulkReason(null);
+    setHandEditedReasons(new Set<string>());
+  }, []);
+
+  const handleReasonEdit = useCallback((productId: string) => {
+    setHandEditedReasons((prev) =>
+      prev.has(productId) ? prev : new Set<string>(prev).add(productId),
+    );
+  }, []);
+
+  // Sticky pass — see CaptainMP: fills only lines without a reason; an
+  // unchanged result keeps the same reference, so this cannot loop.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLines((prev) =>
+      bulkReason
+        ? overruleAll(items, prev, bulkReason, "fillMissing", handEditedReasons)
+        : clearStaleAutoReasons(items, prev),
+    );
+  }, [bulkReason, lines, items, handEditedReasons]);
 
   const handleScrollToRed = useCallback(() => {
     const firstRed = items.find((item) => {
@@ -280,6 +331,14 @@ export function OrderEditPage() {
           </div>
         )}
 
+        {order && items.some((it) => it.suggestion_alerts_enabled !== false) && (
+          <OverruleAllControl
+            active={bulkReason}
+            onApply={handleOverruleAllApply}
+            onDisable={handleOverruleAllDisable}
+          />
+        )}
+
         {!order && !loadError ? (
           <>
             <SkeletonCard />
@@ -300,6 +359,7 @@ export function OrderEditPage() {
                 }
               }
               onChange={handleLineChange}
+              onReasonEdit={handleReasonEdit}
             />
           ))
         )}

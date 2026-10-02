@@ -6,6 +6,7 @@ import { useT } from "../../../i18n";
 import type { ManagerOrderLineDetail } from "../../../types";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { roundQty } from "../../../components/ui/number";
+import { UnitLabel } from "./UnitLabel";
 
 interface ReceiptLineCardProps {
   line: ManagerOrderLineDetail;
@@ -24,10 +25,15 @@ export function ReceiptLineCard({
   onChange,
   readOnly = false,
 }: ReceiptLineCardProps) {
-  const { t } = useT();
+  const { t, tParts } = useT();
   const variance = delivered === "" ? 0 : roundQty(Number(delivered) - ordered);
   const showVariance = delivered !== "" && variance !== 0;
-  const varianceText = `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`;
+  const varianceText = (
+    <>
+      {variance > 0 ? "+" : ""}
+      {variance} <UnitLabel>{line.purchase_unit}</UnitLabel>
+    </>
+  );
 
   return (
     <div className="mb-2 rounded-lg border border-slate-200 bg-white p-3">
@@ -41,7 +47,7 @@ export function ReceiptLineCard({
         <div className="text-sm text-slate-600">
           {t("delivery.ordered")}:{" "}
           <span className="font-bold text-slate-900 tabular-nums text-base">
-            {ordered} {line.purchase_unit}
+            {ordered} <UnitLabel>{line.purchase_unit}</UnitLabel>
           </span>
         </div>
         <label className="flex flex-col items-end">
@@ -79,7 +85,7 @@ export function ReceiptLineCard({
             variance > 0 ? "text-sky-700" : "text-indigo-700"
           }`}
         >
-          {t("delivery.variance", { value: varianceText })}
+          {tParts("delivery.variance", { value: varianceText })}
         </div>
       )}
     </div>

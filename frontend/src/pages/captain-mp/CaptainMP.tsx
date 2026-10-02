@@ -34,13 +34,20 @@ import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
 import { CoveragePrompt, type CoverageDays } from "./components/CoveragePrompt";
 
 import { computeRowState } from "./lib/compute";
-import { overruleAll } from "./lib/overruleAll";
+import { clearStaleAutoReasons, overruleAll } from "./lib/overruleAll";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
 import { serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
 
-import type { Supplier, OrderableItem, OrderLine, DraftState, ReasonCode } from "./types";
+import type {
+  Supplier,
+  OrderableItem,
+  OrderLine,
+  DraftState,
+  ReasonCode,
+  BulkReason,
+} from "./types";
 import type {
   DeliveryProposal,
   InventoryCountSummary,
@@ -78,6 +85,7 @@ function draftHasValues(
   lines: Record<string, OrderLine>,
   extraItems: ExtraItemRow[] = [],
   captainNote: string = "",
+  bulkReason: BulkReason | null = null,
 ): boolean {
   const lineHasValue = Object.values(lines).some(
     (ln) =>
@@ -87,6 +95,7 @@ function draftHasValues(
       (ln.reason_code ?? "") !== "",
   );
   if (lineHasValue) return true;
+  if (bulkReason !== null) return true;
   if (captainNote.trim() !== "") return true;
   return serializeExtraItems(extraItems) !== "";
 }
@@ -118,6 +127,16 @@ export function CaptainMP() {
   // see the supplier-change effect below and handleSubmit.
   const [extraItemRows, setExtraItemRows] = useState<ExtraItemRow[]>([]);
   const [captainNote, setCaptainNote] = useState("");
+  // Sticky "Powód zbiorczo" (feedback-1001 D10): once set it also fills the
+  // reason on lines that start requiring one later. Per supplier: reset on
+  // supplier switch, persisted in the draft.
+  const [bulkReason, setBulkReason] = useState<BulkReason | null>(null);
+  // Lines whose reason the Captain changed or cleared by hand since the last
+  // Apply: the sticky pass leaves them alone. Reset on Apply / Wyłącz /
+  // supplier switch; not persisted in the draft.
+  const [handEditedReasons, setHandEditedReasons] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<ToastProps | null>(null);
   const [draftBanner, setDraftBanner] = useState<{
@@ -265,6 +284,8 @@ export function CaptainMP() {
     // whole session).
     setExtraItemRows([]);
     setCaptainNote("");
+    setBulkReason(null);
+    setHandEditedReasons(new Set<string>());
     /* eslint-enable react-hooks/set-state-in-effect */
 
     api
@@ -303,7 +324,9 @@ export function CaptainMP() {
         const draftNote = draft?.state?.captainNote ?? "";
         if (draftExtra.length > 0) setExtraItemRows(draftExtra);
         if (draftNote !== "") setCaptainNote(draftNote);
-        if (draft && draftHasValues(initialLines, draftExtra, draftNote)) {
+        const draftBulk = draft?.state?.bulkReason ?? null;
+        if (draftBulk) setBulkReason(draftBulk);
+        if (draft && draftHasValues(initialLines, draftExtra, draftNote, draftBulk)) {
           setDraftBanner({
             supplierId: activeSupplierId,
             timestamp: draft.state.timestamp,
@@ -404,7 +427,7 @@ export function CaptainMP() {
   useEffect(() => {
     if (!activeSupplierId) return;
     const timeoutId = setTimeout(() => {
-      if (!draftHasValues(lines, extraItemRows, captainNote)) {
+      if (!draftHasValues(lines, extraItemRows, captainNote, bulkReason)) {
         // Emptying the screen must ERASE the stored draft, not merely skip the
         // write. Skipping left the previous draft in localStorage, so deleting
         // the last ad-hoc row and reloading brought it straight back — on the
@@ -418,13 +441,14 @@ export function CaptainMP() {
         timestamp: Date.now(),
         extraItems: extraItemRows,
         captainNote,
+        bulkReason,
       };
       saveDraft(activeSupplierId, draftState);
     }, 500);
     return () => clearTimeout(timeoutId);
     // The `Object.keys(lines).length === 0` guard was dropped: a catalogue-less
     // supplier has no lines, and an ad-hoc-only draft must still be saved.
-  }, [lines, extraItemRows, captainNote, activeSupplierId]);
+  }, [lines, extraItemRows, captainNote, bulkReason, activeSupplierId]);
 
   // ---- Draft flush on supplier switch / unmount ------------------------------
   // The debounce above loses the last ≤500ms of edits when the supplier changes
@@ -437,11 +461,13 @@ export function CaptainMP() {
     lines: Record<string, OrderLine>;
     extraItems: ExtraItemRow[];
     captainNote: string;
+    bulkReason: BulkReason | null;
   }>({
     supplierId: null,
     lines: {},
     extraItems: [],
     captainNote: "",
+    bulkReason: null,
   });
   useEffect(() => {
     draftFlushRef.current = {
@@ -449,17 +475,22 @@ export function CaptainMP() {
       lines,
       extraItems: extraItemRows,
       captainNote,
+      bulkReason,
     };
   });
   useEffect(() => {
     return () => {
       const snap = draftFlushRef.current;
-      if (snap.supplierId && draftHasValues(snap.lines, snap.extraItems, snap.captainNote)) {
+      if (
+        snap.supplierId &&
+        draftHasValues(snap.lines, snap.extraItems, snap.captainNote, snap.bulkReason)
+      ) {
         saveDraft(snap.supplierId, {
           lines: snap.lines,
           timestamp: Date.now(),
           extraItems: snap.extraItems,
           captainNote: snap.captainNote,
+          bulkReason: snap.bulkReason,
         });
       }
     };
@@ -492,10 +523,17 @@ export function CaptainMP() {
     // banner disappears while the entries it covered stay on screen (F4).
     setExtraItemRows([]);
     setCaptainNote("");
+    setBulkReason(null);
     setDraftBanner(null);
     // The values on screen came from the cleared draft — reset them to blanks
     // and neutralize the flush snapshot so nothing re-saves what was cleared.
-    draftFlushRef.current = { supplierId: null, lines: {}, extraItems: [], captainNote: "" };
+    draftFlushRef.current = {
+      supplierId: null,
+      lines: {},
+      extraItems: [],
+      captainNote: "",
+      bulkReason: null,
+    };
     setLines(() => {
       const blank: Record<string, OrderLine> = {};
       orderableItems.forEach((item) => {
@@ -517,9 +555,10 @@ export function CaptainMP() {
       timestamp: Date.now(),
       extraItems: extraItemRows,
       captainNote,
+      bulkReason,
     });
     showToast(t("toast.draftSaved"), "success");
-  }, [activeSupplierId, lines, extraItemRows, captainNote, showToast, t]);
+  }, [activeSupplierId, lines, extraItemRows, captainNote, bulkReason, showToast, t]);
 
   // ---- Pre-fill actions (FR-023/024) -----------------------------------------
   // All three pull from the SELECTED snapshot (lazily-loaded lines). Matching is
@@ -594,24 +633,53 @@ export function CaptainMP() {
     setPrefillConfirm(null);
   }, [prefillConfirm, overwriteAll, clearAll]);
 
-  // ---- Overrule-all reason control (Phase 1a) --------------------------------
-  // Sets one Captain-picked reason on every line that requires a reason and
-  // doesn't have one yet. Never replaces an already-picked reason (the
-  // selection rule lives entirely in the pure, unit-tested `overruleAll`).
-  // Count is read from the current `lines` snapshot for the toast; the actual
-  // write re-derives from `prev` inside the updater (mirrors fillEmpties/
-  // overwriteAll's defense against a stale closure).
+  // ---- Overrule-all reason control (Phase 1a, sticky since feedback-1001) ----
+  // Apply sets one Captain-picked reason on every line that requires one
+  // (overwriting earlier picks) and arms `bulkReason`; the effect below then
+  // keeps filling lines that start requiring a reason, until "Wyłącz". The
+  // selection rule lives entirely in the pure, unit-tested `overruleAll`.
+  // The toast count is read from the current `lines` snapshot; the actual write
+  // re-derives from `prev` inside the updater (defense against a stale closure).
   const handleOverruleAllApply = useCallback(
     (reason: ReasonCode, comment: string) => {
-      const patched = overruleAll(orderableItems, lines, reason, comment);
+      const bulk: BulkReason = { code: reason, comment: reason === "OTHER" ? comment.trim() : "" };
+      const patched = overruleAll(orderableItems, lines, bulk, "overwrite");
       const patchedCount = orderableItems.filter(
         (item) => patched[item.product_id] !== lines[item.product_id],
       ).length;
-      setLines((prev) => overruleAll(orderableItems, prev, reason, comment));
+      setLines((prev) => overruleAll(orderableItems, prev, bulk, "overwrite"));
+      setBulkReason(bulk);
+      setHandEditedReasons(new Set<string>());
       showToast(t("captain.overruleAllAppliedToast", { count: patchedCount }), "success");
     },
     [orderableItems, lines, showToast, t],
   );
+
+  const handleOverruleAllDisable = useCallback(() => {
+    setBulkReason(null);
+    setHandEditedReasons(new Set<string>());
+  }, []);
+
+  const handleReasonEdit = useCallback((productId: string) => {
+    setHandEditedReasons((prev) =>
+      prev.has(productId) ? prev : new Set<string>(prev).add(productId),
+    );
+  }, []);
+
+  // Sticky pass: whenever lines (or the active reason) change, fill the reason
+  // on lines that now require one and have none. A hand-picked reason is never
+  // touched (mode "fillMissing"); an unchanged result is the same reference, so
+  // React bails out and this cannot loop.
+  // With no bulk reason active (after "Wyłącz") it still removes an auto-filled
+  // reason from a line that stopped requiring one (impl-review F1).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLines((prev) =>
+      bulkReason
+        ? overruleAll(orderableItems, prev, bulkReason, "fillMissing", handEditedReasons)
+        : clearStaleAutoReasons(orderableItems, prev),
+    );
+  }, [bulkReason, lines, orderableItems, handEditedReasons]);
 
   const handleSubmit = useCallback(async () => {
     if (!activeSupplierId) return;
@@ -659,10 +727,17 @@ export function CaptainMP() {
       // Neutralize the flush snapshot + in-memory lines: without this, the
       // flush-on-switch path would immediately re-save the just-submitted
       // values as a fresh draft.
-      draftFlushRef.current = { supplierId: null, lines: {}, extraItems: [], captainNote: "" };
+      draftFlushRef.current = {
+        supplierId: null,
+        lines: {},
+        extraItems: [],
+        captainNote: "",
+        bulkReason: null,
+      };
       setLines({});
       setExtraItemRows([]);
       setCaptainNote("");
+      setBulkReason(null);
       setDeliveryChoices((prev) => {
         const next = { ...prev };
         delete next[activeSupplierId];
@@ -796,8 +871,12 @@ export function CaptainMP() {
 
   // Overrule-all (Phase 1a) is independent of inventory snapshots — available
   // whenever the order screen has lines loaded, unlike the prefill control.
+  // Hidden when the supplier has suggestion alerts off (no reasons exist there).
   const showOverruleAllControl =
-    !!activeSupplierId && !isLoadingItems && orderableItems.length > 0;
+    !!activeSupplierId &&
+    !isLoadingItems &&
+    orderableItems.length > 0 &&
+    orderableItems.some((it) => it.suggestion_alerts_enabled !== false);
 
   // Ad-hoc items + order comment (Phase 1b): unlike the two controls above,
   // deliberately NOT gated on `orderableItems.length > 0` — a supplier with
@@ -948,7 +1027,13 @@ export function CaptainMP() {
           />
         )}
 
-        {showOverruleAllControl && <OverruleAllControl onApply={handleOverruleAllApply} />}
+        {showOverruleAllControl && (
+          <OverruleAllControl
+            active={bulkReason}
+            onApply={handleOverruleAllApply}
+            onDisable={handleOverruleAllDisable}
+          />
+        )}
 
         {isLoadingItems ? (
           <>
@@ -982,6 +1067,7 @@ export function CaptainMP() {
                   }
                 }
                 onChange={handleLineChange}
+                onReasonEdit={handleReasonEdit}
                 previousStock={newestSnapshotStock[item.product_id] ?? null}
               />
             ))}

@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_response.filePath // .tool_input.file_path // empty'); [ -n \"$f\" ] || exit 0; case \"$f\" in */supply-os-v1/*.py) command -v ruff >/dev/null 2>&1 && ruff check --fix \"$f\" 2>/dev/null ;; */frontend/*.ts|*/frontend/*.tsx) d=\"${f%%/frontend/*}/frontend\"; [ -x \"$d/node_modules/.bin/eslint\" ] && (cd \"$d\" && ./node_modules/.bin/eslint --fix \"$f\" 2>/dev/null) ;; esac; true",
+            "timeout": 30,
+            "statusMessage": "Lint-fixing edited file"
+          }
+        ]
+      }
+    ]
+  }
+}

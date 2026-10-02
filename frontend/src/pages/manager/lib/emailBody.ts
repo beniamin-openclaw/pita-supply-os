@@ -8,6 +8,8 @@
 // fall back to clipboard. Keep this in sync with the Python original.
 
 import { packUnitLabel } from "../../../i18n/packUnits";
+import { formatCaseQty } from "../../../lib/packStock";
+import { caseOf, formatQtyG } from "../../../lib/packUnits";
 import { compareProductOrder } from "../../../lib/productOrder";
 import type {
   ManagerOrderDetail,
@@ -25,7 +27,35 @@ export const MAX_GMAIL_URL_LENGTH = 8000;
  * and a float artefact like 0.30000000000000004 -> "0,3" on both sides.
  */
 export function formatEmailQty(qty: number): string {
-  return String(Number(qty.toPrecision(6))).replace(".", ",");
+  return formatQtyG(qty);
+}
+
+/**
+ * The quantity cell of one supplier e-mail line: with a bulk pack (migration
+ * 0028) the D35 wording "6 kartonów + 2 paczki (26 paczek)" (formatCaseQty),
+ * else "<qty> <declined unit>" exactly as before. Twin of the qty_text branch
+ * in gmail_url._build_body.
+ */
+export function emailQtyText(line: ManagerOrderLineDetail, qty: number, unit: string): string {
+  const lineCase = caseOf(line);
+  if (lineCase) return formatCaseQty(qty, lineCase.size, lineCase.unit, unit);
+  const unitLabel = unit ? packUnitLabel(qty, unit, "pl") : "";
+  return `${formatEmailQty(qty)} ${unitLabel}`;
+}
+
+/**
+ * The quantity column of the portal/phone/manual copy list (DispatchPanel,
+ * ResendPanel): the D35 case wording when the line has a bulk pack, else
+ * "<qty> <purchase_unit>" (the unit as stored, as the list has always
+ * printed it). Numbers use the e-mail's Polish format (`formatQtyG`) on every
+ * line so one list never mixes "2.5" and "2,5" (impl-review F4c): whole
+ * numbers print exactly as before, a decimal gets a comma like in the
+ * supplier e-mail, and a float artefact (0.30000000000000004) prints "0,3".
+ */
+export function copyListQty(line: ManagerOrderLineDetail, qty: number): string {
+  const lineCase = caseOf(line);
+  if (lineCase) return formatCaseQty(qty, lineCase.size, lineCase.unit, line.purchase_unit);
+  return `${formatQtyG(qty)} ${line.purchase_unit}`;
 }
 
 // NOTE (S-02): this is the AUTHORITATIVE builder for the email the operator
@@ -141,10 +171,9 @@ export function buildEmailBody(
     const qty = effectiveQtyFor(line);
     // Supplier purchase unit, else the product's inventory unit (as the twin).
     const unit = line.purchase_unit || line.inventory_unit || "";
-    const unitLabel = unit ? packUnitLabel(qty, unit, "pl") : "";
     // Supplier-facing name — the supplier can't read our internal product_name_pl.
     const name = line.supplier_product_name || line.product_name_pl;
-    const cell = `${idx + 1}.  | ${name} | ${formatEmailQty(qty)} ${unitLabel}`;
+    const cell = `${idx + 1}.  | ${name} | ${emailQtyText(line, qty, unit)}`;
     out.push(cell.replace(/\s+$/, ""));
   });
 

@@ -127,7 +127,13 @@ from .product_order import (
     line_sort_key,
     supplier_product_sort_key,
 )
-from .suggestion import SuggestionInput, compute_suggestion, rounding_step
+from .suggestion import (
+    SuggestionInput,
+    case_rounded_max,
+    compute_suggestion,
+    deviation_reference,
+    rounding_step,
+)
 
 log = logging.getLogger(__name__)
 
@@ -230,6 +236,9 @@ def _build_orderable_item(
         "order_note": sp.order_note,
         "suggestion_alerts_enabled": suggestion_alerts_enabled,
         "display_order": sp.display_order,
+        # Bulk pack (migration 0028) — None on both when the product has none.
+        "case_unit": sp.case_unit,
+        "units_per_case": sp.units_per_case,
     }
 
 
@@ -428,6 +437,10 @@ class SuggestRequest(BaseModel):
     is_critical: bool = False
     allow_over_max_due_to_packaging: bool = False
     rounding_rule: RoundingRule = RoundingRule.FULL_ONLY
+    # Purchase units per bulk pack (migration 0028); omitted = no case.
+    units_per_case: Optional[float] = Field(
+        default=None, gt=1, description="Purchase units in one case (karton, skrzynka)"
+    )
 
 
 @app.post("/api/captain/suggest")
@@ -444,6 +457,7 @@ def captain_suggest(
             rounding_rule=req.rounding_rule,
             is_critical=req.is_critical,
             allow_over_max_due_to_packaging=req.allow_over_max_due_to_packaging,
+            units_per_case=req.units_per_case,
         )
         out = compute_suggestion(inp)
     except ValueError as e:
@@ -452,6 +466,7 @@ def captain_suggest(
     return {
         "suggested_qty_base": out.suggested_qty_base,
         "suggested_qty_purchase": out.suggested_qty_purchase,
+        "need_qty_purchase": out.need_qty_purchase,
         "over_max_qty_base": out.over_max_qty_base,
         "explanation": out.explanation,
     }
@@ -585,15 +600,16 @@ def _evaluate_submit_line(
       (``order_base > max`` and not ``allow_over_max_due_to_packaging``). The line
       persists with ``current_stock_qty_base=0`` (column stays NOT NULL) and
       ``delta_vs_suggestion_pct=None`` (so it never inflates deviation roll-ups).
-    - **Counted, at/above target** (``stock is not None`` and
-      ``suggested_qty_purchase == 0``; week2-feedback-quantities Phase 1): the
-      suggestion is 0, so there is no baseline to deviate from — the deviation
-      and critical-under gates are skipped and NO reason is required. The line
+    - **Counted, at/above target** (``stock is not None`` and the per-rule
+      need is 0 — the suggestion itself without a case;
+      week2-feedback-quantities Phase 1): there is no baseline to deviate
+      from — the deviation and critical-under gates are skipped and NO reason
+      is required. The line
       persists the counted stock and ``delta_vs_suggestion_pct=None`` (so it
       never inflates deviation roll-ups). When a quantity was ordered anyway, an
       informational warning ``"... (info)"`` is returned; a ``reason_code``, if
       the Captain gave one, is stored as before.
-    - **Counted, below target** (a value was given and the suggestion is > 0):
+    - **Counted, below target** (a value was given and the need is > 0):
       the existing critical-under and >25% deviation gates apply
       byte-identically.
 
@@ -602,6 +618,18 @@ def _evaluate_submit_line(
     column persists exactly as above (incl. ``delta_vs_suggestion_pct``, the
     learning record), but NO gate raises and NO warning is returned — the
     Captain never has to give a reason for this supplier.
+
+    **Bulk pack** (``sp.units_per_case``, migration 0028, feedback-1001 D33/D34):
+    the suggestion is the need rounded to the nearest whole case and is what
+    ``suggested_qty_purchase`` stores; the need itself is not persisted. The
+    branches above key on the NEED (plan-review F1: a case suggestion of 0 with
+    a need above 0 still runs the gates). An order anywhere between the need
+    and the case suggestion (inclusive) has zero deviation; outside that
+    interval it is measured against the nearer end (``deviation_reference``)
+    and stored in ``delta_vs_suggestion_pct``; the critical gate fires only
+    below the smaller of the two; the uncounted over-MAX gate allows up to max rounded up to a
+    whole case (``case_rounded_max``). Without a case need == suggestion, so
+    every branch is byte-identical to before.
     """
     is_critical = setting.is_critical_for_location or product.is_critical
     stock = line.current_stock_qty_base
@@ -615,39 +643,46 @@ def _evaluate_submit_line(
             rounding_rule=sp.rounding_rule,
             is_critical=is_critical,
             allow_over_max_due_to_packaging=setting.allow_over_max_due_to_packaging,
+            units_per_case=sp.units_per_case,
         )
     )
     suggested_qty_purchase = suggestion.suggested_qty_purchase
     suggested_qty_base = suggestion.suggested_qty_base
+    # Per-rule rounded need before case rounding; == the suggestion without a case.
+    need_qty_purchase = suggestion.need_qty_purchase
 
     warning: Optional[str] = None
     order_base = line.captain_final_qty_purchase * sp.units_per_purchase_unit
 
     if stock is None:
-        # Uncounted — over-MAX is the only reason gate.
+        # Uncounted — over-MAX is the only reason gate. With a case, the ceiling
+        # is max rounded up to a whole case (D34); max itself otherwise.
+        max_allowed = case_rounded_max(
+            setting.max_stock_qty_base, sp.units_per_purchase_unit, sp.units_per_case
+        )
         over_max = (
             setting.max_stock_qty_base > 0
             and not setting.allow_over_max_due_to_packaging
-            and order_base > setting.max_stock_qty_base
+            and order_base > max_allowed
         )
         if alerts_enabled and over_max and line.reason_code is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Line '{line.product_id}' ordered over MAX "
-                    f"({order_base:g} > {setting.max_stock_qty_base:g}) "
+                    f"({order_base:g} > {max_allowed:g}) "
                     f"without reason_code"
                 ),
             )
         if over_max and line.reason_code is not None:
             warning = (
                 f"Line {line.product_id}: over MAX "
-                f"({order_base:g} > {setting.max_stock_qty_base:g}), "
+                f"({order_base:g} > {max_allowed:g}), "
                 f"reason: {line.reason_code.value}"
             )
         stored_stock = 0.0
         delta_pct: Optional[float] = None
-    elif suggested_qty_purchase == 0:
+    elif need_qty_purchase == 0:
         # Counted at/above target — suggestion 0 is information, not a gate.
         # No baseline to express a deviation against, so nothing is required
         # of the Captain; a reason, if given, is still stored below.
@@ -660,14 +695,20 @@ def _evaluate_submit_line(
         stored_stock = stock
         delta_pct = None
     else:
+        # D34: zero inside [need, case suggestion], else measured against the
+        # nearer end (one point — the suggestion — without a case).
+        reference = deviation_reference(
+            line.captain_final_qty_purchase, need_qty_purchase, suggested_qty_purchase
+        )
         delta_pct = abs(
-            line.captain_final_qty_purchase - suggested_qty_purchase
-        ) / max(suggested_qty_purchase, rounding_step(sp.rounding_rule))
+            line.captain_final_qty_purchase - reference
+        ) / max(reference, rounding_step(sp.rounding_rule))
 
         if (
             alerts_enabled
             and is_critical
-            and line.captain_final_qty_purchase < suggested_qty_purchase
+            and line.captain_final_qty_purchase
+            < min(need_qty_purchase, suggested_qty_purchase)
             and line.reason_code is None
         ):
             raise HTTPException(
@@ -748,10 +789,13 @@ def captain_submit(
         without reason_code -> 400. When stock is uncounted the deviation +
         critical gates are skipped (no real suggestion); only over-MAX forces a
         reason. See `_evaluate_submit_line`.
-      - counted line at/above target (suggested_qty_purchase == 0) -> never a
-        400: no reason is required, delta_vs_suggestion_pct is stored as None,
+      - counted line at/above target (need == 0, the suggestion without a
+        case) -> never a 400: no reason is required, delta_vs_suggestion_pct is stored as None,
         and an "(info)" warning names the ordered quantity when it is > 0
         (week2-feedback-quantities Phase 1). See `_evaluate_submit_line`.
+      - bulk pack (supplier_products.units_per_case) -> an order between the
+        need and the case suggestion needs no reason; see D34 in
+        `_evaluate_submit_line`.
       - supplier with `suggestion_alerts_enabled = False` (Pago) -> none of the
         reason gates above fire and no warning is returned; the suggestion and
         deviation are still persisted (pago-suggestion-no-alerts).
@@ -1306,6 +1350,8 @@ def manager_order_detail(
                 manager_comment=line.manager_comment,
                 manager_final_set=is_manager_final_set(line),
                 display_order=sp.display_order if sp else None,
+                case_unit=sp.case_unit if sp else None,
+                units_per_case=sp.units_per_case if sp else None,
             )
         )
 
@@ -1437,6 +1483,8 @@ def _enrich_lines_for_detail(
                 captain_comment=line.captain_comment,
                 manager_final_set=is_manager_final_set(line),
                 display_order=sp.display_order if sp else None,
+                case_unit=sp.case_unit if sp else None,
+                units_per_case=sp.units_per_case if sp else None,
             )
         )
     return enriched
@@ -2964,6 +3012,8 @@ def captain_inventory_products(
                 inventory_order=effective_inventory_order(
                     setting.inventory_order, product.inventory_order
                 ),
+                case_unit=sp.case_unit if sp else None,
+                units_per_case=sp.units_per_case if sp else None,
             )
         )
     items.sort(key=lambda it: inventory_sort_key(it.inventory_order, it.product_id))

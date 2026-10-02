@@ -7,6 +7,9 @@ import {
   formatPacks,
   packHint,
   isPackBased,
+  caseOf,
+  caseSizeOf,
+  formatQtyG,
 } from "./packUnits";
 import { PACK_UNIT_FORMS, packUnitLabel } from "../i18n/packUnits";
 
@@ -163,5 +166,23 @@ describe("packUnitLabel declension — blok / karton / opak", () => {
     ["opak", 4.5, "opak"],
   ])("%s x %s -> %s", (unit, n, label) => {
     expect(packUnitLabel(n as number, unit as string, "pl")).toBe(label);
+  });
+});
+
+describe("bulk-pack helpers (migration 0028)", () => {
+  it("caseSizeOf / caseOf accept only a full, valid case", () => {
+    expect(caseSizeOf({ units_per_case: 6 })).toBe(6);
+    expect(caseSizeOf({ units_per_case: 1 })).toBeNull();
+    expect(caseSizeOf({ units_per_case: null })).toBeNull();
+    expect(caseSizeOf({})).toBeNull();
+    expect(caseOf({ case_unit: "karton", units_per_case: 4 })).toEqual({ unit: "karton", size: 4 });
+    expect(caseOf({ case_unit: null, units_per_case: 4 })).toBeNull();
+    expect(caseOf({ case_unit: "karton", units_per_case: null })).toBeNull();
+  });
+
+  it("formatQtyG mirrors Python f'{qty:g}' with a decimal comma", () => {
+    expect(formatQtyG(1.5)).toBe("1,5");
+    expect(formatQtyG(26)).toBe("26");
+    expect(formatQtyG(0.30000000000000004)).toBe("0,3");
   });
 });

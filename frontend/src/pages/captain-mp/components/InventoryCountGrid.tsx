@@ -13,7 +13,7 @@ import { ProductListToolbar } from "../../../components/ui/ProductListToolbar";
 import { useT } from "../../../i18n";
 import { categoryLabel } from "../../../i18n/categoryLabels";
 import { packUnitLabel } from "../../../i18n/packUnits";
-import { isPackBased } from "../../../lib/packUnits";
+import { caseOf, isPackBased } from "../../../lib/packUnits";
 import {
   DEFAULT_PRODUCT_LIST_VIEW,
   filterProductRows,
@@ -22,6 +22,7 @@ import {
 import type { InventoryProduct } from "../../../types";
 import { groupProductsByCategory, type InventoryProductGroup } from "../lib/inventoryGrouping";
 import { PackStockInput } from "./PackStockInput";
+import { UnitLabel } from "./UnitLabel";
 import { blankInventoryLine, type InventoryLineInput } from "../lib/inventoryLines";
 
 /** Typed stock above this multiple of the location max shows the yellow
@@ -58,7 +59,7 @@ export function InventoryCountGrid({
   onCommentChange,
   previousByProduct,
 }: InventoryCountGridProps) {
-  const { t, lang } = useT();
+  const { t, tParts, lang } = useT();
 
   // Search + "tylko nieliczone" / "tylko krytyczne" (week2-feedback-quantities
   // Phase 4). Ephemeral (no localStorage). Filtering runs over the flat
@@ -179,9 +180,14 @@ export function InventoryCountGrid({
               <ul className="space-y-2 border-t border-gray-100 p-2">
                 {group.items.map((p) => {
                   const line = lines[p.product_id] || blankInventoryLine();
-                  const upp: number = p.units_per_purchase_unit ?? 1;
-                  const packUnit: string = p.purchase_unit ?? "";
-                  const showPack: boolean = packUnit !== "" && isPackBased(upp);
+                  // A bulk pack (feedback-1001 D22) takes precedence over upp > 1:
+                  // the count is [cases] + [loose], one case = units_per_case × upp.
+                  const purchaseUpp: number = p.units_per_purchase_unit ?? 1;
+                  const productCase = caseOf(p);
+                  const upp: number = productCase ? productCase.size * purchaseUpp : purchaseUpp;
+                  const packUnit: string = productCase ? productCase.unit : (p.purchase_unit ?? "");
+                  const showPack: boolean =
+                    packUnit !== "" && (productCase !== null || isPackBased(upp));
                   const stock: number | "" = line.current_stock_qty_base;
                   const stockNum: number | null =
                     stock === "" || stock === undefined ? null : Number(stock);
@@ -212,7 +218,9 @@ export function InventoryCountGrid({
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-slate-500">{p.inventory_unit}</div>
+                          <div className="text-[11px]">
+                            <UnitLabel>{p.inventory_unit}</UnitLabel>
+                          </div>
                         </div>
                         {showPack ? (
                           <PackStockInput
@@ -246,10 +254,10 @@ export function InventoryCountGrid({
                         <div className="mt-1.5 space-y-0.5 text-xs text-slate-500">
                           {showPack && (
                             <div className="break-words" data-testid={`pack-${p.product_id}`}>
-                              {t("inventory.packHint", {
-                                packUnit: packUnitLabel(1, packUnit, lang),
+                              {tParts("inventory.packHint", {
+                                packUnit: <UnitLabel>{packUnitLabel(1, packUnit, lang)}</UnitLabel>,
                                 upp,
-                                unit: p.inventory_unit,
+                                unit: <UnitLabel>{p.inventory_unit}</UnitLabel>,
                               })}
                             </div>
                           )}
@@ -261,8 +269,9 @@ export function InventoryCountGrid({
                           )}
                           {previous && (
                             <div className="tabular-nums" data-testid={`prev-${p.product_id}`}>
-                              {t("inventory.previousCount", {
+                              {tParts("inventory.previousCount", {
                                 qty: previous.qty,
+                                unit: <UnitLabel>{p.inventory_unit}</UnitLabel>,
                                 date: previous.date,
                               })}
                             </div>

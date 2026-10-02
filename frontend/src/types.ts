@@ -86,6 +86,12 @@ export interface OrderableItem {
   // Position in the supplier's list (migration 0023); the backend already
   // returns orderables in canonical order (lib/productOrder.ts). null = none.
   display_order?: number | null;
+  // Optional bulk pack ("opakowanie zbiorcze", migration 0028, feedback-1001
+  // D22/D33-D36): the case the supplier ships the purchase unit in (karton,
+  // skrzynka, worek, opak) and how many PURCHASE units it holds (> 1). Both
+  // set or both null; absent/null = no case (today's behaviour).
+  case_unit?: string | null;
+  units_per_case?: number | null;
 }
 
 // Captain Submit -------------------------------------------------------------
@@ -149,6 +155,10 @@ export interface InventoryProduct {
   // inventory-card-order: effective card position; the backend returns the
   // list sorted by it and the grid renders it as returned. null = none.
   inventory_order?: number | null;
+  // Bulk pack of the primary supplier product (migration 0028): the count grid
+  // takes stock as [cases] + [loose]. Absent/null = no case.
+  case_unit?: string | null;
+  units_per_case?: number | null;
 }
 
 export interface InventoryLatestLine {
@@ -511,6 +521,12 @@ export interface ManagerOrderLineDetail {
   // Position of the line's supplier product (migration 0023) — document
   // builders sort with lib/productOrder.ts compareProductOrder. null = none.
   display_order?: number | null;
+  // Bulk pack of the line's supplier product (migration 0028), joined from
+  // CURRENT master data: the Manager "= 6 kartonów + 2 paczki" hint, the
+  // e-mail / copy-list wording and the Captain edit screen's two-field input.
+  // Absent/null = no case.
+  case_unit?: string | null;
+  units_per_case?: number | null;
 }
 
 export interface ManagerOrderReceiptLine {

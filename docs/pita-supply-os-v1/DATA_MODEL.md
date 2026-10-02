@@ -134,6 +134,8 @@ where the **unit conversion** lives.
 | `notes`                      | string      | E.g., `1 karton = 36 szt = 9 kg`                                      |
 | `display_order`              | integer     | Optional position in the supplier's list (migration 0023). Every per-supplier screen and document sorts by it, then by `supplier_product_id`; empty = no position (keeps id order, after positioned rows) |
 | `counts_toward_minimum`      | boolean     | Default `true`. `false` = excluded from the basis the informational minimum-order chip compares with `suppliers.minimum_order_value_pln` (Bukat: Tzatzyki, Tirokafteri, Feta). Never a gate (migration 0023) |
+| `case_unit`                  | text        | Optional bulk pack ("opakowanie zbiorcze": karton, skrzynka, worek, opak), migration 0028. Set together with `units_per_case` or not at all (CHECK). With a case the Captain enters stock and order as [cases] + [loose], the suggestion is the need rounded to the nearest whole case, and the supplier e-mail prints "6 kartonów + 2 paczki (26 paczek)" |
+| `units_per_case`             | numeric     | Purchase units in one `case_unit` (> 1, CHECK), migration 0028. Order lines, receipts and thresholds stay in the purchase unit |
 
 **Why this table:** suggestion calculation requires this. Without
 `units_per_purchase_unit`, you cannot translate "need 9.5 kg" into "order 1

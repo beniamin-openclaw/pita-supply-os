@@ -19,6 +19,7 @@ import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
 import { effectiveOrderedQtyPurchase, isManagerFinalSet } from "../../lib/orderQty";
 import { roundQty } from "../../components/ui/number";
+import { caseOf } from "../../lib/packUnits";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import type {
   CaptainOrderDetail,
@@ -28,6 +29,7 @@ import type {
   ReceiptSummary,
 } from "../../types";
 import { statusVisual } from "./lib/orderStatus";
+import { UnitLabel } from "./components/UnitLabel";
 
 // "Manager changed this line" (Phase 7, week2-feedback-quantities): the
 // Manager set the line (lib/orderQty.ts isManagerFinalSet — an explicit 0
@@ -43,7 +45,7 @@ function managerChangedLine(line: ManagerOrderLineDetail): boolean {
 }
 
 export function OrderDetailPage() {
-  const { t, tPlural, formatDateTime } = useT();
+  const { t, tParts, tPlural, formatDateTime } = useT();
   const navigate = useNavigate();
   const { order_id } = useParams<{ order_id: string }>();
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
@@ -268,8 +270,12 @@ export function OrderDetailPage() {
                         <span className="break-words">{line.product_name_pl}</span>
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
-                        stan: {line.current_stock_qty_base} {line.inventory_unit} ·
-                        sugestia: {line.suggested_qty_purchase} {line.purchase_unit}
+                        {tParts("orders.detail.stockSuggestion", {
+                          stock: line.current_stock_qty_base,
+                          inventoryUnit: <UnitLabel>{line.inventory_unit}</UnitLabel>,
+                          suggested: line.suggested_qty_purchase,
+                          purchaseUnit: <UnitLabel>{line.purchase_unit}</UnitLabel>,
+                        })}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -284,14 +290,14 @@ export function OrderDetailPage() {
                           </div>
                           <div className="text-lg font-bold text-slate-900 tabular-nums">
                             {roundQty(receiptLine.received_qty_purchase)}{" "}
-                            <span className="text-xs font-normal text-slate-600">
-                              {line.purchase_unit}
+                            <span className="text-xs">
+                              <UnitLabel>{line.purchase_unit}</UnitLabel>
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-500 mt-0.5">
-                            {t("orders.detail.orderedSecondary", {
+                            {tParts("orders.detail.orderedSecondary", {
                               value: roundQty(receiptLine.ordered_qty_purchase),
-                              unit: line.purchase_unit,
+                              unit: <UnitLabel>{line.purchase_unit}</UnitLabel>,
                             })}
                           </div>
                           {variance !== 0 && (
@@ -303,8 +309,13 @@ export function OrderDetailPage() {
                                 variance > 0 ? "text-sky-700" : "text-indigo-700"
                               }`}
                             >
-                              {t("delivery.variance", {
-                                value: `${variance > 0 ? "+" : ""}${variance} ${line.purchase_unit}`,
+                              {tParts("delivery.variance", {
+                                value: (
+                                  <>
+                                    {variance > 0 ? "+" : ""}
+                                    {variance} <UnitLabel>{line.purchase_unit}</UnitLabel>
+                                  </>
+                                ),
                               })}
                             </div>
                           )}
@@ -319,8 +330,8 @@ export function OrderDetailPage() {
                           </div>
                           <div className="text-lg font-bold text-slate-900 tabular-nums">
                             {effectiveOrderedQtyPurchase(line)}{" "}
-                            <span className="text-xs font-normal text-slate-600">
-                              {line.purchase_unit}
+                            <span className="text-xs">
+                              <UnitLabel>{line.purchase_unit}</UnitLabel>
                             </span>
                           </div>
                           {/* Hint only when the manager's final differs from the
@@ -334,20 +345,14 @@ export function OrderDetailPage() {
                               })}
                             </div>
                           )}
-                          {line.suggested_qty_purchase === 0 ? (
-                            // Stock ≥ target → "ponad cel" (information); an
-                            // uncounted line (stock 0, target > 0) → "brak bazy".
-                            <div className="text-xs font-semibold text-slate-500">
-                              {line.captain_final_qty_purchase === 0
-                                ? "—"
-                                : t(
-                                    line.current_stock_qty_base >= line.target_stock_qty_base
-                                      ? "deviation.aboveTarget"
-                                      : "deviation.noBaseline",
-                                  )}
-                            </div>
-                          ) : (
-                            typeof line.delta_vs_suggestion_pct === "number" &&
+                          {!(line.suggested_qty_purchase === 0 && caseOf(line) === null) &&
+                          typeof line.delta_vs_suggestion_pct === "number" ? (
+                            // A stored deviation is shown — also on a bulk-pack
+                            // line whose case suggestion is 0 but whose need was
+                            // not (plan-review F1). Suggestion 0 WITHOUT a case
+                            // keeps the old reading below even with a stored
+                            // delta: legacy lines stored qty / step there
+                            // (impl-review F2).
                             Math.abs(line.delta_vs_suggestion_pct) >= 0.05 && (
                               <div
                                 className={`text-xs font-semibold ${
@@ -358,6 +363,22 @@ export function OrderDetailPage() {
                               >
                                 {line.delta_vs_suggestion_pct > 0 ? "+" : ""}
                                 {Math.round(line.delta_vs_suggestion_pct * 100)}%
+                              </div>
+                            )
+                          ) : (
+                            line.suggested_qty_purchase === 0 && (
+                              // Suggestion 0 (no case, or a case line without a
+                              // stored deviation): stock ≥ target →
+                              // "ponad cel" (information); an uncounted line
+                              // (stock 0, target > 0) → "brak bazy".
+                              <div className="text-xs font-semibold text-slate-500">
+                                {line.captain_final_qty_purchase === 0
+                                  ? "—"
+                                  : t(
+                                      line.current_stock_qty_base >= line.target_stock_qty_base
+                                        ? "deviation.aboveTarget"
+                                        : "deviation.noBaseline",
+                                    )}
                               </div>
                             )
                           )}

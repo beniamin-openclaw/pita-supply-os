@@ -11,6 +11,7 @@
 import {
   createContext,
   createElement,
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -65,12 +66,38 @@ function interpolate(template: string, vars?: Record<string, string | number>): 
   );
 }
 
+/** Like `interpolate`, but a var may be a React node: returns the template split
+ *  around its `{placeholders}` as an array of nodes (each keyed), so a caller can
+ *  render a unit in bold without moving copy out of `src/i18n/`. Text content is
+ *  identical to `interpolate` for string/number vars. */
+function interpolateParts(
+  template: string,
+  vars?: Record<string, ReactNode>,
+): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /\{(\w+)\}/g;
+  let last = 0;
+  let i = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template)) !== null) {
+    if (m.index > last) out.push(createElement(Fragment, { key: i++ }, template.slice(last, m.index)));
+    const name = m[1];
+    const v = vars && name in vars ? vars[name] : `{${name}}`;
+    out.push(createElement(Fragment, { key: i++ }, v));
+    last = m.index + m[0].length;
+  }
+  if (last < template.length) out.push(createElement(Fragment, { key: i }, template.slice(last)));
+  return out;
+}
+
 // ---- Context ---------------------------------------------------------------
 
 interface LangContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   t: (key: StringKey, vars?: Record<string, string | number>) => string;
+  /** Same lookup as `t`, but vars may be React nodes; returns renderable parts. */
+  tParts: (key: StringKey, vars?: Record<string, ReactNode>) => ReactNode[];
   /** Plural-aware lookup. Given a key prefix like "sticky.summary" and a noun
    *  family ("lines"|"deviations"|"reasons"), picks `.one|.few|.many` based on n
    *  and interpolates `{n}` with the count. */
@@ -116,6 +143,20 @@ export function LangProvider({ children }: LangProviderProps) {
     [lang],
   );
 
+  const tParts = useCallback(
+    (key: StringKey, vars?: Record<string, ReactNode>): ReactNode[] => {
+      const entry = STRINGS[key];
+      if (!entry) {
+        if (import.meta.env.MODE === "development") {
+          console.warn(`[i18n] missing key: ${key}`);
+        }
+        return [String(key)];
+      }
+      return interpolateParts(entry[lang], vars);
+    },
+    [lang],
+  );
+
   const tPlural = useCallback(
     (prefix: string, noun: string, n: number, extraVars?: Record<string, string | number>) => {
       const form = pluralForm(n, lang);
@@ -155,8 +196,8 @@ export function LangProvider({ children }: LangProviderProps) {
   );
 
   const value = useMemo<LangContextValue>(
-    () => ({ lang, setLang, t, tPlural, formatDateTime }),
-    [lang, setLang, t, tPlural, formatDateTime],
+    () => ({ lang, setLang, t, tParts, tPlural, formatDateTime }),
+    [lang, setLang, t, tParts, tPlural, formatDateTime],
   );
 
   return createElement(LangContext.Provider, { value }, children);

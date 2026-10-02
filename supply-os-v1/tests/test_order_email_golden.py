@@ -74,6 +74,9 @@ def _render(fx: dict) -> str:
             supplier_product_name=ln["supplier_product_name"],
             purchase_unit=ln["purchase_unit"],
             display_order=ln["display_order"],
+            # Bulk pack (feedback-1001 D35); absent from the older fixtures.
+            case_unit=ln.get("case_unit"),
+            units_per_case=ln.get("units_per_case"),
         )
     signer = OrderEmailSigner(**fx["signer"]) if fx["signer"] else None
     include = fx["include_delivery_date"]
@@ -92,7 +95,7 @@ def test_golden_fixture(name: str):
 
 
 def test_scenarios_present():
-    assert {"bracka_bukat", "wola_intermlecz", "ken_edge_cases"} <= set(SCENARIOS)
+    assert {"bracka_bukat", "wola_intermlecz", "ken_edge_cases", "case_lines"} <= set(SCENARIOS)
 
 
 def _parse_ts_pl_forms() -> dict[str, dict[str, str]]:

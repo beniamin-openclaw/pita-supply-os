@@ -810,3 +810,77 @@ def test_submit_internal_production_is_rejected_before_any_write(mocker):
     append_order.assert_not_called()
     append_lines.assert_not_called()
     load_suppliers.assert_not_called()
+
+
+# ---------- Bulk packs (feedback-1001 D33/D34) ----------
+# Seed WOLA × SP_BUKAT_P006 Pomidor: target 42 kg, max 42, critical, tenth_kg,
+# skrzynka of 6 kg. The full example table is the shared fixture
+# (test_case_suggestion_fixture.py); these run the same rules through the route.
+
+
+def _pomidor_body(stock, qty, **extra) -> dict:
+    line = {
+        "product_id": "P006",
+        "supplier_product_id": "SP_BUKAT_P006",
+        "current_stock_qty_base": stock,
+        "captain_final_qty_purchase": qty,
+        **extra,
+    }
+    return {"supplier_id": "SUP_BUKAT", "ordered_by": "Jan Kowalski", "lines": [line]}
+
+
+@pytest.mark.parametrize("qty", [4, 6])
+def test_submit_case_need_or_case_suggestion_needs_no_reason(mocker, qty):
+    """Stock 38 -> need 4 kg -> one crate (6). Either number is accepted with no
+    reason and no deviation warning; the line stores the CASE suggestion and a
+    0 deviation against the nearer reference."""
+    mocked_append_lines = _patch_sheet_master_data(mocker)
+    r = client.post("/api/captain/submit", json=_pomidor_body(38, qty), headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["warnings"] == []
+    appended = mocked_append_lines.call_args[0][0][0]
+    assert appended.suggested_qty_purchase == 6
+    assert appended.suggested_qty_base == 6
+    assert appended.delta_vs_suggestion_pct == 0
+
+
+def test_submit_case_zero_with_a_need_still_gates(mocker):
+    """Plan-review F1: stock 40 -> need 2 kg -> case suggestion 0. Ordering 18
+    kg is measured against the need (800%), not waved through as "stock >=
+    target"."""
+    r = client.post("/api/captain/submit", json=_pomidor_body(40, 18), headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "deviates 800%" in r.json()["detail"]
+
+    mocked_append_lines = _patch_sheet_master_data(mocker)
+    body = _pomidor_body(40, 18, reason_code="EVENT_HIGH_TRAFFIC")
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert not any("(info)" in w for w in r.json()["warnings"])
+    appended = mocked_append_lines.call_args[0][0][0]
+    assert appended.suggested_qty_purchase == 0
+    assert appended.delta_vs_suggestion_pct == pytest.approx(8)
+
+
+def test_submit_case_zero_with_a_need_ordering_nothing_is_fine():
+    r = client.post("/api/captain/submit", json=_pomidor_body(40, 0), headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    assert not any("deviation" in w or "(info)" in w for w in r.json()["warnings"])
+
+
+def test_submit_case_critical_gate_fires_below_the_smaller_reference():
+    """Stock 36 -> need 6 = one crate. Ordering 5 of a critical product is under
+    both references -> reason required."""
+    r = client.post("/api/captain/submit", json=_pomidor_body(36, 5), headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "under-ordered" in r.json()["detail"]
+
+
+def test_submit_case_uncounted_over_max():
+    """Uncounted: max 42 kg is already 7 whole crates, so 42 passes and 43 needs
+    a reason (the crate-rounded ceiling equals max here)."""
+    r = client.post("/api/captain/submit", json=_pomidor_body(None, 42), headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    r = client.post("/api/captain/submit", json=_pomidor_body(None, 43), headers=WOLA_AUTH)
+    assert r.status_code == 400
+    assert "over MAX (43 > 42)" in r.json()["detail"]

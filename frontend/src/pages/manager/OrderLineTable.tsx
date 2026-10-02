@@ -9,7 +9,7 @@
 
 import { AlertOctagon } from "lucide-react";
 
-import { useT } from "../../i18n";
+import { useT, type Lang } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
 import type { ManagerOrderLineDetail, ReasonCode } from "../../types";
 import {
@@ -26,10 +26,26 @@ import {
   lineVisualStateWithQty,
 } from "./lib/managerLine";
 import { DecimalInput } from "../../components/ui/DecimalInput";
-import { baseToPacks, formatPacks, isPackBased } from "../../lib/packUnits";
+import { baseToPacks, caseOf, formatPacks, isPackBased } from "../../lib/packUnits";
+import { formatPackStock, splitPackStock } from "../../lib/packStock";
 
 function reasonLabelKey(code: ReasonCode): StringKey {
   return `reason.codes.${code}` as StringKey;
+}
+
+/**
+ * D36 read-only bulk-pack hint for a quantity in the invoice unit — "= 6
+ * kartonów + 2 paczki" — or null when the line has no case or the quantity is
+ * under one case (the number alone already says it).
+ */
+function caseSplitText(
+  line: ManagerOrderLineDetail,
+  qty: number,
+  lang: Lang,
+): string | null {
+  const lineCase = caseOf(line);
+  if (lineCase === null || splitPackStock(qty, lineCase.size).packs < 1) return null;
+  return formatPackStock(qty, lineCase.size, lineCase.unit, line.purchase_unit, lang);
 }
 
 function formatPct(fraction: number): string {
@@ -108,6 +124,15 @@ export function OrderLineTable({
                   : "bg-white";
             const qtyStrike = visual === "cancelled" ? "line-through text-amber-700" : "";
             const commentValue = editable && drafts ? draftComment(drafts, line) : line.manager_comment;
+            const suggestionCaseHint = caseSplitText(line, line.suggested_qty_purchase, lang);
+            // Suggestion 0 on a line WITHOUT a case keeps the "ponad cel" / "brak
+            // bazy" reading even when a delta is stored: legacy lines from before
+            // week2-feedback-quantities stored delta = qty / step there
+            // (impl-review F2). Only a case line puts its stored delta first.
+            const zeroSuggestionInfo =
+              line.suggested_qty_purchase === 0 && caseOf(line) === null;
+            const managerCaseHint =
+              visual === "cancelled" ? null : caseSplitText(line, managerQty, lang);
 
             return (
               <tr
@@ -164,6 +189,11 @@ export function OrderLineTable({
                   title={`${line.suggested_qty_base} ${line.inventory_unit}`}
                 >
                   {line.suggested_qty_purchase}
+                  {suggestionCaseHint !== null && (
+                    <div className="text-[11px] text-slate-500">
+                      {t("manager.caseHint", { split: suggestionCaseHint })}
+                    </div>
+                  )}
                 </td>
 
                 {/* Punkt chce — captain_final */}
@@ -173,12 +203,27 @@ export function OrderLineTable({
 
                 {/* Δ vs sug. + reason badge (captain's deviation) */}
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {line.suggested_qty_purchase === 0 ? (
-                    // Suggestion 0: a counted stock at/above target was ordered
-                    // as information ("ponad cel"); only an uncounted line
-                    // (stock stored 0 below a positive target) is "brak bazy".
-                    // A qty-0 line (manager add-line / transport prefill
-                    // skeleton, nobody counted or ordered) shows a dash.
+                  {!zeroSuggestionInfo && typeof line.delta_vs_suggestion_pct === "number" ? (
+                    // A stored deviation is shown — also on a bulk-pack line whose
+                    // case suggestion is 0 but whose need was not (plan-review F1).
+                    Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
+                      <span
+                        className={`font-semibold tabular-nums ${
+                          line.delta_vs_suggestion_pct > 0 ? "text-orange-700" : "text-red-700"
+                        }`}
+                      >
+                        {formatPct(line.delta_vs_suggestion_pct)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )
+                  ) : line.suggested_qty_purchase === 0 ? (
+                    // Suggestion 0 without a case, or a case line without a stored
+                    // deviation: a counted stock at/above
+                    // target was ordered as information ("ponad cel"); only an
+                    // uncounted line (stock stored 0 below a positive target) is
+                    // "brak bazy". A qty-0 line (manager add-line / transport
+                    // prefill skeleton, nobody counted or ordered) shows a dash.
                     <span className="text-slate-400">
                       {line.captain_final_qty_purchase === 0
                         ? "—"
@@ -187,15 +232,6 @@ export function OrderLineTable({
                               ? "deviation.aboveTarget"
                               : "deviation.noBaseline",
                           )}
-                    </span>
-                  ) : typeof line.delta_vs_suggestion_pct === "number" &&
-                    Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (
-                    <span
-                      className={`font-semibold tabular-nums ${
-                        line.delta_vs_suggestion_pct > 0 ? "text-orange-700" : "text-red-700"
-                      }`}
-                    >
-                      {formatPct(line.delta_vs_suggestion_pct)}
                     </span>
                   ) : (
                     <span className="text-slate-400">—</span>
@@ -231,6 +267,15 @@ export function OrderLineTable({
                     />
                   ) : (
                     <span className={qtyStrike}>{managerQty}</span>
+                  )}
+                  {/* D36: one field in the invoice unit, plus the case reading. */}
+                  {managerCaseHint !== null && (
+                    <div
+                      className="mt-0.5 text-[11px] font-normal text-slate-500"
+                      data-testid={`case-hint-${line.order_line_id}`}
+                    >
+                      {t("manager.caseHint", { split: managerCaseHint })}
+                    </div>
                   )}
                 </td>
 

@@ -4,7 +4,7 @@
 
 import type { Lang } from "../i18n";
 import { packUnitLabel } from "../i18n/packUnits";
-import { isPackBased } from "./packUnits";
+import { formatQtyG, isPackBased } from "./packUnits";
 
 const EPS = 1e-6;
 
@@ -76,4 +76,28 @@ export function suggestPackCount(args: {
   if (refs.length === 0) return null;
   if (Math.max(...refs) < 2 * upp) return null;
   return loose;
+}
+
+/**
+ * D35 wording of a purchase quantity with a bulk pack, for the supplier e-mail
+ * and the copy lists — twin of gmail_url._format_case_qty, Polish only:
+ *   whole cases   -> "6 kartonów (24 paczki)"
+ *   cases + loose -> "6 kartonów + 2 paczki (26 paczek)"
+ *   under 1 case  -> "2 paczki" (no case part)
+ * The split is `splitPackStock` (EPS 1e-6, 3-decimal loose), numbers are
+ * `formatQtyG`, units are declined by `packUnitLabel`.
+ */
+export function formatCaseQty(
+  qty: number,
+  unitsPerCase: number,
+  caseUnit: string,
+  unit: string,
+): string {
+  const label = (n: number, u: string): string => (u ? packUnitLabel(n, u, "pl") : "");
+  const total = `${formatQtyG(qty)} ${label(qty, unit)}`.trimEnd();
+  const { packs, loose } = splitPackStock(qty, unitsPerCase);
+  if (packs < 1) return total;
+  let out = `${formatQtyG(packs)} ${label(packs, caseUnit)}`;
+  if (loose > 0) out += ` + ${formatQtyG(loose)} ${label(loose, unit)}`.trimEnd();
+  return `${out} (${total})`;
 }

@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 import { LangProvider } from "../../../i18n";
 import { PackStockInput } from "./PackStockInput";
+import { innermostText } from "../../../test/innermostText";
 
 function Controlled({
   initial,
@@ -69,7 +70,7 @@ describe("PackStockInput", () => {
     const { spy, loose } = setup();
     fireEvent.change(loose(), { target: { value: "20" } });
     expect(spy).toHaveBeenLastCalledWith(20);
-    expect(screen.getByText("= 1 blok + 5 kg (20 kg)")).toBeInTheDocument();
+    expect(screen.getByText(innermostText("= 1 blok + 5 kg (20 kg)"))).toBeInTheDocument();
     // echo did not re-seed the half-edit
     expect(loose().value).toBe("20");
   });
@@ -114,7 +115,7 @@ describe("PackStockInput", () => {
     fireEvent.change(loose(), { target: { value: "6" } });
     expect(screen.queryByText(/Czy chodziło/)).not.toBeInTheDocument();
     fireEvent.blur(loose());
-    expect(screen.getByText("Czy chodziło o 6 bloków (90 kg)?")).toBeInTheDocument();
+    expect(screen.getByText(innermostText("Czy chodziło o 6 bloków (90 kg)?"))).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tak, popraw" }));
     expect(spy).toHaveBeenLastCalledWith(90);
     expect(packs().value).toBe("6");
@@ -150,6 +151,6 @@ describe("PackStockInput", () => {
     });
     setup(20);
     expect(screen.getByLabelText("Obecny stan, block")).toBeInTheDocument();
-    expect(screen.getByText("= 1 block + 5 kg (20 kg)")).toBeInTheDocument();
+    expect(screen.getByText(innermostText("= 1 block + 5 kg (20 kg)"))).toBeInTheDocument();
   });
 });

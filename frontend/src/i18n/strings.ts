@@ -164,6 +164,13 @@ export const STRINGS = {
   "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
   "stock.didYouMeanNo": { pl: "Nie", en: "No" },
 
+  // Two-field ORDER input for a product with a bulk pack (feedback-1001 D22):
+  // "[cases] + [loose purchase units]". Own keys so the order wording can move
+  // independently of the stock input above.
+  "orderPack.fieldAria": { pl: "{label}, {unit}", en: "{label}, {unit}" },
+  "orderPack.reading": { pl: "= {split} ({total})", en: "= {split} ({total})" },
+  "orderPack.readingBase": { pl: "= {total}", en: "= {total}" },
+
   // ProductCard — pack-unit variants (units_per_purchase_unit > 1) ----------
   // Rendered as three no-wrap segments joined by " · " so a phone breaks the
   // line only between them, never inside "(5 zgrzewek)".
@@ -185,6 +192,28 @@ export const STRINGS = {
   "card.suggestionNeed": {
     pl: "brakuje {base} {inventoryUnit}",
     en: "need {base} {inventoryUnit}",
+  },
+  // Suggestion tile, bulk-pack variant (feedback-1001 D33): the suggestion in
+  // whole cases, "→ 1 skrzynka (6 kg)"; "→ 0 skrzynek" when the need is under
+  // half a case.
+  "card.suggestionCase": {
+    pl: "→ {packs} ({total})",
+    en: "→ {packs} ({total})",
+  },
+  "card.suggestionCaseNone": {
+    pl: "→ {packs}",
+    en: "→ {packs}",
+  },
+  // Same, when the per-rule need differs from the case suggestion — the need is
+  // one end of the no-reason interval (D34, impl-review F5): "→ 3 kg ≈
+  // 1 skrzynka (6 kg)"; "→ 2 kg ≈ 0 skrzynek" under half a case.
+  "card.suggestionCaseNeed": {
+    pl: "→ {need} ≈ {packs} ({total})",
+    en: "→ {need} ≈ {packs} ({total})",
+  },
+  "card.suggestionCaseNeedNone": {
+    pl: "→ {need} ≈ {packs}",
+    en: "→ {need} ≈ {packs}",
   },
 
   // Row state messages (compute.ts) -----------------------------------------
@@ -728,6 +757,9 @@ export const STRINGS = {
   },
   "manager.transportOnlyLink": { pl: "Przejdź do ekranu Transport", en: "Go to the Transport screen" },
   "manager.copyList.header": { pl: "Produkt | Ilość | Kod", en: "Product | Qty | Code" },
+  // Read-only bulk-pack hint next to a quantity in the invoice unit
+  // (feedback-1001 D36): "= 6 kartonów + 2 paczki".
+  "manager.caseHint": { pl: "= {split}", en: "= {split}" },
 
   // Captain "My orders" view (Phase E4) -------------------------------------
   "orders.title": { pl: "Moje zamówienia", en: "My orders" },
@@ -804,6 +836,10 @@ export const STRINGS = {
   },
   "orders.detail.orderedLabel": { pl: "Zamówiono", en: "Ordered" },
   "orders.detail.receivedLabel": { pl: "Dostarczono", en: "Delivered" },
+  "orders.detail.stockSuggestion": {
+    pl: "stan: {stock} {inventoryUnit} · sugestia: {suggested} {purchaseUnit}",
+    en: "stock: {stock} {inventoryUnit} · suggestion: {suggested} {purchaseUnit}",
+  },
   "orders.detail.orderedSecondary": {
     pl: "Zamówiono: {value} {unit}",
     en: "Ordered: {value} {unit}",
@@ -907,8 +943,8 @@ export const STRINGS = {
     en: "1 {packUnit} = {upp} {unit}",
   },
   "inventory.previousCount": {
-    pl: "ostatnio {qty} · {date}",
-    en: "last {qty} · {date}",
+    pl: "ostatnio {qty} {unit} · {date}",
+    en: "last {qty} {unit} · {date}",
   },
   "inventory.checkUnitHint": {
     pl: "sprawdź jednostkę",
@@ -975,17 +1011,23 @@ export const STRINGS = {
   },
   "captain.prefillClearConfirm": { pl: "Wyczyść wszystko", en: "Clear all" },
 
-  // Overrule-all reason control (training-feedback-0901 Phase 1a) — applies one
-  // reason to every line that requires one and has none yet; never replaces an
-  // already-picked reason (fill-empties only, no destructive overwrite mode).
+  // Overrule-all reason control (training-feedback-0901 Phase 1a, sticky since
+  // feedback-1001 Phase 2) — Apply sets one reason on every line that requires
+  // one (replacing earlier picks) and keeps filling lines that start requiring
+  // one until "Wyłącz".
   "captain.overruleAllTitle": {
     pl: "Powód zbiorczo",
     en: "Bulk reason",
   },
   "captain.overruleAllHint": {
-    pl: "Wybierz powód — zostanie ustawiony na każdej pozycji, która go wymaga i jeszcze go nie ma. Ustawiony wcześniej powód nigdy nie zostanie zastąpiony.",
-    en: "Pick a reason — it is applied to every line that requires one and doesn't have one yet. A reason you already picked is never replaced.",
+    pl: "Wybierz powód — zostanie ustawiony na każdej pozycji, która go wymaga, także na dodanych później, dopóki go nie wyłączysz. Zastępuje powody wybrane wcześniej; powód wybrany ręcznie po zastosowaniu zostaje.",
+    en: "Pick a reason — it is set on every line that requires one, including lines added later, until you turn it off. It replaces reasons picked earlier; a reason you pick by hand afterwards is kept.",
   },
+  "captain.overruleAllActive": {
+    pl: "Aktywny powód zbiorczy: {reason}",
+    en: "Bulk reason active: {reason}",
+  },
+  "captain.overruleAllDisable": { pl: "Wyłącz", en: "Turn off" },
   "captain.overruleAllApply": { pl: "Zastosuj", en: "Apply" },
   "captain.overruleAllAppliedToast": {
     pl: "Zastosowano powód do {count} pozycji",

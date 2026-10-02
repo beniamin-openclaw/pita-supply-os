@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
+import { UnitLabel } from "./components/UnitLabel";
 import { useT } from "../../i18n";
 import type {
   InventoryCountSummary,
@@ -224,7 +225,7 @@ export function InventoryHistoryPage() {
                           )}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
-                          {row.stock} {row.unit}
+                          {row.stock} <UnitLabel>{row.unit}</UnitLabel>
                         </td>
                       </tr>
                     ))}
