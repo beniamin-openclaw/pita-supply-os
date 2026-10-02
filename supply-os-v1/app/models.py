@@ -1054,7 +1054,9 @@ class InventoryCountDetail(BaseModel):
     events: list[InventoryCountEvent] = Field(default_factory=list)
     # Stock value of the whole count (inventory-value): sums of the priced
     # lines; gross is an estimate (see InventoryCountDetailLine.vat_rate).
-    # None when the caller did not price the count.
+    # None when the caller did not price the count. unpriced_line_count counts
+    # lines with a quantity > 0 and no price — a line counted at 0 has no
+    # value to miss, so it is not reported.
     total_value_netto_pln: Optional[float] = None
     total_value_brutto_pln: Optional[float] = None
     unpriced_line_count: int = 0

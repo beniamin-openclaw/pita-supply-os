@@ -191,7 +191,7 @@ export function ManagerInventoryPage() {
                 )}
               </div>
 
-              {detail.total_value_netto_pln != null && (
+              {detail.total_value_netto_pln != null && detail.total_value_brutto_pln != null && (
                 <section
                   aria-label={t("manager.inventory.value.title")}
                   className="mb-4 rounded-xl border border-gray-200 bg-white p-4"
