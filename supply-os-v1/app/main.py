@@ -4173,6 +4173,65 @@ def captain_receipt_detail(
     )
 
 
+_PHOTO_TYPE_BY_EXT: dict[str, str] = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "heic": "image/heic",
+    "heif": "image/heif",
+    "webp": "image/webp",
+    "gif": "image/gif",
+}
+_PHOTO_EXT_BY_TYPE: dict[str, str] = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/heic": ".heic",
+    "image/heif": ".heif",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+
+
+def _sniff_image_type(content: bytes) -> Optional[str]:
+    """Image MIME type from the file's magic bytes, or None."""
+    if content.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if content[:4] == b"RIFF" and content[8:12] == b"WEBP":
+        return "image/webp"
+    if content[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if content[4:8] == b"ftyp":
+        brand = content[8:12]
+        if brand in (b"heic", b"heix", b"hevc", b"hevx"):
+            return "image/heic"
+        if brand in (b"mif1", b"msf1", b"heif"):
+            return "image/heif"
+    return None
+
+
+def _photo_content_type(
+    declared: Optional[str], filename: Optional[str], content: bytes
+) -> Optional[str]:
+    """Content type to store a WZ photo under, or None when it is not an image.
+
+    A declared raster type from ``_PHOTO_EXT_BY_TYPE`` is trusted; any other
+    ``image/*`` (svg, bmp, tiff …) is refused, so nothing is ever stored and served
+    under a type outside that set. Otherwise (some Android pickers and in-app
+    browsers send ``application/octet-stream`` or no type at all for a JPEG/HEIC)
+    fall back to the file extension, then to the magic bytes."""
+    ctype = (declared or "").split(";", 1)[0].strip().lower()
+    if ctype in ("image/jpg", "image/pjpeg"):
+        ctype = "image/jpeg"
+    if ctype.startswith("image/"):
+        return ctype if ctype in _PHOTO_EXT_BY_TYPE else None
+    if ctype not in ("", "application/octet-stream", "binary/octet-stream"):
+        return None
+    ext = (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
+    return _PHOTO_TYPE_BY_EXT.get(ext) or _sniff_image_type(content)
+
+
 @app.post(
     "/api/captain/receipt/{receipt_id}/photos",
     response_model=ReceiptPhotoUploadResponse,
@@ -4223,21 +4282,26 @@ def captain_receipt_photos(
         raise HTTPException(status_code=400, detail="No files uploaded")
 
     prefix = supabase_storage.order_prefix(receipt.order_id)
+    # Number this batch after the photos already attached, so a second batch
+    # never overwrites the first (upsert=true); a retry after a failed batch
+    # (count not yet bumped) still overwrites the same keys cleanly.
+    start = (receipt.wz_photo_count or 0) + 1
     uploaded: list[ReceiptPhotoItem] = []
-    for idx, f in enumerate(files, start=1):
+    for f in files:
         content = f.file.read()
         if not content:
             continue
-        ctype = f.content_type or ""
-        if not ctype.startswith("image/"):
+        ctype = _photo_content_type(f.content_type, f.filename, content)
+        if ctype is None:
             raise HTTPException(
                 status_code=400,
-                detail=f"File '{f.filename}' is not an image ({ctype or 'unknown'})",
+                detail=(
+                    f"File '{f.filename}' is not an image "
+                    f"({f.content_type or 'unknown'})"
+                ),
             )
-        ext = ""
-        if f.filename and "." in f.filename:
-            ext = "." + f.filename.rsplit(".", 1)[1]
-        name = f"{receipt.receipt_id}-{idx:02d}{ext}"
+        ext = _PHOTO_EXT_BY_TYPE.get(ctype, "")
+        name = f"{receipt.receipt_id}-{start + len(uploaded):02d}{ext}"
         object_path = f"{prefix}/{name}"
         supabase_storage.upload_photo(object_path, content, ctype)
         uploaded.append(
