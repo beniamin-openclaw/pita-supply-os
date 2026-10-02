@@ -92,3 +92,10 @@
 - **Problem**: Between 2026-06-23 and 2026-09-07 about 127 commits shipped four location rollouts, a transport module and a finance mirror while `roadmap.md` stayed frozen and `AGENTS.md` kept saying "No CI yet", "deploy not wired", "frontend has no test runner". Every agent session started from false premises, and a reviewer saw a repo whose docs contradicted its code.
 - **Rule**: When a change is archived, update the roadmap row (or add it to the current Horizon table) and re-read `AGENTS.md` for claims the change made false — in the same commit. A shipped change without a roadmap row is drift, not done.
 - **Applies to**: implement, impl-review, archive
+
+## Prod SQL with DELETE needs the operator at the screen
+
+- **Context**: Applying approved prod master-data batches through the Supabase connector (`execute_sql`), e.g. feedback-1001 Phase 1 on 2026-10-02.
+- **Problem**: Any statement containing `DELETE` makes the connector ask the human for a confirmation; with nobody watching, the call times out after 60 s and nothing is written. Three attempts were lost before the cause was clear, and a big multi-block payload hides which block triggered it.
+- **Rule**: Order a prod batch so the non-deleting blocks run on their own, then send the DELETE blocks in one call only while the operator is at the screen to confirm. After any timeout, read the state before retrying. Never disguise a DELETE to dodge the confirmation.
+- **Applies to**: implement (prod SQL), every prod data batch
