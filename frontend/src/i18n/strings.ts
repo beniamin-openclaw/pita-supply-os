@@ -1147,9 +1147,17 @@ export const STRINGS = {
   // CSV export of one inventory count (manager-only; training-feedback-0901
   // follow-up, operator request 2026-09-02).
   "manager.inventory.csvButton": { pl: "Pobierz CSV", en: "Download CSV" },
-  "manager.inventory.csvPriceNote": {
-    pl: "Ceny i wartość magazynowa nie są jeszcze dostępne w tym widoku — kolumny „Cena” i „Wartość” w pliku CSV zostaną puste, dopóki dane menedżera nie będą zawierać cen.",
-    en: "Prices and stock value aren't available in this view yet — the “Price” and “Value” columns in the CSV will stay empty until pricing data is exposed here.",
+  // Stock value of a count (inventory-value, manager-only, 2026-10-02).
+  "manager.inventory.value.title": { pl: "Wartość remanentu", en: "Stock value" },
+  "manager.inventory.value.netto": { pl: "Netto", en: "Net" },
+  "manager.inventory.value.brutto": { pl: "Brutto (szacunkowo)", en: "Gross (estimate)" },
+  "manager.inventory.value.note": {
+    pl: "Ilość × cena netto z cennika dostawcy. VAT szacowany wg kategorii produktu.",
+    en: "Quantity × net price from the supplier price list. VAT estimated by product category.",
+  },
+  "manager.inventory.value.unpriced": {
+    pl: "Bez ceny w systemie: {n} poz. (nie wliczone do wartości).",
+    en: "No price in the system: {n} item(s) (not included in the value).",
   },
   "manager.inventory.csv.metaLocation": { pl: "Lokalizacja", en: "Location" },
   "manager.inventory.csv.metaDate": { pl: "Data", en: "Date" },
@@ -1165,8 +1173,10 @@ export const STRINGS = {
   "manager.inventory.csv.colTarget": { pl: "Cel", en: "Target" },
   "manager.inventory.csv.colMax": { pl: "Max", en: "Max" },
   "manager.inventory.csv.colCritical": { pl: "Krytyczny", en: "Critical" },
-  "manager.inventory.csv.colPrice": { pl: "Cena jedn. (PLN)", en: "Unit price (PLN)" },
-  "manager.inventory.csv.colValue": { pl: "Wartość (PLN)", en: "Value (PLN)" },
+  "manager.inventory.csv.colPrice": { pl: "Cena netto jedn. (PLN)", en: "Net unit price (PLN)" },
+  "manager.inventory.csv.colValue": { pl: "Wartość netto (PLN)", en: "Net value (PLN)" },
+  "manager.inventory.csv.colVat": { pl: "VAT", en: "VAT" },
+  "manager.inventory.csv.colValueGross": { pl: "Wartość brutto (PLN)", en: "Gross value (PLN)" },
   "manager.inventory.csv.colComment": { pl: "Komentarz", en: "Comment" },
   "manager.inventory.csv.totalLabel": { pl: "RAZEM", en: "TOTAL" },
   // S-08 — Captain inventory history (FR-019)

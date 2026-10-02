@@ -1007,6 +1007,15 @@ class InventoryCountDetailLine(BaseModel):
     inventory_order: Optional[int] = None
     display_order: Optional[int] = None
     supplier_product_id: Optional[str] = None
+    # Stock value (inventory-value, Manager only): net price of ONE inventory
+    # unit (app/inventory_value.py), the estimated VAT rate (0.05/0.08/0.23 —
+    # no VAT in master data yet) and the line values. Price and values are
+    # None when no priced supplier_product exists; the line then counts in
+    # InventoryCountDetail.unpriced_line_count instead of adding 0 silently.
+    unit_price_netto_pln: Optional[float] = None
+    vat_rate: Optional[float] = None
+    value_netto_pln: Optional[float] = None
+    value_brutto_pln: Optional[float] = None
 
 
 class InventoryCountEvent(BaseModel):
@@ -1043,6 +1052,14 @@ class InventoryCountDetail(BaseModel):
     notes: str = ""
     lines: list[InventoryCountDetailLine] = Field(default_factory=list)
     events: list[InventoryCountEvent] = Field(default_factory=list)
+    # Stock value of the whole count (inventory-value): sums of the priced
+    # lines; gross is an estimate (see InventoryCountDetailLine.vat_rate).
+    # None when the caller did not price the count. unpriced_line_count counts
+    # lines with a quantity > 0 and no price — a line counted at 0 has no
+    # value to miss, so it is not reported.
+    total_value_netto_pln: Optional[float] = None
+    total_value_brutto_pln: Optional[float] = None
+    unpriced_line_count: int = 0
 
 
 # ---------- Suggestion learning-loop review (S-03 / FR-012) ----------
