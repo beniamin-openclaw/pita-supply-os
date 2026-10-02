@@ -37,8 +37,8 @@
 --   * 1b.4 (P052) is BLOCKED on 2026-10-01 by ORD-20261001-WOL-INTE-8971b4
 --     (WOLA, sent 2026-10-01 12:25 UTC, no receipt yet). Re-run after WOLA
 --     confirms that delivery.
---   * 1b.6 (KEN thresholds read as kg) is OPTIONAL: run it only if the
---     operator picks the kg reading for KEN. Default = keep (do not run).
+--   * 1b.6 (KEN thresholds read as kg): the operator chose YES on
+--     2026-10-02 — run it after 1b.2..1b.5.
 -- =====================================================================
 
 
@@ -128,8 +128,8 @@ BEGIN
       warehouse_pickup, display_order, counts_toward_minimum)
   SELECT 'SP_INTERMLECZ_P017_H', 'SUP_INTERMLECZ', 'P017',
          'Helcom Papryka Grillowana Czerwona 4,2kg/2,5kg', 'opak', 1, 'full_only',
-         NULL, true,
-         '2026-10-01 feedback-1001 1b.1 D27: Helcom per opak; zastępuje SP_INTERMLECZ_P017 (Florinis, opak 3,6 kg); cena do uzupełnienia',
+         39.66, true,
+         '2026-10-01 feedback-1001 1b.1 D27: Helcom per opak; zastępuje SP_INTERMLECZ_P017 (Florinis, opak 3,6 kg); cena 39,66 zł netto (operator 2026-10-02)',
          '1 opak = puszka 4,2 kg (2,5 kg po odsączeniu)', NULL, NULL,
          sp.warehouse_pickup, sp.display_order, sp.counts_toward_minimum
     FROM supplier_products sp WHERE sp.supplier_product_id = 'SP_INTERMLECZ_P017';
