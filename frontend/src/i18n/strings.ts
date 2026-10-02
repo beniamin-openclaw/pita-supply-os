@@ -1299,6 +1299,12 @@ export const STRINGS = {
   "delivery.receivedByPlaceholder": { pl: "Imię i nazwisko", en: "Full name" },
   "delivery.photosLabel": { pl: "Zdjęcia WZ", en: "WZ photos" },
   "delivery.addPhoto": { pl: "Dodaj zdjęcie", en: "Add photo" },
+  "delivery.takePhoto": { pl: "Zrób zdjęcie", en: "Take photo" },
+  "delivery.pickFromGallery": { pl: "Z galerii", en: "From gallery" },
+  "delivery.cameraTip": {
+    pl: "Czarny ekran przy aparacie? Zrób zdjęcie zwykłym aparatem telefonu i dodaj je przyciskiem „Z galerii”.",
+    en: "Black camera screen? Take the photo with the phone's camera app and add it with “From gallery”.",
+  },
   "delivery.photoHint": {
     pl: "Zalecane zdjęcie WZ. Możesz dodać kilka.",
     en: "A WZ photo is recommended. You can add several.",
