@@ -3,7 +3,8 @@
 -- data (D22/D23/D32-D36, plan-review F5, impl-review F5)
 -- Project: Supabase lpzhphufjwrndfogkfub
 --
--- PREPARED 2026-10-02, NOT RUN ON PROD. Before-state read from prod with
+-- STATUS 2026-10-02: APPLIED (4.2 keep, 4.4 keep; audit ok) — see
+-- prod-run-2026-10-02.md. PREPARED 2026-10-02. Before-state read from prod with
 -- SELECT only on 2026-10-02. Human-readable diff: prod-sql-2-diff.md. Run
 -- nothing until the operator approves that diff.
 --

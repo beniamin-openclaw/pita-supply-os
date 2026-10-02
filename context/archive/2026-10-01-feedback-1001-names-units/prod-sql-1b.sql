@@ -3,7 +3,7 @@
 -- counts mean (papryka P017, Prymat spices P050/P051/P052/P055)
 -- Project: Supabase lpzhphufjwrndfogkfub
 --
--- PREPARED 2026-10-01, NOT RUN ON PROD. Before-state read from prod with
+-- STATUS 2026-10-02: NOT RUN YET (waits for the full-count day). PREPARED 2026-10-01. Before-state read from prod with
 -- SELECT only on 2026-10-01 (~16:30 CEST). Human-readable diff with the
 -- per-location decisions and the last counts: prod-sql-1b-diff.md.
 --

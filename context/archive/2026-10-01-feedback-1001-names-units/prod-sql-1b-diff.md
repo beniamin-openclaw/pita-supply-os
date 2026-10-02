@@ -1,6 +1,6 @@
 # Phase 1b — diff for the operator (`prod-sql-1b.sql`)
 
-- **Source:** prod read-only SELECTs, 2026-10-01 ~16:30 CEST. **Nothing has been written to prod.**
+- **Source:** prod read-only SELECTs, 2026-10-01 ~16:30 CEST. **Nothing has been written to prod** (still pending on 2026-10-02: waits for the full-count day).
 - **What it does:** moves papryka P017 and four Prymat spices to per-tin / per-jar counting.
 - **When to apply:** on the full-count day, after staff message part 1b has gone out.
 - **Why the timing matters:**

@@ -12,7 +12,7 @@
   OK?
 - **Zamówienie testowe:** `ORD-20261001-WOL-INTE-1851ca` („TEST TEST TEST”) czeka jako przejęte. Anulować?
 
-- **Source:** prod read-only SELECTs, 2026-10-02. **Nothing has been written to prod.**
+- **Source:** prod read-only SELECTs, 2026-10-02. Nothing was written when this diff was prepared. **Applied on 2026-10-02 (4.2 keep, 4.4 keep) — see `prod-run-2026-10-02.md`.**
 - **Preconditions:**
   - migration 0028 is applied (checked: 2 columns, 3 CHECKs, no row has a case yet);
   - Phase 1 steps 1.1 and 1.8 are applied (P021 is `paczka`);
