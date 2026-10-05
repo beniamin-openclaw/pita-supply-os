@@ -39,6 +39,8 @@ def _products() -> list[Product]:
     return [
         Product(product_id="P027", product_name_pl="Souvlaki Kurczak", product_category="Mięso", inventory_unit="kg"),
         Product(product_id="P026", product_name_pl="Gyros Wieprz", product_category="Mięso", inventory_unit="kg"),
+        # No setting at WOLA — only reachable through the Manager override.
+        Product(product_id="P024", product_name_pl="Gyros 15 KG", product_category="Mięso", inventory_unit="kg"),
     ]
 
 
@@ -61,6 +63,14 @@ def _supplier_products() -> list[SupplierProduct]:
             purchase_unit="karton",
             units_per_purchase_unit=5.0,
             price_estimate_pln=94.0,
+        ),
+        SupplierProduct(
+            supplier_product_id="SP_PAGO_P024",
+            supplier_id="SUP_PAGO",
+            product_id="P024",
+            supplier_product_name="Gyros 15 KG",
+            purchase_unit="szt",
+            units_per_purchase_unit=15.0,
         ),
     ]
 
@@ -158,6 +168,25 @@ def test_manager_orderable_happy(mocker):
     assert p026["supplier_product_id"] == "SP_PAGO_P026"
     assert p026["purchase_unit"] == "karton"
     assert p026["target_stock_qty_base"] == 10
+    assert p026["configured_for_location"] is True
+
+
+def test_manager_orderable_include_unconfigured(mocker):
+    """manager-add-any-product: the override list adds the supplier's products
+    with no setting at the location, flagged and with zero thresholds."""
+    _enable_sheet(mocker)
+    r = client.get(
+        "/api/manager/orderable?supplier_id=SUP_PAGO&location_id=WOLA"
+        "&include_unconfigured=true",
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    items = {it["product_id"]: it for it in r.json()}
+    assert set(items) == {"P027", "P026", "P024"}
+    assert items["P024"]["configured_for_location"] is False
+    assert items["P024"]["target_stock_qty_base"] == 0
+    assert items["P024"]["max_stock_qty_base"] == 0
+    assert items["P027"]["configured_for_location"] is True
 
 
 def test_manager_orderable_empty_for_unknown_supplier(mocker):
@@ -403,3 +432,82 @@ def test_add_line_seed_backend_returns_503():
     )
     assert r.status_code == 503
     assert "persistent backend" in r.json()["detail"]
+
+
+# ---------- Manager override: product outside the location's list ----------
+
+
+def test_add_line_unconfigured_rejected_without_override(mocker):
+    order = _order()
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={"product_id": "P024", "supplier_product_id": "SP_PAGO_P024"},
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 400
+    assert "not orderable" in r.json()["detail"]
+    mocks["append_order_lines"].assert_not_called()
+
+
+def test_add_line_unconfigured_with_override_appends_and_logs(mocker):
+    """The one-off lands as a normal order line (so pickup, e-mail and the goods
+    receipt see it) with target 0, and is always written to the order history."""
+    order = _order()
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={
+            "product_id": "P024",
+            "supplier_product_id": "SP_PAGO_P024",
+            "allow_unconfigured": True,
+        },
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    line = mocks["append_order_lines"].call_args.args[0][0]
+    assert line.product_id == "P024"
+    assert line.supplier_product_id == "SP_PAGO_P024"
+    assert line.target_stock_qty_base == 0
+    assert line.manager_final_qty_purchase == 0
+    # claimed order: no last_edited_at stamp, but the override IS logged.
+    mocks["update_order"].assert_not_called()
+    mocks["append_order_event"].assert_called_once()
+    event = mocks["append_order_event"].call_args.args[0]
+    assert event.event_type == "line_added"
+    assert "Gyros 15 KG" in event.details
+    assert "poza listą lokalu" in event.details
+
+
+def test_add_line_override_still_rejects_other_supplier(mocker):
+    order = _order()
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={
+            "product_id": "P099",
+            "supplier_product_id": "SP_NOPE",
+            "allow_unconfigured": True,
+        },
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 400
+    mocks["append_order_lines"].assert_not_called()
+
+
+def test_add_line_override_on_configured_product_is_not_flagged(mocker):
+    order = _order()
+    mocks = _enable_sheet(mocker, order=order)
+    r = client.post(
+        f"/api/manager/order/{order.order_id}/add-line",
+        json={
+            "product_id": "P026",
+            "supplier_product_id": "SP_PAGO_P026",
+            "allow_unconfigured": True,
+        },
+        headers=MANAGER_AUTH,
+    )
+    assert r.status_code == 200, r.text
+    line = mocks["append_order_lines"].call_args.args[0][0]
+    assert line.target_stock_qty_base == 10
+    mocks["append_order_event"].assert_not_called()

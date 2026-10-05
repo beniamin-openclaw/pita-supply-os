@@ -92,6 +92,10 @@ export interface OrderableItem {
   // set or both null; absent/null = no case (today's behaviour).
   case_unit?: string | null;
   units_per_case?: number | null;
+  // Manager one-off override (manager-add-any-product): false = the product has
+  // no setting at this location and is only listed because the Manager asked
+  // for the full supplier list (`include_unconfigured`). Absent = configured.
+  configured_for_location?: boolean;
 }
 
 // Captain Submit -------------------------------------------------------------

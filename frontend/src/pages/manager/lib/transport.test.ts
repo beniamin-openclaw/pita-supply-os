@@ -33,6 +33,7 @@ import {
   hasValidRecipient,
   loadSeenTransports,
   markTransportSeen,
+  orderAddOneOptions,
   seedTransportDrafts,
   sortTransportEvents,
   splitRecipients,
@@ -552,6 +553,41 @@ describe("buildTransportAddAllOptions", () => {
     const options = buildTransportAddAllOptions(orders, orderableByOrderId);
     // P1 is already on the only order; the rest follow position, then id.
     expect(options.map((o) => o.product_id)).toEqual(["P4", "P3", "P2"]);
+  });
+
+  it("never offers a one-off product outside a location's list to add-to-all", () => {
+    const orders: TransportBatchOrder[] = [batchOrder({ order_id: "ORD-1", lines: [] })];
+    const orderableByOrderId: Record<string, OrderableItem[]> = {
+      "ORD-1": [
+        orderable({ product_id: "P1", supplier_product_id: "SP_P1" }),
+        orderable({ product_id: "P2", supplier_product_id: "SP_P2", configured_for_location: false }),
+      ],
+    };
+    const options = buildTransportAddAllOptions(orders, orderableByOrderId);
+    expect(options.map((o) => o.product_id)).toEqual(["P1"]);
+  });
+});
+
+describe("orderAddOneOptions (manager-add-any-product)", () => {
+  it("lists the order's full list incl. one-off items, minus lines it already has", () => {
+    const order = batchOrder({
+      order_id: "ORD-NOR",
+      lines: [orderLine({ order_line_id: "OL-1", product_id: "P1" })],
+    });
+    const orderableByOrderId: Record<string, OrderableItem[]> = {
+      "ORD-NOR": [
+        orderable({ product_id: "P1", supplier_product_id: "SP_P1", display_order: 10 }),
+        orderable({ product_id: "P024", supplier_product_id: "SP_P024", display_order: 30, configured_for_location: false }),
+        orderable({ product_id: "P2", supplier_product_id: "SP_P2", display_order: 20 }),
+      ],
+    };
+    const options = orderAddOneOptions(order, orderableByOrderId);
+    expect(options.map((o) => o.product_id)).toEqual(["P2", "P024"]);
+    expect(options[1].configured_for_location).toBe(false);
+  });
+
+  it("returns [] when the order's list has not loaded", () => {
+    expect(orderAddOneOptions(batchOrder({ order_id: "ORD-X" }), {})).toEqual([]);
   });
 });
 

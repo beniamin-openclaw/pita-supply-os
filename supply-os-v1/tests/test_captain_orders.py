@@ -753,3 +753,54 @@ def test_edit_leaves_delivery_calendar_fields_untouched(mocker):
     update_kwargs = patches["update_order"].call_args.kwargs
     assert "suggested_delivery_date" not in update_kwargs
     assert "coverage_days" not in update_kwargs
+
+
+# ---------- Manager one-off line on a sent-back order (manager-add-any-product) ----------
+
+
+def test_edit_keeps_manager_one_off_line_without_setting(mocker):
+    """A line the Manager added outside the location's list stays editable after
+    the order is sent back to the Captain (no 400 on the missing setting)."""
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED)
+    order.lines = [_line("ORD-A", "OL-ORD-A-M-abc123")]
+    patches = _enable_sheet(mocker, orders=[order], get_order_return=order)
+    mocker.patch.object(sheets, "load_location_product_settings", return_value=[])
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "captain_final_qty_purchase": 2.0,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    appended = patches["append_order_lines"].call_args[0][0]
+    assert appended[0].captain_final_qty_purchase == 2.0
+    assert appended[0].target_stock_qty_base == 0
+
+
+def test_edit_still_rejects_new_product_without_setting(mocker):
+    order = _order("ORD-A", status=OrderStatus.CAPTAIN_SUBMITTED)
+    patches = _enable_sheet(mocker, orders=[order], get_order_return=order)
+    mocker.patch.object(sheets, "load_location_product_settings", return_value=[])
+    r = client.patch(
+        "/api/captain/order/ORD-A",
+        headers=WOLA_AUTH,
+        json={
+            "lines": [
+                {
+                    "product_id": "P027",
+                    "supplier_product_id": "SP_PAGO_P027",
+                    "captain_final_qty_purchase": 2.0,
+                }
+            ]
+        },
+    )
+    assert r.status_code == 400
+    assert "no location_product_setting" in r.json()["detail"]
+    patches["append_order_lines"].assert_not_called()

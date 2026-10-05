@@ -113,3 +113,24 @@ def test_product_without_a_location_setting_stays_excluded():
         settings=[_setting("P024")],
     )
     assert _ids(_build_orderable_items(backend, "WOLA", "SUP_PAGO")) == ["P024"]
+
+
+def test_include_unconfigured_adds_products_without_setting():
+    """manager-add-any-product: the Manager override drops only the location
+    filter — retired rows and other suppliers stay out."""
+    backend = _Backend(
+        products=[_product("P024"), _product("P025"), _product("P030", active=False)],
+        supplier_products=[
+            _sp("P024"),
+            _sp("P025"),
+            _sp("P030"),
+            _sp("P031", active=False),
+            _sp("P011", supplier="SUP_BUKAT"),
+        ],
+        settings=[_setting("P024")],
+    )
+    assert _ids(_build_orderable_items(backend, "WOLA", "SUP_PAGO")) == ["P024"]
+    items = _build_orderable_items(backend, "WOLA", "SUP_PAGO", include_unconfigured=True)
+    assert _ids(items) == ["P024", "P025"]
+    flags = {i["product_id"]: i["configured_for_location"] for i in items}
+    assert flags == {"P024": True, "P025": False}

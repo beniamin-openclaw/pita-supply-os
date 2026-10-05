@@ -4,6 +4,11 @@
 // list already minus the lines already present) and pick one. The dropdown closes
 // on selection, Escape, or an outside click, and the whole control renders nothing
 // when there is nothing left to add.
+//
+// Manager one-off override (manager-add-any-product): items flagged
+// `configured_for_location === false` stay hidden behind a "show all of the
+// supplier's products" checkbox inside the dropdown and carry a "not on this
+// location's list" tag. Lists without such items (the Captain's) look unchanged.
 
 import { useEffect, useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
@@ -26,6 +31,14 @@ export function AddProductPicker({
   const { t } = useT();
   const [open, setOpen] = useState<boolean>(false);
   const [query, setQuery] = useState<string>("");
+  const [showAll, setShowAll] = useState<boolean>(false);
+
+  // Every close (pick, Escape, outside click, toggle) drops the one-off
+  // checkbox so it never carries over to the next order or location.
+  function close(): void {
+    setOpen(false);
+    setShowAll(false);
+  }
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -34,11 +47,11 @@ export function AddProductPicker({
     if (!open) return;
     function onDocClick(e: MouseEvent): void {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        close();
       }
     }
     function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onKey);
@@ -57,19 +70,23 @@ export function AddProductPicker({
   // them. Nothing left to add → render nothing (the button hides itself).
   if (items.length === 0) return null;
 
+  const hasOutsideList = items.some((it) => it.configured_for_location === false);
+  const visible: OrderableItem[] = showAll
+    ? items
+    : items.filter((it) => it.configured_for_location !== false);
   const q = query.trim().toLowerCase();
   const filtered: OrderableItem[] = q
-    ? items.filter(
+    ? visible.filter(
         (it) =>
           it.product_name_pl.toLowerCase().includes(q) ||
           it.supplier_product_name.toLowerCase().includes(q),
       )
-    : items;
+    : visible;
 
   function handlePick(item: OrderableItem): void {
     onSelect(item);
     setQuery("");
-    setOpen(false);
+    close();
   }
 
   return (
@@ -77,7 +94,7 @@ export function AddProductPicker({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-haspopup="listbox"
         aria-expanded={open}
         className="flex items-center gap-1.5 rounded-lg border border-dashed border-slate-400 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
@@ -100,6 +117,16 @@ export function AddProductPicker({
               className="w-full bg-transparent text-sm focus:outline-none"
             />
           </div>
+          {hasOutsideList && (
+            <label className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={showAll}
+                onChange={(e) => setShowAll(e.target.checked)}
+              />
+              {t("addProduct.showAll")}
+            </label>
+          )}
           <ul role="listbox" className="max-h-64 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <li className="px-3 py-2 text-sm text-slate-400">{t("addProduct.empty")}</li>
@@ -113,7 +140,14 @@ export function AddProductPicker({
                     onClick={() => handlePick(item)}
                     className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none"
                   >
-                    <span className="text-slate-900">{item.product_name_pl}</span>
+                    <span className="text-slate-900">
+                      {item.product_name_pl}
+                      {item.configured_for_location === false && (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+                          {t("addProduct.outsideList")}
+                        </span>
+                      )}
+                    </span>
                     <span className="shrink-0 text-xs text-slate-500">
                       {item.purchase_unit}
                     </span>

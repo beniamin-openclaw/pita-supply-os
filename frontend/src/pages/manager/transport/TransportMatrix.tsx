@@ -12,14 +12,27 @@
 // (AddProductPicker, fed by that order's own orderable list minus what it
 // already carries) and — while editable — a remove-order control in the
 // column header.
+//
+// One-location adds (manager-add-any-product): an empty "–" cell is a "+"
+// button when the row's product is on that location's list, and a "for one location
+// only" row pairs a location select with a picker over that order's full
+// supplier list (one-off items outside the location's list behind the picker's
+// checkbox). Both write the line onto that location's order.
 
-import { Loader2, X } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Plus, X } from "lucide-react";
 
 import { useT } from "../../../i18n";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { AddProductPicker } from "../../../components/ui/AddProductPicker";
 import type { OrderableItem, TransportBatchOrder } from "../../../types";
-import { buildTransportAddAllOptions, buildTransportMatrix, draftQtyFor, type TransportDraftMap } from "../lib/transport";
+import {
+  buildTransportAddAllOptions,
+  buildTransportMatrix,
+  draftQtyFor,
+  orderAddOneOptions,
+  type TransportDraftMap,
+} from "../lib/transport";
 
 interface TransportMatrixProps {
   orders: TransportBatchOrder[];
@@ -31,6 +44,7 @@ interface TransportMatrixProps {
   onQtyChange: (orderId: string, orderLineId: string, qty: number) => void;
   orderableByOrderId: Record<string, OrderableItem[]>;
   onAddProductAll: (productId: string) => void;
+  onAddProductOne: (order: TransportBatchOrder, item: OrderableItem) => void;
   addAllBusy: boolean;
   onRemoveOrder: (order: TransportBatchOrder) => void;
   busyOrderId: string | null;
@@ -44,6 +58,7 @@ export function TransportMatrix({
   onQtyChange,
   orderableByOrderId,
   onAddProductAll,
+  onAddProductOne,
   addAllBusy,
   onRemoveOrder,
   busyOrderId,
@@ -51,6 +66,11 @@ export function TransportMatrix({
   const { t } = useT();
   const rows = buildTransportMatrix(orders);
   const addAllOptions = editable ? buildTransportAddAllOptions(orders, orderableByOrderId) : [];
+  const [addOneOrderId, setAddOneOrderId] = useState<string>("");
+  const addOneOrder: TransportBatchOrder | undefined =
+    orders.find((o) => o.order_id === addOneOrderId) ?? orders[0];
+  const addOneOptions: OrderableItem[] =
+    editable && addOneOrder ? orderAddOneOptions(addOneOrder, orderableByOrderId) : [];
 
   return (
     <div>
@@ -100,9 +120,33 @@ export function TransportMatrix({
                 {orders.map((order) => {
                   const line = row.linesByOrderId[order.order_id];
                   if (!line) {
+                    // "+" only for a product on the location's list — a one-off
+                    // outside it goes through the picker's checkbox step.
+                    const addable = editable
+                      ? (orderableByOrderId[order.order_id] ?? []).find(
+                          (o) =>
+                            o.product_id === row.product_id &&
+                            o.configured_for_location !== false,
+                        )
+                      : undefined;
                     return (
                       <td key={order.order_id} className="px-3 py-2 text-right text-slate-300">
-                        {t("manager.transport.matrix.emptyCell")}
+                        {addable ? (
+                          <button
+                            type="button"
+                            disabled={addAllBusy}
+                            onClick={() => onAddProductOne(order, addable)}
+                            aria-label={t("manager.transport.matrix.addCellAria", {
+                              product: row.product_name_pl,
+                              location: order.location_name,
+                            })}
+                            className="inline-flex items-center rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          >
+                            <Plus size={14} aria-hidden="true" />
+                          </button>
+                        ) : (
+                          t("manager.transport.matrix.emptyCell")
+                        )}
                       </td>
                     );
                   }
@@ -159,6 +203,34 @@ export function TransportMatrix({
                     disabled={addAllBusy}
                     onSelect={(item) => onAddProductAll(item.product_id)}
                   />
+                </td>
+              </tr>
+            )}
+            {editable && addOneOrder && (
+              <tr>
+                <td colSpan={orders.length + 1} className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-600">
+                      {t("manager.transport.matrix.addOneLabel")}
+                    </span>
+                    <select
+                      value={addOneOrder.order_id}
+                      onChange={(e) => setAddOneOrderId(e.target.value)}
+                      aria-label={t("manager.transport.matrix.addOneLocationAria")}
+                      className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {orders.map((o) => (
+                        <option key={o.order_id} value={o.order_id}>
+                          {o.location_name}
+                        </option>
+                      ))}
+                    </select>
+                    <AddProductPicker
+                      items={addOneOptions}
+                      disabled={addAllBusy}
+                      onSelect={(item) => onAddProductOne(addOneOrder, item)}
+                    />
+                  </div>
                 </td>
               </tr>
             )}

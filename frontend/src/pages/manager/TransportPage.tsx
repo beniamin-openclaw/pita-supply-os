@@ -313,7 +313,9 @@ export function TransportPage() {
         api
           // Each member's OWN supplier — a Magazyn Mory order on a Pago run
           // offers Mory's catalogue (transport-pago-mory-combined).
-          .managerOrderable(orderSupplierId(o, batchDetail), o.location_id)
+          // Full supplier list incl. products outside the location's list —
+          // offered only as a one-location add (manager-add-any-product).
+          .managerOrderable(orderSupplierId(o, batchDetail), o.location_id, true)
           .then((items) => [o.order_id, items] as const)
           .catch(() => [o.order_id, []] as const),
       ),
@@ -492,8 +494,10 @@ export function TransportPage() {
       const targets = transportOrdersFor(detail, sectionSupplierId)
         .filter((order) => !order.lines.some((l) => l.product_id === productId))
         .map((order) => {
+          // Add-to-all never uses the one-off override: only orders whose
+          // location normally carries the product get it.
           const item = (orderableByOrderId[order.order_id] ?? []).find(
-            (o) => o.product_id === productId,
+            (o) => o.product_id === productId && o.configured_for_location !== false,
           );
           return item ? { order, item } : null;
         })
@@ -529,6 +533,45 @@ export function TransportPage() {
         .finally(() => setAddAllBusy(false));
     },
     [detail, orderableByOrderId, refreshDetail, showToast, t],
+  );
+
+  // One product for ONE member order (manager-add-any-product): the "+" in an
+  // empty matrix cell and the "for one location only" picker. A product outside
+  // the location's list goes through the add-line override. The line is written
+  // to that location's order, so the pickup, the e-mail and the goods receipt
+  // all carry it. Drafts are preserved — other unsaved edits survive the add.
+  const handleAddProductOne = useCallback(
+    (order: TransportBatchOrder, item: OrderableItem) => {
+      if (!detail) return;
+      setAddAllBusy(true);
+      api
+        .managerAddLine(
+          order.order_id,
+          item.product_id,
+          item.supplier_product_id,
+          item.configured_for_location === false,
+        )
+        .then(() => {
+          showToast(
+            t("manager.transport.matrix.addOneOk", {
+              product: item.product_name_pl,
+              location: order.location_name,
+            }),
+            true,
+          );
+          refreshDetail(detail.transport_id, true);
+        })
+        .catch((e: ApiError) => {
+          showToast(
+            t("manager.transport.matrix.addProductAllError", {
+              locations: `${order.location_name}: ${e.detail}`,
+            }),
+            false,
+          );
+        })
+        .finally(() => setAddAllBusy(false));
+    },
+    [detail, refreshDetail, showToast, t],
   );
 
   // ---- v2 draft workstation: add location -------------------------------------
@@ -1248,6 +1291,7 @@ export function TransportPage() {
                               onAddProductAll={(productId) =>
                                 handleAddProductAll(productId, section.supplier.supplier_id)
                               }
+                              onAddProductOne={handleAddProductOne}
                               addAllBusy={addAllBusy}
                               onRemoveOrder={handleRemoveOrder}
                               busyOrderId={busyOrderId}

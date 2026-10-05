@@ -59,7 +59,12 @@ interface OrderDetailPaneProps {
   /** Orderable products that can still be added to this order (claimed only). */
   availableToAdd: OrderableItem[];
   /** Append an ad-hoc product line to the order (add-product-to-order). */
-  onAddLine: (orderId: string, productId: string, supplierProductId: string) => void;
+  onAddLine: (
+    orderId: string,
+    productId: string,
+    supplierProductId: string,
+    allowUnconfigured: boolean,
+  ) => void;
   onClaim: (orderId: string) => void;
   onRelease: (orderId: string) => void;
   /** Cancel (soft-delete) a pre-dispatch order with a required reason. */
@@ -239,7 +244,12 @@ export function OrderDetailPane({
               items={availableToAdd}
               disabled={locked}
               onSelect={(item) =>
-                onAddLine(detail.order_id, item.product_id, item.supplier_product_id)
+                onAddLine(
+                  detail.order_id,
+                  item.product_id,
+                  item.supplier_product_id,
+                  item.configured_for_location === false,
+                )
               }
             />
           </div>
