@@ -1,10 +1,10 @@
 ---
 change_id: manager-add-any-product
 title: Manager one-off override — add any supplier product to an order, also from a draft Transport
-status: implemented
+status: archived
 created: 2026-10-05
 updated: 2026-10-05
-archived_at: null
+archived_at: 2026-10-05T20:48:12Z
 ---
 
 ## Trigger
