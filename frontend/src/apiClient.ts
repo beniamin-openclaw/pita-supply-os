@@ -66,9 +66,13 @@ import type {
   TransportCreateRequest,
   TransportCreateResponse,
   TransportDraftConfig,
+  TransportDraftCreatedRequest,
   TransportEligibleOrder,
+  TransportEvent,
   TransportFinalizeResponse,
   TransportRemoveOrderResponse,
+  TransportReopenRequest,
+  TransportReopenResponse,
 } from "./types";
 
 // Production: API calls go same-origin to /api/* and are proxied to the droplet
@@ -526,9 +530,12 @@ export const api = {
   // for one supplier into a single Transport ("TO") batch.
   // include_companions: a Pago batch also lists Magazyn Mory orders
   // (transport-pago-mory-combined) — the backend only offers them on opt-in.
-  transportEligible: (supplier_id: string) =>
+  // transport-v2: the PAGO/MORY chips pick the scope (transportScopeFromChips),
+  // so the flag is sent as given — default true keeps the combined view.
+  transportEligible: (supplier_id: string, include_companions: boolean = true) =>
     apiGet<TransportEligibleOrder[]>(
-      `/api/manager/transport/eligible?supplier_id=${encodeURIComponent(supplier_id)}&include_companions=true`,
+      `/api/manager/transport/eligible?supplier_id=${encodeURIComponent(supplier_id)}` +
+        `&include_companions=${include_companions ? "true" : "false"}`,
       "manager",
     ),
   transportBatches: (supplier_id?: string, limit?: number, include_cancelled?: boolean) => {
@@ -594,6 +601,17 @@ export const api = {
   // needs to special-case.
   transportDraftConfig: () =>
     apiGet<TransportDraftConfig>("/api/manager/transport/draft-config", "manager"),
+  // transport-v2: put a SENT batch back into draft ("Cofnij wysłanie").
+  transportReopen: (transport_id: string) =>
+    apiPost<TransportReopenResponse>(
+      "/api/manager/transport/reopen",
+      { transport_id } as TransportReopenRequest,
+      "manager",
+    ),
+  // transport-v2: record a Gmail draft just created for a batch (the Pago
+  // order or the driver list) — returns the appended history event.
+  transportDraftCreated: (req: TransportDraftCreatedRequest) =>
+    apiPost<TransportEvent>("/api/manager/transport/draft-created", req, "manager"),
   // Finance reconciliation ("Faktury vs dostawy", pilot KEN) — eBiuro-mirrored
   // invoices vs. Captain goods-receipts. See supply-os-v1/app/models.py Finance*.
   financeOverview: (location_id: string, days: number) =>

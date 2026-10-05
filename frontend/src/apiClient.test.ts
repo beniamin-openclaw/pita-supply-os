@@ -176,3 +176,109 @@ describe("api.locations — role/token selection (regression, mirrors api.suppli
     expect(authHeaderOf(fetchMock)).toBe("Bearer cap-token");
   });
 });
+
+describe("api transport-v2 calls — URL, method, body, manager token", () => {
+  function stubStorage(entries: Record<string, string>): void {
+    const store = new Map(Object.entries(entries));
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+    });
+  }
+
+  function stubFetchJson(payload: unknown): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function callOf(fetchMock: ReturnType<typeof vi.fn>): { url: string; init: RequestInit } {
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    return { url, init };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("transportEligible sends include_companions=true by default", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchJson([]);
+
+    await api.transportEligible("SUP_PAGO");
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toMatch(
+      /\/api\/manager\/transport\/eligible\?supplier_id=SUP_PAGO&include_companions=true$/,
+    );
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer mgr-token");
+  });
+
+  it("transportEligible sends include_companions=false when asked", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchJson([]);
+
+    await api.transportEligible("SUP_MORY", false);
+
+    expect(callOf(fetchMock).url).toMatch(
+      /\/api\/manager\/transport\/eligible\?supplier_id=SUP_MORY&include_companions=false$/,
+    );
+  });
+
+  it("transportReopen POSTs {transport_id} with the manager token", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchJson({ transport_id: "TRN-1", reopened: ["O1"], skipped: [] });
+
+    const res = await api.transportReopen("TRN-1");
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toMatch(/\/api\/manager\/transport\/reopen$/);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ transport_id: "TRN-1" });
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer mgr-token");
+    expect(res.reopened).toEqual(["O1"]);
+  });
+
+  it("transportDraftCreated POSTs the request as-is with the manager token", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const event = {
+      event_id: "E1",
+      transport_id: "TRN-1",
+      event_type: "order_draft_created",
+      at: "2026-10-05T10:00:00Z",
+      details: "draft_id=r-1; mailbox=biuro@pitabros.pl",
+    };
+    const fetchMock = stubFetchJson(event);
+
+    const res = await api.transportDraftCreated({
+      transport_id: "TRN-1",
+      kind: "order",
+      gmail_draft_id: "r-1",
+      mailbox: "biuro@pitabros.pl",
+      approved_extras: ["2x karton"],
+      replaced_draft_id: "r-0",
+    });
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toMatch(/\/api\/manager\/transport\/draft-created$/);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      transport_id: "TRN-1",
+      kind: "order",
+      gmail_draft_id: "r-1",
+      mailbox: "biuro@pitabros.pl",
+      approved_extras: ["2x karton"],
+      replaced_draft_id: "r-0",
+    });
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer mgr-token");
+    expect(res.event_type).toBe("order_draft_created");
+  });
+});

@@ -6,21 +6,17 @@ import type {
   Location,
   ManagerOrderLineDetail,
   OrderableItem,
-  Supplier,
   TransportBatchDetail,
   TransportBatchOrder,
   TransportBatchSummary,
+  TransportEligibleOrder,
   TransportEvent,
 } from "../../../types";
 import {
   anyTransportDirty,
   buildExtraItemsSupplierBlock,
   buildTransportDriverPrintDoc,
-  buildTransportDriverText,
-  buildTransportEmailBody,
-  buildTransportEmailSubject,
   buildTransportAddAllOptions,
-  buildTransportGmailUrl,
   buildTransportMatrix,
   buildLogisticsOptions,
   buildTransportPagoPrintDoc,
@@ -29,7 +25,20 @@ import {
   collectLogisticsSuggestions,
   computePagoWarehouseExclusion,
   computeWeightStrip,
+  filterEligibleByCity,
+  filterTransportBatches,
+  latestTransportDraft,
+  LOGISTICS_FIELD_LABEL_KEYS,
+  missingLogisticsFields,
+  pagoExtraItemLines,
   parseConfigList,
+  parseTransportDraftEventDetails,
+  sortEligibleNewestFirst,
+  sortTransportBatches,
+  TRANSPORT_CHIP_SUPPLIER_IDS,
+  transportCityOptions,
+  transportLocationCity,
+  transportScopeFromChips,
   hasValidRecipient,
   loadSeenTransports,
   markTransportSeen,
@@ -110,86 +119,6 @@ function batch(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDet
   };
 }
 
-describe("buildTransportDriverText", () => {
-  it("includes the transport id, the date, per-product totals and the per-location breakdown", () => {
-    const text = buildTransportDriverText(batch(), makeT());
-    expect(text).toContain("TRN-20260821-BUKA-abc123");
-    expect(text).toContain("2026-08-21");
-    expect(text).toContain("Pomidory — 12 kg.");
-    expect(text).toContain("  Pita Bros Wola: 5 kg.");
-    expect(text).toContain("  Pita Bros Bracka: 7 kg.");
-  });
-
-  it("renders every product listed on the batch", () => {
-    const b = batch({
-      lines: [
-        {
-          product_id: "P1",
-          product_name_pl: "Pomidory",
-          supplier_product_id: "SP1",
-          supplier_product_name: "Pomidory malinowe",
-          purchase_unit: "kg",
-          total_qty_purchase: 12,
-          per_location: [],
-        },
-        {
-          product_id: "P2",
-          product_name_pl: "Cebula",
-          supplier_product_id: "SP2",
-          supplier_product_name: "Cebula czerwona",
-          purchase_unit: "karton",
-          total_qty_purchase: 3,
-          per_location: [],
-        },
-      ],
-    });
-    const text = buildTransportDriverText(b, makeT());
-    expect(text).toContain("Pomidory — 12 kg.");
-    expect(text).toContain("Cebula — 3 karton.");
-  });
-
-  it("is language-aware for the header labels (en)", () => {
-    const text = buildTransportDriverText(batch(), makeT("en"));
-    expect(text).toContain("Supplier: Bukat");
-  });
-});
-
-describe("buildTransportEmailSubject / buildTransportEmailBody", () => {
-  it("subject names the supplier and the date", () => {
-    const subject = buildTransportEmailSubject(batch(), makeT());
-    expect(subject).toContain("Bukat");
-    expect(subject).toContain("2026-08-21");
-  });
-
-  it("body lists per-product totals only — NO location name leaks in", () => {
-    const body = buildTransportEmailBody(batch(), makeT());
-    expect(body).toContain("Pomidory malinowe");
-    expect(body).toContain("12 kg");
-    expect(body).not.toContain("Pita Bros Wola");
-    expect(body).not.toContain("Pita Bros Bracka");
-    expect(body).not.toContain("WOLA");
-    expect(body).not.toContain("BRACKA");
-  });
-
-  it("falls back to product_name_pl when there is no supplier-facing name", () => {
-    const b = batch({
-      lines: [
-        {
-          product_id: "P2",
-          product_name_pl: "Cebula",
-          supplier_product_id: "SP2",
-          supplier_product_name: "",
-          purchase_unit: "kg",
-          total_qty_purchase: 3,
-          per_location: [],
-        },
-      ],
-    });
-    const body = buildTransportEmailBody(b, makeT());
-    expect(body).toContain("Cebula");
-  });
-});
-
 // ---- training-feedback-0901 F1: ad-hoc off-catalogue items on the Transport
 // path -------------------------------------------------------------------
 
@@ -237,46 +166,8 @@ describe("collectExtraItemsByLocation / buildExtraItemsSupplierBlock", () => {
   });
 });
 
-describe("buildTransportEmailBody / buildTransportDriverText — ad-hoc items (F1)", () => {
-  function batchWithExtraItems(items: [string | undefined, string | undefined]): TransportBatchDetail {
-    return batch({
-      orders: [
-        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [], extra_items: items[0] },
-        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_claimed", lines: [], extra_items: items[1] },
-      ],
-    });
-  }
-
-  it("buildTransportEmailBody lists the SAME item from two locations TWICE — never de-duplicated (10kg, not 5)", () => {
-    const body = buildTransportEmailBody(batchWithExtraItems(["Feta - 5 kg", "Feta - 5 kg"]), makeT());
-    const occurrences = body.split("Feta - 5 kg").length - 1;
-    expect(occurrences).toBe(2);
-  });
-
-  it("buildTransportEmailBody skips the block entirely when no order has an ad-hoc item", () => {
-    const body = buildTransportEmailBody(batchWithExtraItems([undefined, undefined]), makeT());
-    expect(body).not.toContain("Pozycje spoza katalogu");
-  });
-
-  it("buildTransportEmailBody carries NO location attribution for ad-hoc items", () => {
-    const body = buildTransportEmailBody(batchWithExtraItems(["Feta - 5 kg", undefined]), makeT());
-    expect(body).toContain("Feta - 5 kg");
-    expect(body).not.toContain("Wola");
-    expect(body).not.toContain("Bracka");
-  });
-
-  it("buildTransportDriverText lists the same ad-hoc item WITH location attribution for each location", () => {
-    const text = buildTransportDriverText(batchWithExtraItems(["Feta - 5 kg", "Feta - 5 kg"]), makeT());
-    expect(text).toContain("Pita Bros Wola: Feta - 5 kg");
-    expect(text).toContain("Pita Bros Bracka: Feta - 5 kg");
-  });
-
-  it("buildTransportDriverText omits the section when no order has an ad-hoc item", () => {
-    const text = buildTransportDriverText(batchWithExtraItems([undefined, undefined]), makeT());
-    expect(text).not.toContain("Pozycje spoza katalogu");
-  });
-
-  it("buildTransportDriverPrintDoc carries the same per-location ad-hoc entries as buildTransportDriverText", () => {
+describe("buildTransportDriverPrintDoc — ad-hoc items (F1)", () => {
+  it("buildTransportDriverPrintDoc carries the per-location ad-hoc entries", () => {
     const b = batch({
       orders: [
         { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [], extra_items: "Feta - 5 kg\nCebula - 2 kg" },
@@ -346,41 +237,6 @@ describe("splitRecipients / hasValidRecipient", () => {
 
   it("hasValidRecipient is true when at least one address carries @", () => {
     expect(hasValidRecipient("TBD, real@x.pl")).toBe(true);
-  });
-});
-
-describe("buildTransportGmailUrl", () => {
-  const supplier: Supplier = {
-    supplier_id: "SUP_BUKAT",
-    supplier_name: "Bukat",
-    email: "a@bukat.pl,b@bukat.pl",
-    ordering_method: "email",
-    active: true,
-    notes: "",
-  };
-
-  it("joins multiple recipients comma-separated in the to= param (distribution-list decision)", () => {
-    const { url } = buildTransportGmailUrl(batch(), supplier, makeT());
-    expect(decodeURIComponent(url)).toContain("to=a@bukat.pl,b@bukat.pl");
-  });
-
-  it("stays under the length guard for a normal-sized batch", () => {
-    const { tooLong } = buildTransportGmailUrl(batch(), supplier, makeT());
-    expect(tooLong).toBe(false);
-  });
-
-  it("flips tooLong once the assembled URL exceeds MAX_GMAIL_URL_LENGTH", () => {
-    const manyLines = Array.from({ length: 400 }, (_, i) => ({
-      product_id: `P${i}`,
-      product_name_pl: `Produkt bardzo długa nazwa numer ${i}`,
-      supplier_product_id: `SP${i}`,
-      supplier_product_name: `Produkt bardzo długa nazwa numer ${i}`,
-      purchase_unit: "kg",
-      total_qty_purchase: i,
-      per_location: [],
-    }));
-    const { tooLong } = buildTransportGmailUrl(batch({ lines: manyLines }), supplier, makeT());
-    expect(tooLong).toBe(true);
   });
 });
 
@@ -800,6 +656,10 @@ describe("transportEventTypeLabel", () => {
       "logistics_changed",
       "quantities_changed",
       "delivery_confirmed",
+      "order_draft_created",
+      "driver_draft_created",
+      "batch_reopened",
+      "batch_reopen_aborted",
     ];
     for (const type of known) {
       const label = transportEventTypeLabel(makeT(), type);
@@ -810,6 +670,18 @@ describe("transportEventTypeLabel", () => {
 
   it("falls back to the raw event_type for an unrecognized value", () => {
     expect(transportEventTypeLabel(makeT(), "some_future_event")).toBe("some_future_event");
+  });
+
+  it("labels the transport-v2 event types (pl + en)", () => {
+    expect(transportEventTypeLabel(makeT(), "order_draft_created")).toBe("Utworzono szkic zamówienia");
+    expect(transportEventTypeLabel(makeT(), "driver_draft_created")).toBe(
+      "Utworzono szkic listy kierowcy",
+    );
+    expect(transportEventTypeLabel(makeT(), "batch_reopened")).toBe("Cofnięto wysłanie");
+    expect(transportEventTypeLabel(makeT("en"), "batch_reopened")).toBe("Sending undone");
+    expect(transportEventTypeLabel(makeT(), "batch_reopen_aborted")).toBe(
+      "Cofnięcie wysłania przerwane — transport nadal wysłany",
+    );
   });
 });
 
@@ -871,10 +743,10 @@ describe("buildTransportDriverPrintDoc", () => {
     expect(buildTransportDriverPrintDoc(b, "Pago").sections[0].supplierBarText).toBe("Pago / LINEAGE");
   });
 
-  it("falls back to created date and empty driver/vehicle when logistics are unset", () => {
+  it("leaves date, driver, vehicle and time blank when logistics are unset (never the created date)", () => {
     const b = batch({ driver: null, vehicle: null, pickup_date: null, pickup_time: null });
     const doc = buildTransportDriverPrintDoc(b, "Bukat");
-    expect(doc.date).toBe("2026-08-21");
+    expect(doc.date).toBe("");
     expect(doc.driver).toBe("");
     expect(doc.vehicle).toBe("");
     expect(doc.time).toBe("");
@@ -914,6 +786,13 @@ describe("buildTransportDriverPrintDoc", () => {
 });
 
 describe("buildTransportPagoPrintDoc", () => {
+  it("leaves the pickup date blank when unset — never prints the created date as the pickup", () => {
+    const b = batch({ pickup_date: null, pickup_time: null });
+    const doc = buildTransportPagoPrintDoc(b, "Bukat");
+    expect(doc.pickupDate).toBe("");
+    expect(doc.pickupTime).toBe("");
+  });
+
   it("carries per-product totals only — the product table structurally never leaks a per-location split", () => {
     const b = batch({ pickup_date: "2026-08-23" });
     const doc = buildTransportPagoPrintDoc(b, "Bukat");
@@ -1233,10 +1112,21 @@ describe("transportDisplayLabel / transportAutoLabel", () => {
     expect(transportDisplayLabel(b, makeT(), { lang: "pl", locationsById })).toBe("Wtorkowy Pago");
   });
 
-  it("falls back to created when pickup_date is unset", () => {
+  it("does NOT fall back to created when pickup_date is unset (transport-v2: no fake pickup day)", () => {
     const b = batch({ created: "2026-08-21T09:15:00+00:00", pickup_date: undefined, location_ids: ["WOLA"] });
     const label = transportDisplayLabel(b, makeT(), { lang: "pl", locationsById });
-    expect(label).toBe("Transport Piątek · Warszawa · 21.08.26");
+    expect(label).toBe("Transport · Warszawa");
+    expect(label).not.toContain("Piątek");
+    expect(label).not.toContain("21.08.26");
+  });
+
+  it("a null or blank pickup_date also yields no weekday and no date (en too)", () => {
+    const nullPickup = batch({ created: "2026-10-05T08:00:00+00:00", pickup_date: null, location_ids: ["WOLA"] });
+    expect(transportAutoLabel(nullPickup, makeT(), { lang: "pl", locationsById })).toBe("Transport · Warszawa");
+    const blankPickup = batch({ pickup_date: "", location_ids: ["WOLA"] });
+    expect(transportAutoLabel(blankPickup, makeT("en"), { lang: "en", locationsById })).toBe(
+      "Transport · Warszawa",
+    );
   });
 
   it("omits the weekday/date segment gracefully when neither pickup_date nor created is set", () => {
@@ -1390,8 +1280,8 @@ describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
     const b = batch();
     expect(transportSuppliers(b)).toEqual([{ supplier_id: "SUP_BUKAT", supplier_name: "Bukat" }]);
     expect(leadSupplierView(b).lines).toEqual(b.lines);
-    expect(buildTransportDriverText(b, makeT())).toBe(
-      buildTransportDriverText({ ...b, suppliers: [] }, makeT()),
+    expect(buildTransportDriverPrintDoc(b, "x")).toEqual(
+      buildTransportDriverPrintDoc({ ...b, suppliers: [] }, "x"),
     );
   });
 
@@ -1401,13 +1291,10 @@ describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
     expect(transportSuppliers(b)[1].supplier_name).toBe("Magazyn własny Mory");
   });
 
-  it("the order e-mail lists Pago lines and Pago extra items only", () => {
-    const body = buildTransportEmailBody(mixedBatch(), makeT());
-    expect(body).toContain("Souvlaki karton");
-    expect(body).not.toContain("Souvlaki Mory");
-    expect(body).not.toContain("Pita paczka");
-    expect(body).toContain("Tacki - 2 opak");
-    expect(body).not.toContain("Serwetki");
+  it("the Pago extras checklist lists Pago members' extra items only", () => {
+    const lines = pagoExtraItemLines(mixedBatch());
+    expect(lines.map((l) => l.text)).toEqual(["Tacki - 2 opak"]);
+    expect(lines.map((l) => l.text)).not.toContain("Serwetki - 1 karton");
   });
 
   it("the Pago print doc lists Pago warehouse lines only; the exclusion notice ignores Mory", () => {
@@ -1430,15 +1317,9 @@ describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
     expect(pago).toContain("Warszawa");
   });
 
-  it("the driver text has a Pago block then a Mory block, plus every member's extra items", () => {
-    const text = buildTransportDriverText(mixedBatch(), makeT());
-    const pagoAt = text.indexOf("Dostawca: Pago");
-    const moryAt = text.indexOf("Dostawca: Magazyn własny Mory");
-    expect(pagoAt).toBeGreaterThan(-1);
-    expect(moryAt).toBeGreaterThan(pagoAt);
-    expect(text.indexOf("Souvlaki — 3 karton.")).toBeLessThan(moryAt);
-    expect(text.indexOf("Pita — 6 paczka.")).toBeGreaterThan(moryAt);
-    expect(text).toContain("Serwetki - 1 karton");
+  it("the driver print doc carries every member's extra items (Pago and Mory)", () => {
+    const doc = buildTransportDriverPrintDoc(mixedBatch(), "x");
+    expect(doc.extraItems.map((i) => i.text)).toEqual(["Tacki - 2 opak", "Serwetki - 1 karton"]);
   });
 
   it("the driver print doc has two sections, Pago / LINEAGE first, on shared columns", () => {
@@ -1460,10 +1341,370 @@ describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
     expect(buildTransportDriverPrintDoc(onlyMory, "x").sections.map((s) => s.supplierId)).toEqual([
       "SUP_MORY",
     ]);
-    expect(buildTransportDriverText(onlyMory, makeT())).not.toContain("Dostawca: Pago");
     const empty = mixedBatch({ lines: [] });
     const sections = buildTransportDriverPrintDoc(empty, "x").sections;
     expect(sections).toEqual([{ supplierId: "SUP_PAGO", supplierBarText: "Pago / LINEAGE", products: [] }]);
-    expect(buildTransportDriverText(empty, makeT())).toContain("Dostawca: Pago");
+  });
+});
+
+// ---- transport-v2 ----------------------------------------------------------
+
+describe("transport-v2 print docs: driver notes + approved Pago extras", () => {
+  it("buildTransportDriverPrintDoc carries the trimmed batch notes, '' when none", () => {
+    expect(buildTransportDriverPrintDoc(batch({ notes: "  Wjazd od tyłu  " }), "x").notes).toBe(
+      "Wjazd od tyłu",
+    );
+    expect(buildTransportDriverPrintDoc(batch({ notes: "   " }), "x").notes).toBe("");
+    expect(buildTransportDriverPrintDoc(batch(), "x").notes).toBe("");
+  });
+
+  it("buildTransportPagoPrintDoc defaults approvedExtraItems to [] even when members carry extras", () => {
+    const b = mixedBatch();
+    expect(buildTransportPagoPrintDoc(b, "Pago").approvedExtraItems).toEqual([]);
+  });
+
+  it("buildTransportPagoPrintDoc keeps only the approved texts — trimmed, blanks dropped, no location", () => {
+    const doc = buildTransportPagoPrintDoc(mixedBatch(), "Pago", ["  Tacki - 2 opak ", "", "   "]);
+    expect(doc.approvedExtraItems).toEqual(["Tacki - 2 opak"]);
+    expect(JSON.stringify(doc.approvedExtraItems)).not.toContain("Wola");
+  });
+});
+
+describe("transportScopeFromChips", () => {
+  it("lists the two chip suppliers, Pago first", () => {
+    expect(TRANSPORT_CHIP_SUPPLIER_IDS).toEqual(["SUP_PAGO", "SUP_MORY"]);
+  });
+
+  it("both chips -> Pago with companions", () => {
+    expect(transportScopeFromChips({ pago: true, mory: true })).toEqual({
+      leadSupplierId: "SUP_PAGO",
+      includeCompanions: true,
+    });
+  });
+
+  it("only Pago -> Pago alone", () => {
+    expect(transportScopeFromChips({ pago: true, mory: false })).toEqual({
+      leadSupplierId: "SUP_PAGO",
+      includeCompanions: false,
+    });
+  });
+
+  it("only Mory -> Mory alone", () => {
+    expect(transportScopeFromChips({ pago: false, mory: true })).toEqual({
+      leadSupplierId: "SUP_MORY",
+      includeCompanions: false,
+    });
+  });
+
+  it("neither chip is treated as both", () => {
+    expect(transportScopeFromChips({ pago: false, mory: false })).toEqual({
+      leadSupplierId: "SUP_PAGO",
+      includeCompanions: true,
+    });
+  });
+});
+
+const cityLocations: Record<string, Location> = {
+  WOLA: loc({ location_id: "WOLA", location_name: "Pita Bros Wola", city: "01-258 Warszawa" }),
+  BRACKA: loc({ location_id: "BRACKA", location_name: "Pita Bros Bracka", city: "Warsaw" }),
+  KEN: loc({ location_id: "KEN", location_name: "Pita Bros KEN", city: "warszawa" }),
+  POZ: loc({ location_id: "POZ", location_name: "Pita Bros Poznań", city: "Poznań" }),
+  KRK: loc({ location_id: "KRK", location_name: "Pita Bros Kraków", city: "Kraków" }),
+  NOCITY: loc({ location_id: "NOCITY", location_name: "Pita Bros Bez Miasta", city: "  " }),
+};
+
+describe("transportLocationCity / transportCityOptions", () => {
+  it("normalizes postal codes and the Warsaw alias", () => {
+    expect(transportLocationCity("WOLA", cityLocations)).toBe("Warszawa");
+    expect(transportLocationCity("BRACKA", cityLocations)).toBe("Warszawa");
+  });
+
+  it("returns null for an unknown location or a blank city — no location-name fallback", () => {
+    expect(transportLocationCity("MISSING", cityLocations)).toBeNull();
+    expect(transportLocationCity("NOCITY", cityLocations)).toBeNull();
+  });
+
+  it("options are unique (case-insensitive), sorted the Polish way, without unresolvable cities", () => {
+    expect(
+      transportCityOptions(["POZ", "WOLA", "KEN", "BRACKA", "KRK", "NOCITY", "MISSING"], cityLocations),
+    ).toEqual(["Kraków", "Poznań", "Warszawa"]);
+  });
+
+  it("first spelling wins for case-variants", () => {
+    expect(transportCityOptions(["KEN", "WOLA"], cityLocations)).toEqual(["warszawa"]);
+  });
+});
+
+function summary(overrides: Partial<TransportBatchSummary> = {}): TransportBatchSummary {
+  return {
+    transport_id: "TRN-X",
+    supplier_id: "SUP_PAGO",
+    supplier_name: "Pago",
+    created: "2026-10-01T08:00:00+00:00",
+    order_count: 1,
+    location_ids: ["WOLA"],
+    status: "sent",
+    ...overrides,
+  };
+}
+
+describe("sortTransportBatches", () => {
+  it("sorts by pickup date (else created date) newest first, then created newest first", () => {
+    const batches = [
+      summary({ transport_id: "A", created: "2026-10-01T08:00:00+00:00", pickup_date: null }),
+      summary({ transport_id: "B", created: "2026-09-20T08:00:00+00:00", pickup_date: "2026-10-03" }),
+      summary({ transport_id: "C", created: "2026-10-02T08:00:00+00:00", pickup_date: null }),
+      summary({ transport_id: "D", created: "2026-10-01T12:00:00+00:00", pickup_date: null }),
+      summary({ transport_id: "E", created: "2026-09-30T08:00:00+00:00", pickup_date: "2026-10-01" }),
+    ];
+    // B (10-03) > C (10-02) > [D, A, E] on 10-01, ordered by created desc.
+    expect(sortTransportBatches(batches).map((b) => b.transport_id)).toEqual([
+      "B",
+      "C",
+      "D",
+      "A",
+      "E",
+    ]);
+  });
+
+  it("puts a batch with no date at all last and keeps ties in input order", () => {
+    const batches = [
+      summary({ transport_id: "NODATE", created: null, pickup_date: null }),
+      summary({ transport_id: "T1", created: "2026-10-01T08:00:00+00:00" }),
+      summary({ transport_id: "T2", created: "2026-10-01T08:00:00+00:00" }),
+    ];
+    expect(sortTransportBatches(batches).map((b) => b.transport_id)).toEqual(["T1", "T2", "NODATE"]);
+  });
+
+  it("returns a new array and leaves the input untouched", () => {
+    const batches = [summary({ transport_id: "old", created: "2026-09-01T08:00:00+00:00" }), summary({ transport_id: "new" })];
+    const copy = [...batches];
+    const sorted = sortTransportBatches(batches);
+    expect(sorted).not.toBe(batches);
+    expect(batches).toEqual(copy);
+  });
+});
+
+describe("filterTransportBatches", () => {
+  const both = new Set(["SUP_PAGO", "SUP_MORY"]);
+
+  it("keeps a batch when any supplier_ids entry is selected", () => {
+    const batches = [
+      summary({ transport_id: "PAGO", supplier_ids: ["SUP_PAGO"] }),
+      summary({ transport_id: "MIXED", supplier_ids: ["SUP_PAGO", "SUP_MORY"] }),
+      summary({ transport_id: "MORY", supplier_id: "SUP_MORY", supplier_ids: ["SUP_MORY"] }),
+    ];
+    const onlyMory = filterTransportBatches(batches, { supplierIds: new Set(["SUP_MORY"]), cities: null }, cityLocations);
+    expect(onlyMory.map((b) => b.transport_id)).toEqual(["MIXED", "MORY"]);
+  });
+
+  it("falls back to [supplier_id] when supplier_ids is missing or empty", () => {
+    const batches = [
+      summary({ transport_id: "OLD", supplier_ids: undefined }),
+      summary({ transport_id: "EMPTY", supplier_ids: [] }),
+      summary({ transport_id: "BUKAT", supplier_id: "SUP_BUKAT", supplier_ids: undefined }),
+    ];
+    const res = filterTransportBatches(batches, { supplierIds: both, cities: null }, cityLocations);
+    expect(res.map((b) => b.transport_id)).toEqual(["OLD", "EMPTY"]);
+  });
+
+  it("cities = null means no city filter", () => {
+    const batches = [summary({ transport_id: "POZ", location_ids: ["POZ"] })];
+    expect(filterTransportBatches(batches, { supplierIds: both, cities: null }, cityLocations)).toHaveLength(1);
+  });
+
+  it("keeps a batch with any location in a selected city (case-insensitive)", () => {
+    const batches = [
+      summary({ transport_id: "WAW", location_ids: ["WOLA"] }),
+      summary({ transport_id: "POZ", location_ids: ["POZ"] }),
+      summary({ transport_id: "MIX", location_ids: ["POZ", "KEN"] }),
+    ];
+    const res = filterTransportBatches(
+      batches,
+      { supplierIds: both, cities: new Set(["WARSZAWA"]) },
+      cityLocations,
+    );
+    expect(res.map((b) => b.transport_id)).toEqual(["WAW", "MIX"]);
+  });
+
+  it("always keeps a batch without locations or with a location whose city is unknown", () => {
+    const batches = [
+      summary({ transport_id: "NOLOC", location_ids: [] }),
+      summary({ transport_id: "NOCITY", location_ids: ["POZ", "NOCITY"] }),
+      summary({ transport_id: "UNKNOWN", location_ids: ["MISSING"] }),
+      summary({ transport_id: "POZ", location_ids: ["POZ"] }),
+    ];
+    const res = filterTransportBatches(
+      batches,
+      { supplierIds: both, cities: new Set(["Kraków"]) },
+      cityLocations,
+    );
+    expect(res.map((b) => b.transport_id)).toEqual(["NOLOC", "NOCITY", "UNKNOWN"]);
+  });
+
+  it("an empty city set hides every batch that has a resolvable city", () => {
+    const batches = [summary({ transport_id: "WAW", location_ids: ["WOLA"] })];
+    expect(filterTransportBatches(batches, { supplierIds: both, cities: new Set() }, cityLocations)).toEqual([]);
+  });
+});
+
+function eligible(overrides: Partial<TransportEligibleOrder> = {}): TransportEligibleOrder {
+  return {
+    order_id: "O-1",
+    location_id: "WOLA",
+    location_name: "Pita Bros Wola",
+    supplier_id: "SUP_PAGO",
+    supplier_name: "Pago",
+    order_date: "2026-10-01",
+    status: "captain_submitted",
+    captain_submitted_at: "2026-10-01T08:00:00+00:00",
+    line_count: 3,
+    ...overrides,
+  };
+}
+
+describe("filterEligibleByCity / sortEligibleNewestFirst", () => {
+  it("applies the city rule (unknown city always shows; null = no filter)", () => {
+    const orders = [
+      eligible({ order_id: "W", location_id: "WOLA" }),
+      eligible({ order_id: "P", location_id: "POZ" }),
+      eligible({ order_id: "N", location_id: "NOCITY" }),
+    ];
+    expect(filterEligibleByCity(orders, new Set(["Poznań"]), cityLocations).map((o) => o.order_id)).toEqual([
+      "P",
+      "N",
+    ]);
+    expect(filterEligibleByCity(orders, null, cityLocations)).toHaveLength(3);
+  });
+
+  it("merges the Pago and Mory blocks into one newest-first list", () => {
+    // The backend returns the lead block newest-first, then the companion block.
+    const orders = [
+      eligible({ order_id: "P2", captain_submitted_at: "2026-10-04T08:00:00+00:00" }),
+      eligible({ order_id: "P1", captain_submitted_at: "2026-09-21T08:00:00+00:00" }),
+      eligible({ order_id: "M2", supplier_id: "SUP_MORY", captain_submitted_at: "2026-10-05T08:00:00+00:00" }),
+      eligible({ order_id: "M1", supplier_id: "SUP_MORY", captain_submitted_at: "2026-09-30T08:00:00+00:00" }),
+    ];
+    expect(sortEligibleNewestFirst(orders).map((o) => o.order_id)).toEqual(["M2", "P2", "M1", "P1"]);
+  });
+
+  it("falls back to order_date, puts undated orders last and keeps ties stable", () => {
+    const orders = [
+      eligible({ order_id: "NONE", captain_submitted_at: null, order_date: "" }),
+      eligible({ order_id: "BYDATE", captain_submitted_at: null, order_date: "2026-10-03" }),
+      eligible({ order_id: "T1", captain_submitted_at: "2026-10-02T08:00:00+00:00" }),
+      eligible({ order_id: "T2", captain_submitted_at: "2026-10-02T08:00:00+00:00" }),
+    ];
+    const copy = [...orders];
+    expect(sortEligibleNewestFirst(orders).map((o) => o.order_id)).toEqual(["BYDATE", "T1", "T2", "NONE"]);
+    expect(orders).toEqual(copy);
+  });
+});
+
+describe("pagoExtraItemLines", () => {
+  it("lists the lead supplier's non-blank extra lines with stable unique keys", () => {
+    const b = batch({
+      supplier_id: "SUP_PAGO",
+      supplier_name: "Pago",
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_claimed", lines: [], extra_items: "Feta - 5 kg\n\n  \nCebula - 2 kg" },
+        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_claimed", lines: [], extra_items: "Feta - 5 kg" },
+        { order_id: "ORD-3", location_id: "KEN", location_name: "Pita Bros KEN", status: "manager_claimed", lines: [] },
+      ],
+    });
+    const lines = pagoExtraItemLines(b);
+    expect(lines).toEqual([
+      { key: "ORD-1#0", orderId: "ORD-1", locationName: "Pita Bros Wola", text: "Feta - 5 kg" },
+      { key: "ORD-1#1", orderId: "ORD-1", locationName: "Pita Bros Wola", text: "Cebula - 2 kg" },
+      { key: "ORD-2#0", orderId: "ORD-2", locationName: "Pita Bros Bracka", text: "Feta - 5 kg" },
+    ]);
+    expect(new Set(lines.map((l) => l.key)).size).toBe(lines.length);
+    // Same input -> same keys.
+    expect(pagoExtraItemLines(b).map((l) => l.key)).toEqual(lines.map((l) => l.key));
+  });
+
+  it("never includes a companion (Magazyn Mory) member's extras", () => {
+    expect(pagoExtraItemLines(mixedBatch()).map((l) => l.orderId)).toEqual(["ORD-P"]);
+  });
+});
+
+describe("missingLogisticsFields", () => {
+  it("lists empty fields in the fixed order; blank and whitespace count as missing", () => {
+    expect(
+      missingLogisticsFields({ pickup_date: null, pickup_time: "  ", driver: "", vehicle: undefined }),
+    ).toEqual(["pickup_date", "pickup_time", "driver", "vehicle"]);
+    expect(
+      missingLogisticsFields({ pickup_date: "2026-10-06", pickup_time: null, driver: "Jan", vehicle: " " }),
+    ).toEqual(["pickup_time", "vehicle"]);
+    expect(
+      missingLogisticsFields({ pickup_date: "2026-10-06", pickup_time: "07:00", driver: "Jan", vehicle: "Ducato" }),
+    ).toEqual([]);
+  });
+
+  it("maps every field to the Logistics panel label", () => {
+    const t = makeT();
+    expect(t(LOGISTICS_FIELD_LABEL_KEYS.pickup_date)).toBe("Data odbioru");
+    expect(t(LOGISTICS_FIELD_LABEL_KEYS.pickup_time)).toBe("Godzina odbioru");
+    expect(t(LOGISTICS_FIELD_LABEL_KEYS.driver)).toBe("Kierowca");
+    expect(t(LOGISTICS_FIELD_LABEL_KEYS.vehicle)).toBe("Samochód");
+  });
+});
+
+describe("parseTransportDraftEventDetails / latestTransportDraft", () => {
+  it("parses the backend format, extras last (may contain '; ' and '=')", () => {
+    expect(
+      parseTransportDraftEventDetails(
+        "draft_id=r-123; mailbox=biuro@pitabros.pl; replaced=r-100; extras=Feta - 5 kg | Sos; czosnek=2 | Tacki",
+      ),
+    ).toEqual({
+      draftId: "r-123",
+      mailbox: "biuro@pitabros.pl",
+      replacedDraftId: "r-100",
+      extras: ["Feta - 5 kg", "Sos; czosnek=2", "Tacki"],
+    });
+    expect(parseTransportDraftEventDetails("draft_id=r1; mailbox=")).toEqual({
+      draftId: "r1",
+      mailbox: "",
+      replacedDraftId: "",
+      extras: [],
+    });
+  });
+
+  it("returns null without a valid draft_id", () => {
+    expect(parseTransportDraftEventDetails("")).toBeNull();
+    expect(parseTransportDraftEventDetails("mailbox=biuro@pitabros.pl")).toBeNull();
+    expect(parseTransportDraftEventDetails("draft_id=bad id; mailbox=x")).toBeNull();
+  });
+
+  it("picks the newest event of the requested kind", () => {
+    const events = [
+      event({ event_id: "d1", event_type: "driver_draft_created", at: "2026-10-05T12:00:00+00:00", details: "draft_id=r-d1; mailbox=biuro@pitabros.pl" }),
+      event({ event_id: "o1", event_type: "order_draft_created", at: "2026-10-05T10:00:00+00:00", details: "draft_id=r-o1; mailbox=biuro@pitabros.pl" }),
+      event({ event_id: "o2", event_type: "order_draft_created", at: "2026-10-05T11:00:00+00:00", details: "draft_id=r-o2; mailbox=biuro@pitabros.pl; replaced=r-o1" }),
+      event({ event_id: "s", event_type: "batch_sent", at: "2026-10-05T13:00:00+00:00", details: "" }),
+    ];
+    expect(latestTransportDraft(events, "order")).toEqual({
+      draftId: "r-o2",
+      mailbox: "biuro@pitabros.pl",
+      at: "2026-10-05T11:00:00+00:00",
+    });
+    expect(latestTransportDraft(events, "driver")?.draftId).toBe("r-d1");
+  });
+
+  it("skips unparseable events, treats a missing time as oldest, keeps the first of a tie", () => {
+    const events = [
+      event({ event_type: "order_draft_created", at: "2026-10-05T11:00:00+00:00", details: "draft_id=r-a; mailbox=m" }),
+      event({ event_type: "order_draft_created", at: "2026-10-05T11:00:00+00:00", details: "draft_id=r-b; mailbox=m" }),
+      event({ event_type: "order_draft_created", at: "2026-10-05T12:00:00+00:00", details: "garbage" }),
+      event({ event_type: "order_draft_created", at: null, details: "draft_id=r-c; mailbox=m" }),
+    ];
+    expect(latestTransportDraft(events, "order")?.draftId).toBe("r-a");
+    expect(latestTransportDraft([events[3]], "order")).toEqual({ draftId: "r-c", mailbox: "m", at: "" });
+  });
+
+  it("returns null when there is no draft event (or no events)", () => {
+    expect(latestTransportDraft([event({ event_type: "batch_sent" })], "order")).toBeNull();
+    expect(latestTransportDraft(null, "order")).toBeNull();
+    expect(latestTransportDraft(undefined, "driver")).toBeNull();
   });
 });

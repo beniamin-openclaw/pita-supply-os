@@ -6,8 +6,22 @@
 // set logistics (driver/vehicle/pickup/limit), preview the total weight — and
 // finally finalize (draft -> sent), which mirrors v1's totals/driver-list/
 // email/copy view exactly, now read-only.
+//
+// transport-v2: the supplier <select> is replaced by a filter bar — supplier
+// chips (Pago / Magazyn Mory, at least one stays on) pick the eligible-list
+// scope and filter the history; city tiles filter both lists. Everything that
+// sends or marks a batch (Gmail drafts, mark-only, undo) lives in
+// TransportSendPanel.
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Loader2 } from "lucide-react";
 
@@ -15,16 +29,13 @@ import { api, ApiError } from "../../apiClient";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { roundQty } from "../../components/ui/number";
 import { useT } from "../../i18n";
-import { isOrderingSupplier } from "../../lib/orderingSuppliers";
+import type { StringKey } from "../../i18n/strings";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
 import {
   anyTransportDirty,
-  buildTransportDriverText,
-  buildTransportGmailUrl,
   collectCaptainNotes,
   collectLogisticsSuggestions,
   computePagoWarehouseExclusion,
-  hasValidRecipient,
   loadSeenTransports,
   markTransportSeen,
   parseConfigList,
@@ -36,7 +47,14 @@ import {
   lineSupplierId,
   transportOrdersFor,
   transportSuppliers,
-  TRANSPORT_COMPANION_SUPPLIER_IDS,
+  transportScopeFromChips,
+  transportCityOptions,
+  filterEligibleByCity,
+  filterTransportBatches,
+  sortEligibleNewestFirst,
+  sortTransportBatches,
+  TRANSPORT_CHIP_SUPPLIER_IDS,
+  type TransportChips,
   type TransportDraftMap,
 } from "./lib/transport";
 import { AddLocationPicker } from "./transport/AddLocationPicker";
@@ -44,8 +62,8 @@ import { HistorySection } from "./transport/HistorySection";
 import { LocationMultiSelectModal } from "./transport/LocationMultiSelectModal";
 import { LogisticsPanel } from "./transport/LogisticsPanel";
 import { PagoExclusionNotice } from "./transport/PagoExclusionNotice";
-import { PrintViews } from "./transport/PrintViews";
 import { TransportMatrix } from "./transport/TransportMatrix";
+import { TransportSendPanel, type TransportDocLabels } from "./transport/TransportSendPanel";
 import { WeightStrip } from "./transport/WeightStrip";
 import type {
   Location,
@@ -57,6 +75,7 @@ import type {
   TransportBatchSummary,
   TransportDraftConfig,
   TransportEligibleOrder,
+  TransportFinalizeResponse,
   TransportSkippedOrder,
 } from "../../types";
 
@@ -77,14 +96,67 @@ interface CancelResult {
   skipped: TransportSkippedOrder[];
 }
 
-export function TransportPage() {
+type EligibleScope = { leadSupplierId: string; includeCompanions: boolean };
+
+// The history is fetched once, across all suppliers, newest first.
+const TRANSPORT_HISTORY_LIMIT = 100;
+
+const DEFAULT_CHIPS: TransportChips = { pago: true, mory: true };
+
+// The filter bar's supplier chips, in display order.
+const CHIP_DEFS: ReadonlyArray<{
+  key: keyof TransportChips;
+  supplierId: string;
+  labelKey: StringKey;
+}> = [
+  { key: "pago", supplierId: TRANSPORT_CHIP_SUPPLIER_IDS[0], labelKey: "manager.transport.filter.chip.pago" },
+  { key: "mory", supplierId: TRANSPORT_CHIP_SUPPLIER_IDS[1], labelKey: "manager.transport.filter.chip.mory" },
+];
+
+/** Is this supplier's chip on? A supplier without a chip always counts as on. */
+function chipOn(chips: TransportChips, supplierId: string): boolean {
+  const def = CHIP_DEFS.find((d) => d.supplierId === supplierId);
+  return def ? chips[def.key] : true;
+}
+
+/** The city filter for a set of switched-off tiles (lowercase keys):
+ * null = every tile on = no filter. */
+function cityFilterFor(
+  options: string[],
+  excluded: ReadonlySet<string>,
+): ReadonlySet<string> | null {
+  if (excluded.size === 0) return null;
+  return new Set(options.filter((c) => !excluded.has(c.toLowerCase())));
+}
+
+/** One automatic retry of a failed draft-config fetch, after this delay. */
+const DRAFT_CONFIG_RETRY_MS = 3000;
+
+/** State of the draft-config fetch, as the send panel needs it. */
+type DraftConfigStatus = "loading" | "ready" | "failed";
+
+/** A batch's suppliers (lead first); an older backend sends no list. */
+function batchSupplierIds(b: TransportBatchSummary): string[] {
+  return b.supplier_ids && b.supplier_ids.length > 0 ? b.supplier_ids : [b.supplier_id];
+}
+
+export function TransportPage(): ReactElement {
   const { t, lang, formatDateTime } = useT();
   const navigate = useNavigate();
 
-  // Supplier picker ------------------------------------------------------------
+  // Filter bar (transport-v2) -----------------------------------------------
+  // Supplier chips: both on by default, the last one on cannot be turned off;
+  // they pick the eligible-list scope and filter the history. City tiles:
+  // every city on by default; `excludedCities` holds the lowercase keys of
+  // the tiles switched off (empty = no city filter).
+  const [chips, setChips] = useState<TransportChips>(DEFAULT_CHIPS);
+  const scope = useMemo<EligibleScope>(() => transportScopeFromChips(chips), [chips]);
+  const [excludedCities, setExcludedCities] = useState<ReadonlySet<string>>(() => new Set());
+
+  // Supplier master data — no longer a picker: the lead supplier's e-mail
+  // (send panel) and the names on the history badges. Unfiltered.
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
-  const [supplierId, setSupplierId] = useState<string>("");
 
   // Locations master data — for the draft "add location" picker (Manager-only
   // caller; api.locations needs role="manager" or it 401s silently).
@@ -117,27 +189,52 @@ export function TransportPage() {
   }, [locations]);
   const displayLabelOpts = useMemo(() => ({ lang, locationsById }), [lang, locationsById]);
 
+  // City tiles over ALL manager locations (not only those with orders), so a
+  // tile never appears or disappears as the lists reload.
+  const cityOptions = useMemo(
+    () => transportCityOptions(locations.map((l) => l.location_id), locationsById),
+    [locations, locationsById],
+  );
+  const cityFilter = useMemo(
+    () => cityFilterFor(cityOptions, excludedCities),
+    [cityOptions, excludedCities],
+  );
+
   // v4/v5: "Zrob draft w Gmailu" driver-recipients + operator-configured
   // driver/vehicle dictionaries (Logistics panel dropdowns) all come off ONE
   // draft-config fetch — kept as the whole object so downstream consumers
-  // (PrintViews' driverRecipients, LogisticsPanel's driverOptions/
-  // vehicleOptions) each project the field they need. Fetched once; a 401 is
-  // ignored (mirrors the suppliers effect above), any other failure degrades
-  // to null (each consumer then sees its own "" degrade — same contract as
-  // before this refactor).
+  // (TransportSendPanel's driverRecipients/orderMailbox, LogisticsPanel's
+  // driverOptions/vehicleOptions) each project the field they need. Fetched
+  // on mount and retried ONCE after DRAFT_CONFIG_RETRY_MS; a second failure
+  // degrades to null (each consumer then sees its own "" degrade) and the
+  // send panel says to reload instead of claiming there is no mailbox.
   const [draftConfig, setDraftConfig] = useState<TransportDraftConfig | null>(null);
+  const [draftConfigStatus, setDraftConfigStatus] = useState<DraftConfigStatus>("loading");
   useEffect(() => {
     let cancelled = false;
-    api
-      .transportDraftConfig()
-      .then((cfg) => {
-        if (!cancelled) setDraftConfig(cfg);
-      })
-      .catch(() => {
-        if (!cancelled) setDraftConfig(null);
-      });
+    let retryTimer: number | null = null;
+    const load = (retriesLeft: number): void => {
+      api
+        .transportDraftConfig()
+        .then((cfg) => {
+          if (cancelled) return;
+          setDraftConfig(cfg);
+          setDraftConfigStatus("ready");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (retriesLeft > 0) {
+            retryTimer = window.setTimeout(() => load(retriesLeft - 1), DRAFT_CONFIG_RETRY_MS);
+            return;
+          }
+          setDraftConfig(null);
+          setDraftConfigStatus("failed");
+        });
+    };
+    load(1);
     return () => {
       cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
   }, []);
   const driverRecipients = draftConfig?.driver_recipients || null;
@@ -167,22 +264,46 @@ export function TransportPage() {
   const [eligibleError, setEligibleError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const loadEligible = useCallback((sid: string) => {
-    setEligible(null);
-    setEligibleError(null);
-    setSelected(new Set());
+  // Latest request wins — chip clicks can overlap a slow response.
+  const eligibleRequestRef = useRef(0);
+  const fetchEligible = useCallback((s: EligibleScope): void => {
+    const request = ++eligibleRequestRef.current;
     api
-      .transportEligible(sid)
-      .then((data) => setEligible(data))
+      .transportEligible(s.leadSupplierId, s.includeCompanions)
+      .then((data) => {
+        if (request === eligibleRequestRef.current) setEligible(data);
+      })
       .catch((e: ApiError) => {
-        if (e.status !== 401) setEligibleError(e.detail);
+        if (request === eligibleRequestRef.current && e.status !== 401) {
+          setEligibleError(e.detail);
+        }
       });
   }, []);
+
+  const loadEligible = useCallback(
+    (s: EligibleScope): void => {
+      setEligible(null);
+      setEligibleError(null);
+      setSelected(new Set());
+      fetchEligible(s);
+    },
+    [fetchEligible],
+  );
+
+  // Initial load with the default chips. fetchEligible sets state only from
+  // promise callbacks, never synchronously in this effect body
+  // (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    fetchEligible(transportScopeFromChips(DEFAULT_CHIPS));
+  }, [fetchEligible]);
 
   // Past batches -----------------------------------------------------------------
   const [batches, setBatches] = useState<TransportBatchSummary[] | null>(null);
   const [batchesError, setBatchesError] = useState<string | null>(null);
   const [selectedTransportId, setSelectedTransportId] = useState<string | null>(null);
+  // The open batch, readable from async callbacks: a refresh that resolves
+  // after the Manager opened another batch must not overwrite it.
+  const selectedIdRef = useRef<string | null>(null);
   const [detail, setDetail] = useState<TransportBatchDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -205,11 +326,14 @@ export function TransportPage() {
   const [logisticsSaving, setLogisticsSaving] = useState(false);
   const [addLocationBusy, setAddLocationBusy] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null); // add-product / remove-order per column
-  const [finalizing, setFinalizing] = useState(false);
   const [finalizeResult, setFinalizeResult] = useState<FinalizeResult | null>(null);
-  const [savingAndSending, setSavingAndSending] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelResult, setCancelResult] = useState<CancelResult | null>(null);
+
+  // Reported by the open batch's panels (both reset to false on unmount):
+  // unsaved Logistics edits, and a send / mark-only / undo in progress.
+  const [logisticsDirty, setLogisticsDirty] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
 
   // v3 Phase 7 — cancelled batches hidden from the list by default.
   const [showCancelled, setShowCancelled] = useState(false);
@@ -218,60 +342,41 @@ export function TransportPage() {
   const [gridCreateOpen, setGridCreateOpen] = useState(false);
   const [gridCreateBusy, setGridCreateBusy] = useState(false);
 
-  const loadBatches = useCallback((sid: string, includeCancelled = showCancelled) => {
-    setBatches(null);
-    setBatchesError(null);
-    setSelectedTransportId(null);
-    setDetail(null);
+  // History: ONE fetch across all suppliers, filtered and sorted client-side
+  // by the chips and city tiles. Latest request wins.
+  const batchesRequestRef = useRef(0);
+  const fetchBatches = useCallback((includeCancelled: boolean): void => {
+    const request = ++batchesRequestRef.current;
     api
-      .transportBatches(sid, undefined, includeCancelled)
-      .then((data) => setBatches(data))
+      .transportBatches(undefined, TRANSPORT_HISTORY_LIMIT, includeCancelled)
+      .then((data) => {
+        if (request !== batchesRequestRef.current) return;
+        setBatches(data);
+        setBatchesError(null);
+      })
       .catch((e: ApiError) => {
-        if (e.status !== 401) setBatchesError(e.detail);
+        if (request === batchesRequestRef.current && e.status !== 401) setBatchesError(e.detail);
       });
-  }, [showCancelled]);
+  }, []);
 
-  // Supplier picker triggers both loads on change — deliberately NOT a
-  // useEffect reacting to `supplierId`: that pattern calls setState
-  // synchronously from the effect body (react-hooks/set-state-in-effect).
-  // Loads instead fire from the promise callback below (async — the initial
-  // default pick) and from the <select> onChange handler (an event handler),
-  // both of which are outside an effect body.
-  const selectSupplier = useCallback(
-    (sid: string) => {
-      setSupplierId(sid);
-      loadEligible(sid);
-      loadBatches(sid);
-    },
-    [loadEligible, loadBatches],
-  );
+  // List-only refetch: never resets the open detail (it used to close the
+  // draft panel mid-edit and discard unsaved matrix edits).
+  const reloadBatchList = useCallback((): void => {
+    fetchBatches(showCancelled);
+  }, [fetchBatches, showCancelled]);
+
+  useEffect(() => {
+    fetchBatches(false);
+  }, [fetchBatches]);
 
   useEffect(() => {
     let cancelled = false;
     api
       // "manager": this screen only ever holds a Manager token, so the default
-      // captain role would send no Authorization header and 401 — leaving the
-      // picker empty and both sections stuck on "Ładowanie…".
+      // captain role would send no Authorization header and 401.
       .suppliers("manager")
       .then((data) => {
-        if (cancelled) return;
-        // Active, and not on-site production (SUP_INTERNAL) — lib/orderingSuppliers.
-        // Companion suppliers (Magazyn Mory) ride on the Pago run and have no
-        // run of their own, so they are not offered here
-        // (transport-pago-mory-combined).
-        const active = data.filter(
-          (s) => isOrderingSupplier(s) && !TRANSPORT_COMPANION_SUPPLIER_IDS.includes(s.supplier_id),
-        );
-        setSuppliers(active);
-        const pago = active.find((s) => s.supplier_id === "SUP_PAGO");
-        const defaultId = pago ? pago.supplier_id : (active[0]?.supplier_id ?? "");
-        if (defaultId) {
-          selectSupplier(defaultId);
-        } else {
-          // No active supplier to pick: nothing will ever trigger a load, so
-          // say so instead of spinning forever.
-          setSuppliersError(t("manager.transport.noSuppliers"));
-        }
+        if (!cancelled) setSuppliers(data);
       })
       .catch((e: ApiError) => {
         if (!cancelled && e.status !== 401) setSuppliersError(e.detail);
@@ -279,14 +384,9 @@ export function TransportPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectSupplier, t]);
+  }, []);
 
-  const supplier = useMemo(
-    () => suppliers?.find((s) => s.supplier_id === supplierId) ?? null,
-    [suppliers, supplierId],
-  );
-
-  const toggleSelected = (orderId: string) => {
+  const toggleSelected = (orderId: string): void => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(orderId)) next.delete(orderId);
@@ -295,15 +395,84 @@ export function TransportPage() {
     });
   };
 
-  const selectionTotal = useMemo(() => {
-    if (!eligible) return 0;
-    return eligible
-      .filter((o) => selected.has(o.order_id))
-      .reduce((sum, o) => sum + (o.total_value_estimate_pln ?? 0), 0);
-  }, [eligible, selected]);
+  // The eligible list as shown: newest first, city-filtered.
+  const visibleEligibleFor = useCallback(
+    (cities: ReadonlySet<string> | null): TransportEligibleOrder[] =>
+      eligible
+        ? filterEligibleByCity(sortEligibleNewestFirst(eligible), cities, locationsById)
+        : [],
+    [eligible, locationsById],
+  );
+  const visibleEligible = useMemo(
+    () => visibleEligibleFor(cityFilter),
+    [visibleEligibleFor, cityFilter],
+  );
+
+  // The selection as the Manager sees it: only visible orders count, are
+  // summed and go to create — a hidden order is never combined.
+  const selectedVisible = useMemo(
+    () => visibleEligible.filter((o) => selected.has(o.order_id)),
+    [visibleEligible, selected],
+  );
+  const selectionTotal = useMemo(
+    () => selectedVisible.reduce((sum, o) => sum + (o.total_value_estimate_pln ?? 0), 0),
+    [selectedVisible],
+  );
+
+  // ---- filter bar handlers -----------------------------------------------------
+
+  const toggleChip = (key: keyof TransportChips): void => {
+    const next: TransportChips = { ...chips, [key]: !chips[key] };
+    if (!next.pago && !next.mory) return; // the last chip on stays on
+    setChips(next);
+    loadEligible(transportScopeFromChips(next));
+  };
+
+  const applyExcludedCities = (next: ReadonlySet<string>): void => {
+    setExcludedCities(next);
+    // Prune the selection to what stays visible, so switching a city back on
+    // never brings back a forgotten tick.
+    const visibleIds = new Set(
+      visibleEligibleFor(cityFilterFor(cityOptions, next)).map((o) => o.order_id),
+    );
+    setSelected((prev) => new Set([...prev].filter((id) => visibleIds.has(id))));
+  };
+
+  const toggleCity = (city: string): void => {
+    const key = city.toLowerCase();
+    const next = new Set(excludedCities);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    applyExcludedCities(next);
+  };
+
+  const resetCities = (): void => applyExcludedCities(new Set());
+
+  // History rows: only batches carrying a supplier whose chip is on, in the
+  // selected cities, newest run first.
+  const visibleBatches = useMemo(() => {
+    if (!batches) return null;
+    const supplierIds = new Set(
+      CHIP_DEFS.filter((d) => chips[d.key]).map((d) => d.supplierId),
+    );
+    return sortTransportBatches(
+      filterTransportBatches(batches, { supplierIds, cities: cityFilter }, locationsById),
+    );
+  }, [batches, chips, cityFilter, locationsById]);
+
+  // Short supplier name for a badge: the chip label for Pago / Magazyn Mory,
+  // else the master-data name.
+  const supplierBadgeName = useCallback(
+    (id: string, fallback?: string): string => {
+      const def = CHIP_DEFS.find((d) => d.supplierId === id);
+      if (def) return t(def.labelKey);
+      return suppliers?.find((s) => s.supplier_id === id)?.supplier_name || fallback || id;
+    },
+    [suppliers, t],
+  );
 
   // Batch detail ----------------------------------------------------------------
-  const fetchOrderable = useCallback((batchDetail: TransportBatchDetail) => {
+  const fetchOrderable = useCallback((batchDetail: TransportBatchDetail): void => {
     if (batchDetail.status !== "draft") {
       setOrderableByOrderId({});
       return;
@@ -320,22 +489,29 @@ export function TransportPage() {
           .catch(() => [o.order_id, []] as const),
       ),
     ).then((pairs) => {
+      // A late answer for a batch that is no longer open must not overwrite
+      // the open batch's catalogue.
+      if (selectedIdRef.current !== batchDetail.transport_id) return;
       setOrderableByOrderId(Object.fromEntries(pairs));
     });
   }, []);
 
   const selectBatch = useCallback(
-    (transportId: string) => {
+    (transportId: string): void => {
       setSelectedTransportId(transportId);
+      selectedIdRef.current = transportId;
       setDetail(null);
       setDetailError(null);
       setDetailLoading(true);
       setDrafts({});
       setOrderableByOrderId({});
       setFinalizeResult(null);
+      setCancelResult(null);
       api
         .transportBatch(transportId)
         .then((d) => {
+          // Click A, then B: A's late answer must not replace B.
+          if (selectedIdRef.current !== transportId) return;
           setDetail(d);
           setDrafts(seedTransportDrafts(d.orders));
           fetchOrderable(d);
@@ -344,9 +520,12 @@ export function TransportPage() {
           scrollDetailIntoView();
         })
         .catch((e: ApiError) => {
+          if (selectedIdRef.current !== transportId) return;
           if (e.status !== 401) setDetailError(e.detail);
         })
-        .finally(() => setDetailLoading(false));
+        .finally(() => {
+          if (selectedIdRef.current === transportId) setDetailLoading(false);
+        });
     },
     [fetchOrderable, scrollDetailIntoView],
   );
@@ -363,78 +542,84 @@ export function TransportPage() {
   // or the empty-draft path — jumps straight into the new transport's detail
   // (selectBatch also marks it seen + scrolls the panel into view).
   const runCreate = useCallback((orderIds: string[]) => {
-    if (!supplierId || creating) return;
+    if (creating) return;
     setCreating(true);
     setCreateError(null);
     setCreateResult(null);
     api
-      // allow_companions: Magazyn Mory orders selected in the list join a
-      // Pago batch (transport-pago-mory-combined).
-      .transportCreate({ supplier_id: supplierId, order_ids: orderIds, allow_companions: true })
+      // The chip scope picks the lead supplier; allow_companions only with
+      // both chips on (Magazyn Mory orders then join a Pago batch).
+      .transportCreate({
+        supplier_id: scope.leadSupplierId,
+        order_ids: orderIds,
+        allow_companions: scope.includeCompanions,
+      })
       .then((resp) => {
         setCreateResult({
           transportId: resp.transport_id,
           combinedCount: resp.combined.length,
           skipped: resp.skipped,
         });
-        loadEligible(supplierId);
-        loadBatches(supplierId);
+        loadEligible(scope);
+        reloadBatchList();
         selectBatch(resp.transport_id);
       })
       .catch((e: ApiError) => {
         if (e.status !== 401) setCreateError(e.detail);
       })
       .finally(() => setCreating(false));
-  }, [supplierId, creating, loadEligible, loadBatches, selectBatch]);
+  }, [scope, creating, loadEligible, reloadBatchList, selectBatch]);
 
   const handleCreate = useCallback(() => {
-    if (selected.size === 0) return;
-    runCreate(Array.from(selected));
-  }, [selected, runCreate]);
+    if (selectedVisible.length === 0) return;
+    runCreate(selectedVisible.map((o) => o.order_id));
+  }, [selectedVisible, runCreate]);
 
   const handleCreateEmpty = useCallback(() => {
     runCreate([]);
   }, [runCreate]);
 
-  // List-only refetch: updates the batches rows WITHOUT resetting the
-  // selection/detail (loadBatches resets both — correct on supplier switch,
-  // wrong mid-workstation: it silently closed the draft panel after a
-  // logistics save and discarded unsaved matrix edits).
-  const reloadBatchList = useCallback((sid: string) => {
-    api
-      .transportBatches(sid, undefined, showCancelled)
-      .then((data) => setBatches(data))
-      .catch((e: ApiError) => {
-        if (e.status !== 401) setBatchesError(e.detail);
-      });
-  }, [showCancelled]);
-
+  // "Pokaż anulowane": refetch the list only — the open detail stays.
   const handleToggleShowCancelled = useCallback(() => {
-    setShowCancelled((prev) => {
-      const next = !prev;
-      if (supplierId) loadBatches(supplierId, next);
-      return next;
-    });
-  }, [supplierId, loadBatches]);
+    const next = !showCancelled;
+    setShowCancelled(next);
+    fetchBatches(next);
+  }, [showCancelled, fetchBatches]);
+
+  // Refresh the open batch and the history rows. Resolves once the detail is
+  // in — the send panel awaits it before re-enabling its buttons.
+  // `preserveDrafts` may be decided from the fresh detail (send panel: keep
+  // the matrix edits unless the status changed).
+  const refreshDetailAsync = useCallback(
+    async (
+      transportId: string,
+      preserveDrafts: boolean | ((fresh: TransportBatchDetail) => boolean) = false,
+    ): Promise<void> => {
+      reloadBatchList();
+      try {
+        const d = await api.transportBatch(transportId);
+        if (selectedIdRef.current !== transportId) return; // another batch is open now
+        setDetail(d);
+        // Reseed clears dirty state — right after a matrix save / add /
+        // remove, wrong after a logistics-only save (it would discard
+        // unsaved quantity edits the manager is still working on).
+        const keepDrafts = typeof preserveDrafts === "function" ? preserveDrafts(d) : preserveDrafts;
+        if (!keepDrafts) setDrafts(seedTransportDrafts(d.orders));
+        fetchOrderable(d);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) return;
+        if (selectedIdRef.current !== transportId) return;
+        setDetailError(e instanceof ApiError ? e.detail : String(e));
+      }
+    },
+    [reloadBatchList, fetchOrderable],
+  );
 
   const refreshDetail = useCallback(
-    (transportId: string, preserveDrafts = false) => {
-      reloadBatchList(supplierId);
-      api
-        .transportBatch(transportId)
-        .then((d) => {
-          setDetail(d);
-          // Reseed clears dirty state — right after a matrix save / add /
-          // remove, wrong after a logistics-only save (it would discard
-          // unsaved quantity edits the manager is still working on).
-          if (!preserveDrafts) setDrafts(seedTransportDrafts(d.orders));
-          fetchOrderable(d);
-        })
-        .catch((e: ApiError) => {
-          if (e.status !== 401) setDetailError(e.detail);
-        });
+    (transportId: string, preserveDrafts = false): void => {
+      void refreshDetailAsync(transportId, preserveDrafts);
     },
-    [supplierId, reloadBatchList, fetchOrderable],
+    [refreshDetailAsync],
   );
 
   const isDraft = detail?.status === "draft";
@@ -671,58 +856,6 @@ export function TransportPage() {
     [detail, refreshDetail, showToast, t],
   );
 
-  // ---- v2 draft workstation: finalize --------------------------------------------
-
-  const handleFinalize = useCallback(() => {
-    if (!detail) return;
-    if (dirty) {
-      showToast(t("manager.unsavedWarning"), false);
-      return;
-    }
-    if (!window.confirm(t("manager.transport.finalize.confirm", { id: detail.transport_id }))) {
-      return;
-    }
-    setFinalizing(true);
-    setFinalizeResult(null);
-    api
-      .transportFinalize(detail.transport_id)
-      .then((resp) => {
-        setFinalizeResult({ sentCount: resp.sent.length, skipped: resp.skipped });
-        refreshDetail(detail.transport_id);
-      })
-      .catch((e: ApiError) => {
-        showToast(t("manager.transport.finalize.error", { detail: e.detail }), false);
-      })
-      .finally(() => setFinalizing(false));
-  }, [detail, dirty, refreshDetail, showToast, t]);
-
-  // ---- v3 Phase 7: "Zapisz i wyślij" — save all dirty orders, THEN finalize ----
-  // (single busy state; on save failure abort with a toast, never finalize).
-
-  const handleSaveAndSend = useCallback(() => {
-    if (!detail) return;
-    const payloads = transportDirtySavePayloads(detail.orders, drafts);
-    if (payloads.length === 0) return;
-    if (!window.confirm(t("manager.transport.finalize.confirm", { id: detail.transport_id }))) {
-      return;
-    }
-    setSavingAndSending(true);
-    setFinalizeResult(null);
-    Promise.all(payloads.map((p) => api.managerSave(p.order_id, p.finals)))
-      .then(() => api.transportFinalize(detail.transport_id))
-      .then((resp) => {
-        setFinalizeResult({ sentCount: resp.sent.length, skipped: resp.skipped });
-        refreshDetail(detail.transport_id);
-      })
-      .catch((e: ApiError) => {
-        showToast(t("manager.transport.finalize.saveAndSendSaveFailed", { detail: e.detail }), false);
-        // A save failure aborts before finalize runs, but the matrix may now be
-        // partially saved — refresh so drafts reflect what actually persisted.
-        refreshDetail(detail.transport_id);
-      })
-      .finally(() => setSavingAndSending(false));
-  }, [detail, drafts, refreshDetail, showToast, t]);
-
   // ---- v3 Phase 7: cancel draft -------------------------------------------------
 
   const handleCancelDraft = useCallback(() => {
@@ -750,23 +883,28 @@ export function TransportPage() {
         // The batch disappears from the default (cancelled-hidden) list —
         // close the detail panel and go back to the list.
         setSelectedTransportId(null);
+        selectedIdRef.current = null;
         setDetail(null);
-        reloadBatchList(supplierId);
+        reloadBatchList();
       })
       .catch((e: ApiError) => {
         showToast(t("manager.transport.cancel.error", { detail: e.detail }), false);
       })
       .finally(() => setCancelling(false));
-  }, [detail, supplierId, reloadBatchList, showToast, t]);
+  }, [detail, reloadBatchList, showToast, t]);
 
   // ---- v3 Phase 9: manager-first grid creation ---------------------------------
 
   const handleGridCreateConfirm = useCallback(
     (locationIds: string[]) => {
-      if (!supplierId || locationIds.length === 0) return;
+      if (locationIds.length === 0) return;
       setGridCreateBusy(true);
       api
-        .transportCreate({ supplier_id: supplierId, order_ids: [], allow_companions: true })
+        .transportCreate({
+          supplier_id: scope.leadSupplierId,
+          order_ids: [],
+          allow_companions: scope.includeCompanions,
+        })
         .then(async (createResp) => {
           const transportId = createResp.transport_id;
           const errors: string[] = [];
@@ -792,8 +930,8 @@ export function TransportPage() {
             showToast(t("manager.transport.gridCreate.done", { count: locationIds.length }), true);
           }
           setGridCreateOpen(false);
-          loadEligible(supplierId);
-          reloadBatchList(supplierId);
+          loadEligible(scope);
+          reloadBatchList();
           selectBatch(transportId);
         })
         .catch((e: ApiError) => {
@@ -801,7 +939,7 @@ export function TransportPage() {
         })
         .finally(() => setGridCreateBusy(false));
     },
-    [supplierId, locations, loadEligible, reloadBatchList, selectBatch, showToast, t],
+    [scope, locations, loadEligible, reloadBatchList, selectBatch, showToast, t],
   );
 
   // rows = product, cols = detail.location_ids (private driver matrix — sent
@@ -831,46 +969,60 @@ export function TransportPage() {
   const showSupplierHeaders = (matrix?.length ?? 0) > 1;
 
   // Draft sections: one editable matrix per supplier the batch can carry —
-  // the lead first, then (on a Pago batch) Magazyn Mory, shown even before it
-  // has a member so a Mory column can be added.
+  // the lead first, then (on a Pago batch) Magazyn Mory. A section with
+  // members always shows; an empty one only while its chip is on (so a Mory
+  // column can still be added from an empty section).
   const draftSections = useMemo(() => {
     if (!detail) return [];
-    return transportSuppliers(detail).map((sup) => ({
-      supplier: sup,
-      orders: transportOrdersFor(detail, sup.supplier_id),
-    }));
-  }, [detail]);
+    return transportSuppliers(detail)
+      .map((sup) => ({
+        supplier: sup,
+        orders: transportOrdersFor(detail, sup.supplier_id),
+      }))
+      .filter((section) => section.orders.length > 0 || chipOn(chips, section.supplier.supplier_id));
+  }, [detail, chips]);
+
+  // ---- send panel wiring ------------------------------------------------------
+
+  // Labels of a (re-fetched) detail — finalize can auto-remove empty columns,
+  // which changes the cities in an auto-label.
+  const docLabelsFor = useCallback(
+    (d: TransportBatchDetail): TransportDocLabels => ({
+      displayLabel: transportDisplayLabel(d, t, displayLabelOpts),
+      pagoDisplayLabel: transportDisplayLabel(leadSupplierView(d), t, displayLabelOpts),
+    }),
+    [t, displayLabelOpts],
+  );
+  const fetchBatchDetail = useCallback(
+    (transportId: string): Promise<TransportBatchDetail> => api.transportBatch(transportId),
+    [],
+  );
+  const handlePanelFinalized = useCallback((res: TransportFinalizeResponse): void => {
+    if (selectedIdRef.current !== res.transport_id) return; // another batch is open now
+    setFinalizeResult({ sentCount: res.sent.length, skipped: res.skipped });
+  }, []);
+  // Re-seed the matrix only when the status changed (draft -> sent after a
+  // send / mark-only, sent -> draft after an undo); otherwise — e.g. a
+  // driver-list send on a draft batch — keep edits typed during the send.
+  // `detail` is the batch as it was when the panel's action started.
+  const handlePanelChanged = useCallback((): Promise<void> => {
+    if (!detail) return Promise.resolve();
+    const statusBefore = detail.status;
+    return refreshDetailAsync(
+      detail.transport_id,
+      (fresh: TransportBatchDetail): boolean => fresh.status === statusBefore,
+    );
+  }, [detail, refreshDetailAsync]);
+  // A send in progress must finish on the open batch: opening another one
+  // would unmount its panel and lose the result or the error.
+  const switchBlocked = (transportId: string): boolean =>
+    sendBusy && transportId !== selectedTransportId;
 
   const locationNameById = useMemo(() => {
     const byId = new Map<string, string>();
     detail?.orders.forEach((o) => byId.set(o.location_id, o.location_name));
     return byId;
   }, [detail]);
-
-  const [copyToast, setCopyToast] = useState<string | null>(null);
-
-  const copyDriverText = useCallback(() => {
-    if (!detail) return;
-    const text = buildTransportDriverText(detail, t);
-    navigator.clipboard
-      .writeText(text)
-      .then(() => setCopyToast(t("manager.transport.detail.copyToast")))
-      .catch(() => setCopyToast(t("manager.transport.detail.copyError")));
-    window.setTimeout(() => setCopyToast(null), 3000);
-  }, [detail, t]);
-
-  const gmail = useMemo(() => {
-    if (!detail || !supplier) return null;
-    return buildTransportGmailUrl(detail, supplier, t);
-  }, [detail, supplier, t]);
-
-  const emailDisabledReason = useMemo(() => {
-    if (!supplier || !hasValidRecipient(supplier.email)) {
-      return t("manager.transport.detail.emailHint");
-    }
-    if (gmail?.tooLong) return t("manager.transport.detail.emailTooLong");
-    return null;
-  }, [supplier, gmail, t]);
 
   // Captain's per-order comment, Manager-only (training-feedback-0901 F1
   // point 5) — never reaches a supplier-facing body or PDF, only this screen.
@@ -910,7 +1062,7 @@ export function TransportPage() {
       </AppHeader>
 
       <main className="flex-1 max-w-5xl mx-auto w-full p-4 space-y-6">
-        {(copyToast || toast) && (
+        {toast && (
           <div
             role={toast && !toast.ok ? "alert" : "status"}
             className={`rounded border px-3 py-2 text-sm ${
@@ -919,36 +1071,83 @@ export function TransportPage() {
                 : "border-green-300 bg-green-50 text-green-900"
             }`}
           >
-            {copyToast ?? toast?.msg}
+            {toast.msg}
           </div>
         )}
 
-        <section>
-          <label htmlFor="trn-supplier" className="block text-xs font-semibold text-slate-600 mb-1">
-            {t("manager.transport.supplierLabel")}
-          </label>
-          {suppliersError && <div className="text-sm text-red-700 mb-1">{suppliersError}</div>}
-          <select
-            id="trn-supplier"
-            value={supplierId}
-            onChange={(e) => {
-              if (
-                dirty &&
-                !window.confirm(t("manager.transport.unsavedSwitchConfirm"))
-              ) {
-                e.target.value = supplierId;
-                return;
-              }
-              selectSupplier(e.target.value);
-            }}
-            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {(suppliers ?? []).map((s) => (
-              <option key={s.supplier_id} value={s.supplier_id}>
-                {s.supplier_name}
-              </option>
-            ))}
-          </select>
+        {/* ---- Filter bar (transport-v2) ---- */}
+        <section className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+          {suppliersError && (
+            <div className="text-sm text-red-700" role="alert">
+              {t("manager.transport.filter.suppliersError", { detail: suppliersError })}
+            </div>
+          )}
+          <div>
+            <div id="trn-filter-suppliers" className="mb-1 text-xs font-semibold text-slate-600">
+              {t("manager.transport.filter.suppliersLabel")}
+            </div>
+            <div role="group" aria-labelledby="trn-filter-suppliers" className="flex flex-wrap gap-2">
+              {CHIP_DEFS.map((def) => {
+                const on = chips[def.key];
+                const lastOn = on && CHIP_DEFS.filter((d) => chips[d.key]).length === 1;
+                return (
+                  <button
+                    key={def.key}
+                    type="button"
+                    aria-pressed={on}
+                    disabled={lastOn}
+                    title={lastOn ? t("manager.transport.filter.lastChipTitle") : undefined}
+                    onClick={() => toggleChip(def.key)}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed ${
+                      on
+                        ? "border-blue-700 bg-blue-700 text-white"
+                        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {t(def.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {cityOptions.length > 0 && (
+            <div>
+              <div className="mb-1 flex items-center gap-3">
+                <span id="trn-filter-cities" className="text-xs font-semibold text-slate-600">
+                  {t("manager.transport.filter.citiesLabel")}
+                </span>
+                {excludedCities.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={resetCities}
+                    className="text-xs font-semibold text-blue-700 underline decoration-dotted hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    {t("manager.transport.filter.allCities")}
+                  </button>
+                )}
+              </div>
+              <div role="group" aria-labelledby="trn-filter-cities" className="flex flex-wrap gap-2">
+                {cityOptions.map((city) => {
+                  const on = !excludedCities.has(city.toLowerCase());
+                  return (
+                    <button
+                      key={city}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleCity(city)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                        on
+                          ? "border-blue-300 bg-blue-50 text-blue-900"
+                          : "border-slate-200 bg-white text-slate-400 line-through hover:bg-slate-50"
+                      }`}
+                    >
+                      {city}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* ---- Eligible orders (to combine) ---- */}
@@ -963,9 +1162,15 @@ export function TransportPage() {
           {!eligibleError && eligible === null && (
             <div className="text-sm text-slate-500">{t("manager.transport.eligible.loading")}</div>
           )}
-          {!eligibleError && eligible !== null && eligible.length === 0 && (
+          {!eligibleError && eligible !== null && visibleEligible.length === 0 && (
             <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
-              <p>{t("manager.transport.eligible.empty")}</p>
+              <p>
+                {t(
+                  eligible.length === 0
+                    ? "manager.transport.eligible.empty"
+                    : "manager.transport.eligible.emptyFiltered",
+                )}
+              </p>
               {/* The empty-eligible state is EXACTLY when the empty-draft path
                   matters most (Pago day one: no submitted orders anywhere) —
                   the manager starts a draft and adds locations inside it. */}
@@ -990,10 +1195,10 @@ export function TransportPage() {
             </div>
           )}
 
-          {eligible && eligible.length > 0 && (
+          {visibleEligible.length > 0 && (
             <>
               <ul className="space-y-2 mb-3">
-                {eligible.map((o) => {
+                {visibleEligible.map((o) => {
                   const visual = statusVisual(o.status);
                   return (
                     <li key={o.order_id}>
@@ -1007,7 +1212,7 @@ export function TransportPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 truncate">{o.location_name}</span>
-                            {o.supplier_id !== supplierId && (
+                            {o.supplier_id !== scope.leadSupplierId && (
                               <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-800">
                                 {o.supplier_name}
                               </span>
@@ -1038,7 +1243,7 @@ export function TransportPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-slate-600">
                   {t("manager.transport.eligible.selectedSummary", {
-                    count: selected.size,
+                    count: selectedVisible.length,
                     total: selectionTotal.toFixed(2),
                   })}
                 </div>
@@ -1061,7 +1266,7 @@ export function TransportPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={selected.size === 0 || creating}
+                    disabled={selectedVisible.length === 0 || creating}
                     onClick={handleCreate}
                     className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
                   >
@@ -1133,21 +1338,33 @@ export function TransportPage() {
           {!batchesError && batches === null && (
             <div className="text-sm text-slate-500">{t("manager.transport.batches.loading")}</div>
           )}
-          {!batchesError && batches !== null && batches.length === 0 && (
+          {!batchesError && batches !== null && visibleBatches !== null && visibleBatches.length === 0 && (
             <div className="rounded border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
-              {t("manager.transport.batches.empty")}
+              {t(
+                batches.length === 0
+                  ? "manager.transport.batches.empty"
+                  : "manager.transport.batches.emptyFiltered",
+              )}
             </div>
           )}
 
-          {batches && batches.length > 0 && (
+          {visibleBatches && visibleBatches.length > 0 && (
             <ul className="space-y-2">
-              {batches.map((b) => (
+              {visibleBatches.map((b) => (
                 <li key={b.transport_id}>
                   <button
                     type="button"
+                    disabled={switchBlocked(b.transport_id)}
+                    title={
+                      switchBlocked(b.transport_id)
+                        ? t("manager.transport.batches.busySwitchTitle")
+                        : undefined
+                    }
                     onClick={() => {
+                      // Re-opening even the open batch remounts its send panel.
+                      if (sendBusy) return;
                       if (
-                        dirty &&
+                        (dirty || logisticsDirty) &&
                         b.transport_id !== selectedTransportId &&
                         !window.confirm(t("manager.transport.unsavedSwitchConfirm"))
                       ) {
@@ -1155,7 +1372,7 @@ export function TransportPage() {
                       }
                       selectBatch(b.transport_id);
                     }}
-                    className={`w-full text-left rounded-lg border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    className={`w-full text-left rounded-lg border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed ${
                       b.status === "cancelled" ? "opacity-60" : ""
                     } ${
                       selectedTransportId === b.transport_id
@@ -1163,7 +1380,7 @@ export function TransportPage() {
                         : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-slate-900">
                         {transportDisplayLabel(b, t, displayLabelOpts)}
                       </span>
@@ -1185,6 +1402,14 @@ export function TransportPage() {
                               : "manager.transport.status.sent",
                         )}
                       </span>
+                      {batchSupplierIds(b).map((id) => (
+                        <span
+                          key={id}
+                          className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-800"
+                        >
+                          {supplierBadgeName(id, id === b.supplier_id ? b.supplier_name : undefined)}
+                        </span>
+                      ))}
                       {b.status !== "cancelled" && !seenTransports.has(b.transport_id) && (
                         <span className="inline-flex items-center rounded-full border border-green-300 bg-green-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-green-700">
                           {t("manager.transport.badge.new")}
@@ -1252,11 +1477,15 @@ export function TransportPage() {
                     vehicleOptions={configuredVehicles}
                     busy={logisticsSaving}
                     onSave={handleSaveLogistics}
+                    onDirtyChange={setLogisticsDirty}
                   />
 
                   {pagoExclusion && <PagoExclusionNotice exclusion={pagoExclusion} />}
 
-                  <PrintViews
+                  <TransportSendPanel
+                    // Remount per batch; a distinct key from its sibling
+                    // LogisticsPanel (duplicate sibling keys break reconciling).
+                    key={`send-${detail.transport_id}`}
                     detail={detail}
                     displayLabel={transportDisplayLabel(detail, t, displayLabelOpts)}
                     pagoDisplayLabel={transportDisplayLabel(
@@ -1264,9 +1493,43 @@ export function TransportPage() {
                       t,
                       displayLabelOpts,
                     )}
+                    labelsFor={docLabelsFor}
                     supplierEmail={suppliers?.find((s) => s.supplier_id === detail.supplier_id)?.email}
                     driverRecipients={driverRecipients}
+                    orderMailbox={draftConfig?.order_mailbox ?? ""}
+                    configStatus={draftConfigStatus}
+                    dirty={dirty}
+                    logisticsDirty={logisticsDirty}
+                    onBusyChange={setSendBusy}
+                    onChanged={handlePanelChanged}
+                    onFinalized={handlePanelFinalized}
+                    fetchDetail={fetchBatchDetail}
                   />
+
+                  {/* A finalize result (send on a draft batch, or mark-only).
+                      Shown while the batch is sent, or when nothing was sent
+                      (the skipped reasons explain why); hidden after an undo. */}
+                  {finalizeResult && (detail.status === "sent" || finalizeResult.sentCount === 0) && (
+                    <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+                      <div>
+                        {t("manager.transport.finalize.result.sent", { count: finalizeResult.sentCount })}
+                      </div>
+                      {finalizeResult.skipped.length > 0 && (
+                        <div className="mt-2">
+                          <div className="font-semibold">
+                            {t("manager.transport.finalize.result.skippedHeader")}
+                          </div>
+                          <ul className="list-disc list-inside">
+                            {finalizeResult.skipped.map((s) => (
+                              <li key={s.order_id}>
+                                {s.order_id}: {s.reason}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <HistorySection events={detail.events} />
 
@@ -1341,7 +1604,8 @@ export function TransportPage() {
 
                         <button
                           type="button"
-                          disabled={cancelling}
+                          // Not while the send panel is marking this batch sent.
+                          disabled={cancelling || sendBusy}
                           onClick={handleCancelDraft}
                           className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                         >
@@ -1354,52 +1618,6 @@ export function TransportPage() {
                             t("manager.transport.cancel.button")
                           )}
                         </button>
-
-                        <div className="ml-auto flex flex-col items-end gap-1">
-                          <div className="flex items-center gap-2">
-                            {dirty && (
-                              <button
-                                type="button"
-                                disabled={savingAndSending}
-                                onClick={handleSaveAndSend}
-                                className="rounded-lg border border-green-700 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-                              >
-                                {savingAndSending ? (
-                                  <span className="inline-flex items-center gap-1.5">
-                                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                                    {t("manager.transport.finalize.saveAndSendBusy")}
-                                  </span>
-                                ) : (
-                                  t("manager.transport.finalize.saveAndSendButton")
-                                )}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              disabled={finalizing || dirty || detail.orders.length === 0}
-                              onClick={handleFinalize}
-                              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-                            >
-                              {finalizing ? (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                                  {t("manager.transport.finalize.busy")}
-                                </span>
-                              ) : (
-                                t("manager.transport.finalize.button")
-                              )}
-                            </button>
-                          </div>
-                          {/* Permanent inline hint while dirty — the finalize UX fix
-                              (v3 design decision 3): the button used to just silently
-                              4s-toast on click with unsaved edits; now it stays
-                              disabled with an always-visible explanation. */}
-                          {dirty && (
-                            <span className="text-xs text-amber-700">
-                              {t("manager.transport.finalize.disabledHint")}
-                            </span>
-                          )}
-                        </div>
                       </div>
 
                       {cancelResult && (
@@ -1417,28 +1635,6 @@ export function TransportPage() {
                               </div>
                               <ul className="list-disc list-inside">
                                 {cancelResult.skipped.map((s) => (
-                                  <li key={s.order_id}>
-                                    {s.order_id}: {s.reason}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {finalizeResult && (
-                        <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
-                          <div>
-                            {t("manager.transport.finalize.result.sent", { count: finalizeResult.sentCount })}
-                          </div>
-                          {finalizeResult.skipped.length > 0 && (
-                            <div className="mt-2">
-                              <div className="font-semibold">
-                                {t("manager.transport.finalize.result.skippedHeader")}
-                              </div>
-                              <ul className="list-disc list-inside">
-                                {finalizeResult.skipped.map((s) => (
                                   <li key={s.order_id}>
                                     {s.order_id}: {s.reason}
                                   </li>
@@ -1541,34 +1737,6 @@ export function TransportPage() {
                               ))}
                             </tbody>
                           </table>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3 mb-4">
-                          <button
-                            type="button"
-                            onClick={copyDriverText}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                          >
-                            {t("manager.transport.detail.copyButton")}
-                          </button>
-
-                          {!emailDisabledReason && gmail ? (
-                            <a
-                              href={gmail.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-lg bg-green-700 px-3 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
-                            >
-                              {t("manager.transport.detail.emailButton")}
-                            </a>
-                          ) : (
-                            <span
-                              className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-400 cursor-not-allowed"
-                              title={emailDisabledReason ?? undefined}
-                            >
-                              {t("manager.transport.detail.emailButton")}
-                            </span>
-                          )}
                         </div>
 
                         <h3 className="text-sm font-semibold text-slate-800 mb-2">

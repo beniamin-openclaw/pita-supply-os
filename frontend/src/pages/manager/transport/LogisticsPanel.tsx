@@ -10,7 +10,7 @@
 // than an effect that re-seeds on prop change — simpler and avoids a
 // setState-in-effect footgun.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { Loader2, X } from "lucide-react";
 
 import { useT } from "../../../i18n";
@@ -29,6 +29,18 @@ interface LogisticsPanelProps {
   vehicleOptions: string[];
   busy: boolean;
   onSave: (patch: TransportBatchPatchRequest) => void;
+  /** Reports whether the form holds unsaved edits (and false on unmount) —
+   * the send panel waits for a save, since documents use the saved batch.
+   * Pass a stable callback (e.g. a state setter). */
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+/** limit_kg as handleSave writes it: blank or not a number -> null; a
+ * decimal comma is accepted. Rounded to the column's 2 decimals
+ * (numeric(10,2)), so a saved "650.125" (stored 650.13) reads as clean. */
+function parseLimitKg(value: string): number | null {
+  const parsed = value.trim() === "" ? null : Number(value.replace(",", "."));
+  return parsed != null && Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
 }
 
 /** Sentinel select value for the "Inny — wpisz ręcznie…" escape hatch. Never
@@ -153,7 +165,8 @@ export function LogisticsPanel({
   vehicleOptions,
   busy,
   onSave,
-}: LogisticsPanelProps) {
+  onDirtyChange,
+}: LogisticsPanelProps): ReactElement {
   const { t } = useT();
   const [name, setName] = useState(detail.name ?? "");
   const [driver, setDriver] = useState(detail.driver ?? "");
@@ -163,17 +176,28 @@ export function LogisticsPanel({
   const [limitKg, setLimitKg] = useState(detail.limit_kg != null ? String(detail.limit_kg) : "");
   const [notes, setNotes] = useState(detail.notes ?? "");
 
+  // Compared the way handleSave writes the values (trimmed, limit parsed),
+  // so a saved form is clean again: "12,5" saved as 12.5, or " Jan" saved
+  // as "Jan", must not stay "unsaved" and keep blocking the send panel. A
+  // blank name is never sent (the backend keeps the old one), so it is not
+  // a change either.
   const dirty =
-    name !== (detail.name ?? "") ||
-    driver !== (detail.driver ?? "") ||
-    vehicle !== (detail.vehicle ?? "") ||
-    pickupDate !== (detail.pickup_date ?? "") ||
-    pickupTime !== (detail.pickup_time ?? "") ||
-    limitKg !== (detail.limit_kg != null ? String(detail.limit_kg) : "") ||
+    (name.trim() !== "" && name.trim() !== (detail.name ?? "").trim()) ||
+    driver.trim() !== (detail.driver ?? "").trim() ||
+    vehicle.trim() !== (detail.vehicle ?? "").trim() ||
+    pickupDate.trim() !== (detail.pickup_date ?? "") ||
+    pickupTime.trim() !== (detail.pickup_time ?? "").trim() ||
+    parseLimitKg(limitKg) !== (detail.limit_kg ?? null) ||
     notes !== (detail.notes ?? "");
 
-  const handleSave = () => {
-    const parsedLimit = limitKg.trim() === "" ? null : Number(limitKg.replace(",", "."));
+  useEffect(() => {
+    if (!onDirtyChange) return undefined;
+    onDirtyChange(dirty);
+    return () => onDirtyChange(false);
+  }, [dirty, onDirtyChange]);
+
+  const handleSave = (): void => {
+    const parsedLimit = parseLimitKg(limitKg);
     onSave({
       // Blank -> omit the field entirely (undefined), not null: a batch
       // never given a name should keep falling back to
@@ -184,7 +208,7 @@ export function LogisticsPanel({
       vehicle: vehicle.trim() === "" ? null : vehicle.trim(),
       pickup_date: pickupDate.trim() === "" ? null : pickupDate,
       pickup_time: pickupTime.trim() === "" ? null : pickupTime.trim(),
-      limit_kg: parsedLimit != null && Number.isFinite(parsedLimit) ? parsedLimit : null,
+      limit_kg: parsedLimit,
       notes: notes,
     });
   };

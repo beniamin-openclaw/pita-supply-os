@@ -3119,6 +3119,7 @@ def test_draft_config_returns_value_from_backend(mocker):
         "driver_recipients": "driver@example.com, biuro@example.com",
         "drivers": "Mateusz Miecznikowski, Grzegorz",
         "vehicles": "Iveco WPR9345K",
+        "order_mailbox": sheets.settings.order_mailbox,
     }
 
 
@@ -3132,7 +3133,12 @@ def test_draft_config_degrades_to_empty_on_load_meta_error(mocker):
     )
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": "", "drivers": "", "vehicles": ""}
+    assert r.json() == {
+        "driver_recipients": "",
+        "drivers": "",
+        "vehicles": "",
+        "order_mailbox": sheets.settings.order_mailbox,
+    }
 
 
 def test_draft_config_missing_key_returns_empty(mocker):
@@ -3142,7 +3148,12 @@ def test_draft_config_missing_key_returns_empty(mocker):
     mocker.patch.object(sheets, "load_meta", return_value={"other_key": "x"})
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": "", "drivers": "", "vehicles": ""}
+    assert r.json() == {
+        "driver_recipients": "",
+        "drivers": "",
+        "vehicles": "",
+        "order_mailbox": sheets.settings.order_mailbox,
+    }
 
 
 def test_draft_config_seed_mode_returns_empty(mocker):
@@ -3150,7 +3161,12 @@ def test_draft_config_seed_mode_returns_empty(mocker):
     mocker.patch.object(sheets.settings, "data_backend", DataBackend.SEED)
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": "", "drivers": "", "vehicles": ""}
+    assert r.json() == {
+        "driver_recipients": "",
+        "drivers": "",
+        "vehicles": "",
+        "order_mailbox": sheets.settings.order_mailbox,
+    }
 
 
 def test_draft_config_partial_keys_default_missing_ones_to_empty(mocker):
@@ -3163,7 +3179,12 @@ def test_draft_config_partial_keys_default_missing_ones_to_empty(mocker):
     )
     r = client.get("/api/manager/transport/draft-config", headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
-    assert r.json() == {"driver_recipients": "", "drivers": "Grzegorz", "vehicles": ""}
+    assert r.json() == {
+        "driver_recipients": "",
+        "drivers": "Grzegorz",
+        "vehicles": "",
+        "order_mailbox": sheets.settings.order_mailbox,
+    }
 
 
 def test_draft_config_requires_manager_auth(mocker):

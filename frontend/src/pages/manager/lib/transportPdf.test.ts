@@ -299,3 +299,74 @@ describe("buildDriverPdfDocDefinition — supplier sections (transport-pago-mory
     for (const table of tables) expect(table.table.body[1][0].text).toBe("1");
   });
 });
+
+// ---- transport-v2: approved Pago extras on the ZOW PDF, notes on the driver PDF
+
+describe("buildPagoPdfDocDefinition — approved extras section (transport-v2)", () => {
+  const pagoWithExtras = (): TransportBatchDetail =>
+    batch({
+      supplier_id: "SUP_PAGO",
+      supplier_name: "Pago",
+      orders: [
+        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Tacki - 2 opak\nFeta - 5 kg" },
+        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [] },
+      ],
+      lines: batch().lines.map((l) => ({ ...l, warehouse_pickup: true })),
+    });
+
+  it("prints no extras section and no extra text when nothing was approved", () => {
+    const doc = buildTransportPagoPrintDoc(pagoWithExtras(), "Transport");
+    const text = flattenText(buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT).content);
+    expect(text).not.toContain("Pozycje dodatkowe uzgodnione z PAGO");
+    expect(text).not.toContain("Tacki");
+    expect(text).not.toContain("Feta");
+  });
+
+  it("prints only the approved lines, after the product table, with no location data", () => {
+    const doc = buildTransportPagoPrintDoc(pagoWithExtras(), "Transport", ["Tacki - 2 opak"]);
+    const pdf = buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT);
+    const text = flattenText(pdf.content);
+    expect(text).toContain("Pozycje dodatkowe uzgodnione z PAGO");
+    expect(text).toContain("Tacki - 2 opak");
+    expect(text).not.toContain("Feta");
+    expect(text).not.toContain("Wola");
+    expect(text).not.toContain("Bracka");
+
+    const contentTexts = pdf.content.map((node) => flattenText(node));
+    const productsAt = contentTexts.findIndex((s) => s.includes("Pomidory malinowe"));
+    const titleAt = contentTexts.findIndex((s) => s.includes("Pozycje dodatkowe uzgodnione z PAGO"));
+    const extraAt = contentTexts.findIndex((s) => s.includes("Tacki - 2 opak"));
+    expect(productsAt).toBeGreaterThan(-1);
+    expect(titleAt).toBeGreaterThan(productsAt);
+    expect(extraAt).toBeGreaterThan(titleAt);
+  });
+
+  it("uses the generic title on a non-Pago supplier document", () => {
+    const doc = buildTransportPagoPrintDoc(batch(), "Bukat", ["Karton extra"]);
+    const text = flattenText(buildPagoPdfDocDefinition(doc, makeT(), GENERATED_AT).content);
+    expect(text).toContain("Pozycje dodatkowe uzgodnione z dostawcą");
+    expect(text).not.toContain("uzgodnione z PAGO");
+    expect(text).toContain("Karton extra");
+  });
+
+  it("is language-aware (en)", () => {
+    const doc = buildTransportPagoPrintDoc(pagoWithExtras(), "Transport", ["Tacki - 2 opak"]);
+    const text = flattenText(buildPagoPdfDocDefinition(doc, makeT("en"), GENERATED_AT).content);
+    expect(text).toContain("Additional items agreed with PAGO");
+  });
+});
+
+describe("buildDriverPdfDocDefinition — batch notes (transport-v2)", () => {
+  it("prints an 'Uwagi' row with the notes when set", () => {
+    const doc = buildTransportDriverPrintDoc(batch({ notes: "  Wjazd od rampy nr 2 " }), "Transport");
+    const text = flattenText(buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT).content);
+    expect(text).toContain("Uwagi");
+    expect(text).toContain("Wjazd od rampy nr 2");
+  });
+
+  it("prints no 'Uwagi' row when the notes are blank", () => {
+    const doc = buildTransportDriverPrintDoc(batch({ notes: "   " }), "Transport");
+    const text = flattenText(buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT).content);
+    expect(text).not.toContain("Uwagi");
+  });
+});

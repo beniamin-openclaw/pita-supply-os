@@ -276,78 +276,223 @@ describe("parseOAuthCallbackHash", () => {
 
 // ---------- buildPagoDraftEmail / buildDriverDraftEmail -----------------------
 
+/** A Pago run with products, Pago AND Mory extras, location names and full
+ * logistics — everything the Pago body must NOT contain is present. */
+function richMixed(overrides: Partial<TransportBatchDetail> = {}): TransportBatchDetail {
+  return batch({
+    supplier_id: "SUP_PAGO",
+    supplier_name: "Pago",
+    location_ids: ["WOLA", "KEN"],
+    pickup_date: "2026-10-06",
+    pickup_time: "07:30",
+    driver: "Jan Kowalski",
+    vehicle: "Ducato WX 12345",
+    notes: "Wjazd od rampy nr 2",
+    orders: [
+      {
+        order_id: "ORD-P", location_id: "WOLA", location_name: "Pita Bros Wola",
+        status: "manager_sent", lines: [], supplier_id: "SUP_PAGO",
+        extra_items: "Tacki - 2 opak\nFeta grecka - 5 kg",
+      },
+      {
+        order_id: "ORD-M", location_id: "KEN", location_name: "Pita Bros KEN",
+        status: "manager_sent", lines: [], supplier_id: "SUP_MORY",
+        extra_items: "Serwetki - 1 karton",
+      },
+    ],
+    lines: [
+      {
+        product_id: "P027", product_name_pl: "Souvlaki", supplier_product_id: "SP_PAGO_P027",
+        supplier_product_name: "Souvlaki karton", purchase_unit: "karton", total_qty_purchase: 3,
+        supplier_id: "SUP_PAGO", supplier_name: "Pago",
+        per_location: [
+          { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-P", qty_purchase: 3 },
+        ],
+      },
+      {
+        product_id: "P050", product_name_pl: "Pita", supplier_product_id: "SP_MORY_P050",
+        supplier_product_name: "Pita paczka", purchase_unit: "paczka", total_qty_purchase: 6,
+        supplier_id: "SUP_MORY", supplier_name: "Magazyn własny Mory",
+        per_location: [
+          { location_id: "KEN", location_name: "Pita Bros KEN", order_id: "ORD-M", qty_purchase: 6 },
+        ],
+      },
+    ],
+    ...overrides,
+  });
+}
+
 describe("buildPagoDraftEmail", () => {
-  it("matches the legacy subject template verbatim, using pickup_date when set", () => {
+  it("subject: legacy template with the pickup date when set", () => {
     const b = batch({ pickup_date: "2026-08-22", pickup_time: null });
     const { subject } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
     expect(subject).toBe("Zlecenie odbioru wlasnego - Transport Sobota - 2026-08-22");
   });
 
-  it("falls back to created's date part when pickup_date is unset", () => {
+  it("subject: no date at all when pickup_date is unset — never the created date", () => {
     const b = batch({ pickup_date: null, created: "2026-08-21T09:15:00+00:00" });
-    const { subject } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
-    expect(subject).toBe("Zlecenie odbioru wlasnego - Transport Sobota - 2026-08-21");
+    const { subject } = buildPagoDraftEmail(b, "Transport · Warszawa", makeT());
+    expect(subject).toBe("Zlecenie odbioru wlasnego - Transport · Warszawa");
+    expect(subject).not.toContain("2026-08-21");
   });
 
-  it("body never mentions a per-location location name (no-location-leak invariant)", () => {
-    const b = batch({ pickup_date: "2026-08-22" });
-    const { bodyText } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
-    expect(bodyText).not.toContain("Wola");
-    expect(bodyText).not.toContain("Bracka");
-    expect(bodyText).not.toContain("WOLA");
-    expect(bodyText).not.toContain("BRACKA");
+  it("body is exactly greeting, attachment line, pickup line, closing, signature", () => {
+    const { bodyText } = buildPagoDraftEmail(richMixed(), "Transport Poniedziałek", makeT());
+    expect(bodyText).toBe(
+      [
+        "Dzień dobry,",
+        "",
+        "W załączniku przesyłamy zlecenie odbioru własnego.",
+        "Odbiór: 2026-10-06, godz. 07:30",
+        "",
+        "Pozdrawiam,",
+        "Pita Bros",
+      ].join("\n"),
+    );
   });
 
-  it("body includes the display label, greeting, and signature", () => {
-    const b = batch({ pickup_date: "2026-08-22" });
-    const { bodyText } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
-    expect(bodyText).toContain("Transport Sobota");
-    expect(bodyText).toContain("Dzień dobry,");
-    expect(bodyText).toContain("Pita Bros");
+  it("body carries NO product, extra item, location, driver/vehicle, notes or label", () => {
+    const { bodyText } = buildPagoDraftEmail(richMixed(), "Transport Poniedziałek · Warszawa", makeT());
+    for (const forbidden of [
+      "Souvlaki",
+      "Pita paczka",
+      "Tacki",
+      "Feta",
+      "Serwetki",
+      "Pozycje spoza katalogu",
+      "Wola",
+      "KEN",
+      "WOLA",
+      "Jan Kowalski",
+      "Ducato",
+      "Kierowca",
+      "Pojazd",
+      "Wjazd od rampy",
+      "Transport Poniedziałek",
+      "Warszawa",
+    ]) {
+      expect(bodyText).not.toContain(forbidden);
+    }
   });
 
-  it("body includes driver/vehicle lines only when set", () => {
-    const withBoth = batch({ pickup_date: "2026-08-22", driver: "Jan", vehicle: "Bus 12" });
-    const { bodyText: withBothBody } = buildPagoDraftEmail(withBoth, "Transport Sobota", makeT());
-    expect(withBothBody).toContain("Kierowca: Jan");
-    expect(withBothBody).toContain("Pojazd: Bus 12");
+  it("pickup line: date only when no time is set", () => {
+    const { bodyText } = buildPagoDraftEmail(richMixed({ pickup_time: "  " }), "x", makeT());
+    expect(bodyText).toContain("Odbiór: 2026-10-06");
+    expect(bodyText).not.toContain("godz.");
+  });
 
-    const withNeither = batch({ pickup_date: "2026-08-22", driver: null, vehicle: null });
-    const { bodyText: withNeitherBody } = buildPagoDraftEmail(withNeither, "Transport Sobota", makeT());
-    expect(withNeitherBody).not.toContain("Kierowca:");
-    expect(withNeitherBody).not.toContain("Pojazd:");
+  it("pickup line: 'to be confirmed' when there is no pickup date", () => {
+    const { bodyText } = buildPagoDraftEmail(
+      richMixed({ pickup_date: null, pickup_time: null }),
+      "x",
+      makeT(),
+    );
+    expect(bodyText).toContain("Termin odbioru do potwierdzenia.");
+    expect(bodyText).not.toContain("Odbiór:");
+    expect(bodyText).not.toContain("2026-08-21"); // the created date never stands in
+  });
+
+  it("is language-aware (en)", () => {
+    const { bodyText } = buildPagoDraftEmail(richMixed({ pickup_date: null }), "x", makeT("en"));
+    expect(bodyText).toContain("Please find the self-pickup order attached.");
+    expect(bodyText).toContain("Pickup date to be confirmed.");
+  });
+
+  it("correction: KOREKTA prefix on the subject and one line right after the greeting", () => {
+    const { subject, bodyText } = buildPagoDraftEmail(
+      richMixed(),
+      "Transport Wtorek",
+      makeT(),
+      { correction: true },
+    );
+    expect(subject).toBe("KOREKTA - Zlecenie odbioru wlasnego - Transport Wtorek - 2026-10-06");
+    expect(bodyText).toBe(
+      [
+        "Dzień dobry,",
+        "",
+        "KOREKTA: to zlecenie koryguje i zastępuje wcześniej wysłane zlecenie odbioru własnego dla tego transportu.",
+        "W załączniku przesyłamy zlecenie odbioru własnego.",
+        "Odbiór: 2026-10-06, godz. 07:30",
+        "",
+        "Pozdrawiam,",
+        "Pita Bros",
+      ].join("\n"),
+    );
+    // Still no product, extra item or location in a corrected body.
+    for (const forbidden of ["Souvlaki", "Tacki", "Feta", "Wola", "KEN"]) {
+      expect(bodyText).not.toContain(forbidden);
+    }
+  });
+
+  it("correction: false or omitted leaves subject and body unchanged", () => {
+    const plain = buildPagoDraftEmail(richMixed(), "Transport Wtorek", makeT());
+    const off = buildPagoDraftEmail(richMixed(), "Transport Wtorek", makeT(), { correction: false });
+    expect(off).toEqual(plain);
+    expect(plain.subject.startsWith("KOREKTA")).toBe(false);
+    expect(plain.bodyText).not.toContain("KOREKTA");
   });
 });
 
 describe("buildDriverDraftEmail", () => {
-  it("matches the legacy subject template verbatim", () => {
+  it("subject: legacy template with the pickup date when set", () => {
     const b = batch({ pickup_date: "2026-08-22" });
     const { subject } = buildDriverDraftEmail(b, "Transport Sobota", makeT());
     expect(subject).toBe("Transport / odbior i rozwoz - Transport Sobota - 2026-08-22");
   });
 
-  it("falls back to created's date part when pickup_date is unset", () => {
+  it("subject: no date at all when pickup_date is unset", () => {
     const b = batch({ pickup_date: null, created: "2026-08-21T09:15:00+00:00" });
-    const { subject } = buildDriverDraftEmail(b, "Transport Sobota", makeT());
-    expect(subject).toBe("Transport / odbior i rozwoz - Transport Sobota - 2026-08-21");
+    const { subject } = buildDriverDraftEmail(b, "Transport · Warszawa", makeT());
+    expect(subject).toBe("Transport / odbior i rozwoz - Transport · Warszawa");
   });
 
-  it("body includes pickup date/time when both are set", () => {
-    const b = batch({ pickup_date: "2026-08-22", pickup_time: "08:30" });
-    const { bodyText } = buildDriverDraftEmail(b, "Transport Sobota", makeT());
-    expect(bodyText).toContain("2026-08-22");
-    expect(bodyText).toContain("08:30");
+  it("body: the four logistics lines with their values, notes, every member's extras", () => {
+    const { bodyText } = buildDriverDraftEmail(richMixed(), "Transport Poniedziałek", makeT());
+    expect(bodyText).toBe(
+      [
+        "Dzień dobry,",
+        "",
+        "Transport: Transport Poniedziałek",
+        "Data odbioru: 2026-10-06",
+        "Godzina odbioru: 07:30",
+        "Kierowca: Jan Kowalski",
+        "Pojazd: Ducato WX 12345",
+        "",
+        "Uwagi:",
+        "Wjazd od rampy nr 2",
+        "",
+        "Pozycje spoza katalogu:",
+        "Tacki - 2 opak",
+        "Feta grecka - 5 kg",
+        "Serwetki - 1 karton",
+        "",
+        "Szczegóły w załączniku.",
+        "",
+        "Pozdrawiam,",
+        "Pita Bros",
+      ].join("\n"),
+    );
   });
-});
 
-// ---- training-feedback-0901 F1: ad-hoc off-catalogue items on the actual
-// Gmail draft body (buildDraftBody, shared by both buildPagoDraftEmail and
-// buildDriverDraftEmail) — this is the path that actually reaches Pago; the
-// bug was that only the single-order emailBody.ts/gmail_url.py pair carried
-// extra_items, not this one. ----------------------------------------------
+  it("body: always prints the four lines, with 'do potwierdzenia' for missing values", () => {
+    const b = richMixed({
+      pickup_date: null,
+      pickup_time: "",
+      driver: null,
+      vehicle: "   ",
+      notes: "  ",
+      orders: richMixed().orders.map((o) => ({ ...o, extra_items: "" })),
+    });
+    const { bodyText } = buildDriverDraftEmail(b, "Transport · Warszawa", makeT());
+    expect(bodyText).toContain("Data odbioru: do potwierdzenia");
+    expect(bodyText).toContain("Godzina odbioru: do potwierdzenia");
+    expect(bodyText).toContain("Kierowca: do potwierdzenia");
+    expect(bodyText).toContain("Pojazd: do potwierdzenia");
+    expect(bodyText).not.toContain("Uwagi:");
+    expect(bodyText).not.toContain("Pozycje spoza katalogu");
+  });
 
-describe("buildDraftBody ad-hoc items (F1)", () => {
-  it("lists every order's ad-hoc items verbatim, never de-duplicated", () => {
+  it("extras are listed verbatim, never de-duplicated (10kg, not 5)", () => {
     const b = batch({
       pickup_date: "2026-08-22",
       orders: [
@@ -355,69 +500,14 @@ describe("buildDraftBody ad-hoc items (F1)", () => {
         { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
       ],
     });
-    const { bodyText } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
+    const { bodyText } = buildDriverDraftEmail(b, "Transport Sobota", makeT());
     expect(bodyText.split("Feta - 5 kg").length - 1).toBe(2);
   });
 
-  it("omits the block entirely when no member order has an ad-hoc item", () => {
-    const { bodyText } = buildPagoDraftEmail(batch({ pickup_date: "2026-08-22" }), "Transport Sobota", makeT());
-    expect(bodyText).not.toContain("Pozycje spoza katalogu");
-  });
-
-  it("still honours the no-location-leak invariant when ad-hoc items are present", () => {
-    const b = batch({
-      pickup_date: "2026-08-22",
-      orders: [
-        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
-        { order_id: "ORD-2", location_id: "BRACKA", location_name: "Pita Bros Bracka", status: "manager_sent", lines: [] },
-      ],
-    });
-    const { bodyText } = buildPagoDraftEmail(b, "Transport Sobota", makeT());
-    expect(bodyText).toContain("Feta - 5 kg");
-    expect(bodyText).not.toContain("Wola");
-    expect(bodyText).not.toContain("Bracka");
-  });
-
-  it("also appears in the driver draft email body (buildDraftBody is shared)", () => {
-    const b = batch({
-      pickup_date: "2026-08-22",
-      orders: [
-        { order_id: "ORD-1", location_id: "WOLA", location_name: "Pita Bros Wola", status: "manager_sent", lines: [], extra_items: "Feta - 5 kg" },
-      ],
-    });
-    const { bodyText } = buildDriverDraftEmail(b, "Transport Sobota", makeT());
-    expect(bodyText).toContain("Feta - 5 kg");
-  });
-});
-
-
-describe("Pago + Mory on one run (transport-pago-mory-combined)", () => {
-  const mixed = () =>
-    batch({
-      supplier_id: "SUP_PAGO",
-      supplier_name: "Pago",
-      pickup_date: "2026-09-30",
-      orders: [
-        {
-          order_id: "ORD-P", location_id: "WOLA", location_name: "Pita Bros Wola",
-          status: "manager_sent", lines: [], supplier_id: "SUP_PAGO", extra_items: "Tacki - 2 opak",
-        },
-        {
-          order_id: "ORD-M", location_id: "KEN", location_name: "Pita Bros KEN",
-          status: "manager_sent", lines: [], supplier_id: "SUP_MORY", extra_items: "Serwetki - 1 karton",
-        },
-      ],
-    });
-
-  it("the Pago draft carries only Pago members' extra items", () => {
-    const { bodyText } = buildPagoDraftEmail(mixed(), "Transport", makeT());
-    expect(bodyText).toContain("Tacki - 2 opak");
-    expect(bodyText).not.toContain("Serwetki");
-  });
-
-  it("the driver draft carries every member's extra items", () => {
-    const { bodyText } = buildDriverDraftEmail(mixed(), "Transport", makeT());
-    expect(bodyText).toContain("Tacki - 2 opak");
-    expect(bodyText).toContain("Serwetki - 1 karton");
+  it("is language-aware (en)", () => {
+    const { bodyText } = buildDriverDraftEmail(richMixed({ driver: null }), "x", makeT("en"));
+    expect(bodyText).toContain("Pickup date: 2026-10-06");
+    expect(bodyText).toContain("Driver: to be confirmed");
+    expect(bodyText).toContain("Notes:");
   });
 });
