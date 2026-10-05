@@ -4438,8 +4438,9 @@ def captain_receipt_photo_urls(
 # (transport-pago-mory-combined, operator decision 2B, 2026-09-28): the driver
 # collects Magazyn własny Mory goods on the Pago run, so a Pago batch may carry
 # SUP_MORY orders. One-directional — a Mory batch never carries Pago orders.
-# A code constant, like _INTERNAL_SUPPLIER_ID; the frontend mirrors it in
-# lib/transport.ts (TRANSPORT_COMPANION_SUPPLIER_IDS).
+# A code constant, like _INTERNAL_SUPPLIER_ID. The frontend does not mirror
+# it: it reads a batch's suppliers from the API (detail ``suppliers``, summary
+# ``supplier_ids``); only its PAGO/MORY filter chips name the two ids.
 _TRANSPORT_COMPANION_SUPPLIERS: dict[str, tuple[str, ...]] = {"SUP_PAGO": ("SUP_MORY",)}
 
 
