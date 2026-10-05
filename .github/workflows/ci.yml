@@ -27,6 +27,9 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Lint (ruff)
         run: ruff check .
+      # Also runs tests/test_agents_md_imports.py, which guards the root and
+      # frontend AGENTS.md too. Keep it in a job that runs on every push if
+      # this job is ever scoped to backend paths.
       - name: Test (pytest)
         run: pytest
 
