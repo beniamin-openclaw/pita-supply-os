@@ -40,6 +40,18 @@ No critical findings. Fixed: the matrix "+" skipped the checkbox for one-offs (n
 - Backend: `python -m pytest` 1008 passed; `ruff check .` clean. New tests in `tests/test_manager_add_line.py`, `tests/test_orderable_active_filter.py` and `tests/test_captain_orders.py`.
 - Frontend: build + lint clean; new tests `AddProductPicker.test.tsx` and `lib/transport.test.ts` (`orderAddOneOptions`, add-to-all exclusion). Three captain-mp vitest failures (localStorage) reproduce on clean `main` locally and are unrelated.
 
+## Prod master data (2026-10-05, after the live test)
+
+Owner confirmed the override works on prod ("działa") and asked for Westfield's Gyros 15 KG thresholds: target 2 blocks, max 4 blocks, min 1 block (P024 is counted in kg, 1 block = 15 kg).
+
+| setting_id | before (min/target/max kg) | after (min/target/max kg) |
+|---|---|---|
+| WESTFIELD__P024 | 30 / 60 / 60 | 15 / 30 / 60 |
+
+- Diff before: the row above (it is the rollback: `UPDATE location_product_settings SET min_stock_qty_base=30, target_stock_qty_base=60, max_stock_qty_base=60 WHERE setting_id='WESTFIELD__P024'`).
+- Apply: single guarded UPDATE (`WHERE` on the old 30/60/60 values), 1 row; note appended "[2026-10-05 owner: cel 2 szt / max 4 szt / min 1 szt; przed 30/60/60]".
+- Audit after: exactly 1 WESTFIELD×P024 row, min <= target <= max, `SP_PAGO_P024.units_per_purchase_unit` = 15 (so 15/30/60 kg = 1/2/4 blocks).
+
 ## Rollback
 
 Revert the PR. No migration, no prod data written.
