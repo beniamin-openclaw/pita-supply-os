@@ -452,7 +452,11 @@ export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMa
  * supplier+product and identical across locations, but a caller that actually
  * adds the product must still resolve it PER ORDER from that order's own
  * orderable list (see `handleAddProductAll` in TransportPage) — not every
- * order necessarily carries this exact `OrderableItem` instance. */
+ * order necessarily carries this exact `OrderableItem` instance.
+ *
+ * Items outside a location's list (`configured_for_location === false`,
+ * manager-add-any-product) are left out — add-to-all never applies the one-off
+ * override; that goes through `orderAddOneOptions` for a single order. */
 export function buildTransportAddAllOptions(
   orders: TransportBatchOrder[],
   orderableByOrderId: Record<string, OrderableItem[]>,
@@ -461,11 +465,25 @@ export function buildTransportAddAllOptions(
   for (const order of orders) {
     const present = new Set(order.lines.map((l) => l.product_id));
     for (const item of orderableByOrderId[order.order_id] ?? []) {
+      if (item.configured_for_location === false) continue;
       if (present.has(item.product_id) || byProduct.has(item.product_id)) continue;
       byProduct.set(item.product_id, item);
     }
   }
   return [...byProduct.values()].sort(compareProductOrder);
+}
+
+/** Products that can still be added to ONE member order — its full orderable
+ * list (incl. one-off items outside the location's list) minus what it already
+ * carries, in canonical supplier order (manager-add-any-product). */
+export function orderAddOneOptions(
+  order: TransportBatchOrder,
+  orderableByOrderId: Record<string, OrderableItem[]>,
+): OrderableItem[] {
+  const present = new Set(order.lines.map((l) => l.product_id));
+  return (orderableByOrderId[order.order_id] ?? [])
+    .filter((item) => !present.has(item.product_id))
+    .sort(compareProductOrder);
 }
 
 /** Per-order draft state for a draft batch — one `DraftMap` (order_line_id ->

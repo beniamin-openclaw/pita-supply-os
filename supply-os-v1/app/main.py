@@ -219,19 +219,25 @@ def _build_orderable_item(
     ``Supplier.suggestion_alerts_enabled``) — the card keeps the suggestion but
     drops every alert and reason prompt when it is False."""
     product = products_by_id[sp.product_id]
-    setting = settings_by_pid[sp.product_id]
+    # No setting = a Manager one-off outside the location's list
+    # (manager-add-any-product): thresholds read 0, flagged below.
+    setting = settings_by_pid.get(sp.product_id)
     return {
         "product_id": sp.product_id,
         "product_name_pl": product.product_name_pl,
         "inventory_unit": product.inventory_unit,
-        "is_critical": setting.is_critical_for_location or product.is_critical,
+        "is_critical": (setting.is_critical_for_location if setting else False)
+        or product.is_critical,
         "purchase_unit": sp.purchase_unit,
         "units_per_purchase_unit": sp.units_per_purchase_unit,
         "rounding_rule": sp.rounding_rule.value,
-        "min_stock_qty_base": setting.min_stock_qty_base,
-        "max_stock_qty_base": setting.max_stock_qty_base,
-        "target_stock_qty_base": setting.target_stock_qty_base,
-        "allow_over_max_due_to_packaging": setting.allow_over_max_due_to_packaging,
+        "min_stock_qty_base": setting.min_stock_qty_base if setting else 0,
+        "max_stock_qty_base": setting.max_stock_qty_base if setting else 0,
+        "target_stock_qty_base": setting.target_stock_qty_base if setting else 0,
+        "allow_over_max_due_to_packaging": (
+            setting.allow_over_max_due_to_packaging if setting else False
+        ),
+        "configured_for_location": setting is not None,
         "supplier_product_id": sp.supplier_product_id,
         "supplier_product_name": sp.supplier_product_name,
         "order_note": sp.order_note,
@@ -248,9 +254,16 @@ def _build_orderable_items(
     location_id: str,
     supplier_id: str,
     suggestion_alerts_enabled: bool = True,
+    include_unconfigured: bool = False,
 ) -> list[dict]:
     """Orderable line dicts for one location + supplier (shared by the Captain
     and Manager orderable routes).
+
+    ``include_unconfigured`` (Manager only, manager-add-any-product) drops the
+    location-setting filter so the Manager can add a one-off product the
+    location does not normally carry (e.g. Gyros 15 KG at Norblin). Those items
+    carry ``configured_for_location = False`` and zero thresholds; the active
+    filters still apply. The Captain path never sets it.
 
     Mirrors the prior inline ``captain_orderable`` body: reads through the chosen
     ``backend`` (so sheet/supabase serve live master data), filters
@@ -286,7 +299,7 @@ def _build_orderable_items(
         for sp in backend.load_supplier_products()
         if sp.supplier_id == supplier_id
         and sp.active
-        and sp.product_id in settings_by_pid
+        and (include_unconfigured or sp.product_id in settings_by_pid)
         and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
     # Canonical supplier order (supplier-product-order-minimum): position, then
@@ -416,6 +429,7 @@ def captain_delivery_proposal(
 def manager_orderable(
     supplier_id: str,
     location_id: str,
+    include_unconfigured: bool = False,
     _: None = Depends(require_manager),
 ):
     """Manager-auth twin of `captain_orderable` (add-product-to-order).
@@ -424,8 +438,15 @@ def manager_orderable(
     param (vs. derived from the Captain token). Same shape + logic — used by the
     Manager add-line picker to list products that can be added to an order at
     `location_id` from `supplier_id`. No status restriction (it only reads master
-    data); orderable membership is re-checked server-side on the add-line POST."""
-    return _build_orderable_items(_choose_backend(), location_id, supplier_id)
+    data); orderable membership is re-checked server-side on the add-line POST.
+
+    ``include_unconfigured=true`` also lists the supplier's active products that
+    have no setting at this location (``configured_for_location = False``) —
+    the Manager's one-off override (manager-add-any-product)."""
+    return _build_orderable_items(
+        _choose_backend(), location_id, supplier_id,
+        include_unconfigured=include_unconfigured,
+    )
 
 
 class SuggestRequest(BaseModel):
@@ -1712,6 +1733,20 @@ def captain_order_edit(
                 detail=f"Unknown product_id '{line.product_id}'",
             )
         setting = master.settings_by_pid.get(line.product_id)
+        if setting is None and any(
+            ln.product_id == line.product_id for ln in existing.lines
+        ):
+            # A Manager one-off line (manager-add-any-product) on an order sent
+            # back to the Captain: the location has no setting for it, but the
+            # line is already on the order — keep it editable with zero
+            # thresholds; packaging allowance on so qty > 0 needs no over-MAX
+            # reason.
+            setting = LocationProductSetting(
+                setting_id=f"{location_id}__{line.product_id}__one-off",
+                location_id=location_id,
+                product_id=line.product_id,
+                allow_over_max_due_to_packaging=True,
+            )
         if setting is None:
             raise HTTPException(
                 status_code=400,
@@ -2680,7 +2715,14 @@ def manager_add_line(
 
     # Orderable membership for THIS order's supplier + location (server-side
     # re-check; the picker's list is advisory).
-    orderable = _build_orderable_items(backend, order.location_id, order.supplier_id)
+    # `allow_unconfigured` is the Manager's explicit one-off override
+    # (manager-add-any-product): a product of this supplier with no setting at
+    # this location. It still lands as a normal order line, so the Transport
+    # pickup, the e-mail and the goods receipt all see it.
+    orderable = _build_orderable_items(
+        backend, order.location_id, order.supplier_id,
+        include_unconfigured=req.allow_unconfigured,
+    )
     match = next(
         (it for it in orderable if it["supplier_product_id"] == req.supplier_product_id),
         None,
@@ -2715,7 +2757,8 @@ def manager_add_line(
         supplier_product_id=req.supplier_product_id,
         current_stock_qty_base=0,
         # Real target from the location_product_setting (so the detail "Cel"
-        # column is meaningful); no suggestion is computed for an ad-hoc add.
+        # column is meaningful; 0 for a one-off outside the location's list);
+        # no suggestion is computed for an ad-hoc add.
         target_stock_qty_base=match["target_stock_qty_base"],
         suggested_qty_base=0,
         suggested_qty_purchase=0,
@@ -2746,12 +2789,16 @@ def manager_add_line(
             )
     backend.append_order_lines([new_line])
 
-    if post_send:
+    # An override is always logged (audit: who added what outside the
+    # location's list); a regular add only post-send, as before.
+    override = not match["configured_for_location"]
+    if post_send or override:
+        suffix = " — poza listą lokalu" if override else ""
         _log_order_event(
             backend,
             order_id,
             "line_added",
-            f"{match['product_name_pl']}: dodano ({match['purchase_unit']})",
+            f"{match['product_name_pl']}: dodano ({match['purchase_unit']}){suffix}",
         )
 
     return ManagerAddLineResponse(

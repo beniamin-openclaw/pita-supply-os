@@ -468,17 +468,29 @@ export const api = {
     apiPost<ManagerDispatchResponse>("/api/manager/dispatch", req, "manager"),
   // Orderable products the Manager can add to an order (add-product-to-order).
   // location_id is explicit — the manager token carries no location.
-  managerOrderable: (supplier_id: string, location_id: string) =>
+  // includeUnconfigured (manager-add-any-product) also lists the supplier's
+  // products with no setting at this location, flagged configured_for_location=false.
+  managerOrderable: (supplier_id: string, location_id: string, includeUnconfigured = false) =>
     apiGet<OrderableItem[]>(
-      `/api/manager/orderable?supplier_id=${encodeURIComponent(supplier_id)}&location_id=${encodeURIComponent(location_id)}`,
+      `/api/manager/orderable?supplier_id=${encodeURIComponent(supplier_id)}&location_id=${encodeURIComponent(location_id)}` +
+        (includeUnconfigured ? "&include_unconfigured=true" : ""),
       "manager",
     ),
   // Append one ad-hoc product line to a manager_claimed order. The new line lands
   // at qty 0; the Manager sets manager_final via the existing save/dispatch flow.
-  managerAddLine: (order_id: string, product_id: string, supplier_product_id: string) =>
+  // allowUnconfigured = the Manager's one-off override for a product outside the
+  // location's list; the line still lands on the order (pickup, e-mail, receipt).
+  managerAddLine: (
+    order_id: string,
+    product_id: string,
+    supplier_product_id: string,
+    allowUnconfigured = false,
+  ) =>
     apiPost<ManagerAddLineResponse>(
       `/api/manager/order/${encodeURIComponent(order_id)}/add-line`,
-      { product_id, supplier_product_id },
+      allowUnconfigured
+        ? { product_id, supplier_product_id, allow_unconfigured: true }
+        : { product_id, supplier_product_id },
       "manager",
     ),
   managerClaim: (order_id: string) =>

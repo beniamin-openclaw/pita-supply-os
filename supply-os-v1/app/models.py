@@ -788,6 +788,9 @@ class ManagerAddLineRequest(BaseModel):
     deviation/critical/over-MAX reason gate applies to a manager-added line)."""
     product_id: str = Field(min_length=1)
     supplier_product_id: str = Field(min_length=1)
+    # Manager one-off override (manager-add-any-product): also accept an active
+    # product of the order's supplier that has no setting at this location.
+    allow_unconfigured: bool = False
 
 
 class ManagerAddLineResponse(BaseModel):

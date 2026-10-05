@@ -1361,6 +1361,11 @@ export const STRINGS = {
   "addProduct.button": { pl: "+ Dodaj produkt", en: "+ Add product" },
   "addProduct.placeholder": { pl: "Szukaj produktu…", en: "Search product…" },
   "addProduct.empty": { pl: "Brak produktów do dodania", en: "No products to add" },
+  "addProduct.showAll": {
+    pl: "Wyjątkowo: pokaż wszystkie produkty dostawcy",
+    en: "One-off: show all of the supplier's products",
+  },
+  "addProduct.outsideList": { pl: "poza listą lokalu", en: "not on this location's list" },
   "manager.addLineOk": {
     pl: "Dodano produkt do zamówienia",
     en: "Product added to order",
@@ -1629,6 +1634,22 @@ export const STRINGS = {
   "manager.transport.matrix.addProductAllError": {
     pl: "Nie udało się dodać produktu dla: {locations}",
     en: "Couldn't add the product for: {locations}",
+  },
+  "manager.transport.matrix.addCellAria": {
+    pl: "Dodaj {product} dla {location}",
+    en: "Add {product} for {location}",
+  },
+  "manager.transport.matrix.addOneLabel": {
+    pl: "Tylko dla jednego lokalu:",
+    en: "For one location only:",
+  },
+  "manager.transport.matrix.addOneLocationAria": {
+    pl: "Lokal, do którego zamówienia dodać produkt",
+    en: "Location whose order gets the product",
+  },
+  "manager.transport.matrix.addOneOk": {
+    pl: "Dodano {product} do zamówienia {location} — wpisz ilość i zapisz",
+    en: "Added {product} to the {location} order — enter the quantity and save",
   },
 
   "manager.transport.addLocation.button": { pl: "Dodaj lokalizację", en: "Add location" },

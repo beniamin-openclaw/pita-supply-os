@@ -151,7 +151,9 @@ export function ManagerPage() {
           // stays hidden if it fails.
           if (isOrderEditable(d)) {
             api
-              .managerOrderable(d.supplier_id, d.location_id)
+              // Full supplier list: products outside this location's list stay
+              // behind the picker's one-off checkbox (manager-add-any-product).
+              .managerOrderable(d.supplier_id, d.location_id, true)
               .then((orderable) => {
                 if (latestDetailRequest.current !== orderId) return; // stale
                 setOrderableForSelected(orderable);
@@ -401,11 +403,21 @@ export function ManagerPage() {
   // manager's other unsaved edits). The Manager sets the qty via the existing
   // save/dispatch flow afterwards.
   const handleAddLine = useCallback(
-    async (orderId: string, productId: string, supplierProductId: string) => {
+    async (
+      orderId: string,
+      productId: string,
+      supplierProductId: string,
+      allowUnconfigured = false,
+    ) => {
       if (blockedByDraft()) return;
       setBusyId(orderId);
       try {
-        const resp = await api.managerAddLine(orderId, productId, supplierProductId);
+        const resp = await api.managerAddLine(
+          orderId,
+          productId,
+          supplierProductId,
+          allowUnconfigured,
+        );
         const newDetail = await api.managerOrder(orderId);
         if (latestDetailRequest.current !== orderId) return; // user moved on
         setDetail(newDetail);
