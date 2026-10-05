@@ -12,6 +12,12 @@
 //   4. drafts.get From must be the alias — else the draft is deleted.
 // Only a verified draft is returned; the caller dispatches after that. The app
 // never sends — the manager sends the draft from Gmail.
+//
+// transport-v2 splits the flow in two so the Transport send panel can take the
+// token FIRST (inside the click gesture, before finalize/PDF work) and create
+// one or more drafts with it later: acquireVerifiedGmailToken (steps 1-2) and
+// createVerifiedDraftWithToken (steps 3-4, with optional PDF attachments).
+// createVerifiedOrderDraft composes the two and keeps its old contract.
 
 import type { StringKey } from "../../../i18n/strings";
 import {
@@ -22,6 +28,7 @@ import {
   getGmailDraftFrom,
   getGmailProfileEmail,
   GmailAuthExpiredError,
+  type MimeAttachment,
   type MimeFrom,
   rememberGmailToken,
   requestGmailAccessToken,
@@ -76,14 +83,23 @@ export interface VerifiedOrderDraftArgs {
   body: string;
 }
 
+export interface VerifiedGmailTokenArgs {
+  clientId: string;
+  /** The mailbox the token must belong to (order_mailbox, biuro@). */
+  mailbox: string;
+}
+
 /**
- * Create the draft and verify mailbox + sender. MUST be the first call of the
- * click handler: it opens the Google popup synchronously (before any await),
- * or the browser blocks it.
+ * Steps 1-2: a Gmail token for `mailbox`, verified via users.getProfile.
+ * Pre-selects the mailbox in the popup and reuses a cached token (~50 min).
+ * A token for another account is never kept: the cache entry is cleared and
+ * WrongMailboxError is thrown (no draft can be created with it). Only a
+ * token that passed the check is remembered.
+ *
+ * MUST be the first call of the click handler: it opens the Google popup
+ * synchronously (before any await), or the browser blocks it.
  */
-export async function createVerifiedOrderDraft(
-  args: VerifiedOrderDraftArgs,
-): Promise<{ draftId: string }> {
+export async function acquireVerifiedGmailToken(args: VerifiedGmailTokenArgs): Promise<string> {
   const token = await requestGmailAccessToken(args.clientId, {
     loginHint: args.mailbox,
     reuse: true,
@@ -95,13 +111,39 @@ export async function createVerifiedOrderDraft(
     throw new WrongMailboxError(actual);
   }
   rememberGmailToken(args.mailbox, token);
+  return token;
+}
+
+export interface VerifiedDraftArgs {
+  /** Required sender; the stored draft's From must match it. */
+  from: MimeFrom;
+  to: string;
+  /** Comma-joined Cc; omitted/empty -> no Cc header. */
+  cc?: string;
+  subject: string;
+  body: string;
+  /** e.g. the Transport order / driver-list PDF. */
+  attachments?: MimeAttachment[];
+}
+
+/**
+ * Steps 3-4 with a token from acquireVerifiedGmailToken: create the draft,
+ * then read its From back — Gmail silently replaces a From that is not a
+ * send-as alias of the mailbox, so a mismatch deletes the draft (best
+ * effort) and throws SenderRewrittenError. A 401 surfaces as
+ * GmailAuthExpiredError (the token cache is already cleared).
+ */
+export async function createVerifiedDraftWithToken(
+  token: string,
+  args: VerifiedDraftArgs,
+): Promise<{ id: string }> {
   const mime = buildMimeMessage({
     from: args.from,
     to: args.to,
     cc: args.cc || undefined,
     subject: args.subject,
     bodyText: args.body,
-    attachments: [],
+    attachments: args.attachments ?? [],
   });
   const { id } = await createGmailDraft(token, toBase64Url(mime));
   const stored = addressFromHeader(await getGmailDraftFrom(token, id));
@@ -110,6 +152,26 @@ export async function createVerifiedOrderDraft(
     await deleteGmailDraft(token, id).catch(() => undefined);
     throw new SenderRewrittenError(stored);
   }
+  return { id };
+}
+
+/**
+ * Create the draft and verify mailbox + sender (acquireVerifiedGmailToken +
+ * createVerifiedDraftWithToken). MUST be the first call of the click
+ * handler: it opens the Google popup synchronously (before any await), or
+ * the browser blocks it.
+ */
+export async function createVerifiedOrderDraft(
+  args: VerifiedOrderDraftArgs,
+): Promise<{ draftId: string }> {
+  const token = await acquireVerifiedGmailToken({ clientId: args.clientId, mailbox: args.mailbox });
+  const { id } = await createVerifiedDraftWithToken(token, {
+    from: args.from,
+    to: args.to,
+    cc: args.cc,
+    subject: args.subject,
+    body: args.body,
+  });
   return { draftId: id };
 }
 

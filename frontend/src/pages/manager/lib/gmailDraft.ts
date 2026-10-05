@@ -17,8 +17,10 @@
 // order-email-v2 reuses the same primitives for the per-order supplier e-mail
 // (see orderEmailDraft.ts): an optional From (location send-as alias) and Cc
 // in the MIME, `login_hint`, a short-lived in-memory token cache, and three
-// thin Gmail API reads/deletes used to VERIFY the draft. Transport calls pass
-// none of the new options, so its output is unchanged.
+// thin Gmail API reads/deletes used to VERIFY the draft. Since transport-v2
+// the Transport drafts go through the same verified flow
+// (orderEmailDraft.ts: acquireVerifiedGmailToken + createVerifiedDraftWithToken),
+// with From = the order mailbox and the PDF attached.
 //
 // This module is split into MIME/base64 mechanics (pure, unit-tested) and
 // two thin browser-only wrappers (requestGmailAccessToken, createGmailDraft)
@@ -26,14 +28,12 @@
 // network call — see the task's test scope).
 
 import type { StringKey } from "../../../i18n/strings";
-import type { TransportBatchDetail, TransportBatchOrder } from "../../../types";
+import type { TransportBatchDetail } from "../../../types";
 // Deliberate exception to this module's usual zero-coupling-with-transport.ts
-// stance (see `isoDatePart` below): the ad-hoc off-catalogue items block MUST
-// be the SAME function both here and in transport.ts's buildTransportEmailBody
-// call, not two independently-maintained copies — that exact "both builders"
-// drift (migration 0013 patched one and not the other) is the bug this fixes
+// stance (see `isoDatePart` below): the driver draft's off-catalogue block is
+// transport.ts's buildExtraItemsSupplierBlock, not a second, driftable copy
 // (training-feedback-0901 F1).
-import { buildExtraItemsSupplierBlock, leadSupplierView } from "./transport";
+import { buildExtraItemsSupplierBlock } from "./transport";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
@@ -41,9 +41,7 @@ type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
 /** ISO datetime/date -> the date part only ("YYYY-MM-DD"). "" when absent.
  * Mirrors the private `isoDatePart` in lib/transport.ts — kept as an
- * independent one-line copy rather than imported, unlike
- * `buildExtraItemsSupplierBlock` above (see that import's comment for why
- * THAT one specifically must be shared, not duplicated). */
+ * independent one-line copy rather than imported. */
 function isoDatePart(iso?: string | null): string {
   if (!iso) return "";
   return iso.slice(0, 10);
@@ -167,80 +165,100 @@ export function toBase64Url(mime: string): string {
 // ---------- draft email content (subject + body) -----------------------------
 
 /**
- * PAGO order draft — subject + body per the legacy Apps Script recipe.
- * Subject is a fixed ASCII template (deliberately no Polish diacritics,
- * matching the legacy script verbatim): "Zlecenie odbioru wlasnego - {label}
- * - {date}". The body is short plain text and — per the no-location-leak
- * invariant the rest of this codebase enforces for supplier-facing text
- * (see lib/transport.ts's header comment) — never mentions per-location
- * quantities; those live only in the attached PDF's own no-location-data
- * contract (buildTransportPagoPrintDoc).
+ * PAGO order draft (the ZOW e-mail) — subject + body. Subject is a fixed ASCII
+ * template (deliberately no Polish diacritics, matching the legacy script):
+ * "Zlecenie odbioru wlasnego - {label}", plus " - {pickup_date}" only when a
+ * pickup date is set (transport-v2: never a made-up date).
+ *
+ * The body is deliberately minimal (transport-v2): greeting, "the self-pickup
+ * order is attached", the pickup term (date[, time], or "to be confirmed"),
+ * closing, signature. It carries NO product, NO off-catalogue item, NO
+ * location name, NO driver/vehicle and NO transport label — everything the
+ * supplier needs is in the attached ZOW PDF, whose extras section holds only
+ * the lines the Manager approved (buildTransportPagoPrintDoc).
+ *
+ * `opts.correction` (transport-v2, after "Cofnij wysłanie"): the e-mail
+ * corrects a ZOW that already went to PAGO — the subject starts with
+ * "KOREKTA - " and one line right after the greeting says this order
+ * corrects and replaces the earlier one, so PAGO does not fulfil both.
+ * Omitted/false -> the output is unchanged.
  */
 export function buildPagoDraftEmail(
   detail: TransportBatchDetail,
   displayLabel: string,
   t: TFunc,
+  opts: { correction?: boolean } = {},
 ): { subject: string; bodyText: string } {
-  const date = detail.pickup_date ?? isoDatePart(detail.created);
-  const subject = `Zlecenie odbioru wlasnego - ${displayLabel} - ${date}`;
-  // Supplier-facing: only the batch supplier's own members' extra items — a
-  // Magazyn Mory order riding on the Pago run never reaches Pago
-  // (transport-pago-mory-combined).
-  const orders = leadSupplierView(detail).orders;
-  return { subject, bodyText: buildDraftBody(detail, orders, displayLabel, date, t) };
+  const date = isoDatePart(detail.pickup_date);
+  const baseSubject = date
+    ? `Zlecenie odbioru wlasnego - ${displayLabel} - ${date}`
+    : `Zlecenie odbioru wlasnego - ${displayLabel}`;
+  const subject = opts.correction ? `KOREKTA - ${baseSubject}` : baseSubject;
+  const time = (detail.pickup_time ?? "").trim();
+  const out: string[] = [];
+  out.push(t("manager.transport.email.greeting"));
+  out.push("");
+  if (opts.correction) {
+    out.push(t("manager.transport.gmailDraft.body.correctionLine"));
+  }
+  out.push(t("manager.transport.gmailDraft.body.pagoAttachmentLine"));
+  if (!date) {
+    out.push(t("manager.transport.gmailDraft.body.pickupToConfirm"));
+  } else if (time) {
+    out.push(t("manager.transport.gmailDraft.body.pickupLineWithTime", { date, time }));
+  } else {
+    out.push(t("manager.transport.gmailDraft.body.pickupLine", { date }));
+  }
+  out.push("");
+  out.push(t("manager.transport.email.closing"));
+  out.push(t("manager.transport.email.signature"));
+  return { subject, bodyText: out.join("\n") };
 }
 
 /**
- * DRIVER draft — subject + body per the legacy Apps Script recipe. Subject:
- * "Transport / odbior i rozwoz - {label} - {date}" (same fixed-ASCII-template
- * discipline as the Pago draft). Body mirrors the Pago draft's shape; the
- * per-location detail lives in the attached driver-list PDF, not the email
- * text.
+ * DRIVER draft — subject + body. Subject: "Transport / odbior i rozwoz -
+ * {label}", plus " - {pickup_date}" only when set (same fixed-ASCII-template
+ * discipline as the Pago draft). Internal e-mail, so the body ALWAYS lists
+ * the four logistics lines — date, time, driver, vehicle — each with its
+ * value or "do potwierdzenia", then the batch notes when non-blank, then
+ * every member's off-catalogue items (every supplier, flat), then the
+ * attachment line. The per-location detail lives in the attached driver-list
+ * PDF, not the e-mail text.
  */
 export function buildDriverDraftEmail(
   detail: TransportBatchDetail,
   displayLabel: string,
   t: TFunc,
 ): { subject: string; bodyText: string } {
-  const date = detail.pickup_date ?? isoDatePart(detail.created);
-  const subject = `Transport / odbior i rozwoz - ${displayLabel} - ${date}`;
-  // Driver-facing: every member's extra items, whatever its supplier.
-  return { subject, bodyText: buildDraftBody(detail, detail.orders, displayLabel, date, t) };
-}
-
-function buildDraftBody(
-  detail: TransportBatchDetail,
-  orders: TransportBatchOrder[],
-  displayLabel: string,
-  date: string,
-  t: TFunc,
-): string {
+  const date = isoDatePart(detail.pickup_date);
+  const subject = date
+    ? `Transport / odbior i rozwoz - ${displayLabel} - ${date}`
+    : `Transport / odbior i rozwoz - ${displayLabel}`;
+  const toConfirm = t("manager.transport.gmailDraft.body.toConfirm");
+  const orToConfirm = (value: string | null | undefined): string => {
+    const v = (value ?? "").trim();
+    return v === "" ? toConfirm : v;
+  };
   const out: string[] = [];
   out.push(t("manager.transport.email.greeting"));
   out.push("");
   out.push(t("manager.transport.gmailDraft.body.transportLine", { label: displayLabel }));
-  if (date) {
-    out.push(
-      detail.pickup_time
-        ? t("manager.transport.gmailDraft.body.pickupLineWithTime", {
-            date,
-            time: detail.pickup_time,
-          })
-        : t("manager.transport.gmailDraft.body.pickupLine", { date }),
-    );
+  out.push(t("manager.transport.gmailDraft.body.dateLine", { value: orToConfirm(date) }));
+  out.push(
+    t("manager.transport.gmailDraft.body.timeLine", { value: orToConfirm(detail.pickup_time) }),
+  );
+  out.push(t("manager.transport.gmailDraft.body.driverLine", { driver: orToConfirm(detail.driver) }));
+  out.push(
+    t("manager.transport.gmailDraft.body.vehicleLine", { vehicle: orToConfirm(detail.vehicle) }),
+  );
+  const notes = (detail.notes ?? "").trim();
+  if (notes) {
+    out.push("");
+    out.push(t("manager.transport.gmailDraft.body.notesHeader"));
+    out.push(notes);
   }
-  if (detail.driver) {
-    out.push(t("manager.transport.gmailDraft.body.driverLine", { driver: detail.driver }));
-  }
-  if (detail.vehicle) {
-    out.push(t("manager.transport.gmailDraft.body.vehicleLine", { vehicle: detail.vehicle }));
-  }
-  // Ad-hoc off-catalogue items (training-feedback-0901 F1) — this is the body
-  // of the Gmail draft that actually reaches the supplier/driver, so it uses
-  // the SAME buildExtraItemsSupplierBlock as transport.ts's
-  // buildTransportEmailBody (verbatim, never de-duplicated, no location
-  // attribution) rather than a second, driftable copy.
-  const extraItemsBlock = buildExtraItemsSupplierBlock(orders, t);
+  // Driver-facing: every member's extra items, whatever its supplier.
+  const extraItemsBlock = buildExtraItemsSupplierBlock(detail.orders, t);
   if (extraItemsBlock.length > 0) {
     out.push("");
     out.push(...extraItemsBlock);
@@ -250,7 +268,7 @@ function buildDraftBody(
   out.push("");
   out.push(t("manager.transport.email.closing"));
   out.push(t("manager.transport.email.signature"));
-  return out.join("\n");
+  return { subject, bodyText: out.join("\n") };
 }
 
 // ---------- Gmail API + classic OAuth 2.0 implicit-grant popup (browser-only) ----

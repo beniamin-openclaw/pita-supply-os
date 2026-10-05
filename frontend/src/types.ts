@@ -895,9 +895,9 @@ export interface TransportBatchOrder {
   // batch. Backend default `str = ""` -> optional here (lessons.md). EVERY
   // reader must use `?? ""` rather than assume presence: a frontend deployed
   // ahead of this backend field would otherwise get `undefined`, and e.g.
-  // `undefined.trim()` inside TransportPage's `gmail` useMemo (which calls
-  // into buildTransportEmailBody -> this field) would crash the whole
-  // Transport page via the ErrorBoundary.
+  // `undefined.trim()` inside the driver Gmail draft body or the Pago extras
+  // checklist (buildDriverDraftEmail / pagoExtraItemLines -> this field)
+  // would crash the whole Transport page via the ErrorBoundary.
   extra_items?: string;
   captain_note?: string;
 }
@@ -925,6 +925,11 @@ export interface TransportBatchSummary {
   // headerless legacy batch or one never given a name — transportDisplayLabel
   // falls back to "Transport {supplier_name} · {created date}" in that case.
   name?: string | null;
+  // Suppliers the batch carries (transport-v2) — the lead supplier first,
+  // then every other distinct member supplier. Drives the history list's
+  // supplier badges and the PAGO/MORY chip filter. Missing on an older
+  // backend (and [] is possible) — readers fall back to [supplier_id].
+  supplier_ids?: string[];
 }
 
 /** Full Transport batch: the summary fields plus the member orders and the
@@ -1071,6 +1076,42 @@ export interface TransportCancelResponse {
   skipped: TransportSkippedOrder[];
 }
 
+// transport-v2: reopen a sent batch + record a created Gmail draft ----------
+
+/** Payload for POST /api/manager/transport/reopen — put a SENT batch back
+ * into draft so the Manager can fix it and send it again. */
+export interface TransportReopenRequest {
+  transport_id: string;
+}
+
+/** Result of reopen. `reopened` lists members moved manager_sent ->
+ * manager_claimed; `skipped` lists members left as they were (another
+ * status, or a guard conflict) — never silently dropped. */
+export interface TransportReopenResponse {
+  transport_id: string;
+  reopened: string[];
+  skipped: TransportSkippedOrder[];
+}
+
+/** Payload for POST /api/manager/transport/draft-created — the FE reports a
+ * Gmail draft it just created for a batch (the Pago order or the driver
+ * list), so the batch history records the current draft and its mailbox.
+ * The backend stores it as a `<kind>_draft_created` TransportEvent whose
+ * `details` read `draft_id=<id>; mailbox=<mailbox>[; replaced=<id>][;
+ * extras=<a> | <b>]` (parsed back by latestTransportDraft). */
+export interface TransportDraftCreatedRequest {
+  transport_id: string;
+  kind: "order" | "driver";
+  gmail_draft_id: string;
+  mailbox?: string;
+  // Off-catalogue lines the Manager approved for the order PDF (max 50,
+  // each max 300 chars on the backend).
+  approved_extras?: string[];
+  // The previous draft of the same kind this one supersedes ("" / omitted
+  // when none).
+  replaced_draft_id?: string;
+}
+
 /** Payload for POST /api/manager/transport/remove-order — drop one member
  * order from a draft batch. */
 export interface TransportRemoveOrderRequest {
@@ -1121,6 +1162,9 @@ export interface TransportDraftConfig {
   // — the panel falls back to free-text entry.
   drivers: string;
   vehicles: string;
+  // Mailbox the Transport Gmail drafts are created in (transport-v2) — the
+  // backend's settings.order_mailbox (biuro@). Missing on an older backend.
+  order_mailbox?: string;
 }
 
 // Finance reconciliation ("Faktury vs dostawy", pilot KEN) -------------------

@@ -3,22 +3,29 @@
 // page component.
 //
 // Two very different documents come out of one TransportBatchDetail:
-//   - the DRIVER list (buildTransportDriverText) — internal, copy/pasted or
-//     handed to the driver — carries the per-location breakdown (who gets
-//     how much), because the driver needs to know where to drop what.
-//   - the SUPPLIER email (buildTransportEmailSubject/Body) — carries
-//     per-product TOTALS ONLY. The supplier never sees which location ordered
-//     what; splitting deliveries between locations is Pita Bros' own
-//     logistics, not the supplier's business (plan: "Driver list stays
-//     private"). Keep this asymmetry — do not add per-location detail to the
-//     email builder.
+//   - the DRIVER list (buildTransportDriverPrintDoc -> driver PDF, plus the
+//     driver Gmail draft) — internal — carries the per-location breakdown
+//     (who gets how much), because the driver needs to know where to drop
+//     what.
+//   - the SUPPLIER order (buildTransportPagoPrintDoc -> ZOW PDF, plus the
+//     Pago Gmail draft) — carries per-product TOTALS ONLY. The supplier never
+//     sees which location ordered what; splitting deliveries between
+//     locations is Pita Bros' own logistics, not the supplier's business
+//     (plan: "Driver list stays private"). Keep this asymmetry — do not add
+//     per-location detail to a supplier-facing builder.
 //
 // A second axis since transport-pago-mory-combined: a Pago batch also carries
 // Magazyn własny Mory orders (the driver collects them on the same run).
-// Supplier-facing documents (the order e-mail, the Pago PDF, the Pago Gmail
-// draft, the warehouse-exclusion notice) are built from `leadSupplierView` —
-// the batch supplier's own members and lines only; Pago never sees a Mory
-// line. Driver documents cover every supplier, in blocks (lead first).
+// Supplier-facing documents (the Pago PDF, the Pago Gmail draft, the
+// warehouse-exclusion notice, the extras checklist) are built from
+// `leadSupplierView` — the batch supplier's own members and lines only; Pago
+// never sees a Mory line. Driver documents cover every supplier, in blocks
+// (lead first).
+//
+// transport-v2 removed the clipboard driver text and the compose-URL order
+// e-mail (it put every product into the e-mail body); the two Gmail drafts
+// (gmailDraft.ts) are the only e-mails left, and the Pago one carries no
+// products at all — they live in the attached PDF.
 
 import type { Lang } from "../../../i18n";
 import type { StringKey } from "../../../i18n/strings";
@@ -27,27 +34,21 @@ import type {
   ManagerOrderLineDetail,
   OrderableItem,
   OrderLineManagerFinal,
-  Supplier,
   TransportBatchDetail,
   TransportBatchOrder,
   TransportBatchSummary,
+  TransportEligibleOrder,
   TransportEvent,
   TransportSupplierRef,
 } from "../../../types";
 import { compareProductOrder } from "../../../lib/productOrder";
-import { buildGmailComposeUrl } from "./emailBody";
 import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
 import { effectiveManagerQtyPurchase } from "./managerLine";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
-/** Quantity label (mirrors emailBody.ts's formatQty): drop trailing zeros. */
-function formatQty(qty: number): string {
-  return String(qty);
-}
-
 /** ISO datetime/date -> the date part only ("YYYY-MM-DD"), timezone-free so
- * the driver text / email subject stay deterministic regardless of the
+ * the print docs and the history sort stay deterministic regardless of the
  * viewer's locale. "" when absent (a batch with no dispatched member yet). */
 function isoDatePart(iso?: string | null): string {
   if (!iso) return "";
@@ -55,12 +56,6 @@ function isoDatePart(iso?: string | null): string {
 }
 
 // ---- transport-pago-mory-combined: suppliers on one batch ------------------
-
-/** Suppliers whose orders may ride on another supplier's Transport run —
- * mirrors the backend's `_TRANSPORT_COMPANION_SUPPLIERS` (Magazyn Mory rides
- * on the Pago run). The Transport supplier dropdown hides them: a
- * Magazyn-only batch would have no physical run of its own. */
-export const TRANSPORT_COMPANION_SUPPLIER_IDS: readonly string[] = ["SUP_MORY"];
 
 /** Supplier of a line or member order. A missing or "" `supplier_id` (an
  * older backend, or the model default) counts as the batch's own supplier —
@@ -152,25 +147,21 @@ function driverBlocks(
 //
 // The Captain's "+ dodaj produkt" free-text add (extra_items, one item per
 // line — see captain-mp/lib/extraItems.ts) reaches the supplier on the
-// single-order path via emailBody.ts + the backend's gmail_url.py. Neither
-// Transport builder carried it before this change, so anything ordered
-// through a combined Transport batch (how Pago actually ships) silently
-// never reached the supplier at all. Two shapes, deliberately asymmetric —
-// mirrors this file's header comment on the driver/supplier split:
+// single-order path via emailBody.ts + the backend's gmail_url.py. Three
+// shapes on the Transport path:
 //
-//   - SUPPLIER-facing (buildExtraItemsSupplierBlock): flat, VERBATIM, never
+//   - flat block (buildExtraItemsSupplierBlock): VERBATIM, never
 //     de-duplicated (two locations both asking "Feta - 5 kg" are 10kg total,
-//     not 5 — collapsing them would under-order), and carries NO location
-//     attribution (the supplier document never learns which of our
-//     restaurants ordered what).
-//   - DRIVER-facing (collectExtraItemsByLocation): the same items, but WITH
+//     not 5 — collapsing them would under-order), NO location attribution.
+//     Used by the driver Gmail draft body only.
+//   - DRIVER PDF (collectExtraItemsByLocation): the same items, WITH
 //     per-location attribution — the driver is the one who has to know who
 //     gets the extra feta.
-//
-// Both buildTransportEmailBody and gmailDraft.ts's buildDraftBody call the
-// SAME buildExtraItemsSupplierBlock (rather than each re-deriving the block)
-// so the two cannot silently drift apart the way emailBody.ts / gmail_url.py
-// once did — the exact gap this change fixes.
+//   - PAGO (transport-v2): extras never go into the Pago e-mail body. The
+//     Manager ticks the lines agreed with Pago (pagoExtraItemLines -> a
+//     checklist, unticked by default) and only the ticked texts reach the
+//     ZOW PDF, in their own section (buildTransportPagoPrintDoc's
+//     approvedExtraItems).
 
 /** One ad-hoc off-catalogue item line, attributed to the location whose
  * Captain added it — the driver-facing shape (see the section header above). */
@@ -183,8 +174,8 @@ export interface TransportExtraItem {
  * attributed to its order's location. Preserves order-then-line order; NEVER
  * deduplicates. `order.extra_items` is read via `?? ""` — an order from a
  * backend that doesn't carry the field yet contributes nothing rather than
- * throwing. Shared by buildTransportDriverText and
- * buildTransportDriverPrintDoc so the two driver documents cannot drift. */
+ * throwing. Shared by buildTransportDriverPrintDoc and
+ * buildExtraItemsSupplierBlock so the driver documents cannot drift. */
 export function collectExtraItemsByLocation(orders: TransportBatchOrder[]): TransportExtraItem[] {
   const out: TransportExtraItem[] = [];
   for (const order of orders) {
@@ -199,12 +190,10 @@ export function collectExtraItemsByLocation(orders: TransportBatchOrder[]): Tran
 }
 
 /**
- * Supplier-facing "Pozycje spoza katalogu" block lines — [] when no member
- * order carries any ad-hoc item (callers then skip the block entirely).
- * Verbatim, never de-duplicated, no location attribution — see the section
- * header above. This is the ONE function both buildTransportEmailBody and
- * gmailDraft.ts's buildDraftBody call, so a future edit to one cannot forget
- * the other.
+ * Flat "Pozycje spoza katalogu" block lines — [] when no member order carries
+ * any ad-hoc item (callers then skip the block entirely). Verbatim, never
+ * de-duplicated, no location attribution — see the section header above.
+ * Used by gmailDraft.ts's buildDriverDraftEmail; never by a Pago builder.
  */
 export function buildExtraItemsSupplierBlock(orders: TransportBatchOrder[], t: TFunc): string[] {
   const items = collectExtraItemsByLocation(orders).map((item) => item.text);
@@ -241,94 +230,6 @@ export function collectCaptainNotes(orders: TransportBatchOrder[]): TransportCap
 }
 
 /**
- * The PRIVATE driver list: transport id + date, then per supplier a
- * "Dostawca: …" line and one block per product —
- * "<produkt> — <total> <jm>." followed by an indented "  <lokal>: <qty> <jm>."
- * line for each location that contributed to it. Supplier blocks follow
- * `driverBlocks` (lead first; a Pago run also lists Magazyn Mory). Never sent
- * to the supplier; copy/clipboard + in-app display only.
- */
-export function buildTransportDriverText(detail: TransportBatchDetail, t: TFunc): string {
-  const out: string[] = [];
-  out.push(t("manager.transport.driverText.header", { id: detail.transport_id, date: isoDatePart(detail.created) }));
-
-  for (const block of driverBlocks(detail)) {
-    out.push(t("manager.transport.driverText.supplierLine", { supplier: block.supplier.supplier_name }));
-    out.push("");
-    block.lines.forEach((line) => {
-      out.push(`${line.product_name_pl} — ${formatQty(line.total_qty_purchase)} ${line.purchase_unit}.`);
-      line.per_location.forEach((pl) => {
-        out.push(`  ${pl.location_name}: ${formatQty(pl.qty_purchase)} ${line.purchase_unit}.`);
-      });
-      out.push("");
-    });
-  }
-
-  // Ad-hoc off-catalogue items (F1) — WITH location attribution (this is an
-  // internal document; the driver needs to know who gets the extra feta).
-  // Shares collectExtraItemsByLocation with buildTransportDriverPrintDoc so
-  // the two driver documents never drift apart.
-  const extraItems = collectExtraItemsByLocation(detail.orders);
-  if (extraItems.length > 0) {
-    out.push(t("manager.transport.driverText.extraItemsHeader"));
-    extraItems.forEach((item) => out.push(`  ${item.locationName}: ${item.text}`));
-    out.push("");
-  }
-
-  // Trim the trailing blank line the loop above always leaves.
-  while (out.length > 0 && out[out.length - 1] === "") out.pop();
-  return out.join("\n");
-}
-
-/** Subject: "Zamówienie zbiorcze <supplier> — <date>" (i18n). */
-export function buildTransportEmailSubject(detail: TransportBatchDetail, t: TFunc): string {
-  return t("manager.transport.email.subject", {
-    supplier: detail.supplier_name,
-    date: isoDatePart(detail.created),
-  });
-}
-
-/**
- * The SUPPLIER-facing body: per-product totals only, no per-location
- * breakdown — deliberately parallel to the driver text's opposite discipline.
- * Supplier-facing product name (supplier_product_name) is preferred over the
- * internal product_name_pl, mirroring emailBody.ts's dispatch email. Built
- * from `leadSupplierView`: a companion's (Magazyn Mory's) lines and extra
- * items never reach the supplier.
- */
-export function buildTransportEmailBody(fullDetail: TransportBatchDetail, t: TFunc): string {
-  const detail = leadSupplierView(fullDetail);
-  const out: string[] = [];
-  out.push(t("manager.transport.email.greeting"));
-  out.push("");
-  out.push(t("manager.transport.email.intro"));
-  out.push("");
-  out.push(t("manager.transport.email.lineHeader"));
-
-  detail.lines.forEach((line, idx) => {
-    const name = line.supplier_product_name || line.product_name_pl;
-    out.push(`${idx + 1}. | ${name} | ${formatQty(line.total_qty_purchase)} ${line.purchase_unit}`);
-  });
-
-  // Ad-hoc off-catalogue items (F1) — verbatim, never de-duplicated, no
-  // location attribution. Shared with gmailDraft.ts's buildDraftBody via
-  // buildExtraItemsSupplierBlock so the two supplier-facing builders cannot
-  // silently drift apart again (the exact gap this change fixes).
-  const extraItemsBlock = buildExtraItemsSupplierBlock(detail.orders, t);
-  if (extraItemsBlock.length > 0) {
-    out.push("");
-    out.push(...extraItemsBlock);
-  }
-
-  out.push("");
-  out.push(t("manager.transport.email.closing"));
-  out.push(t("manager.transport.email.signature"));
-  out.push(`(transport #${detail.transport_id})`);
-
-  return out.join("\n");
-}
-
-/**
  * Split a possibly comma/semicolon-separated distribution list into trimmed
  * addresses, dropping anything that doesn't carry "@" (placeholders like
  * "TBD" mixed into a list are silently ignored rather than sent to a dead
@@ -349,27 +250,6 @@ export function splitRecipients(email: string): string[] {
 export function hasValidRecipient(email?: string | null): boolean {
   if (!email) return false;
   return splitRecipients(email).length > 0;
-}
-
-/**
- * Build the Gmail compose URL for the supplier-order email — reuses
- * `buildGmailComposeUrl` (emailBody.ts) rather than duplicating the URL
- * assembly / length-guard logic. `cc` mirrors the standing-office-copy
- * pattern used by the single-order dispatch flow.
- */
-export function buildTransportGmailUrl(
-  detail: TransportBatchDetail,
-  supplier: Supplier,
-  t: TFunc,
-  cc?: string | null,
-): { url: string; tooLong: boolean } {
-  const to = splitRecipients(supplier.email ?? "").join(",");
-  return buildGmailComposeUrl({
-    to,
-    subject: buildTransportEmailSubject(detail, t),
-    body: buildTransportEmailBody(detail, t),
-    cc,
-  });
 }
 
 // ---- v2 (ADDENDUM v2): draft workstation helpers ---------------------------
@@ -672,16 +552,18 @@ function transportShortDate(iso: string): string {
 /** The auto-generated fallback label (feature 1, v4 feedback round 2):
  * "Transport {Weekday} · {City or cities} · {dd.MM.yy}" — e.g.
  * "Transport Sobota · Warszawa · 22.08.26". The weekday AND date segment both
- * come from the SAME source date (`pickup_date` if set, else `created`); a
- * missing source date or an empty cities line simply drops that segment
- * rather than leaving a stray "·". Pure — takes `lang` explicitly rather than
- * reading it from a hook, so it stays testable without a React tree. */
+ * come from `pickup_date` ONLY (transport-v2): a batch without a pickup date
+ * is "Transport · Warszawa" — its creation day is not its pickup day, and
+ * labelling it so read as a confirmed pickup. An empty cities line likewise
+ * drops its segment rather than leaving a stray "·". Pure — takes `lang`
+ * explicitly rather than reading it from a hook, so it stays testable
+ * without a React tree. */
 export function transportAutoLabel(
-  batch: Pick<TransportBatchSummary, "supplier_name" | "created" | "pickup_date" | "location_ids">,
+  batch: Pick<TransportBatchSummary, "supplier_name" | "pickup_date" | "location_ids">,
   t: TFunc,
   opts: { lang: Lang; locationsById: Record<string, Location> },
 ): string {
-  const sourceIso = batch.pickup_date ?? batch.created ?? null;
+  const sourceIso = batch.pickup_date || null;
   const weekday = sourceIso ? transportWeekdayLabel(sourceIso, opts.lang) : "";
   const datePart = sourceIso ? transportShortDate(sourceIso) : "";
   const cities = transportCitiesLine(batch.location_ids, opts.locationsById);
@@ -701,10 +583,7 @@ export function transportAutoLabel(
  * the raw `TRN-...` id is demoted to small secondary text next to it, never
  * dropped (it stays the durable identifier). */
 export function transportDisplayLabel(
-  batch: Pick<
-    TransportBatchSummary,
-    "supplier_name" | "created" | "name" | "pickup_date" | "location_ids"
-  >,
+  batch: Pick<TransportBatchSummary, "supplier_name" | "name" | "pickup_date" | "location_ids">,
   t: TFunc,
   opts: { lang: Lang; locationsById: Record<string, Location> },
 ): string {
@@ -793,6 +672,11 @@ const EVENT_TYPE_LABEL_KEYS: Record<string, StringKey> = {
   logistics_changed: "manager.transport.events.type.logisticsChanged",
   quantities_changed: "manager.transport.events.type.quantitiesChanged",
   delivery_confirmed: "manager.transport.events.type.deliveryConfirmed",
+  // transport-v2
+  order_draft_created: "manager.transport.events.type.orderDraftCreated",
+  driver_draft_created: "manager.transport.events.type.driverDraftCreated",
+  batch_reopened: "manager.transport.events.type.batchReopened",
+  batch_reopen_aborted: "manager.transport.events.type.batchReopenAborted",
 };
 
 /** Human label for one event's `event_type` — a known type resolves through
@@ -823,7 +707,7 @@ export function sortTransportEvents(events: TransportEvent[]): TransportEvent[] 
 // v4 feedback (feature 3): the two print docs are redesigned to replicate the
 // legacy PDFs' structure (navy title/section bars, light-blue header cells, a
 // per-location MATRIX on the driver doc, a two-box header + fixed Pago entity
-// block on the supplier doc) — layout lives in PrintViews.tsx; these builders
+// block on the supplier doc) — layout lives in lib/transportPdf.ts; these builders
 // only shape the data.
 
 export interface PrintDriverProductLine {
@@ -864,6 +748,9 @@ export interface TransportDriverPrintDoc {
   // collectExtraItemsByLocation. [] when no member order carries one; the PDF
   // builder then omits the section entirely.
   extraItems: TransportExtraItem[];
+  // The batch's logistics notes, trimmed (transport-v2). "" when none — the
+  // PDF builder then omits the "Uwagi" row.
+  notes: string;
 }
 
 /** Build the printable DRIVER document ("LISTA DLA KIEROWCY"): logistics
@@ -913,7 +800,7 @@ export function buildTransportDriverPrintDoc(
   return {
     transportId: detail.transport_id,
     displayLabel,
-    date: isoDatePart(detail.pickup_date ?? detail.created),
+    date: isoDatePart(detail.pickup_date),
     time: detail.pickup_time ?? "",
     driver: detail.driver ?? "",
     vehicle: detail.vehicle ?? "",
@@ -922,6 +809,7 @@ export function buildTransportDriverPrintDoc(
     locations,
     sections,
     extraItems: collectExtraItemsByLocation(detail.orders),
+    notes: (detail.notes ?? "").trim(),
   };
 }
 
@@ -1021,6 +909,11 @@ export interface TransportPagoPrintDoc {
   // F7 — see the section header above and PagoWarehouseExclusion.
   excludedProducts: string[];
   warehousePickupDataMissing: boolean;
+  // Off-catalogue lines the Manager explicitly approved for this document
+  // (transport-v2 extras checklist, see pagoExtraItemLines) — trimmed,
+  // blanks dropped, verbatim otherwise; NO location attribution. [] (the
+  // default) prints no extras section at all.
+  approvedExtraItems: string[];
 }
 
 /** Build the printable SUPPLIER document ("ZLECENIE ODBIORU WŁASNEGO" for
@@ -1028,16 +921,21 @@ export interface TransportPagoPrintDoc {
  * document data) then per-product TOTALS ONLY. Carries NO location data at
  * all — not in `products`, and (since 2026-09-02) not as a summary line in the
  * document-data box either: the supplier has no business knowing which of our
- * locations ordered what, or even how many there are. Same discipline as
- * buildTransportEmailBody. The DRIVER document is the opposite case and keeps
- * its per-location columns — that one is ours, not the supplier's. */
+ * locations ordered what, or even how many there are. Same discipline as the
+ * Pago Gmail draft body. The DRIVER document is the opposite case and keeps
+ * its per-location columns — that one is ours, not the supplier's.
+ *
+ * `approvedExtraItems` (transport-v2): only the off-catalogue lines the
+ * Manager ticked in the send panel — never the raw extra_items of the batch,
+ * so an extra not agreed with Pago can never reach the document. */
 export function buildTransportPagoPrintDoc(
   fullDetail: TransportBatchDetail,
   displayLabel: string,
+  approvedExtraItems: string[] = [],
 ): TransportPagoPrintDoc {
   // Lead supplier's lines only (transport-pago-mory-combined): a Magazyn Mory
   // line riding on the Pago run never reaches the Pago document. The caller
-  // computes `displayLabel` from leadSupplierView too (PrintViews).
+  // computes `displayLabel` from leadSupplierView too (TransportSendPanel).
   const detail = leadSupplierView(fullDetail);
   const { isPago, excludedProducts, warehousePickupDataMissing } =
     computePagoWarehouseExclusion(detail);
@@ -1050,7 +948,7 @@ export function buildTransportPagoPrintDoc(
       : `${detail.supplier_name} — ZAMÓWIENIE`,
     isPago,
     entity: isPago ? PAGO_ENTITY : null,
-    pickupDate: isoDatePart(detail.pickup_date ?? detail.created),
+    pickupDate: isoDatePart(detail.pickup_date),
     pickupTime: detail.pickup_time ?? "",
     driver: detail.driver ?? "",
     vehicle: detail.vehicle ?? "",
@@ -1090,7 +988,276 @@ export function buildTransportPagoPrintDoc(
       })),
     excludedProducts,
     warehousePickupDataMissing,
+    approvedExtraItems: approvedExtraItems.map((text) => text.trim()).filter((text) => text !== ""),
   };
+}
+
+// ---- transport-v2: supplier chips, city filter, sorting --------------------
+//
+// The Transport screen's filter bar: two supplier chips (Pago, Magazyn Mory —
+// at least one stays on) and one tile per city (all on by default). The
+// eligible list and the history list both follow it, newest first.
+
+/** The supplier chips of the filter bar, in display order. */
+export const TRANSPORT_CHIP_SUPPLIER_IDS = ["SUP_PAGO", "SUP_MORY"] as const;
+
+/** Which supplier chips are on. */
+export interface TransportChips {
+  pago: boolean;
+  mory: boolean;
+}
+
+/** The eligible-list query for a chip state: both chips (or, defensively,
+ * neither) -> the Pago run with its Magazyn Mory companions; one chip -> that
+ * supplier alone, without companions. */
+export function transportScopeFromChips(chips: TransportChips): {
+  leadSupplierId: string;
+  includeCompanions: boolean;
+} {
+  const [pagoId, moryId] = TRANSPORT_CHIP_SUPPLIER_IDS;
+  if (chips.pago && !chips.mory) return { leadSupplierId: pagoId, includeCompanions: false };
+  if (chips.mory && !chips.pago) return { leadSupplierId: moryId, includeCompanions: false };
+  return { leadSupplierId: pagoId, includeCompanions: true };
+}
+
+/** The normalized city of one location (postal code stripped, "Warsaw" ->
+ * "Warszawa" — same rule as the auto-label), or null when the location is
+ * unknown or has no city. Unlike transportCitiesLine there is NO fallback to
+ * the location name: a city filter must not invent a "city" called "Wola". */
+export function transportLocationCity(
+  locationId: string,
+  locationsById: Record<string, Location>,
+): string | null {
+  const loc = locationsById[locationId];
+  if (!loc || !loc.city) return null;
+  const city = normalizeCityName(loc.city);
+  return city === "" ? null : city;
+}
+
+/** The city tiles for a set of location ids: unique (case-insensitive, first
+ * spelling wins), sorted Polish-alphabetically. Locations without a
+ * resolvable city contribute nothing. */
+export function transportCityOptions(
+  locationIds: string[],
+  locationsById: Record<string, Location>,
+): string[] {
+  const byKey = new Map<string, string>();
+  for (const id of locationIds) {
+    const city = transportLocationCity(id, locationsById);
+    if (city === null) continue;
+    const key = city.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, city);
+  }
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, "pl"));
+}
+
+/** The shared city rule: no filter (null) keeps everything; otherwise keep
+ * when there is nothing to judge by (no locations), when ANY location is in
+ * a selected city, or when ANY location has no resolvable city (an item is
+ * never hidden because master data lacks a city). Case-insensitive. */
+function matchesCities(
+  locationIds: string[],
+  cities: ReadonlySet<string> | null,
+  locationsById: Record<string, Location>,
+): boolean {
+  if (cities === null) return true;
+  if (locationIds.length === 0) return true;
+  const wanted = new Set([...cities].map((c) => c.toLowerCase()));
+  return locationIds.some((id) => {
+    const city = transportLocationCity(id, locationsById);
+    return city === null || wanted.has(city.toLowerCase());
+  });
+}
+
+/** Milliseconds of an ISO string, or null when absent/unparseable. */
+function isoMillis(iso?: string | null): number | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/** Descending compare where a missing value sorts last. */
+function compareDescNullsLast(a: number | null, b: number | null): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return b - a;
+}
+
+/** History order (returns a NEW array): newest run first — by pickup date
+ * when set, else by the creation date (date part) — then by creation time,
+ * newest first. A batch with neither date sorts last; ties keep their input
+ * order. */
+export function sortTransportBatches(batches: TransportBatchSummary[]): TransportBatchSummary[] {
+  const dayKey = (b: TransportBatchSummary): string =>
+    isoDatePart(b.pickup_date) || isoDatePart(b.created);
+  return [...batches].sort((a, b) => {
+    const ka = dayKey(a);
+    const kb = dayKey(b);
+    if (ka !== kb) {
+      if (!ka) return 1;
+      if (!kb) return -1;
+      return ka < kb ? 1 : -1;
+    }
+    return compareDescNullsLast(isoMillis(a.created), isoMillis(b.created));
+  });
+}
+
+/** History filter: keep a batch when any of its suppliers (`supplier_ids`,
+ * falling back to `[supplier_id]` on an older backend or an empty list) is a
+ * selected chip supplier AND it passes the city rule (see matchesCities). */
+export function filterTransportBatches(
+  batches: TransportBatchSummary[],
+  filter: { supplierIds: ReadonlySet<string>; cities: ReadonlySet<string> | null },
+  locationsById: Record<string, Location>,
+): TransportBatchSummary[] {
+  return batches.filter((b) => {
+    const ids = b.supplier_ids && b.supplier_ids.length > 0 ? b.supplier_ids : [b.supplier_id];
+    if (!ids.some((id) => filter.supplierIds.has(id))) return false;
+    return matchesCities(b.location_ids ?? [], filter.cities, locationsById);
+  });
+}
+
+/** Eligible-list city filter — the same rule as the history (an order whose
+ * location has no resolvable city always shows). */
+export function filterEligibleByCity(
+  orders: TransportEligibleOrder[],
+  cities: ReadonlySet<string> | null,
+  locationsById: Record<string, Location>,
+): TransportEligibleOrder[] {
+  return orders.filter((o) => matchesCities([o.location_id], cities, locationsById));
+}
+
+/** Eligible orders newest first (returns a NEW array): by
+ * `captain_submitted_at`, falling back to `order_date`; missing dates last,
+ * ties in input order. The backend returns the lead block and the companion
+ * block each sorted, so the combined list otherwise jumps back in time. */
+export function sortEligibleNewestFirst(orders: TransportEligibleOrder[]): TransportEligibleOrder[] {
+  const when = (o: TransportEligibleOrder): number | null =>
+    isoMillis(o.captain_submitted_at) ?? isoMillis(o.order_date);
+  return [...orders].sort((a, b) => compareDescNullsLast(when(a), when(b)));
+}
+
+// ---- transport-v2: send panel helpers ---------------------------------------
+
+/** One off-catalogue line of the Pago extras checklist. `locationName` is
+ * for the Manager's eyes only — the ZOW PDF receives `text` alone. */
+export interface TransportExtraLine {
+  key: string; // stable and unique: `${orderId}#${n}`
+  orderId: string;
+  locationName: string;
+  text: string;
+}
+
+/** The non-blank extra_items lines of the LEAD supplier's member orders (a
+ * Magazyn Mory extra never reaches Pago), in order-then-line order, never
+ * de-duplicated. Feeds the send panel's checklist; only ticked texts go to
+ * buildTransportPagoPrintDoc. */
+export function pagoExtraItemLines(detail: TransportBatchDetail): TransportExtraLine[] {
+  const out: TransportExtraLine[] = [];
+  for (const order of leadSupplierView(detail).orders) {
+    const raw = (order.extra_items ?? "").trim();
+    if (!raw) continue;
+    let n = 0;
+    for (const rawLine of raw.split("\n")) {
+      const text = rawLine.trim();
+      if (!text) continue;
+      out.push({
+        key: `${order.order_id}#${n}`,
+        orderId: order.order_id,
+        locationName: order.location_name,
+        text,
+      });
+      n += 1;
+    }
+  }
+  return out;
+}
+
+/** The logistics fields the send confirmation checks. */
+export type TransportLogisticsField = "pickup_date" | "pickup_time" | "driver" | "vehicle";
+
+/** Label key of each logistics field (the Logistics panel's own labels). */
+export const LOGISTICS_FIELD_LABEL_KEYS: Record<TransportLogisticsField, StringKey> = {
+  pickup_date: "manager.transport.logistics.pickupDateLabel",
+  pickup_time: "manager.transport.logistics.pickupTimeLabel",
+  driver: "manager.transport.logistics.driverLabel",
+  vehicle: "manager.transport.logistics.vehicleLabel",
+};
+
+/** Logistics fields still empty (null, "" or whitespace), in the fixed order
+ * pickup_date, pickup_time, driver, vehicle — a soft warning in the send
+ * confirmation, never a block. */
+export function missingLogisticsFields(
+  detail: Pick<TransportBatchDetail, "pickup_date" | "pickup_time" | "driver" | "vehicle">,
+): TransportLogisticsField[] {
+  const order: TransportLogisticsField[] = ["pickup_date", "pickup_time", "driver", "vehicle"];
+  return order.filter((field) => (detail[field] ?? "").trim() === "");
+}
+
+/** Parsed `details` of an `order_draft_created` / `driver_draft_created`
+ * event. */
+export interface TransportDraftEventDetails {
+  draftId: string;
+  mailbox: string;
+  replacedDraftId: string; // "" when none
+  extras: string[];
+}
+
+const DRAFT_ID_RE = /^[A-Za-z0-9_-]{1,200}$/;
+const EXTRAS_SEGMENT = "; extras=";
+
+/** Parse the backend's draft-event details, written exactly as
+ * `draft_id=<id>; mailbox=<mailbox>[; replaced=<id>][; extras=<a> | <b>]`
+ * (main.py `_transport_draft_created_details`). `extras` is always the last
+ * segment, so everything after the first "; extras=" belongs to it. null
+ * when there is no valid draft_id. */
+export function parseTransportDraftEventDetails(details: string): TransportDraftEventDetails | null {
+  const raw = details ?? "";
+  const extrasAt = raw.indexOf(EXTRAS_SEGMENT);
+  const head = extrasAt >= 0 ? raw.slice(0, extrasAt) : raw;
+  const extrasRaw = extrasAt >= 0 ? raw.slice(extrasAt + EXTRAS_SEGMENT.length) : "";
+  const fields = new Map<string, string>();
+  for (const part of head.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const key = part.slice(0, eq).trim();
+    if (key && !fields.has(key)) fields.set(key, part.slice(eq + 1).trim());
+  }
+  const draftId = fields.get("draft_id") ?? "";
+  if (!DRAFT_ID_RE.test(draftId)) return null;
+  const replaced = fields.get("replaced") ?? "";
+  return {
+    draftId,
+    mailbox: fields.get("mailbox") ?? "",
+    replacedDraftId: DRAFT_ID_RE.test(replaced) ? replaced : "",
+    extras: extrasRaw
+      .split(" | ")
+      .map((e) => e.trim())
+      .filter((e) => e !== ""),
+  };
+}
+
+/** The current Gmail draft of one kind for a batch: the newest
+ * `<kind>_draft_created` event (by `at`; an event without a time counts as
+ * oldest; ties keep the input order — the backend lists newest first) whose
+ * details parse. null when there is none. */
+export function latestTransportDraft(
+  events: TransportEvent[] | null | undefined,
+  kind: "order" | "driver",
+): { draftId: string; mailbox: string; at: string } | null {
+  const type = `${kind}_draft_created`;
+  let best: { draftId: string; mailbox: string; at: string; ms: number | null } | null = null;
+  for (const e of events ?? []) {
+    if (e.event_type !== type) continue;
+    const parsed = parseTransportDraftEventDetails(e.details);
+    if (!parsed) continue;
+    const ms = isoMillis(e.at);
+    if (best === null || compareDescNullsLast(ms, best.ms) < 0) {
+      best = { draftId: parsed.draftId, mailbox: parsed.mailbox, at: e.at ?? "", ms };
+    }
+  }
+  return best ? { draftId: best.draftId, mailbox: best.mailbox, at: best.at } : null;
 }
 
 // ---- v4 feedback (feature 2): "NOWY" badge on unopened batches -------------

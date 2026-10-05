@@ -1,6 +1,6 @@
 // PDF generation for the Manager Transport screen's two printable documents
 // (v5 feedback — replaces the window.print()/@media-print flow entirely; see
-// PrintViews.tsx). pdfmake was chosen over jsPDF specifically because its
+// TransportSendPanel.tsx). pdfmake was chosen over jsPDF specifically because its
 // bundled Roboto (the vfs fonts imported at download time) covers Polish
 // diacritics (ą/ć/ę/ł/ń/ó/ś/ź/ż) out of the box — jsPDF's core fonts do not.
 //
@@ -15,7 +15,7 @@
 //     never lands in the main app bundle, then triggers the browser download.
 //
 // Visual fidelity target: replicate the legacy print/PDF layout (see the prior
-// PrintViews.tsx history) — navy title bar, light-blue label cells in the
+// git history of the former PrintViews.tsx) — navy title bar, light-blue label cells in the
 // logistics/header tables, navy table header rows with white bold text, zebra
 // body striping, a bold "Razem" total column on the driver doc, side-by-side
 // entity boxes on the Pago doc, and a small grey footer line.
@@ -145,6 +145,12 @@ export function buildDriverPdfDocDefinition(
     ],
     [{ label: t("manager.transport.print.vehicleLabel"), value: doc.vehicle, colSpan: 3 }],
   ];
+  // Batch notes (transport-v2) — only when the Manager wrote some.
+  if ((doc.notes ?? "").trim() !== "") {
+    headerRows.push([
+      { label: t("manager.transport.print.notesLabel"), value: (doc.notes ?? "").trim(), colSpan: 3 },
+    ]);
+  }
 
   const columnHeaders = [
     { text: t("manager.transport.print.lpCol"), style: "tableHeader" },
@@ -220,7 +226,10 @@ export function buildDriverPdfDocDefinition(
  * side-by-side header boxes ("Dane podmiotu" / "Dane dokumentu") then a
  * totals-only product table. Deliberately carries NO per-location data
  * anywhere (mirrors `buildTransportPagoPrintDoc`'s no-location-leak
- * discipline) — the supplier never sees which location ordered what. */
+ * discipline) — the supplier never sees which location ordered what.
+ * transport-v2: when the Manager approved off-catalogue lines, a separate
+ * "Pozycje dodatkowe uzgodnione z PAGO" table follows the products — texts
+ * only, no location. */
 export function buildPagoPdfDocDefinition(
   doc: TransportPagoPrintDoc,
   t: TFunc,
@@ -289,8 +298,42 @@ export function buildPagoPdfDocDefinition(
       table: { headerRows: 1, widths: [20, "*", 40, 40], body: [columnHeaders, ...bodyRows] },
       layout: TABLE_BORDER_LAYOUT,
     },
-    footerLine(t, generatedAt, doc.transportId),
   );
+
+  const approvedExtras = (doc.approvedExtraItems ?? []).filter((text) => text.trim() !== "");
+  if (approvedExtras.length > 0) {
+    content.push(
+      sectionBar(
+        t(
+          doc.isPago
+            ? "manager.transport.print.pagoDoc.approvedExtrasTitle"
+            : "manager.transport.print.pagoDoc.approvedExtrasTitleGeneric",
+        ),
+      ),
+      {
+        table: {
+          headerRows: 1,
+          widths: [20, "*"],
+          body: [
+            [
+              { text: t("manager.transport.print.lpCol"), style: "tableHeader" },
+              { text: t("manager.transport.print.productCol"), style: "tableHeader" },
+            ],
+            ...approvedExtras.map((text, idx) => {
+              const zebra = idx % 2 === 1 ? { fillColor: ZEBRA } : {};
+              return [
+                { text: String(idx + 1), ...zebra },
+                { text: text.trim(), ...zebra },
+              ];
+            }),
+          ],
+        },
+        layout: TABLE_BORDER_LAYOUT,
+      },
+    );
+  }
+
+  content.push(footerLine(t, generatedAt, doc.transportId));
 
   return {
     pageSize: "A4",

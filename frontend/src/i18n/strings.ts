@@ -1400,7 +1400,21 @@ export const STRINGS = {
   "manager.transport.navLink": { pl: "Transport (TO)", en: "Transport" },
   "manager.transport.title": { pl: "Transport zbiorczy", en: "Combined transport" },
   "manager.transport.back": { pl: "Powrót do menedżera", en: "Back to manager" },
-  "manager.transport.supplierLabel": { pl: "Dostawca", en: "Supplier" },
+  // transport-v2 — filter bar: supplier chips (at least one stays on) and
+  // city tiles; both lists follow it.
+  "manager.transport.filter.suppliersLabel": { pl: "Dostawcy", en: "Suppliers" },
+  "manager.transport.filter.citiesLabel": { pl: "Miasta", en: "Cities" },
+  "manager.transport.filter.chip.pago": { pl: "Pago", en: "Pago" },
+  "manager.transport.filter.chip.mory": { pl: "Magazyn Mory", en: "Magazyn Mory" },
+  "manager.transport.filter.lastChipTitle": {
+    pl: "Co najmniej jeden dostawca musi zostać włączony.",
+    en: "At least one supplier has to stay on.",
+  },
+  "manager.transport.filter.allCities": { pl: "Wszystkie", en: "All" },
+  "manager.transport.filter.suppliersError": {
+    pl: "Nie udało się pobrać dostawców: {detail}",
+    en: "Couldn't load suppliers: {detail}",
+  },
   // v4 feedback — friendly batch naming (feature 1): the primary title shown
   // everywhere a batch never given a `name` is displayed. "Transport Sobota ·
   // Warszawa · 22.08.26" — this key is just the leading word; the weekday /
@@ -1413,18 +1427,22 @@ export const STRINGS = {
     en: "Start empty transport",
   },
   "manager.transport.unsavedSwitchConfirm": {
-    pl: "Masz niezapisane zmiany ilości — porzucić je?",
-    en: "You have unsaved quantity changes — discard them?",
+    pl: "Masz niezapisane zmiany (ilości albo logistyka) — porzucić je?",
+    en: "You have unsaved changes (quantities or logistics) — discard them?",
   },
-  "manager.transport.noSuppliers": {
-    pl: "Brak aktywnych dostawców w danych podstawowych.",
-    en: "No active suppliers in master data.",
+  "manager.transport.batches.busySwitchTitle": {
+    pl: "Poczekaj, aż skończy się wysyłka otwartego transportu.",
+    en: "Wait until the open transport has finished sending.",
   },
   "manager.transport.eligible.title": { pl: "Do połączenia", en: "To combine" },
   "manager.transport.eligible.loading": { pl: "Ładowanie…", en: "Loading…" },
   "manager.transport.eligible.empty": {
-    pl: "Brak zamówień do połączenia dla tego dostawcy.",
-    en: "No orders to combine for this supplier.",
+    pl: "Brak zamówień do połączenia dla wybranych dostawców.",
+    en: "No orders to combine for the selected suppliers.",
+  },
+  "manager.transport.eligible.emptyFiltered": {
+    pl: "Brak zamówień do połączenia w wybranych miastach.",
+    en: "No orders to combine in the selected cities.",
   },
   "manager.transport.eligible.fetchError": {
     pl: "Nie udało się pobrać zamówień: {detail}",
@@ -1449,8 +1467,12 @@ export const STRINGS = {
   "manager.transport.batches.title": { pl: "Utworzone transporty", en: "Created transports" },
   "manager.transport.batches.loading": { pl: "Ładowanie…", en: "Loading…" },
   "manager.transport.batches.empty": {
-    pl: "Brak utworzonych transportów dla tego dostawcy.",
-    en: "No transports created for this supplier yet.",
+    pl: "Brak utworzonych transportów.",
+    en: "No transports created yet.",
+  },
+  "manager.transport.batches.emptyFiltered": {
+    pl: "Brak transportów dla wybranych dostawców i miast.",
+    en: "No transports for the selected suppliers and cities.",
   },
   "manager.transport.batches.fetchError": {
     pl: "Nie udało się pobrać transportów: {detail}",
@@ -1472,24 +1494,6 @@ export const STRINGS = {
     pl: "Rozbicie na lokalizacje (tylko dla kierowcy)",
     en: "Per-location breakdown (driver only)",
   },
-  "manager.transport.detail.copyButton": {
-    pl: "Kopiuj listę dla kierowcy",
-    en: "Copy driver list",
-  },
-  "manager.transport.detail.copyToast": {
-    pl: "Skopiowano listę dla kierowcy.",
-    en: "Driver list copied.",
-  },
-  "manager.transport.detail.copyError": { pl: "Nie udało się skopiować.", en: "Couldn't copy." },
-  "manager.transport.detail.emailButton": { pl: "Otwórz email", en: "Open email" },
-  "manager.transport.detail.emailHint": {
-    pl: "uzupełnij email dostawcy w master data",
-    en: "add the supplier's email in master data",
-  },
-  "manager.transport.detail.emailTooLong": {
-    pl: "Zbyt długi projekt e-maila — skopiuj listę zamiast tego.",
-    en: "Draft too long — copy the list instead.",
-  },
   "manager.transport.detail.ordersTitle": { pl: "Zamówienia źródłowe", en: "Source orders" },
   // Captain's order-level comment (captain_note), surfaced per member order on
   // the Transport batch screen — Manager-ONLY (training-feedback-0901 F1
@@ -1497,40 +1501,13 @@ export const STRINGS = {
   // body or PDF. Mirrors manager.detail.captainNoteLabel (the single-order
   // detail pane's equivalent block), pluralized for a batch of locations.
   "manager.transport.captainNotes.title": { pl: "Komentarze kapitanów", en: "Captain notes" },
-  "manager.transport.driverText.header": {
-    pl: "Transport {id} — {date}",
-    en: "Transport {id} — {date}",
-  },
-  "manager.transport.driverText.supplierLine": {
-    pl: "Dostawca: {supplier}",
-    en: "Supplier: {supplier}",
-  },
-  // Ad-hoc off-catalogue items on the Transport path (training-feedback-0901
-  // F1) — driver-facing (WITH location attribution): driverText clipboard
-  // export + the driver PDF's own section title.
-  "manager.transport.driverText.extraItemsHeader": {
-    pl: "Pozycje spoza katalogu:",
-    en: "Off-catalogue items:",
-  },
-  "manager.transport.email.subject": {
-    pl: "Zamówienie zbiorcze {supplier} — {date}",
-    en: "Combined order {supplier} — {date}",
-  },
+  // Shared lines of the two Transport Gmail drafts (gmailDraft.ts).
   "manager.transport.email.greeting": { pl: "Dzień dobry,", en: "Hello," },
-  "manager.transport.email.intro": {
-    pl: "Poniżej zbiorcze zamówienie transportowe:",
-    en: "Please find below the combined transport order:",
-  },
-  "manager.transport.email.lineHeader": {
-    pl: "Lp. | Produkt | Ilość",
-    en: "No. | Product | Qty",
-  },
   "manager.transport.email.closing": { pl: "Pozdrawiam,", en: "Best regards," },
   "manager.transport.email.signature": { pl: "Pita Bros", en: "Pita Bros" },
   // Ad-hoc off-catalogue items on the Transport path (training-feedback-0901
-  // F1) — supplier-facing (NO location attribution): shared by
-  // buildTransportEmailBody and gmailDraft.ts's buildDraftBody (the Gmail
-  // draft body that actually reaches the supplier/driver).
+  // F1) — flat block, NO location attribution, in the DRIVER Gmail draft body
+  // only (transport-v2: the Pago draft body never lists extras).
   "manager.transport.email.extraItemsHeader": {
     pl: "Pozycje spoza katalogu:",
     en: "Off-catalogue items:",
@@ -1684,36 +1661,11 @@ export const STRINGS = {
     en: "Couldn't remove the order: {detail}",
   },
 
-  "manager.transport.finalize.button": { pl: "Zatwierdź transport", en: "Approve transport" },
-  "manager.transport.finalize.confirm": {
-    pl: "Zatwierdzić transport {id}? Zamówienia zostaną oznaczone jako wysłane do dostawcy.",
-    en: "Approve transport {id}? Member orders will be marked as sent to the supplier.",
-  },
-  "manager.transport.finalize.busy": { pl: "Zatwierdzanie…", en: "Approving…" },
-  "manager.transport.finalize.error": {
-    pl: "Nie udało się zatwierdzić transportu: {detail}",
-    en: "Couldn't approve the transport: {detail}",
-  },
   "manager.transport.finalize.result.sent": {
     pl: "Wysłano {count} zamówień.",
     en: "Sent {count} orders.",
   },
   "manager.transport.finalize.result.skippedHeader": { pl: "Pominięte:", en: "Skipped:" },
-
-  // ADDENDUM v3 — finalize UX fix: disabled while dirty + one-click save+send.
-  "manager.transport.finalize.disabledHint": {
-    pl: "Najpierw zapisz zmiany (Zapisz zmiany)",
-    en: "Save changes first (Save changes)",
-  },
-  "manager.transport.finalize.saveAndSendButton": {
-    pl: "Zapisz i zatwierdź",
-    en: "Save and approve",
-  },
-  "manager.transport.finalize.saveAndSendBusy": { pl: "Zapisywanie i zatwierdzanie…", en: "Saving and approving…" },
-  "manager.transport.finalize.saveAndSendSaveFailed": {
-    pl: "Nie udało się zapisać zmian — transport NIE został wysłany: {detail}",
-    en: "Couldn't save changes — the transport was NOT sent: {detail}",
-  },
 
   // ADDENDUM v3 — cancel draft.
   "manager.transport.status.cancelled": { pl: "Anulowany", en: "Cancelled" },
@@ -1756,6 +1708,20 @@ export const STRINGS = {
   "manager.transport.events.type.logisticsChanged": { pl: "Zmieniono logistykę", en: "Logistics changed" },
   "manager.transport.events.type.quantitiesChanged": { pl: "Zmieniono ilości", en: "Quantities changed" },
   "manager.transport.events.type.deliveryConfirmed": { pl: "Potwierdzono dostawę", en: "Delivery confirmed" },
+  // transport-v2: Gmail drafts recorded by the send panel + reopen.
+  "manager.transport.events.type.orderDraftCreated": {
+    pl: "Utworzono szkic zamówienia",
+    en: "Order draft created",
+  },
+  "manager.transport.events.type.driverDraftCreated": {
+    pl: "Utworzono szkic listy kierowcy",
+    en: "Driver list draft created",
+  },
+  "manager.transport.events.type.batchReopened": { pl: "Cofnięto wysłanie", en: "Sending undone" },
+  "manager.transport.events.type.batchReopenAborted": {
+    pl: "Cofnięcie wysłania przerwane — transport nadal wysłany",
+    en: "Undo send aborted — the transport is still sent",
+  },
 
   // ADDENDUM v3 — manager-first grid creation (Phase 9).
   "manager.transport.gridCreate.button": {
@@ -1791,20 +1757,7 @@ export const STRINGS = {
   "manager.transport.gridCreate.selectAll": { pl: "Zaznacz wszystkie", en: "Select all" },
   "manager.transport.gridCreate.deselectAll": { pl: "Odznacz wszystkie", en: "Deselect all" },
 
-  // ADDENDUM v3 — print/PDF views (Phase 10). v5 feedback: real .pdf download,
-  // not window.print() — button copy no longer says "Drukuj".
-  "manager.transport.print.driverButton": {
-    pl: "PDF — lista kierowcy",
-    en: "PDF — driver list",
-  },
-  "manager.transport.print.pagoButton": {
-    pl: "PDF — zamówienie",
-    en: "PDF — order",
-  },
-  "manager.transport.print.downloadError": {
-    pl: "Nie udało się wygenerować PDF. Spróbuj ponownie.",
-    en: "Failed to generate the PDF. Please try again.",
-  },
+  // ADDENDUM v3 — print/PDF views (Phase 10): the documents' own copy.
   "manager.transport.print.driverTitle": { pl: "Lista dla kierowcy", en: "Driver list" },
   "manager.transport.print.pagoTitle": { pl: "Zamówienie zbiorcze", en: "Combined order" },
   "manager.transport.print.driverLabel": { pl: "Kierowca", en: "Driver" },
@@ -1827,14 +1780,15 @@ export const STRINGS = {
   "manager.transport.print.unitCol": { pl: "Jm.", en: "Unit" },
   "manager.transport.print.totalCol": { pl: "Razem", en: "Total" },
   // Ad-hoc off-catalogue items section on the driver PDF (training-feedback-
-  // 0901 F1) — see manager.transport.driverText.extraItemsHeader for the
-  // matching clipboard-text label (this one is a bare section-bar title, no
-  // trailing colon, matching this file's other section-bar titles).
+  // 0901 F1) — WITH location attribution; a bare section-bar title, no
+  // trailing colon, matching this file's other section-bar titles.
   "manager.transport.print.extraItemsSectionTitle": {
     pl: "Pozycje spoza katalogu",
     en: "Off-catalogue items",
   },
   "manager.transport.print.footerGenerated": { pl: "Wygenerowano: {when}", en: "Generated: {when}" },
+  // Driver PDF header row with the batch notes (transport-v2), only when set.
+  "manager.transport.print.notesLabel": { pl: "Uwagi", en: "Notes" },
   "manager.transport.print.pagoDoc.entityBoxTitle": { pl: "Dane podmiotu", en: "Entity data" },
   "manager.transport.print.pagoDoc.docBoxTitle": { pl: "Dane dokumentu", en: "Document data" },
   "manager.transport.print.pagoDoc.fullNameLabel": { pl: "Pełna nazwa", en: "Full name" },
@@ -1850,39 +1804,260 @@ export const STRINGS = {
     pl: "Odbiór własny z magazynu Pita Bros",
     en: "Self pickup from Pita Bros warehouse",
   },
+  // ZOW PDF section with the off-catalogue lines the Manager approved in the
+  // send panel (transport-v2) — printed only when at least one was ticked.
+  // The generic variant is for a non-Pago supplier document.
+  "manager.transport.print.pagoDoc.approvedExtrasTitle": {
+    pl: "Pozycje dodatkowe uzgodnione z PAGO",
+    en: "Additional items agreed with PAGO",
+  },
+  "manager.transport.print.pagoDoc.approvedExtrasTitleGeneric": {
+    pl: "Pozycje dodatkowe uzgodnione z dostawcą",
+    en: "Additional items agreed with the supplier",
+  },
 
-  // v4 — "Zrob draft w Gmailu": creates a real Gmail DRAFT (never sends) in
-  // the mailbox of whoever clicks, via Google OAuth (gmail.compose scope).
-  "manager.transport.gmailDraft.orderButton": {
-    pl: "Szkic Gmail — zamówienie",
-    en: "Gmail draft — order",
+  // transport-v2 — "Dokumenty i wysyłka" (TransportSendPanel). The app never
+  // sends: it creates a Gmail draft in the order mailbox, the Manager sends it.
+  "manager.transport.send.title": { pl: "Dokumenty i wysyłka", en: "Documents and sending" },
+  "manager.transport.send.downloadDriver": {
+    pl: "Lista dla kierowcy (PDF)",
+    en: "Driver list (PDF)",
   },
-  "manager.transport.gmailDraft.driverButton": {
-    pl: "Szkic Gmail — lista kierowcy",
-    en: "Gmail draft — driver list",
+  "manager.transport.send.downloadPago": {
+    pl: "Zlecenie odbioru (PDF)",
+    en: "Pickup order (PDF)",
   },
-  "manager.transport.gmailDraft.error": {
-    pl: "Nie udało się utworzyć szkicu w Gmailu: {detail}",
-    en: "Failed to create the Gmail draft: {detail}",
+  "manager.transport.send.downloadError": {
+    pl: "Nie udało się wygenerować PDF. Spróbuj ponownie.",
+    en: "Failed to generate the PDF. Please try again.",
   },
-  "manager.transport.gmailDraft.success": {
-    pl: "Szkic zapisany w Twoich Szkicach Gmaila — otwieram Gmaila w nowej karcie.",
-    en: "Draft saved in your Gmail Drafts — opening Gmail in a new tab.",
+  "manager.transport.send.approvedExtrasInPdf": {
+    pl: "Zlecenie odbioru (PDF) zawiera zaznaczone pozycje spoza katalogu: {count}.",
+    en: "The pickup order (PDF) includes ticked off-catalogue items: {count}.",
   },
-  "manager.transport.gmailDraft.openDraftsLink": {
-    pl: "Otwórz szkice Gmail",
-    en: "Open Gmail drafts",
+  "manager.transport.send.orderButton": { pl: "Wyślij zamówienie", en: "Send order" },
+  "manager.transport.send.driverButton": { pl: "Wyślij listę kierowcy", en: "Send driver list" },
+  "manager.transport.send.noClientId": {
+    pl: "Tworzenie szkiców w Gmailu jest niedostępne — brakuje konfiguracji Google.",
+    en: "Creating Gmail drafts is unavailable — the Google configuration is missing.",
   },
-  "manager.transport.gmailDraft.noSupplierRecipientTooltip": {
-    pl: "Brak adresu e-mail dostawcy",
-    en: "No supplier email address",
+  "manager.transport.send.reason.dirty": {
+    pl: "Najpierw zapisz zmiany.",
+    en: "Save your changes first.",
   },
-  "manager.transport.gmailDraft.noDriverRecipientTooltip": {
-    pl: "Brak skonfigurowanych odbiorców listy kierowcy",
-    en: "No driver-list recipients configured",
+  "manager.transport.send.reason.logisticsDirty": {
+    pl: "Najpierw zapisz logistykę („Zapisz logistykę” w sekcji Logistyka).",
+    en: "Save the logistics first (“Save logistics” in the Logistics section).",
   },
-  // Body lines shared by both drafts (order + driver) — short plain text,
-  // no per-location quantities (details live in the PDF attachment only).
+  "manager.transport.send.reason.configLoading": {
+    pl: "Wczytywanie konfiguracji wysyłki…",
+    en: "Loading the sending configuration…",
+  },
+  "manager.transport.send.reason.configFailed": {
+    pl: "Nie udało się wczytać konfiguracji wysyłki — odśwież stronę.",
+    en: "Couldn't load the sending configuration — reload the page.",
+  },
+  "manager.transport.send.reason.noMailbox": {
+    pl: "Brak skrzynki zamówień w konfiguracji — nie ma gdzie utworzyć szkicu.",
+    en: "No order mailbox configured — there is nowhere to create the draft.",
+  },
+  "manager.transport.send.reason.noOrderRecipient": {
+    pl: "Dostawca nie ma poprawnego adresu e-mail.",
+    en: "The supplier has no valid e-mail address.",
+  },
+  "manager.transport.send.reason.noOrderRecipientMarkOnly": {
+    pl: "Dostawca nie ma poprawnego adresu e-mail — użyj „Oznacz jako wysłane bez maila”.",
+    en: "The supplier has no valid e-mail address — use “Mark as sent without e-mail”.",
+  },
+  "manager.transport.send.reason.noDriverRecipient": {
+    pl: "Brak skonfigurowanych odbiorców listy kierowcy.",
+    en: "No driver-list recipients configured.",
+  },
+  "manager.transport.send.reason.noOrders": {
+    pl: "Transport nie ma zamówień.",
+    en: "The transport has no orders.",
+  },
+  "manager.transport.send.reason.tooManyExtras": {
+    pl: "Zaznaczono {count} pozycji spoza katalogu — można najwyżej {max}. Odznacz część.",
+    en: "{count} off-catalogue items are ticked — at most {max} are allowed. Untick some.",
+  },
+  "manager.transport.send.reason.extraTooLong": {
+    pl: "Pozycja spoza katalogu ma ponad {max} znaków („{text}”). Odznacz ją albo skróć w zamówieniu.",
+    en: "An off-catalogue item is longer than {max} characters (“{text}”). Untick it or shorten it in the order.",
+  },
+  "manager.transport.send.reasonFor.order": {
+    pl: "Wyślij zamówienie: {reason}",
+    en: "Send order: {reason}",
+  },
+  "manager.transport.send.reasonFor.driver": {
+    pl: "Wyślij listę kierowcy: {reason}",
+    en: "Send driver list: {reason}",
+  },
+  "manager.transport.send.confirm.titleOrder": {
+    pl: "Szkic zamówienia (zlecenie odbioru) w Gmailu",
+    en: "Order draft (pickup order) in Gmail",
+  },
+  "manager.transport.send.confirm.titleDriver": {
+    pl: "Szkic listy kierowcy w Gmailu",
+    en: "Driver-list draft in Gmail",
+  },
+  "manager.transport.send.confirm.to": { pl: "Do:", en: "To:" },
+  "manager.transport.send.confirm.from": { pl: "Od:", en: "From:" },
+  "manager.transport.send.confirm.missingLogistics": {
+    pl: "Brakuje: {fields}. Możesz kontynuować albo uzupełnić w sekcji Logistyka.",
+    en: "Missing: {fields}. You can continue or fill them in under Logistics.",
+  },
+  "manager.transport.send.confirm.extrasHeading": {
+    pl: "Pozycje spoza katalogu — domyślnie NIE idą do PAGO. Zaznacz tylko uzgodniony wyjątek:",
+    en: "Off-catalogue items — by default they do NOT go to PAGO. Tick only an agreed exception:",
+  },
+  "manager.transport.send.confirm.extraLine": { pl: "{location}: {text}", en: "{location}: {text}" },
+  "manager.transport.send.confirm.extrasToPdf": {
+    pl: "Zaznaczone pozycje trafią do PDF zlecenia jako osobna sekcja — nigdy do treści e-maila.",
+    en: "Ticked items go into the order PDF as a separate section — never into the e-mail body.",
+  },
+  "manager.transport.send.confirm.correction": {
+    pl: "To korekta zlecenia, które już poszło do PAGO — dodaj „KOREKTA” do tematu i treści",
+    en: "This corrects an order already sent to PAGO — add “KOREKTA” to the subject and body",
+  },
+  "manager.transport.send.confirm.correctionPreTicked": {
+    pl: "Zaznaczone, bo po ostatnim szkicu zamówienia było „Cofnij wysłanie”.",
+    en: "Ticked because “Undo sending” happened after the last order draft.",
+  },
+  "manager.transport.send.confirm.statusOrderDraft": {
+    pl: "Transport zostanie oznaczony jako wysłany — e-mail wysyłasz sam z Gmaila po sprawdzeniu.",
+    en: "The transport will be marked as sent — you send the e-mail yourself from Gmail after checking it.",
+  },
+  "manager.transport.send.confirm.statusOrderSent": {
+    pl: "Powstanie nowy szkic; status transportu się nie zmieni.",
+    en: "A new draft is created; the transport status does not change.",
+  },
+  "manager.transport.send.confirm.statusDriver": {
+    pl: "Status transportu się nie zmieni.",
+    en: "The transport status does not change.",
+  },
+  "manager.transport.send.confirm.replacesPrevious": {
+    pl: "Poprzedni szkic tego dokumentu ({time}) zostanie usunięty z Gmaila, jeśli nie został wysłany.",
+    en: "The previous draft of this document ({time}) will be deleted from Gmail if it hasn't been sent.",
+  },
+  "manager.transport.send.confirm.previousOtherMailbox": {
+    pl: "Poprzedni szkic tego dokumentu ({time}) jest w innej skrzynce ({mailbox}) — usuń go tam ręcznie i nie wysyłaj.",
+    en: "The previous draft of this document ({time}) is in another mailbox ({mailbox}) — delete it there by hand and don't send it.",
+  },
+  "manager.transport.send.confirm.submitOrderDraft": {
+    pl: "Utwórz szkic i oznacz jako wysłane",
+    en: "Create draft and mark as sent",
+  },
+  "manager.transport.send.confirm.submit": { pl: "Utwórz szkic", en: "Create draft" },
+  "manager.transport.send.confirm.cancel": { pl: "Anuluj", en: "Cancel" },
+  "manager.transport.send.working": { pl: "Tworzenie szkicu…", en: "Creating draft…" },
+  "manager.transport.send.fromName": { pl: "Pita Bros", en: "Pita Bros" },
+  "manager.transport.send.finalizeError": {
+    pl: "Nie udało się oznaczyć transportu jako wysłanego — szkic NIE został utworzony: {detail}",
+    en: "Couldn't mark the transport as sent — the draft was NOT created: {detail}",
+  },
+  "manager.transport.send.nothingSent": {
+    pl: "Żadne zamówienie nie zostało oznaczone jako wysłane — szkic NIE został utworzony. Pominięte: {skipped}",
+    en: "No order was marked as sent — the draft was NOT created. Skipped: {skipped}",
+  },
+  "manager.transport.send.draftFailedAfterFinalize": {
+    pl: "Transport jest już oznaczony jako wysłany, ale szkic NIE został utworzony ({detail}). Kliknij „Wyślij zamówienie” jeszcze raz.",
+    en: "The transport is already marked as sent, but the draft was NOT created ({detail}). Click “Send order” again.",
+  },
+  "manager.transport.send.recordFailed": {
+    pl: "Szkic powstał w {mailbox}, ale nie udało się go zapisać w historii transportu ({detail}). Sprawdź Szkice w Gmailu. Kolejne „Wyślij” nie zastąpi tego szkicu — przed ponownym wysłaniem usuń go ręcznie.",
+    en: "The draft was created in {mailbox}, but it couldn't be recorded in the transport history ({detail}). Check Gmail Drafts. The next “Send” won't replace this draft — delete it by hand before sending again.",
+  },
+  "manager.transport.send.recordFailedKeptPrevious": {
+    pl: "Nowy szkic jest w Szkicach {mailbox}, ale aplikacja go nie zapisała ({detail}). Poprzedni szkic NIE został usunięty — w Gmailu są teraz dwa szkice. Usuń ręcznie jeden z nich, żeby nie wysłać dwóch.",
+    en: "The new draft is in {mailbox} Drafts, but the app didn't record it ({detail}). The previous draft was NOT deleted — Gmail now holds two drafts. Delete one of them by hand so you don't send both.",
+  },
+  "manager.transport.send.deletePreviousFailed": {
+    pl: "Nie udało się usunąć poprzedniego szkicu ({detail}) — może nadal być w Gmailu. Nie wysyłaj go.",
+    en: "Couldn't delete the previous draft ({detail}) — it may still be in Gmail. Don't send it.",
+  },
+  "manager.transport.send.timeout": {
+    pl: "brak odpowiedzi w ciągu {seconds} s — krok mógł się jednak wykonać, sprawdź stan przed ponowieniem",
+    en: "no response within {seconds} s — the step may still have gone through; check the state before retrying",
+  },
+  "manager.transport.send.timeoutDraft": {
+    pl: "Gmail nie odpowiedział w ciągu {seconds} s — szkic mógł jednak powstać; przed ponowieniem sprawdź Szkice w Gmailu i usuń nadmiarowy",
+    en: "Gmail didn't answer within {seconds} s — the draft may still have been created; before retrying, check Gmail Drafts and delete any extra one",
+  },
+  "manager.transport.send.success": {
+    pl: "Szkic utworzony w {mailbox} — sprawdź treść i załącznik, potem wyślij z Gmaila.",
+    en: "Draft created in {mailbox} — check the text and the attachment, then send it from Gmail.",
+  },
+  "manager.transport.send.openDrafts": { pl: "Otwórz Szkice w Gmailu", en: "Open Gmail Drafts" },
+  "manager.transport.send.status.sentAt": {
+    pl: "Oznaczony jako wysłany: {time}",
+    en: "Marked as sent: {time}",
+  },
+  "manager.transport.send.status.orderDraft": {
+    pl: "Szkic zamówienia: {time} · {mailbox}",
+    en: "Order draft: {time} · {mailbox}",
+  },
+  "manager.transport.send.status.driverDraft": {
+    pl: "Szkic listy kierowcy: {time} · {mailbox}",
+    en: "Driver-list draft: {time} · {mailbox}",
+  },
+  "manager.transport.send.status.noOrderDraft": {
+    pl: "Szkic zamówienia: jeszcze nie utworzony",
+    en: "Order draft: not created yet",
+  },
+  "manager.transport.send.status.noDriverDraft": {
+    pl: "Szkic listy kierowcy: jeszcze nie utworzony",
+    en: "Driver-list draft: not created yet",
+  },
+  "manager.transport.send.markOnly.button": {
+    pl: "Oznacz jako wysłane bez maila",
+    en: "Mark as sent without e-mail",
+  },
+  "manager.transport.send.markOnly.confirm": {
+    pl: "Oznaczyć transport {id} jako wysłany bez tworzenia e-maila? Zamówienia lokali zostaną oznaczone jako wysłane.",
+    en: "Mark transport {id} as sent without creating an e-mail? The locations' orders will be marked as sent.",
+  },
+  "manager.transport.send.markOnly.busy": { pl: "Oznaczanie…", en: "Marking…" },
+  "manager.transport.send.markOnly.error": {
+    pl: "Nie udało się oznaczyć transportu jako wysłanego: {detail}",
+    en: "Couldn't mark the transport as sent: {detail}",
+  },
+  "manager.transport.send.markOnly.hint": {
+    pl: "Np. Magazyn Mory albo zamówienie złożone inną drogą.",
+    en: "E.g. Magazyn Mory, or an order placed another way.",
+  },
+  "manager.transport.send.reopen.button": { pl: "Cofnij wysłanie", en: "Undo sending" },
+  "manager.transport.send.reopen.confirm": {
+    pl: "Cofnąć wysłanie transportu {id}?\n\nZamówienia wrócą do edycji, a status „wysłane” u lokali zostanie wycofany. Jeśli szkic e-maila jest jeszcze w Gmailu — nie wysyłaj go. Jeśli zlecenie (ZOW) zostało już wysłane do PAGO, przy ponownej wysyłce oznacz poprawione jako KOREKTA. Po poprawkach użyj „Wyślij zamówienie” — nowy szkic zastąpi stary.",
+    en: "Undo sending transport {id}?\n\nThe orders go back to editing and the locations' \"sent\" status is withdrawn. If the e-mail draft is still in Gmail — don't send it. If the pickup order (ZOW) was already sent to PAGO, mark the corrected one as KOREKTA when sending again. After your fixes use \"Send order\" — the new draft replaces the old one.",
+  },
+  "manager.transport.send.reopen.busy": { pl: "Cofanie…", en: "Undoing…" },
+  "manager.transport.send.reopen.ok": {
+    pl: "Cofnięto wysłanie — zamówienia z powrotem w edycji: {count}.",
+    en: "Sending undone — orders back in editing: {count}.",
+  },
+  "manager.transport.send.reopen.errLegacy": {
+    pl: "Tego transportu nie można cofnąć (stary transport bez nagłówka).",
+    en: "This transport can't be undone (a legacy batch without a header).",
+  },
+  "manager.transport.send.reopen.errDelivered": {
+    pl: "Nie można cofnąć — dostawa jest już przyjęta w: {locations}.",
+    en: "Can't undo — the delivery is already recorded at: {locations}.",
+  },
+  "manager.transport.send.reopen.errConflict": {
+    pl: "Nie można cofnąć wysłania: {detail}",
+    en: "Can't undo sending: {detail}",
+  },
+  "manager.transport.send.reopen.errRetry": {
+    pl: "Chwilowy problem z zapisem — spróbuj ponownie. ({detail})",
+    en: "A temporary storage problem — please try again. ({detail})",
+  },
+  "manager.transport.send.reopen.error": {
+    pl: "Nie udało się cofnąć wysłania: {detail}",
+    en: "Couldn't undo sending: {detail}",
+  },
+  // Body lines of the two drafts (order + driver) — short plain text, no
+  // per-location quantities (details live in the PDF attachment only).
   "manager.transport.gmailDraft.body.transportLine": {
     pl: "Transport: {label}",
     en: "Transport: {label}",
@@ -1907,6 +2082,34 @@ export const STRINGS = {
     pl: "Szczegóły w załączniku.",
     en: "Details in the attachment.",
   },
+  // transport-v2: the Pago (ZOW) body says only that the order is attached
+  // and when it will be collected.
+  "manager.transport.gmailDraft.body.pagoAttachmentLine": {
+    pl: "W załączniku przesyłamy zlecenie odbioru własnego.",
+    en: "Please find the self-pickup order attached.",
+  },
+  "manager.transport.gmailDraft.body.pickupToConfirm": {
+    pl: "Termin odbioru do potwierdzenia.",
+    en: "Pickup date to be confirmed.",
+  },
+  // transport-v2: a corrected ZOW after "Cofnij wysłanie" — one line right
+  // after the greeting (the subject gets "KOREKTA - " in code).
+  "manager.transport.gmailDraft.body.correctionLine": {
+    pl: "KOREKTA: to zlecenie koryguje i zastępuje wcześniej wysłane zlecenie odbioru własnego dla tego transportu.",
+    en: "CORRECTION: this order corrects and replaces the self-pickup order sent earlier for this transport.",
+  },
+  // transport-v2: the driver body always lists date, time, driver and
+  // vehicle, each with its value or toConfirm.
+  "manager.transport.gmailDraft.body.dateLine": {
+    pl: "Data odbioru: {value}",
+    en: "Pickup date: {value}",
+  },
+  "manager.transport.gmailDraft.body.timeLine": {
+    pl: "Godzina odbioru: {value}",
+    en: "Pickup time: {value}",
+  },
+  "manager.transport.gmailDraft.body.toConfirm": { pl: "do potwierdzenia", en: "to be confirmed" },
+  "manager.transport.gmailDraft.body.notesHeader": { pl: "Uwagi:", en: "Notes:" },
 
   // v5.5 — OAuth Gmail-draft callback page (/oauth/gmail-callback). Public
   // route: Google redirects the popup here after the account chooser.

@@ -1,7 +1,7 @@
 """Pydantic models matching docs/pita-supply-os-v1/DATA_MODEL.md."""
 from datetime import date, datetime
 from enum import Enum
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -1363,6 +1363,11 @@ class TransportBatchSummary(BaseModel):
     # to "Transport {supplier_name} · {created date}" in that case
     # (transportDisplayLabel).
     name: str | None = None
+    # Suppliers the batch carries (transport-v2), for the history list's
+    # supplier badges and chip filter: the batch (lead) supplier first, then
+    # every other distinct member supplier sorted by id. A header-only batch
+    # with no members gives ``[supplier_id]``.
+    supplier_ids: list[str] = Field(default_factory=list)
 
 
 class TransportBatchDetail(BaseModel):
@@ -1446,9 +1451,14 @@ class TransportEvent(BaseModel):
     (``batch_sent``, ``batch_cancelled``, ``logistics_changed``) and set for
     an order-level one (``order_combined``, ``location_added``,
     ``order_removed``, ``order_sent``, ``quantities_changed``,
-    ``delivery_confirmed``). ``actor`` is ``"manager-default"`` for every
-    manager-driven action and the location id for a captain-driven one
-    (``delivery_confirmed``)."""
+    ``delivery_confirmed``). transport-v2 adds four batch-level types:
+    ``batch_reopened`` (undo-send; details list the reopened order ids),
+    ``batch_reopen_aborted`` (an undo-send that left the batch sent) and
+    ``order_draft_created`` / ``driver_draft_created`` (a Gmail draft the
+    frontend created; details ``draft_id=<id>; mailbox=<mailbox>[;
+    replaced=<id>][; extras=<a> | <b>]``, parsed back by the frontend).
+    ``actor`` is ``"manager-default"`` for every manager-driven action and the
+    location id for a captain-driven one (``delivery_confirmed``)."""
     event_id: str
     transport_id: str
     order_id: str | None = None
@@ -1627,6 +1637,51 @@ class TransportCancelResponse(BaseModel):
     skipped: list[TransportSkippedOrder] = Field(default_factory=list)
 
 
+# ---------- Manager Transport v2 (transport-v2): undo-send + Gmail draft trace ----------
+
+
+class TransportReopenRequest(BaseModel):
+    """Payload for POST /api/manager/transport/reopen — put a SENT batch back
+    into draft so the Manager can fix it and send it again."""
+    transport_id: str
+
+
+class TransportReopenResponse(BaseModel):
+    """Result of reopen. ``reopened`` lists members moved ``manager_sent ->
+    manager_claimed``; ``skipped`` (reusing ``TransportSkippedOrder``) lists
+    members left as they were (another status, or a status conflict on the
+    guarded write) — mirrors finalize's never-silently-drop contract."""
+    transport_id: str
+    reopened: list[str] = Field(default_factory=list)
+    skipped: list[TransportSkippedOrder] = Field(default_factory=list)
+
+
+# A Gmail draft id as the Gmail API returns it ("r-1234567890123456789",
+# "r1234…"). Kept to a conservative charset because the id is embedded in the
+# free-text ``TransportEvent.details`` that the frontend parses back.
+_GMAIL_DRAFT_ID_PATTERN = r"^[A-Za-z0-9_-]{1,200}$"
+
+
+class TransportDraftCreatedRequest(BaseModel):
+    """Payload for POST /api/manager/transport/draft-created — the frontend
+    reports a Gmail draft it just created for a batch (the Pago order or the
+    driver list), so the batch history records which draft is current and in
+    which mailbox. ``replaced_draft_id`` names the previous draft of the same
+    kind that the new one supersedes ("" when none). ``approved_extras`` are
+    the off-catalogue lines the Manager explicitly approved for the order PDF.
+    No migration: everything is kept in the event's ``details``."""
+    transport_id: str
+    kind: Literal["order", "driver"]
+    gmail_draft_id: str = Field(pattern=_GMAIL_DRAFT_ID_PATTERN)
+    # No ";", "|" or line break: the mailbox sits between "; "-separated
+    # segments of the event details the frontend parses.
+    mailbox: str = Field(default="", max_length=200, pattern=r"^[^;|\r\n]*$")
+    approved_extras: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=50
+    )
+    replaced_draft_id: str = Field(default="", pattern=r"^(?:[A-Za-z0-9_-]{1,200})?$")
+
+
 # ---------- Manager Transport v4: Gmail draft config ("Zrob draft w Gmailu") ----------
 
 
@@ -1647,6 +1702,11 @@ class TransportDraftConfig(BaseModel):
     # yet", and the FE falls back to free-text entry.
     drivers: str = ""
     vehicles: str = ""
+    # Mailbox the Transport Gmail drafts are created in (transport-v2) —
+    # ``settings.order_mailbox`` (biuro@), the same mailbox the per-order
+    # drafts use. Comes from settings, not ``_meta``, so it is set even when
+    # the ``_meta`` read degrades.
+    order_mailbox: str = ""
 
 
 # ---------- Finance: eBiuro purchase documents vs goods receipts (finance-invoice-reconciliation MVP) ----------

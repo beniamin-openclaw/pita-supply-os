@@ -111,6 +111,7 @@ from .models import (
     TransportCreateRequest,
     TransportCreateResponse,
     TransportDraftConfig,
+    TransportDraftCreatedRequest,
     TransportEligibleOrder,
     TransportEvent,
     TransportFinalizeRequest,
@@ -118,6 +119,8 @@ from .models import (
     TransportLocationQty,
     TransportRemoveOrderRequest,
     TransportRemoveOrderResponse,
+    TransportReopenRequest,
+    TransportReopenResponse,
     TransportSkippedOrder,
     TransportSupplierRef,
 )
@@ -4435,8 +4438,9 @@ def captain_receipt_photo_urls(
 # (transport-pago-mory-combined, operator decision 2B, 2026-09-28): the driver
 # collects Magazyn własny Mory goods on the Pago run, so a Pago batch may carry
 # SUP_MORY orders. One-directional — a Mory batch never carries Pago orders.
-# A code constant, like _INTERNAL_SUPPLIER_ID; the frontend mirrors it in
-# lib/transport.ts (TRANSPORT_COMPANION_SUPPLIER_IDS).
+# A code constant, like _INTERNAL_SUPPLIER_ID. The frontend does not mirror
+# it: it reads a batch's suppliers from the API (detail ``suppliers``, summary
+# ``supplier_ids``); only its PAGO/MORY filter chips name the two ids.
 _TRANSPORT_COMPANION_SUPPLIERS: dict[str, tuple[str, ...]] = {"SUP_PAGO": ("SUP_MORY",)}
 
 
@@ -4798,11 +4802,31 @@ def manager_transport_batches(
                 vehicle=header.vehicle if header is not None else None,
                 pickup_date=header.pickup_date if header is not None else None,
                 name=header.name if header is not None else None,
+                supplier_ids=_transport_summary_supplier_ids(batch_supplier_id, group),
             )
         )
 
     summaries.sort(key=lambda s: -(s.created.timestamp() if s.created else 0.0))
     return summaries[:limit]
+
+
+def _transport_summary_supplier_ids(lead_supplier_id: str, group: list[Order]) -> list[str]:
+    """The suppliers a listed batch carries (transport-v2, history badges and
+    chip filter): ``lead_supplier_id`` first — the header's supplier, or the
+    first member's for a headerless legacy batch — then every other distinct
+    member supplier sorted by id. A header-only batch with no members gives
+    ``[lead_supplier_id]``. ``cancelled`` members are ignored: finalize
+    cancels an empty manager-made skeleton (e.g. a Magazyn Mory column) but
+    it keeps the marker, and that supplier is not on the run. Pure, no I/O."""
+    others = sorted(
+        {
+            o.supplier_id
+            for o in group
+            if o.supplier_id and o.status != OrderStatus.CANCELLED
+        }
+        - {lead_supplier_id}
+    )
+    return [lead_supplier_id, *others] if lead_supplier_id else others
 
 
 def _load_transport_events_safe(backend, transport_id: str) -> list[TransportEvent]:
@@ -6121,6 +6145,465 @@ def manager_transport_cancel(
     )
 
 
+# ---------- Manager Transport v2 (transport-v2): undo-send + Gmail draft trace ----------
+
+
+@app.post("/api/manager/transport/reopen", response_model=TransportReopenResponse)
+def manager_transport_reopen(
+    req: TransportReopenRequest,
+    _: None = Depends(require_manager),
+) -> TransportReopenResponse:
+    """Undo-send ("Cofnij wysłanie"): put a SENT batch back into draft so the
+    Manager can fix it and send it again — the inverse of ``finalize``.
+
+    Gates (nothing is written unless all pass): seed mode -> 503; missing
+    'transport_batches' worksheet -> 503 (both mirror finalize/cancel). No
+    header row -> 404 — an unknown batch, or a headerless legacy v1 batch,
+    which has no draft state to return to. Header ``status != "sent"`` -> 409.
+    Any member ``closed`` or with at least one goods receipt -> 409 naming the
+    locations: the delivery is already recorded, so the batch can no longer
+    change. Every member is checked BEFORE the first write.
+
+    Then each ``manager_sent`` member goes back to ``manager_claimed`` with
+    ``sent_method`` / ``manager_sent_at`` cleared, guarded by
+    ``expected_status=manager_sent``; a guard conflict or backend error lands
+    in ``skipped`` (never aborts the rest). Members in any other status are
+    left alone and reported in ``skipped`` — except ``cancelled`` ones
+    (finalize auto-cancels empty members and keeps their marker), which are
+    left out silently. Order lines and the ``TRN-`` marker are never touched.
+    A member that got a receipt WHILE being reopened goes back to ``closed``
+    (``_reopen_revert_delivered``) and is reported as skipped.
+
+    Header (``status="draft"``, ``sent_at=None``):
+    - any member write failed unexpectedly ("backend error") -> 503, header
+      left ``sent`` AND every member this call reopened is restored to
+      ``manager_sent`` with its original sent fields
+      (``_reopen_restore_sent``), so the 503 means "nothing changed" and no
+      member is stranded ``manager_claimed`` under a sent header if a
+      receipt then blocks the retry;
+    - nothing reopened and no member already ``manager_claimed`` -> 409,
+      header left ``sent`` (a draft batch with no editable member would be
+      stranded);
+    - otherwise it flips — including the retry after a failed header write,
+      where the members are already ``manager_claimed`` and only the header
+      remains. A failed header write is a 503 (the batch would otherwise
+      still read "sent"); retrying is idempotent.
+    Every path that reopened a member logs one ``batch_reopened`` event with
+    the reopened order ids. A call that ends with the batch still sent (the
+    503 member-error abort, or a 409 after delivered members were reverted)
+    logs ``batch_reopen_aborted`` instead, so the history and the frontend's
+    KOREKTA default never read it as a reopen.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport reopen requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("transport_batches")
+    try:
+        batch = backend.get_transport_batch(req.transport_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503, detail="transport_batches worksheet missing"
+        )
+    if batch is None:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Transport batch {req.transport_id} not found (a legacy batch "
+                f"without a header cannot be reopened)"
+            ),
+        )
+    if batch.status != "sent":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id} is not sent "
+                f"(status={batch.status}) — cannot reopen"
+            ),
+        )
+
+    backend.invalidate_cache("orders")
+    backend.invalidate_cache("receipts")
+    orders = backend.load_orders()
+    group = [o for o in orders if o.supplier_order_reference == req.transport_id]
+
+    # Delivery gate over ALL members before any write. One targeted receipts
+    # read for the whole group — the batched form of `_has_receipts`, with the
+    # same degrade (a missing 'receipts' worksheet reads as "no receipts").
+    try:
+        received_ids = {
+            r.order_id
+            for r in backend.load_receipts_for_orders([o.order_id for o in group])
+        }
+    except sheets.WorksheetNotFound:
+        received_ids = set()
+    delivered = [
+        o for o in group if o.status == OrderStatus.CLOSED or o.order_id in received_ids
+    ]
+    if delivered:
+        locations_by_id = {loc.location_id: loc for loc in backend.load_locations()}
+        names = sorted(
+            {
+                (
+                    locations_by_id[o.location_id].location_name
+                    if o.location_id in locations_by_id
+                    else o.location_id
+                )
+                for o in delivered
+            }
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id} cannot be reopened — delivery "
+                f"already recorded for: {', '.join(names)}"
+            ),
+        )
+
+    # Pre-write snapshot: the revert below restores these, and the header
+    # rule reads "already claimed before this call" — neither may depend on
+    # the loaded Order objects staying untouched by the writes.
+    sent_fields: dict[str, tuple[Optional[str], Optional[datetime]]] = {
+        o.order_id: (o.sent_method, o.manager_sent_at) for o in group
+    }
+    claimed_before = any(o.status == OrderStatus.MANAGER_CLAIMED for o in group)
+
+    reopened: list[str] = []
+    skipped: list[TransportSkippedOrder] = []
+    for order in group:
+        if order.status == OrderStatus.CANCELLED:
+            # Finalize auto-cancels empty members and keeps their marker —
+            # reporting them on every reopen would only be noise.
+            continue
+        if order.status != OrderStatus.MANAGER_SENT:
+            skipped.append(
+                TransportSkippedOrder(
+                    order_id=order.order_id,
+                    reason=f"status {order.status.value} not eligible",
+                )
+            )
+            continue
+        try:
+            backend.update_order(
+                order.order_id,
+                status=OrderStatus.MANAGER_CLAIMED.value,
+                sent_method=None,
+                manager_sent_at=None,
+                expected_status=OrderStatus.MANAGER_SENT.value,
+            )
+        except _TRANSPORT_GUARD_EXCEPTIONS:
+            skipped.append(
+                TransportSkippedOrder(order_id=order.order_id, reason="reopen conflict")
+            )
+            continue
+        except Exception:
+            log.exception(
+                "Transport reopen %s: unexpected error reopening order %s",
+                req.transport_id,
+                order.order_id,
+            )
+            skipped.append(
+                TransportSkippedOrder(order_id=order.order_id, reason="backend error")
+            )
+            continue
+        reopened.append(order.order_id)
+
+    # Race close-out: a captain receipt can land between the delivery gate
+    # and a member write (the receipt route accepts manager_sent, and its own
+    # manager_sent -> closed flip then conflicts with ours). Re-read receipts
+    # for the members just reopened; each hit goes back to `closed` with its
+    # original sent fields (best-effort, guarded) and is reported as skipped.
+    reverted = _reopen_revert_delivered(backend, req.transport_id, sent_fields, reopened)
+    for order_id, reason in reverted:
+        reopened.remove(order_id)
+        skipped.append(TransportSkippedOrder(order_id=order_id, reason=reason))
+
+    event_details = (
+        f"{len(reopened)} order(s) reopened: {', '.join(reopened)}"
+        if reopened
+        else "0 order(s) reopened"
+    )
+    if reverted:
+        event_details += (
+            f"; delivery recorded during reopen: {', '.join(oid for oid, _ in reverted)}"
+        )
+
+    # A member write failed for an unexpected reason: keep the header `sent`
+    # and put every member this call reopened back to `manager_sent`, so the
+    # 503 means "nothing changed". Leaving them `manager_claimed` would strand
+    # them under a sent header once a receipt on a still-sent member makes
+    # the retry 409 at the delivery gate.
+    failed_ids = [s.order_id for s in skipped if s.reason == "backend error"]
+    if failed_ids:
+        restore_failed = _reopen_restore_sent(
+            backend, req.transport_id, sent_fields, reopened
+        )
+        restored = [oid for oid in reopened if oid not in restore_failed]
+        abort_details = f"reopen aborted — backend error: {', '.join(failed_ids)}"
+        if restored:
+            abort_details += f"; restored to sent: {', '.join(restored)}"
+        if restore_failed:
+            abort_details += f"; restore failed: {', '.join(restore_failed)}"
+        if reverted:
+            abort_details += (
+                "; delivery recorded during reopen: "
+                f"{', '.join(oid for oid, _ in reverted)}"
+            )
+        _log_transport_event(
+            backend,
+            req.transport_id,
+            "batch_reopen_aborted",
+            f"{abort_details} — header still sent, retry",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Transport batch {req.transport_id}: some orders could not be "
+                f"reopened — the batch is still sent, retry"
+            ),
+        )
+
+    # Nothing reopened now AND no member already claimed (the retry case after
+    # a failed header write, where the members are claimed and only the header
+    # is left): flipping the header would leave a draft batch with no editable
+    # member. Keep it `sent`.
+    if not reopened and not claimed_before:
+        if reverted:
+            _log_transport_event(
+                backend,
+                req.transport_id,
+                "batch_reopen_aborted",
+                f"{event_details} — header still sent",
+            )
+        why = "; ".join(f"{s.order_id}: {s.reason}" for s in skipped)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id}: no order could be reopened "
+                f"({why or 'no eligible members'}) — the batch stays sent"
+            ),
+        )
+
+    try:
+        backend.update_transport_batch(req.transport_id, status="draft", sent_at=None)
+    except Exception:
+        log.exception(
+            "Transport reopen %s: members reopened (%s) but header update failed",
+            req.transport_id,
+            ", ".join(reopened) or "none",
+        )
+        # The member writes are durable — record them before reporting.
+        _log_transport_event(
+            backend,
+            req.transport_id,
+            "batch_reopened",
+            f"{event_details} — header still sent, retry",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Transport batch {req.transport_id}: orders were reopened but the "
+                f"batch status could not be updated — retry"
+            ),
+        )
+
+    _log_transport_event(backend, req.transport_id, "batch_reopened", event_details)
+
+    return TransportReopenResponse(
+        transport_id=req.transport_id, reopened=reopened, skipped=skipped
+    )
+
+
+def _reopen_revert_delivered(
+    backend,
+    transport_id: str,
+    sent_fields: dict[str, tuple[Optional[str], Optional[datetime]]],
+    reopened: list[str],
+) -> list[tuple[str, str]]:
+    """Members reopened by ``manager_transport_reopen`` that got a goods
+    receipt meanwhile: put each back to ``closed`` with its pre-reopen
+    ``sent_method`` / ``manager_sent_at`` (``sent_fields``, snapshotted before
+    any write; guarded ``manager_claimed -> closed``) and return
+    ``(order_id, skip reason)`` pairs. Best-effort per
+    order — a failed revert only logs and says so in the reason. A failed
+    receipts re-read logs and reverts nothing (the gate already passed)."""
+    if not reopened:
+        return []
+    backend.invalidate_cache("receipts")
+    try:
+        received_ids = {r.order_id for r in backend.load_receipts_for_orders(reopened)}
+    except sheets.WorksheetNotFound:
+        return []
+    except Exception:
+        log.exception(
+            "Transport reopen %s: receipts re-read after reopen failed", transport_id
+        )
+        return []
+    out: list[tuple[str, str]] = []
+    for order_id in reopened:
+        if order_id not in received_ids:
+            continue
+        sent_method, manager_sent_at = sent_fields[order_id]
+        reason = "delivery recorded during reopen"
+        try:
+            backend.update_order(
+                order_id,
+                status=OrderStatus.CLOSED.value,
+                sent_method=sent_method,
+                manager_sent_at=manager_sent_at,
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except Exception:
+            log.exception(
+                "Transport reopen %s: order %s got a receipt during reopen and "
+                "the revert to closed failed — it stays manager_claimed",
+                transport_id,
+                order_id,
+            )
+            reason += " (revert failed)"
+        out.append((order_id, reason))
+    return out
+
+
+def _reopen_restore_sent(
+    backend,
+    transport_id: str,
+    sent_fields: dict[str, tuple[Optional[str], Optional[datetime]]],
+    reopened: list[str],
+) -> list[str]:
+    """Undo this call's member writes after a backend error aborted the
+    reopen: each id in ``reopened`` goes back to ``manager_sent`` with its
+    pre-reopen ``sent_method`` / ``manager_sent_at`` (``sent_fields``),
+    guarded ``manager_claimed -> manager_sent``. Best-effort per order;
+    returns the ids whose restore failed (each one logged)."""
+    failed: list[str] = []
+    for order_id in reopened:
+        sent_method, manager_sent_at = sent_fields[order_id]
+        try:
+            backend.update_order(
+                order_id,
+                status=OrderStatus.MANAGER_SENT.value,
+                sent_method=sent_method,
+                manager_sent_at=manager_sent_at,
+                expected_status=OrderStatus.MANAGER_CLAIMED.value,
+            )
+        except Exception:
+            log.exception(
+                "Transport reopen %s: aborted, and restoring order %s to "
+                "manager_sent failed — it stays manager_claimed",
+                transport_id,
+                order_id,
+            )
+            failed.append(order_id)
+    return failed
+
+
+def _transport_draft_created_details(req: TransportDraftCreatedRequest) -> str:
+    """The ``details`` of a ``*_draft_created`` event, which the frontend
+    parses back (``latestTransportDraft``):
+    ``draft_id=<id>; mailbox=<mailbox>[; replaced=<id>][; extras=<a> | <b>]``.
+    ``extras`` is always the LAST segment, so a reader takes everything after
+    ``extras=``. The mailbox cannot hold ``;``, ``|`` or a line break (422 at
+    the model), so it is only trimmed. Line breaks inside an extra collapse to
+    one space and each extra is trimmed; an extra left empty is dropped."""
+
+    def _one_line(value: str) -> str:
+        return " ".join(part.strip() for part in value.splitlines() if part.strip())
+
+    parts = [f"draft_id={req.gmail_draft_id}", f"mailbox={req.mailbox.strip()}"]
+    if req.replaced_draft_id:
+        parts.append(f"replaced={req.replaced_draft_id}")
+    extras = [line for line in (_one_line(e) for e in req.approved_extras) if line]
+    if extras:
+        parts.append(f"extras={' | '.join(extras)}")
+    return "; ".join(parts)
+
+
+@app.post("/api/manager/transport/draft-created", response_model=TransportEvent)
+def manager_transport_draft_created(
+    req: TransportDraftCreatedRequest,
+    _: None = Depends(require_manager),
+) -> TransportEvent:
+    """Record that the frontend created a Gmail draft for a batch — the Pago
+    order (``kind="order"``) or the driver list (``kind="driver"``) — as one
+    ``order_draft_created`` / ``driver_draft_created`` event. The app never
+    sends anything; this only leaves the trace the Transport screen reads to
+    show the current draft (and to replace it on the next "Wyślij").
+
+    Gates: seed mode -> 503; missing 'transport_batches' worksheet -> 503. No
+    header row (unknown or headerless legacy batch) -> 404. A ``cancelled``
+    batch -> 409. An ORDER draft on a batch that is not ``sent`` -> 409 (the
+    frontend finalizes before it creates the order draft, so an order draft
+    exists only for a sent batch). A driver draft is accepted on a draft or a
+    sent batch (the driver list may go out before finalize).
+
+    Unlike every other Transport event this write is NOT best-effort: the
+    frontend relies on the record, so a failed write is a 503 rather than a
+    silent success. Returns the stored ``TransportEvent``.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Transport draft record requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+
+    backend.invalidate_cache("transport_batches")
+    try:
+        batch = backend.get_transport_batch(req.transport_id)
+    except sheets.WorksheetNotFound:
+        raise HTTPException(
+            status_code=503, detail="transport_batches worksheet missing"
+        )
+    if batch is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transport batch {req.transport_id} not found"
+        )
+    if batch.status == "cancelled":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Transport batch {req.transport_id} is cancelled",
+        )
+    if req.kind == "order" and batch.status != "sent":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Transport batch {req.transport_id} is not sent "
+                f"(status={batch.status}) — finalize it before recording an order draft"
+            ),
+        )
+
+    event = TransportEvent(
+        event_id=f"TEV-{secrets.token_hex(4)}",
+        transport_id=req.transport_id,
+        order_id=None,
+        event_type=f"{req.kind}_draft_created",
+        actor="manager-default",
+        at=datetime.now(timezone.utc),
+        details=_transport_draft_created_details(req),
+    )
+    try:
+        backend.append_transport_event(event)
+    except Exception:
+        log.exception(
+            "Transport draft-created %s: event write failed (kind=%s, draft_id=%s)",
+            req.transport_id,
+            req.kind,
+            req.gmail_draft_id,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Transport batch {req.transport_id}: the Gmail draft exists but "
+                f"its record could not be saved — retry"
+            ),
+        )
+    return event
+
+
 # ---------- Manager Transport v4: Gmail draft config ("Zrob draft w Gmailu") ----------
 
 
@@ -6165,7 +6648,12 @@ def manager_transport_draft_config(
         drivers = ""
         vehicles = ""
     return TransportDraftConfig(
-        driver_recipients=driver_recipients, drivers=drivers, vehicles=vehicles
+        driver_recipients=driver_recipients,
+        drivers=drivers,
+        vehicles=vehicles,
+        # transport-v2: the mailbox both Transport drafts are created in.
+        # From settings, so it survives a degraded `_meta` read.
+        order_mailbox=settings.order_mailbox or "",
     )
 
 
