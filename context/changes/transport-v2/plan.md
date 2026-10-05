@@ -249,6 +249,6 @@ Manual: live E2E by the operator on prod after deploy (drafts only).
 ### Phase 4: Verify, review, ship
 
 - [x] 4.1 Independent impl review addressed — ef66936
-- [ ] 4.2 PR merged, CI green
-- [ ] 4.3 Live: /health, new bundle, draft-config mailbox
+- [x] 4.2 PR merged, CI green — a741abd
+- [x] 4.3 Live: /health, new bundle, draft-config mailbox — a741abd
 - [ ] 4.4 Operator E2E on the 07.10 run
