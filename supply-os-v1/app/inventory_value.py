@@ -75,7 +75,9 @@ def inventory_unit_price(
     Candidates: active supplier_products of an active supplier with a positive
     ``price_estimate_pln``. An external supplier beats ``SUP_INTERNAL``; then
     the lowest ``supplier_product_id`` (stable, same tie-break as
-    ``main._primary_supplier_product``)."""
+    ``main._primary_supplier_product``; a backup row loses to a primary one).
+    ``sps`` is the location's catalog (``supplier_catalog.
+    effective_supplier_products``)."""
     candidates = [
         sp
         for sp in sps
@@ -89,5 +91,7 @@ def inventory_unit_price(
     if not candidates:
         return None
     external = [sp for sp in candidates if sp.supplier_id != _INTERNAL_SUPPLIER_ID]
-    sp = min(external or candidates, key=lambda c: c.supplier_product_id)
+    pool = external or candidates
+    pool = [c for c in pool if not c.is_backup] or pool
+    sp = min(pool, key=lambda c: c.supplier_product_id)
     return sp.price_estimate_pln / sp.units_per_purchase_unit

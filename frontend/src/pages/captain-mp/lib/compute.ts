@@ -148,6 +148,19 @@ export function computeRowState(item: OrderableItem, line: OrderLine): RowState 
 
   const final = Number(line.captain_final_qty_purchase);
 
+  // Backup source for this product at this location (krakow-katowice-rollout):
+  // the suggestion belongs to the primary supplier, so the row is always
+  // neutral — never green/amber/red, never a reason. Mirrors the backend, which
+  // also forces alerts off for backup items.
+  if (item.is_backup === true) {
+    return {
+      state: "grey",
+      messageKey: "state.orderEntered",
+      requiresReason: false,
+      deviationPct: null,
+    };
+  }
+
   // Supplier with suggestion alerts off (Pago, pago-suggestion-no-alerts):
   // the suggestion stays on the card, but no deviation / critical / over-MAX
   // alert and never a reason — mirrors the backend `_evaluate_submit_line`

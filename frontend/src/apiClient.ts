@@ -363,6 +363,9 @@ export const api = {
   // "captain" there would send no Authorization header a Manager screen can
   // use and 401 silently (the same bug `api.suppliers` shipped once before
   // gaining this same optional param — see lessons.md).
+  // Captain-scoped tabs: active, non-internal suppliers with at least one
+  // orderable product at the captain's location (krakow-katowice-rollout).
+  captainSuppliers: () => apiGet<Supplier[]>("/api/captain/suppliers", "captain"),
   locations: (role: Role = "captain") => apiGet<Location[]>("/api/locations", role),
   // Captain
   orderable: (supplier_id: string) =>

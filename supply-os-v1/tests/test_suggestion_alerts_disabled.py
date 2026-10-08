@@ -43,6 +43,7 @@ def sheet_seed(mocker):
     mocker.patch.object(sheets, "append_order")
     appended = mocker.patch.object(sheets, "append_order_lines")
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", return_value=_pago_without_alerts())
     mocker.patch.object(
         sheets, "load_supplier_products", side_effect=seed_loader.load_supplier_products

@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../apiClient";
 import { clearToken } from "../auth";
-import { isOrderingSupplier } from "../lib/orderingSuppliers";
+import { loadCaptainSuppliers } from "../lib/orderingSuppliers";
 import type { OrderableItem, Supplier } from "../types";
 
 export function CaptainPage() {
@@ -20,9 +20,11 @@ export function CaptainPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api
-      .suppliers()
-      .then((data) => setSuppliers(data.filter(isOrderingSupplier)))
+    loadCaptainSuppliers(
+      () => api.captainSuppliers(),
+      () => api.suppliers(),
+    )
+      .then(setSuppliers)
       .catch((e: ApiError) => setError(e.detail));
   }, []);
 

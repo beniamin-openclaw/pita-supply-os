@@ -142,6 +142,13 @@ class Location(BaseModel):
     # Location phone in display form ("600 722 252"), printed as
     # "Telefon lokalu:" in the supplier e-mail. None -> no phone line.
     phone: Optional[str] = None
+    # True = the location orders ONLY from supplier_products rows scoped to it
+    # (supplier_products.location_id = this location) — Kraków and Katowice
+    # buy from their own city suppliers (krakow-katowice-rollout, migration
+    # 0029). False = the shared (location_id NULL) catalog, as every Warsaw
+    # location. `bool = False`, NOT Optional: NOT NULL DEFAULT false and
+    # _LOCATION_COLUMNS binds it on insert. See app/supplier_catalog.py.
+    own_catalog: bool = False
 
 
 class SupplierProduct(BaseModel):
@@ -209,6 +216,16 @@ class SupplierProduct(BaseModel):
     # nullable master-data columns — None binds SQL NULL, which is valid here.
     case_unit: Optional[str] = None
     units_per_case: Optional[float] = None
+    # Per-location catalog (krakow-katowice-rollout, migration 0029). None = a
+    # shared row, used by every location without ``own_catalog``; set = the
+    # row exists only at that location (which must have ``own_catalog``).
+    location_id: Optional[str] = None
+    # Backup source for the product at ``location_id``: orderable in this
+    # supplier's tab, but no suggestion and no reason gates — the primary
+    # (non-backup) supplier's tab carries them. `bool = False`, NOT Optional
+    # (NOT NULL DEFAULT false, bound on insert). DB CHECK: only a scoped row
+    # can be a backup.
+    is_backup: bool = False
 
 
 class LocationProductSetting(BaseModel):
@@ -495,6 +512,26 @@ class ManagerQueueItem(BaseModel):
     coverage_days: Optional[int] = None
 
 
+class OpenOrderRef(BaseModel):
+    """An open order of the same location + product at ANOTHER supplier
+    (krakow-katowice-rollout): Katowice fries come from Kuchnie Świata or
+    Selgros, so the Captain card and the Manager line say "already ordered at
+    X". Open = captain_submitted / manager_claimed / manager_sent, submitted on
+    or after today − 7 days (Warsaw), effective ordered quantity > 0.
+    Information only."""
+    order_id: str
+    supplier_id: str
+    supplier_name: str
+    status: OrderStatus
+    qty_purchase: float
+    purchase_unit: Optional[str] = None
+    qty_base: float
+    inventory_unit: Optional[str] = None
+    order_date: date
+    requested_delivery_date: Optional[date] = None
+    captain_submitted_at: Optional[datetime] = None
+
+
 class ManagerOrderLineDetail(BaseModel):
     """One line in the detail table — enriched with product + supplier_product info."""
     order_line_id: str
@@ -540,6 +577,13 @@ class ManagerOrderLineDetail(BaseModel):
     # None on both when the product has no case.
     case_unit: Optional[str] = None
     units_per_case: Optional[float] = None
+    # The line's supplier_product is a backup source at the order's location
+    # (krakow-katowice-rollout): the Captain had no suggestion for it, so the
+    # edit screens skip its reason gates and the Manager shows no deviation.
+    is_backup: bool = False
+    # Open orders of the same product at the order's location from OTHER
+    # suppliers (Manager detail only, open orders only); [] elsewhere.
+    open_orders_elsewhere: list[OpenOrderRef] = []
 
 
 class ManagerOrderReceiptLine(BaseModel):

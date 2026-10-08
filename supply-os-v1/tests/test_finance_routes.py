@@ -1,6 +1,6 @@
 """Finance routes — seed mode gates (503), and the overview/detail/review/alias
 flow against a fake Supabase-like backend (no network, no DB)."""
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +20,19 @@ from app.models import (
     Supplier,
     SupplierProduct,
 )
+
+# The fixture's receipt / invoice dates sit a few days before today: the
+# overview reads the last 30 days, so fixed calendar dates aged out of the
+# window (the correction stopped being listed after 2026-10-05).
+_DAY0 = date.today() - timedelta(days=4)
+
+
+def _day(offset: int) -> date:
+    return _DAY0 + timedelta(days=offset)
+
+
+def _at(offset: int, hour: int) -> datetime:
+    return datetime.combine(_day(offset), time(hour), tzinfo=timezone.utc)
 
 MANAGER = {"Authorization": "Bearer test_manager_token"}
 client = TestClient(app)
@@ -49,8 +62,8 @@ class FakeBackend:
         self.aliases: dict[tuple[str, str], FinanceLineAlias] = {}
         self.receipt = Receipt(
             receipt_id="RCP-20260904-KEN-dadd5b", order_id="ORD-20260902-KEN-COCA-210ea7",
-            location_id="KEN", supplier_id="SUP_COCACOLA", receipt_date=date(2026, 9, 4),
-            received_by="Khushi", received_submitted_at=datetime(2026, 9, 4, 10, tzinfo=timezone.utc),
+            location_id="KEN", supplier_id="SUP_COCACOLA", receipt_date=_day(0),
+            received_by="Khushi", received_submitted_at=_at(0, 10),
             line_count=2, discrepancy_count=0, wz_photo_count=1,
         )
         self.lines = [
@@ -67,10 +80,10 @@ class FakeBackend:
             doc_id=77000001, company_id=7189181, company_nip="5223241275",
             contractor_nip="5242106963", contractor_name="Coca-Cola HBC Polska",
             doc_type="Faktura zakupu", invoice_number="2424267999",
-            issue_date=date(2026, 9, 4), sell_date=date(2026, 9, 3), netto=311.0, brutto=382.5,
+            issue_date=_day(0), sell_date=_day(-1), netto=311.0, brutto=382.5,
             pdf_url="https://apps.symfonia.pl/x.pdf", state=2,
-            synced_at=datetime(2026, 9, 5, 7, tzinfo=timezone.utc),
-            last_seen_at=datetime(2026, 9, 5, 7, tzinfo=timezone.utc),
+            synced_at=_at(1, 7),
+            last_seen_at=_at(1, 7),
         )
         self.doc_lines = [
             FinanceDocumentLine(doc_id=self.doc.doc_id, ordinal=1, name="0.25 RGB X24 COCA-COLA ZERO",
@@ -83,7 +96,7 @@ class FakeBackend:
         self.correction = FinanceDocument(
             doc_id=77000002, company_id=7189181, company_nip="5223241275",
             contractor_nip="5242106963", doc_type="Korekta zakupu", invoice_number="K-1",
-            issue_date=date(2026, 9, 5), sell_date=date(2026, 9, 5), netto=-20.0,
+            issue_date=_day(1), sell_date=_day(1), netto=-20.0,
         )
 
     # master data

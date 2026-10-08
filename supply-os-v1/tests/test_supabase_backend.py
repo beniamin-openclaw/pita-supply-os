@@ -689,6 +689,7 @@ def test_route_captain_edit_passes_expected_status(mocker):
         supabase_backend, "load_suppliers",
         return_value=[Supplier(supplier_id="SUP_X", supplier_name="X", email="x@example.com")],
     )
+    mocker.patch.object(supabase_backend, "load_locations", return_value=[])
     mocker.patch.object(
         supabase_backend, "load_supplier_products",
         return_value=[
@@ -784,6 +785,7 @@ def test_route_captain_edit_status_conflict_returns_409(mocker):
         supabase_backend, "load_suppliers",
         return_value=[Supplier(supplier_id="SUP_X", supplier_name="X", email="x@example.com")],
     )
+    mocker.patch.object(supabase_backend, "load_locations", return_value=[])
     mocker.patch.object(
         supabase_backend, "load_supplier_products",
         return_value=[

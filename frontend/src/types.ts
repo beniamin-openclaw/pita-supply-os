@@ -61,6 +61,27 @@ export interface Location {
 
 // Captain orderable (computed view) ------------------------------------------
 
+// Open order for the same location + product at ANOTHER supplier
+// (krakow-katowice-rollout). Info only — never blocks input or submit.
+export interface OpenOrderRef {
+  order_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  status: string;
+  qty_purchase: number;
+  purchase_unit?: string | null;
+  qty_base: number;
+  inventory_unit?: string | null;
+  order_date: string;
+  requested_delivery_date?: string | null;
+  captain_submitted_at?: string | null;
+}
+
+export interface OtherSupplierRef {
+  supplier_id: string;
+  supplier_name: string;
+}
+
 export interface OrderableItem {
   product_id: string;
   product_name_pl: string;
@@ -96,6 +117,16 @@ export interface OrderableItem {
   // no setting at this location and is only listed because the Manager asked
   // for the full supplier list (`include_unconfigured`). Absent = configured.
   configured_for_location?: boolean;
+  // Backup supplier source for this product at this location
+  // (krakow-katowice-rollout): no suggestion is offered, the card is neutral.
+  // The backend also sets suggestion_alerts_enabled=false. Absent = false.
+  is_backup?: boolean;
+  // Backup items: names of the primary supplier(s); [] / absent otherwise.
+  primary_supplier_names?: string[];
+  // Other suppliers offering this product at this location (primary first).
+  other_suppliers?: OtherSupplierRef[];
+  // Open orders for this location + product at OTHER suppliers (captain only).
+  open_orders_elsewhere?: OpenOrderRef[];
 }
 
 // Captain Submit -------------------------------------------------------------
@@ -502,6 +533,9 @@ export interface ManagerQueueItem {
 // Manager Order Detail -------------------------------------------------------
 
 export interface ManagerOrderLineDetail {
+  // krakow-katowice-rollout: backup source line + open orders at other suppliers.
+  is_backup?: boolean;
+  open_orders_elsewhere?: OpenOrderRef[];
   order_line_id: string;
   product_id: string;
   product_name_pl: string;

@@ -13,7 +13,7 @@ import { api, ApiError } from "../../apiClient";
 import { getToken, saveDraft, loadDraft, clearDraft } from "../../auth";
 import { useT } from "../../i18n";
 import { getNameSuggestions, addNameSuggestion } from "../../lib/nameSuggestions";
-import { isOrderingSupplier } from "../../lib/orderingSuppliers";
+import { loadCaptainSuppliers, pickDefaultSupplier } from "../../lib/orderingSuppliers";
 
 import { Header } from "./components/Header";
 import { CaptainTabs } from "./components/CaptainTabs";
@@ -182,11 +182,15 @@ export function CaptainMP() {
   // ---- Initial fetch: suppliers ---------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    api
-      .suppliers()
+    // Location-scoped tabs (only suppliers with goods here); falls back to the
+    // global list when the endpoint is missing (older backend mid-deploy).
+    // Active, not SUP_INTERNAL — lib/orderingSuppliers.
+    loadCaptainSuppliers(
+      () => api.captainSuppliers(),
+      () => api.suppliers(),
+    )
       .then((data) => {
-        // Active, and not on-site production (SUP_INTERNAL) — lib/orderingSuppliers.
-        if (!cancelled) setSuppliers(data.filter(isOrderingSupplier));
+        if (!cancelled) setSuppliers(data);
       })
       .catch((err: ApiError) => {
         if (cancelled) return;
@@ -257,8 +261,7 @@ export function CaptainMP() {
   // simply falls through to the fallback.
   useEffect(() => {
     if (!activeSupplierId && suppliers.length > 0) {
-      const pilot =
-        suppliers.find((s) => s.supplier_id === PILOT_SUPPLIER_ID) ?? suppliers[0];
+      const pilot = pickDefaultSupplier(suppliers, PILOT_SUPPLIER_ID) ?? suppliers[0];
       // Intentional one-time default once suppliers load; activeSupplierId is
       // also user-settable (picker), so it can't be derived purely in render.
       // eslint-disable-next-line react-hooks/set-state-in-effect

@@ -361,6 +361,7 @@ def test_submit_persists_to_sheet_when_backend_is_sheet(mocker):
     from app import seed_loader
 
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
     mocker.patch.object(
         sheets,
@@ -405,6 +406,7 @@ def test_submit_persists_extra_items_and_captain_note(mocker):
     from app import seed_loader
 
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
     mocker.patch.object(
         sheets,
@@ -453,6 +455,7 @@ def test_submit_defaults_extra_items_and_captain_note_to_empty_string(mocker):
     from app import seed_loader
 
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
     mocker.patch.object(
         sheets,
@@ -591,6 +594,7 @@ def test_submit_uncounted_persists_zero_stock_and_null_delta(mocker):
     from app import seed_loader
 
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
     mocker.patch.object(
         sheets, "load_supplier_products", side_effect=seed_loader.load_supplier_products
@@ -712,6 +716,7 @@ def _patch_sheet_master_data(mocker):
     from app import seed_loader
 
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
     mocker.patch.object(
         sheets, "load_supplier_products", side_effect=seed_loader.load_supplier_products

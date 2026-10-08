@@ -2,7 +2,8 @@
 
 Co trzeba zebrać i zrobić, żeby kapitan nowego lokalu mógł się zalogować, policzyć stan
 i złożyć zamówienie. Na podstawie rolloutów Bracka, Norblin, KEN/Browary
-i Elektrownia/Westfield (`context/archive/*-rollout*`, `context/changes/elektrownia-westfield-rollout/`).
+i Elektrownia/Westfield (`context/archive/*-rollout*`, `context/changes/elektrownia-westfield-rollout/`)
+oraz Kraków Forum / Katowice Supersam (`context/changes/krakow-katowice-rollout/`).
 
 Kod aplikacji się nie zmienia — nowy punkt to dane w bazie i jeden kod dostępu.
 
@@ -52,6 +53,14 @@ do dostawcy, więc muszą być poprawne przed pierwszą wysyłką.
       Trafiają do `supplier_delivery_rules`.
 - [ ] Pago: lokal jest w arkuszu „Ordering PB v5 prod” z właściwymi produktami (np. Gyros 25 KG).
 - [ ] Minimum zamówienia u dostawców spoza Warszawy (jeśli lokal jest poza Warszawą).
+- [ ] Lokal poza Warszawą z własnymi dostawcami (jak FORUM, SUPERSAM): **katalog lokalu**.
+      `locations.own_catalog = true` — lokal widzi tylko wiersze `supplier_products` z
+      `location_id = <lokal>` i żadnego wiersza wspólnego (warszawskiego). Dostawcy miejscy to osobne
+      rekordy `suppliers` na każde miasto. Produkt bez wiersza lokalu jest tam tylko do liczenia.
+- [ ] Produkt u dwóch dostawców w jednym lokalu: jeden wiersz główny (progi, sugestia), drugi
+      `is_backup = true` — widoczny w zakładce zapasowego dostawcy bez sugestii i bez powodów.
+      Każdy zapasowy musi mieć główny w tym samym lokalu (audyt). Kapitan i manager widzą
+      „Już zamówione u X” dla otwartych zamówień z ostatnich 7 dni.
 
 ## 4. Dostęp
 
@@ -66,7 +75,11 @@ do dostawcy, więc muszą być poprawne przed pierwszą wysyłką.
 1. Dane z punktów 1–3 zebrane; braki wypisane operatorowi.
 2. Diff „przed” (tylko odczyt) zapisany w folderze zmiany w `context/changes/<lokal>-rollout/`.
 3. Jeden skrypt SQL w jednej transakcji: lokal (adres, spółka, `active = true`), brakujące produkty,
-   progi z arkusza. Rollback przygotowany przed uruchomieniem.
+   progi z arkusza. Rollback przygotowany przed uruchomieniem. Przy katalogu lokalu wiersze
+   `supplier_products` z `location_id` i nowi aktywni dostawcy idą dopiero po wdrożeniu kodu, który
+   czyta `location_id` (migracja 0029) — starszy kod pokazałby je we wszystkich lokalach.
+   Po dodaniu wierszy lokalu nie uruchamiać `scripts/backfill_supabase.py` ani
+   `scripts/sync_master_data.py` bez przeczytania dry-runu (arkusz nie ma tych kolumn).
 4. Audyt po zmianie: arkusz vs baza 1:1, brak `min > max`, brak progów na nieaktywnych produktach.
 5. Kod kapitana na Railway, potem smoke test kodem lokalu — tylko odczyt (lista produktów Bukat,
    lista do inwentaryzacji). **Nigdy testowego zamówienia do prawdziwego dostawcy.**

@@ -23,6 +23,14 @@ from . import (
 )
 from .auth import require_any_auth, require_captain, require_manager
 from .order_qty import effective_ordered_qty, is_manager_final_set
+from .supplier_catalog import (
+    effective_supplier_products,
+    is_orderable_supplier,
+    location_scope,
+    multi_supplier_products,
+    rows_in_scope,
+    suppliers_by_product,
+)
 from .config import DataBackend, settings
 from .models import (
     CaptainEditRequest,
@@ -75,6 +83,7 @@ from .models import (
     ManagerReleaseResponse,
     ManagerSaveRequest,
     ManagerSaveResponse,
+    OpenOrderRef,
     Order,
     OrderEvent,
     OrderLine,
@@ -215,12 +224,21 @@ def _build_orderable_item(
     products_by_id: dict[str, Product],
     settings_by_pid: dict[str, LocationProductSetting],
     suggestion_alerts_enabled: bool = True,
+    other_suppliers: Optional[list[dict]] = None,
+    primary_supplier_names: Optional[list[str]] = None,
+    open_orders_elsewhere: Optional[list[OpenOrderRef]] = None,
 ) -> dict:
     """Compose one line for the Captain Submit screen.
 
     ``suggestion_alerts_enabled`` is the supplier's flag (see
     ``Supplier.suggestion_alerts_enabled``) — the card keeps the suggestion but
-    drops every alert and reason prompt when it is False."""
+    drops every alert and reason prompt when it is False. A backup row
+    (``sp.is_backup``, krakow-katowice-rollout) turns it off too: the primary
+    supplier's tab carries the suggestion.
+
+    ``other_suppliers`` / ``primary_supplier_names`` / ``open_orders_elsewhere``
+    feed the "also at / already ordered at" hint for a product offered by two
+    or more suppliers at the location; all empty otherwise."""
     product = products_by_id[sp.product_id]
     # No setting = a Manager one-off outside the location's list
     # (manager-add-any-product): thresholds read 0, flagged below.
@@ -244,7 +262,13 @@ def _build_orderable_item(
         "supplier_product_id": sp.supplier_product_id,
         "supplier_product_name": sp.supplier_product_name,
         "order_note": sp.order_note,
-        "suggestion_alerts_enabled": suggestion_alerts_enabled,
+        "suggestion_alerts_enabled": suggestion_alerts_enabled and not sp.is_backup,
+        "is_backup": sp.is_backup,
+        "other_suppliers": other_suppliers or [],
+        "primary_supplier_names": primary_supplier_names or [],
+        "open_orders_elsewhere": [
+            ref.model_dump(mode="json") for ref in (open_orders_elsewhere or [])
+        ],
         "display_order": sp.display_order,
         # Bulk pack (migration 0028) — None on both when the product has none.
         "case_unit": sp.case_unit,
@@ -258,6 +282,7 @@ def _build_orderable_items(
     supplier_id: str,
     suggestion_alerts_enabled: bool = True,
     include_unconfigured: bool = False,
+    with_open_orders: bool = False,
 ) -> list[dict]:
     """Orderable line dicts for one location + supplier (shared by the Captain
     and Manager orderable routes).
@@ -290,31 +315,166 @@ def _build_orderable_items(
       not, so a discontinued product stayed orderable.
 
     A product hidden here is never lost: it keeps its ``order_lines`` history
-    (there is an FK), and it reappears the moment the row is re-activated."""
+    (there is an FK), and it reappears the moment the row is re-activated.
+
+    Per-location catalog (krakow-katowice-rollout): the rows come from the
+    location's catalog (``supplier_catalog.effective_supplier_products`` — the
+    shared rows, or only the location's own rows when it has ``own_catalog``),
+    scoped over every supplier BEFORE the supplier filter. Each item also
+    lists the product's other suppliers at the location; ``with_open_orders``
+    (the Captain screen) adds their open orders for multi-supplier products."""
     products_by_id = {p.product_id: p for p in backend.load_products()}
     settings_by_pid = {
         s.product_id: s
         for s in backend.load_location_product_settings()
         if s.location_id == location_id
     }
+    effective = effective_supplier_products(
+        backend.load_supplier_products(), location_id, backend.load_locations()
+    )
     sps = [
         sp
-        for sp in backend.load_supplier_products()
+        for sp in effective
         if sp.supplier_id == supplier_id
-        and sp.active
         and (include_unconfigured or sp.product_id in settings_by_pid)
         and getattr(products_by_id.get(sp.product_id), "active", False)
     ]
+    suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+    rows_by_pid = suppliers_by_product(
+        effective, suppliers_by_id, products_by_id, set(settings_by_pid)
+    )
+    open_by_pid: dict[str, list[OpenOrderRef]] = {}
+    if with_open_orders:
+        multi = multi_supplier_products(rows_by_pid)
+        open_by_pid = _open_orders_elsewhere(
+            backend,
+            location_id,
+            [sp.product_id for sp in sps if sp.product_id in multi],
+            exclude_supplier_id=supplier_id,
+        )
     # Canonical supplier order (supplier-product-order-minimum): position, then
     # supplier_product_id. The Captain order/edit screens, the Manager add-line
     # picker and the Transport prefill line ids all follow this list.
     sps.sort(key=lambda sp: supplier_product_sort_key(sp.display_order, sp.supplier_product_id))
-    return [
-        _build_orderable_item(
-            sp, products_by_id, settings_by_pid, suggestion_alerts_enabled
+
+    def _name(sid: str) -> str:
+        supplier = suppliers_by_id.get(sid)
+        return supplier.supplier_name if supplier else sid
+
+    items: list[dict] = []
+    for sp in sps:
+        rows = rows_by_pid.get(sp.product_id, [])
+        others = [r for r in rows if r.supplier_id != supplier_id]
+        items.append(
+            _build_orderable_item(
+                sp,
+                products_by_id,
+                settings_by_pid,
+                suggestion_alerts_enabled,
+                other_suppliers=[
+                    {"supplier_id": r.supplier_id, "supplier_name": _name(r.supplier_id)}
+                    for r in others
+                ],
+                primary_supplier_names=(
+                    [_name(r.supplier_id) for r in others if not r.is_backup]
+                    if sp.is_backup
+                    else []
+                ),
+                open_orders_elsewhere=open_by_pid.get(sp.product_id, []),
+            )
         )
-        for sp in sps
-    ]
+    return items
+
+
+# Open = still on its way to the location (krakow-katowice-rollout hint).
+_OPEN_ORDER_STATUSES = (
+    OrderStatus.CAPTAIN_SUBMITTED,
+    OrderStatus.MANAGER_CLAIMED,
+    OrderStatus.MANAGER_SENT,
+)
+_OPEN_ORDER_WINDOW_DAYS = 7
+
+
+def _open_orders_elsewhere(
+    backend,
+    location_id: str,
+    product_ids: list[str],
+    *,
+    exclude_supplier_id: Optional[str] = None,
+    exclude_order_id: Optional[str] = None,
+) -> dict[str, list[OpenOrderRef]]:
+    """Open orders of ``product_ids`` at ``location_id`` — status submitted,
+    claimed or sent; submitted (``captain_submitted_at``, else ``order_date``)
+    on or after today − 7 days (Europe/Warsaw dates, so the same weekday
+    last week still counts); effective ordered quantity > 0 —
+    keyed by product_id, newest first. Orders of ``exclude_supplier_id`` and
+    the order ``exclude_order_id`` itself are skipped.
+
+    Information only, NEVER raising: a non-persistent backend (seed), an empty
+    product list or any read error returns {} (logged), like
+    ``_load_delivery_rules_safe``."""
+    if not product_ids or not _is_persistent(backend):
+        return {}
+    wanted = set(product_ids)
+    try:
+        today = datetime.now(_WARSAW_TZ).date()
+        since = today - timedelta(days=_OPEN_ORDER_WINDOW_DAYS)
+        orders: list[Order] = []
+        for order in backend.load_orders():
+            if order.location_id != location_id or order.status not in _OPEN_ORDER_STATUSES:
+                continue
+            if order.order_id == exclude_order_id or order.supplier_id == exclude_supplier_id:
+                continue
+            submitted = (
+                order.captain_submitted_at.astimezone(_WARSAW_TZ).date()
+                if order.captain_submitted_at is not None
+                else order.order_date
+            )
+            if submitted < since:
+                continue
+            orders.append(order)
+        if not orders:
+            return {}
+        orders_by_id = {o.order_id: o for o in orders}
+        sps_by_id = {sp.supplier_product_id: sp for sp in backend.load_supplier_products()}
+        products_by_id = {p.product_id: p for p in backend.load_products()}
+        suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
+        out: dict[str, list[OpenOrderRef]] = {}
+        for line in backend.load_order_lines_for_orders(list(orders_by_id)):
+            if line.product_id not in wanted:
+                continue
+            qty = effective_ordered_qty(line)
+            if qty <= 0:
+                continue
+            order = orders_by_id[line.order_id]
+            sp = sps_by_id.get(line.supplier_product_id)
+            product = products_by_id.get(line.product_id)
+            supplier = suppliers_by_id.get(order.supplier_id)
+            out.setdefault(line.product_id, []).append(
+                OpenOrderRef(
+                    order_id=order.order_id,
+                    supplier_id=order.supplier_id,
+                    supplier_name=supplier.supplier_name if supplier else order.supplier_id,
+                    status=order.status,
+                    qty_purchase=qty,
+                    purchase_unit=sp.purchase_unit if sp else None,
+                    qty_base=qty * (sp.units_per_purchase_unit if sp else 1.0),
+                    inventory_unit=product.inventory_unit if product else None,
+                    order_date=order.order_date,
+                    requested_delivery_date=order.requested_delivery_date,
+                    captain_submitted_at=order.captain_submitted_at,
+                )
+            )
+        for refs in out.values():
+            refs.sort(key=lambda r: (r.order_date, r.order_id), reverse=True)
+        return out
+    except Exception:  # noqa: BLE001 — a hint must never fail the screen
+        log.warning(
+            "open-orders hint failed for %s — continuing without it",
+            location_id,
+            exc_info=True,
+        )
+        return {}
 
 
 def _supplier_alerts_enabled(suppliers: list[Supplier], supplier_id: str) -> bool:
@@ -348,7 +508,37 @@ def captain_orderable(
         location_id,
         supplier_id,
         _supplier_alerts_enabled(backend.load_suppliers(), supplier_id),
+        with_open_orders=True,
     )
+
+
+@app.get("/api/captain/suppliers", response_model=list[Supplier])
+def captain_suppliers(location_id: str = Depends(require_captain)):
+    """The suppliers this Captain can order from: active, not on-site
+    production, with at least one orderable product at the token's location
+    (krakow-katowice-rollout — Kraków and Katowice see only their city
+    suppliers, and empty tabs disappear everywhere). Same shape and order as
+    ``GET /api/suppliers``, which the Manager and Transport keep using."""
+    backend = _choose_backend()
+    products_by_id = {p.product_id: p for p in backend.load_products()}
+    settings_pids = {
+        s.product_id
+        for s in backend.load_location_product_settings()
+        if s.location_id == location_id
+    }
+    suppliers = backend.load_suppliers()
+    suppliers_by_id = {s.supplier_id: s for s in suppliers}
+    effective = effective_supplier_products(
+        backend.load_supplier_products(), location_id, backend.load_locations()
+    )
+    with_items = {
+        sp.supplier_id
+        for rows in suppliers_by_product(
+            effective, suppliers_by_id, products_by_id, settings_pids
+        ).values()
+        for sp in rows
+    }
+    return [s for s in suppliers if s.supplier_id in with_items and is_orderable_supplier(s)]
 
 
 def _load_delivery_rules_safe(backend) -> list[SupplierDeliveryRule]:
@@ -553,9 +743,13 @@ def _resolve_master_data(backend, location_id: str, supplier_id: str) -> _Master
     )
     if supplier is None:
         raise HTTPException(status_code=400, detail="Unknown supplier_id")
+    # The location's catalog only (krakow-katowice-rollout): a Warsaw order
+    # cannot reference a Kraków row and vice versa. Inactive rows stay, as
+    # before, so a Captain edit of an order whose row was retired still works.
+    scope = location_scope(location_id, backend.load_locations())
     sps_by_id = {
         sp.supplier_product_id: sp
-        for sp in backend.load_supplier_products()
+        for sp in rows_in_scope(backend.load_supplier_products(), scope)
         if sp.supplier_id == supplier_id
     }
     settings_by_pid = {
@@ -884,7 +1078,7 @@ def captain_submit(
             product,
             order_line_id=f"OL-{order_id}-{idx:03d}",
             order_id=order_id,
-            alerts_enabled=master.supplier.suggestion_alerts_enabled,
+            alerts_enabled=master.supplier.suggestion_alerts_enabled and not sp.is_backup,
         )
         if warning is not None:
             warnings.append(warning)
@@ -1163,10 +1357,13 @@ def manager_queue(
         # no deviation chip for it — the Captain was never asked for a reason,
         # so the chip would only be noise (pago-queue-deviation-chips).
         alerts_enabled = supplier.suggestion_alerts_enabled if supplier else True
+        # A backup line (krakow-katowice-rollout) had no suggestion on the
+        # Captain card either, so it never counts as a deviation.
         deviation_count = (
             sum(
                 1 for line in lines
                 if abs(line.delta_vs_suggestion_pct or 0.0) >= threshold
+                and not getattr(sps_by_id.get(line.supplier_product_id), "is_backup", False)
             )
             if alerts_enabled
             else 0
@@ -1377,8 +1574,31 @@ def manager_order_detail(
                 display_order=sp.display_order if sp else None,
                 case_unit=sp.case_unit if sp else None,
                 units_per_case=sp.units_per_case if sp else None,
+                is_backup=sp.is_backup if sp else False,
             )
         )
+
+    # "Already ordered at X" (krakow-katowice-rollout): for a still-open order,
+    # each line whose product another supplier also offers at this location
+    # lists that supplier's open orders. Information only; {} on any error.
+    if order.status in _OPEN_ORDER_STATUSES:
+        effective = effective_supplier_products(
+            list(sps_by_id.values()), order.location_id, locations_by_id.values()
+        )
+        multi = multi_supplier_products(
+            suppliers_by_product(
+                effective, suppliers_by_id, products_by_id, set(settings_by_pid)
+            )
+        )
+        open_by_pid = _open_orders_elsewhere(
+            backend,
+            order.location_id,
+            [ln.product_id for ln in enriched_lines if ln.product_id in multi],
+            exclude_supplier_id=order.supplier_id,
+            exclude_order_id=order.order_id,
+        )
+        for ln in enriched_lines:
+            ln.open_orders_elsewhere = open_by_pid.get(ln.product_id, [])
 
     # Receipts can only exist once an order reached manager_sent (the Captain
     # confirm gate requires it), so only those statuses pay the receipt scan;
@@ -1510,6 +1730,7 @@ def _enrich_lines_for_detail(
                 display_order=sp.display_order if sp else None,
                 case_unit=sp.case_unit if sp else None,
                 units_per_case=sp.units_per_case if sp else None,
+                is_backup=sp.is_backup if sp else False,
             )
         )
     return enriched
@@ -1774,7 +1995,7 @@ def captain_order_edit(
             product,
             order_line_id=f"OL-{order_id}-{idx:03d}",
             order_id=order_id,
-            alerts_enabled=master.supplier.suggestion_alerts_enabled,
+            alerts_enabled=master.supplier.suggestion_alerts_enabled and not sp.is_backup,
         )
         if warning is not None:
             warnings.append(warning)
@@ -2970,6 +3191,10 @@ def _primary_supplier_product(
     exists, so a sauce that is both made in-house and bought from Bukat shows
     Bukat. ``None`` when nothing qualifies — callers leave the supplier fields
     unset rather than guessing.
+
+    ``sps`` is the location's catalog (``supplier_catalog.
+    effective_supplier_products``, krakow-katowice-rollout), so Kraków shows its
+    city supplier; a backup row loses to any primary row.
     """
     candidates = [
         sp
@@ -2982,6 +3207,7 @@ def _primary_supplier_product(
         return None
     external = [sp for sp in candidates if sp.supplier_id != _INTERNAL_SUPPLIER_ID]
     pool = external or candidates
+    pool = [sp for sp in pool if not sp.is_backup] or pool
     return min(pool, key=lambda sp: sp.supplier_product_id)
 
 
@@ -3034,7 +3260,9 @@ def captain_inventory_products(
     """
     backend = _choose_backend()
     products_by_id = {p.product_id: p for p in backend.load_products()}
-    sps = backend.load_supplier_products()
+    sps = effective_supplier_products(
+        backend.load_supplier_products(), location_id, backend.load_locations()
+    )
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     items: list[InventoryProduct] = []
     for setting in backend.load_location_product_settings():
@@ -3754,7 +3982,9 @@ def manager_inventory_count_detail(
         for s in backend.load_location_product_settings()
         if s.location_id == count.location_id
     }
-    sps = backend.load_supplier_products()
+    sps = effective_supplier_products(
+        backend.load_supplier_products(), count.location_id, locations_by_id.values()
+    )
     suppliers_by_id = {s.supplier_id: s for s in backend.load_suppliers()}
     primary_sp_by_pid: dict[str, SupplierProduct] = {}
     for line in count.lines:

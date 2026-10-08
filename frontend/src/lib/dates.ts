@@ -64,3 +64,10 @@ export const DELIVERY_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   day: "2-digit",
   month: "2-digit",
 };
+
+/** "YYYY-MM-DD" (or an ISO timestamp) → "dd.MM"; the input unchanged when it
+ *  does not start with a date. Pure string slicing — no timezone involved. */
+export function formatDayMonth(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}.${m[2]}` : iso;
+}

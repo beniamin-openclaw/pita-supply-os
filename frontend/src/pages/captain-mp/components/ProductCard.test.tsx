@@ -295,3 +295,76 @@ describe("ProductCard — non-case suggestion detail number formatting", () => {
     expect(document.body.textContent).not.toMatch(/2\.9500/);
   });
 });
+
+describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)", () => {
+  const ref = {
+    order_id: "O1",
+    supplier_id: "SUP_X",
+    supplier_name: "Hurtownia X",
+    status: "captain_submitted",
+    qty_purchase: 3,
+    purchase_unit: "zgrzewka",
+    qty_base: 72,
+    inventory_unit: "szt",
+    order_date: "2026-10-07",
+    requested_delivery_date: "2026-10-09",
+    captain_submitted_at: null,
+  };
+
+  it("backup: no suggestion offered, note with primary names, badge", () => {
+    const { onChangeSpy } = renderCard(
+      makeItem({
+        is_backup: true,
+        suggestion_alerts_enabled: false,
+        primary_supplier_names: ["Bukat", "Pago"],
+      }),
+      makeLine({ current_stock_qty_base: 0 }),
+    );
+    expect(screen.getByText("zapasowy")).toBeInTheDocument();
+    expect(screen.getByText("Sugestia u: Bukat, Pago")).toBeInTheDocument();
+    const tile = screen.getByRole("button", { name: /sugestia/i });
+    expect(tile).toBeDisabled();
+    expect(tile.textContent).toContain("—");
+    fireEvent.click(tile);
+    expect(onChangeSpy).not.toHaveBeenCalled();
+  });
+
+  it("open order elsewhere with a delivery date", () => {
+    renderCard(makeItem({ open_orders_elsewhere: [ref] }), makeLine());
+    expect(
+      screen.getByText("Już zamówione u Hurtownia X: 3 zgrzewki · U menedżera · dostawa 09.10"),
+    ).toBeInTheDocument();
+  });
+
+  it("open order elsewhere without a delivery date", () => {
+    renderCard(
+      makeItem({ open_orders_elsewhere: [{ ...ref, requested_delivery_date: null }] }),
+      makeLine(),
+    );
+    expect(
+      screen.getByText(
+        "Już zamówione u Hurtownia X: 3 zgrzewki · U menedżera · zamówienie z 07.10",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("'Też u' for a multi-supplier non-backup item", () => {
+    renderCard(
+      makeItem({
+        other_suppliers: [
+          { supplier_id: "S1", supplier_name: "Alfa" },
+          { supplier_id: "S2", supplier_name: "Beta" },
+        ],
+      }),
+      makeLine(),
+    );
+    expect(screen.getByText("Też u: Alfa, Beta")).toBeInTheDocument();
+  });
+
+  it("plain item shows none of it", () => {
+    renderCard(makeItem(), makeLine());
+    expect(screen.queryByText("zapasowy")).toBeNull();
+    expect(screen.queryByText(/Też u/)).toBeNull();
+    expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
+  });
+});
