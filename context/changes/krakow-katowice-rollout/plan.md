@@ -362,7 +362,7 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Automated
 
-- [ ] 3.1 SQL files parse in a BEGIN/ROLLBACK dry run on a disposable DB
+- [x] 3.1 SQL files parse in a BEGIN/ROLLBACK dry run on a disposable DB
 
 #### Manual
 
