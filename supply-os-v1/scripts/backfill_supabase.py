@@ -18,6 +18,12 @@ Usage (run from supply-os-v1/):
 
 Run the final apply inside a brief Sheet read-only window so no write lands in
 Sheets after the snapshot. Verify with scripts/verify_parity.py afterwards.
+
+Since migration 0029 (krakow-katowice-rollout) Postgres is the only home of
+``supplier_products.location_id`` / ``is_backup`` and ``locations.own_catalog``:
+the Sheet has no such columns, so any Sheet-only row this script inserts lands
+as a SHARED, non-backup row visible at every Warsaw location. Read the dry run
+before ``--apply``.
 """
 import sys
 

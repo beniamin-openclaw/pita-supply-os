@@ -24,6 +24,7 @@ import { packUnitLabel } from "../../../i18n/packUnits";
 import { PackStockInput } from "./PackStockInput";
 import { GramsHint } from "./GramsHint";
 import { PackQty, UnitLabel } from "./UnitLabel";
+import { OpenOrdersElsewhere } from "../../../components/OpenOrdersElsewhere";
 
 interface ProductCardProps {
   item: OrderableItem;
@@ -96,6 +97,8 @@ export function ProductCard({
   onReasonEdit,
 }: ProductCardProps) {
   const { t, tParts, lang } = useT();
+  const isBackup = item.is_backup === true;
+  const otherSuppliers = item.other_suppliers ?? [];
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
   const colors = STATE_STYLES[state];
@@ -105,6 +108,7 @@ export function ProductCard({
   // Hidden for a supplier with suggestion alerts off (pago-suggestion-no-alerts).
   const belowMin =
     item.suggestion_alerts_enabled !== false &&
+    !isBackup &&
     line.current_stock_qty_base !== "" &&
     item.min_stock_qty_base > 0 &&
     currentVal < item.min_stock_qty_base;
@@ -176,6 +180,11 @@ export function ProductCard({
           <h3 className="font-semibold text-slate-900 leading-tight">
             {item.product_name_pl}
           </h3>
+          {isBackup && (
+            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+              {t("card.backupBadge")}
+            </span>
+          )}
           {item.is_critical && (
             <span className="flex items-center gap-1 bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0">
               <AlertOctagon size={10} aria-hidden="true" />
@@ -232,6 +241,29 @@ export function ProductCard({
             })
           )}
         </div>
+
+        {/* Cross-supplier info (krakow-katowice-rollout) — info only */}
+        {(isBackup ||
+          (item.open_orders_elsewhere?.length ?? 0) > 0 ||
+          (!isBackup && otherSuppliers.length > 0)) && (
+          <div className="-mt-2 mb-3 space-y-1">
+            {isBackup && (item.primary_supplier_names?.length ?? 0) > 0 && (
+              <div className="text-xs text-slate-600">
+                {t("card.suggestionAtPrimary", {
+                  names: (item.primary_supplier_names ?? []).join(", "),
+                })}
+              </div>
+            )}
+            <OpenOrdersElsewhere orders={item.open_orders_elsewhere} scope="card" />
+            {!isBackup && otherSuppliers.length > 0 && (
+              <div className="text-xs text-slate-500">
+                {t("card.alsoFromSuppliers", {
+                  names: otherSuppliers.map((o) => o.supplier_name).join(", "),
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Master-data annotation + below-minimum signal (both optional) */}
         {(item.order_note || belowMin) && (
@@ -340,7 +372,7 @@ export function ProductCard({
           <button
             type="button"
             onClick={() => {
-              if (line.current_stock_qty_base === "") return;
+              if (isBackup || line.current_stock_qty_base === "") return;
               onChange({ ...line, captain_final_qty_purchase: suggestedPurchase });
               // Optional haptic feedback on supported mobile browsers
               if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -351,9 +383,9 @@ export function ProductCard({
                 }
               }
             }}
-            disabled={line.current_stock_qty_base === ""}
+            disabled={isBackup || line.current_stock_qty_base === ""}
             aria-label={
-              line.current_stock_qty_base === ""
+              isBackup || line.current_stock_qty_base === ""
                 ? t("card.suggestionMissing")
                 : t("card.acceptSuggestion", { count: suggestedPurchase, unit: item.purchase_unit })
             }
@@ -367,9 +399,9 @@ export function ProductCard({
               aria-live="polite"
               className="font-bold text-slate-900 tabular-nums text-lg"
             >
-              {line.current_stock_qty_base === "" ? "—" : suggestedPurchase}
+              {isBackup || line.current_stock_qty_base === "" ? "—" : suggestedPurchase}
             </div>
-            {line.current_stock_qty_base !== "" && (
+            {!isBackup && line.current_stock_qty_base !== "" && (
               <div className="text-xs text-slate-700 mt-0.5 text-center leading-tight">
                 {itemCase ? (
                   <>

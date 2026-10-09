@@ -143,6 +143,20 @@ export const STRINGS = {
     pl: "brakuje {base} {inventoryUnit} → {purchase} {purchaseUnit}",
     en: "need {base} {inventoryUnit} → {purchase} {purchaseUnit}",
   },
+  "card.backupBadge": { pl: "zapasowy", en: "backup" },
+  "card.suggestionAtPrimary": {
+    pl: "Sugestia u: {names}",
+    en: "Suggestion at: {names}",
+  },
+  "card.alsoFromSuppliers": { pl: "Też u: {names}", en: "Also at: {names}" },
+  "card.openOrderElsewhere": {
+    pl: "Już zamówione u {supplier}: {qty} {unit} · {status} · dostawa {date}",
+    en: "Already ordered at {supplier}: {qty} {unit} · {status} · delivery {date}",
+  },
+  "card.openOrderElsewhereNoDate": {
+    pl: "Już zamówione u {supplier}: {qty} {unit} · {status} · zamówienie z {date}",
+    en: "Already ordered at {supplier}: {qty} {unit} · {status} · order from {date}",
+  },
   "card.order": { pl: "Zamawiasz", en: "Ordering" },
   "card.belowMin": {
     pl: "Poniżej minimum: {min} {unit}",
@@ -579,6 +593,14 @@ export const STRINGS = {
   "manager.detailLoading": { pl: "Ładowanie zamówienia…", en: "Loading order…" },
   "manager.groupCount": { pl: "{n}", en: "{n}" },
   // Detail header band labels
+  "manager.detail.openElsewhere": {
+    pl: "Już zamówione u {supplier}: {qty} {unit} · {status} · dostawa {date}",
+    en: "Already ordered at {supplier}: {qty} {unit} · {status} · delivery {date}",
+  },
+  "manager.detail.openElsewhereNoDate": {
+    pl: "Już zamówione u {supplier}: {qty} {unit} · {status} · zamówienie z {date}",
+    en: "Already ordered at {supplier}: {qty} {unit} · {status} · order from {date}",
+  },
   "manager.detail.cutoff": { pl: "Cutoff: {value}", en: "Cutoff: {value}" },
   "manager.detail.cutoffPast": { pl: "po cutoff: {value}", en: "past cutoff: {value}" },
   "manager.detail.submitted": { pl: "Wysłane przez kapitana: {value}", en: "Captain submitted: {value}" },
@@ -846,6 +868,10 @@ export const STRINGS = {
   "orders.detail.stockSuggestion": {
     pl: "stan: {stock} {inventoryUnit} · sugestia: {suggested} {purchaseUnit}",
     en: "stock: {stock} {inventoryUnit} · suggestion: {suggested} {purchaseUnit}",
+  },
+  "orders.detail.stockOnly": {
+    pl: "stan: {stock} {inventoryUnit}",
+    en: "stock: {stock} {inventoryUnit}",
   },
   "orders.detail.orderedSecondary": {
     pl: "Zamówiono: {value} {unit}",

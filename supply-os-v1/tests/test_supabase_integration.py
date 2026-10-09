@@ -215,6 +215,12 @@ def _schema():
     supplier_product_case = (
         MIGRATIONS_DIR / "0028_supplier_product_case.sql"
     ).read_text()
+    # 0029 adds locations.own_catalog + supplier_products.location_id /
+    # is_backup (krakow-katowice-rollout); _LOCATION_COLUMNS and
+    # _SUPPLIER_PRODUCT_COLUMNS reference them.
+    location_supplier_catalog = (
+        MIGRATIONS_DIR / "0029_location_supplier_catalog.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -244,6 +250,7 @@ def _schema():
         conn.exec_driver_sql(sender_and_phone)
         conn.exec_driver_sql(inventory_order)
         conn.exec_driver_sql(supplier_product_case)
+        conn.exec_driver_sql(location_supplier_catalog)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -484,6 +491,62 @@ def test_supplier_product_case_roundtrip_and_checks():
             conn.exec_driver_sql(
                 "DELETE FROM supplier_products WHERE supplier_product_id = 'SP_CASE'"
             )
+
+
+def test_location_catalog_roundtrip_and_backup_check():
+    """Migration 0029: a location's own_catalog flag and a scoped backup row
+    survive a write + load; a shared row (location_id NULL) cannot be a backup
+    and a scoped row must name a known location."""
+    supabase_backend._insert(
+        "locations", supabase_backend._LOCATION_COLUMNS,
+        Location(location_id="CITY", location_name="City", own_catalog=True),
+    )
+    supabase_backend._insert(
+        "supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS,
+        SupplierProduct(
+            supplier_product_id="SP_CITY_BACKUP", supplier_id="SUP_X", product_id="P1",
+            supplier_product_name="Frytki", purchase_unit="szt",
+            location_id="CITY", is_backup=True,
+        ),
+    )
+    try:
+        loc = next(
+            loc for loc in supabase_backend.load_locations() if loc.location_id == "CITY"
+        )
+        assert loc.own_catalog is True
+        loaded = next(
+            sp for sp in supabase_backend.load_supplier_products()
+            if sp.supplier_product_id == "SP_CITY_BACKUP"
+        )
+        assert loaded.location_id == "CITY"
+        assert loaded.is_backup is True
+        with pytest.raises(IntegrityError):
+            with supabase_backend._get_engine().begin() as conn:
+                conn.exec_driver_sql(
+                    "UPDATE supplier_products SET location_id = NULL "
+                    "WHERE supplier_product_id = 'SP_CITY_BACKUP'"
+                )
+        with pytest.raises(IntegrityError):
+            with supabase_backend._get_engine().begin() as conn:
+                conn.exec_driver_sql(
+                    "UPDATE supplier_products SET location_id = 'NOWHERE' "
+                    "WHERE supplier_product_id = 'SP_CITY_BACKUP'"
+                )
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM supplier_products WHERE supplier_product_id = 'SP_CITY_BACKUP'"
+            )
+            conn.exec_driver_sql("DELETE FROM locations WHERE location_id = 'CITY'")
+
+
+def test_migration_0029_is_rerunnable():
+    """0029 is applied a second time without error (ADD COLUMN IF NOT EXISTS,
+    DROP CONSTRAINT IF EXISTS before ADD, CREATE INDEX IF NOT EXISTS)."""
+    sql = (MIGRATIONS_DIR / "0029_location_supplier_catalog.sql").read_text()
+    assert "%" not in sql  # exec_driver_sql would treat it as a placeholder
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(sql)
 
 
 def test_migration_0028_is_rerunnable():

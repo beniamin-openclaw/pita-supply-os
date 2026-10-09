@@ -106,6 +106,7 @@ _LOCATION_COLUMNS = [
     "location_id", "location_name", "delivery_address", "city", "active", "notes",
     "company_name", "company_address", "company_nip", "email",
     "sender_email", "phone",
+    "own_catalog",  # migration 0029 (krakow-katowice-rollout)
 ]
 _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",
@@ -113,6 +114,7 @@ _SUPPLIER_PRODUCT_COLUMNS = [
     "price_estimate_pln", "active", "notes", "order_note", "unit_weight_kg",
     "supplier_sku", "warehouse_pickup", "display_order", "counts_toward_minimum",
     "case_unit", "units_per_case",  # migration 0028 (feedback-1001 bulk packs)
+    "location_id", "is_backup",  # migration 0029 (krakow-katowice-rollout)
 ]
 _LOCATION_PRODUCT_SETTING_COLUMNS = [
     "setting_id", "location_id", "product_id", "min_stock_qty_base",

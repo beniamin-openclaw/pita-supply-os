@@ -375,3 +375,26 @@ describe("computeRowState — supplier with suggestion alerts off (Pago)", () =>
     expect(r.requiresReason).toBe(true);
   });
 });
+
+describe("computeRowState — backup item (krakow-katowice-rollout)", () => {
+  const backup = (o: Partial<OrderableItem> = {}) =>
+    makeItem({ is_backup: true, suggestion_alerts_enabled: false, ...o });
+
+  it("is neutral even when the order equals the suggestion", () => {
+    const r = computeRowState(
+      backup(),
+      makeLine({ current_stock_qty_base: 0, captain_final_qty_purchase: 5 }),
+    );
+    expect(r.state).toBe("grey");
+    expect(r.requiresReason).toBe(false);
+  });
+
+  it("is neutral without the alerts flag too, and for a huge over-MAX order", () => {
+    const r = computeRowState(
+      makeItem({ is_backup: true, is_critical: true }),
+      makeLine({ current_stock_qty_base: "", captain_final_qty_purchase: 999 }),
+    );
+    expect(r.state).toBe("grey");
+    expect(r.requiresReason).toBe(false);
+  });
+});

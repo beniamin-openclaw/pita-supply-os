@@ -133,6 +133,7 @@ def _enable_sheet_submit(mocker):
     append_order = mocker.patch.object(sheets, "append_order")
     mocker.patch.object(sheets, "append_order_lines")
     mocker.patch.object(sheets, "load_products", side_effect=seed_loader.load_products)
+    mocker.patch.object(sheets, "load_locations", side_effect=seed_loader.load_locations)
     mocker.patch.object(sheets, "load_suppliers", side_effect=seed_loader.load_suppliers)
     mocker.patch.object(
         sheets, "load_supplier_products", side_effect=seed_loader.load_supplier_products

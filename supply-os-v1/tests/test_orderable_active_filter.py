@@ -32,6 +32,12 @@ class _Backend:
     def load_location_product_settings(self):
         return self._settings
 
+    def load_suppliers(self):
+        return []
+
+    def load_locations(self):
+        return []
+
 
 def _product(pid: str, *, active: bool = True) -> Product:
     return Product(

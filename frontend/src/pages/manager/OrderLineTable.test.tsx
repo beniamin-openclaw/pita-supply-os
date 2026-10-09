@@ -183,3 +183,49 @@ describe("OrderLineTable — bulk-pack hint (feedback-1001 D36)", () => {
     expect(screen.queryByTestId("case-hint-OL-1")).not.toBeInTheDocument();
   });
 });
+
+describe("OrderLineTable — backup + open orders elsewhere", () => {
+  it("shows the badge, the amber line and no deviation for a backup line", () => {
+    renderTable([
+      makeLine({
+        is_backup: true,
+        delta_vs_suggestion_pct: 0.5,
+        open_orders_elsewhere: [
+          {
+            order_id: "O9",
+            supplier_id: "SUP_X",
+            supplier_name: "Hurtownia X",
+            status: "manager_sent",
+            qty_purchase: 2,
+            purchase_unit: "zgrzewka",
+            qty_base: 48,
+            inventory_unit: "szt",
+            order_date: "2026-10-07",
+            requested_delivery_date: "2026-10-09",
+            captain_submitted_at: null,
+          },
+        ],
+      }),
+    ]);
+    expect(screen.getByText("zapasowy")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Już zamówione u Hurtownia X: 2 zgrzewki · Zamówione u dostawcy · dostawa 09.10",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("+1%")).toBeNull();
+    expect(screen.queryByText("+50%")).toBeNull();
+  });
+
+  it("shows no stored suggestion on a backup line (it belongs to the primary)", () => {
+    renderTable([
+      makeLine({ is_backup: true, suggested_qty_purchase: 36, captain_final_qty_purchase: 2 }),
+    ]);
+    expect(screen.queryByText("36")).toBeNull();
+  });
+
+  it("still shows the suggestion on a primary line", () => {
+    renderTable([makeLine({ suggested_qty_purchase: 36, captain_final_qty_purchase: 2 })]);
+    expect(screen.getByText("36")).toBeInTheDocument();
+  });
+});

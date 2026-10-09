@@ -8,6 +8,10 @@ inventory tabs are out of scope (this only touches master data).
 Usage (run from supply-os-v1/):
     SUPPLY_OS_DATA_BACKEND=sheet python scripts/sync_master_data.py           # dry-run
     SUPPLY_OS_DATA_BACKEND=sheet python scripts/sync_master_data.py --apply   # write
+
+Legacy (Sheets backend). The Sheet has no ``supplier_products.location_id`` /
+``is_backup`` columns (migration 0029), so per-location catalog rows live only
+in Postgres and are never represented here.
 """
 import sys
 

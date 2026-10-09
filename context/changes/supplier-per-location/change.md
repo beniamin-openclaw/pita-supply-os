@@ -3,11 +3,17 @@ change_id: supplier-per-location
 title: Supplier dimension at the location level — one product, many suppliers, per-location choice
 status: blocked
 created: 2026-08-20
-updated: 2026-10-01
+updated: 2026-10-08
 archived_at: null
 ---
 
 ## Notes
+
+**2026-10-08 — related: `krakow-katowice-rollout` (R-37).** Migration 0029 added
+`supplier_products.location_id` + `is_backup` and `locations.own_catalog`, but only as a
+whole-catalog switch for a location (Kraków/Katowice use only their own rows). A per-product
+choice inside the shared Warsaw catalog (this lane's Wolska/Blue Service case) is still not
+possible; a future pin could build on `location_id`. Status unchanged.
 
 **Track B**, split out of Tushar's request (2026-08-20) — see
 [[wolska-blueservice-master-data]] for track A (purely additive data, no model change).

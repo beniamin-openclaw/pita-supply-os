@@ -25,6 +25,7 @@ import {
   lineVisualState,
   lineVisualStateWithQty,
 } from "./lib/managerLine";
+import { OpenOrdersElsewhere } from "../../components/OpenOrdersElsewhere";
 import { DecimalInput } from "../../components/ui/DecimalInput";
 import { baseToPacks, caseOf, formatPacks, isPackBased } from "../../lib/packUnits";
 import { formatPackStock, splitPackStock } from "../../lib/packStock";
@@ -150,7 +151,17 @@ export function OrderLineTable({
                       />
                     )}
                     <span>{line.product_name_pl}</span>
+                    {line.is_backup === true && (
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                        {t("card.backupBadge")}
+                      </span>
+                    )}
                   </div>
+                  {(line.open_orders_elsewhere?.length ?? 0) > 0 && (
+                    <div className="mt-1 max-w-[320px] font-normal">
+                      <OpenOrdersElsewhere orders={line.open_orders_elsewhere} scope="manager" />
+                    </div>
+                  )}
                 </td>
 
                 {/* Jedn. — purchase unit; inventory + ratio in tooltip */}
@@ -183,13 +194,22 @@ export function OrderLineTable({
                   )}
                 </td>
 
-                {/* Sugestia (algorithm) */}
+                {/* Sugestia (algorithm). A backup line stores one (submit math is
+                    shared) but it belongs to the primary supplier — show none. */}
                 <td
                   className="px-3 py-2 whitespace-nowrap tabular-nums text-slate-700"
-                  title={`${line.suggested_qty_base} ${line.inventory_unit}`}
+                  title={
+                    line.is_backup === true
+                      ? undefined
+                      : `${line.suggested_qty_base} ${line.inventory_unit}`
+                  }
                 >
-                  {line.suggested_qty_purchase}
-                  {suggestionCaseHint !== null && (
+                  {line.is_backup === true ? (
+                    <span className="text-slate-400">—</span>
+                  ) : (
+                    line.suggested_qty_purchase
+                  )}
+                  {line.is_backup !== true && suggestionCaseHint !== null && (
                     <div className="text-[11px] text-slate-500">
                       {t("manager.caseHint", { split: suggestionCaseHint })}
                     </div>
@@ -203,7 +223,11 @@ export function OrderLineTable({
 
                 {/* Δ vs sug. + reason badge (captain's deviation) */}
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {!zeroSuggestionInfo && typeof line.delta_vs_suggestion_pct === "number" ? (
+                  {line.is_backup === true ? (
+                    // Backup line: the suggestion belongs to the primary supplier,
+                    // so no deviation highlight.
+                    <span className="text-slate-400">—</span>
+                  ) : !zeroSuggestionInfo && typeof line.delta_vs_suggestion_pct === "number" ? (
                     // A stored deviation is shown — also on a bulk-pack line whose
                     // case suggestion is 0 but whose need was not (plan-review F1).
                     Math.abs(line.delta_vs_suggestion_pct) >= 0.005 ? (

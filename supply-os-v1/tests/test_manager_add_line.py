@@ -132,6 +132,8 @@ def _enable_sheet(
     mocker.patch.object(sheets, "invalidate_cache", return_value=None)
     mocker.patch.object(sheets, "get_order", return_value=order)
     mocker.patch.object(sheets, "load_products", return_value=_products())
+    mocker.patch.object(sheets, "load_locations", return_value=[])
+    mocker.patch.object(sheets, "load_suppliers", return_value=[])
     mocker.patch.object(sheets, "load_supplier_products", return_value=_supplier_products())
     mocker.patch.object(
         sheets, "load_location_product_settings", return_value=_settings()
