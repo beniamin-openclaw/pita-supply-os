@@ -542,6 +542,7 @@ Kolejność jak w „Kolejność wdrożenia”. Każdy plik uruchomiony dosłown
 | Merge + deploy | CI 9/9 zielone na PR #62; merge `7b03cf9`; Railway (deployment 6958917690) i Vercel (6958928603) `success` na `7b03cf9`; `/health` ok; bundle `index-BIWyUTQY.js` → `index-BTKigPar.js` (zawiera `orders.detail.stockOnly`) |
 | B | STEP 0: 0 / 0 / 260 / 172 / `c6389820…` / `c7fa486d…` / 0 zamówień; STEP 1 bez błędu; audyt (a) jak tabela „Katalog miejski”, (b)(c)(d)(h)(i) 0, (e) FORUM 33 / SUPERSAM 36 wszystkie 0/0/0, (f) 260 / 172 / `c6389820…` / 0 `is_backup`, (g) `c7fa486d…`; odcisk 181 wierszy `e18e37b6af774b123b3b5316d2cea517` i 7 dostawców `2633044f416df34241dae050cd8e4760` = próba lokalna bajt w bajt |
 | B2 | STEP 0: 7 / 181 / 0 / 0, 24 wiersze źródłowe, tylko liczenie SUPERSAM 36 (0 niezerowych), 0 zamówień; STEP 1 bez błędu; audyt (a) Coca-Cola Katowice portal 8 + Pago + Magazyn + Lemoniady manual 16, alerty wył., minimum NULL / 0; (b) 0 z 24; (b2) 24 / 24; (c) 12, 0 niezerowych; (d) 0; (e) 260 / 172 / `c6389820…`; odcisk 24 wierszy `3dce70f49f31cf70f56afaa6165d10e5` i 2 dostawców `f8043d9b4f26cf9db38006c8babe7ca2` = próba lokalna |
+| Kody + smoke GET | kody FORUM / SUPERSAM dopisane w Railway `SUPPLY_OS_CAPTAIN_TOKENS` (wartości tylko na czacie); przyjmowane od 12:06 UTC po redeployu. Wyłącznie GET, żadnego submitu: `/api/locations` 200 dla obu; FORUM 4 zakładki — `SUP_BUKAT_KRK` 14, `SUP_DISPACK_KRK` 26, `SUP_KUCHNIE_KRK` 9, `SUP_SELGROS_KRK` 47 (razem 96); SUPERSAM 5 zakładek — `SUP_COCACOLA_KAT` 8, `SUP_DISPACK_KAT` 28, `SUP_KUCHNIE_KAT` 9, `SUP_SELGROS_KAT` 48, `SUP_WARSZAWA_KAT` 16 (razem 109); suma 96 + 85 = 181 = odcisk B, 8 + 16 = 24 = odcisk B2; `/api/captain/inventory/products` FORUM 104 / SUPERSAM 107; `/api/captain/orders` 0 / 0. Lokal warszawski — jeszcze nie sprawdzony (brak kodu w tej sesji) |
 
 Zakładki kapitana po B2 (dostawcy z aktywnymi wierszami w lokalu): FORUM — Bukat Kraków, Dis-Pack Kraków, Kuchnie Świata Kraków, Selgros Kraków; SUPERSAM — Coca-Cola Katowice, Dis-Pack Katowice, Kuchnie Świata Katowice, Pago + Magazyn + Lemoniady, Selgros Katowice.
 
@@ -556,8 +557,8 @@ Okno A → deploy: A ustawił oba lokale na `active=true` ok. 5 minut przed star
 - [x] Deploy kodu; `/health` na nowym commicie + nowy hash bundla Vercel.
 - [x] B: dopiero po deployu; STEP 0 (zanotować 0c), STEP 1, STEP 2 (a)–(i).
 - [x] B2: po B; STEP 0 (7 / 181 / 0 / 0, 24 wiersze źródłowe, 36), STEP 1, STEP 2 (a)–(e).
-- [ ] Kody kapitanów FORUM / SUPERSAM w `SUPPLY_OS_CAPTAIN_TOKENS` — dopiero po B; kody tylko na czacie, nie w repo.
-- [ ] Smoke po B, wyłącznie GET, kodem każdego lokalu: zakładki = tylko dostawcy miejscy (SUPERSAM: + Coca-Cola Katowice i Pago + Magazyn + Lemoniady), `/api/captain/inventory/products` = 104 (FORUM) i 107 (SUPERSAM) produktów; jeden lokal warszawski bez zmian. Żadnego submitu.
+- [x] Kody kapitanów FORUM / SUPERSAM w `SUPPLY_OS_CAPTAIN_TOKENS` — dopiero po B; kody tylko na czacie, nie w repo.
+- [ ] Smoke po B, wyłącznie GET, kodem każdego lokalu: zakładki = tylko dostawcy miejscy (SUPERSAM: + Coca-Cola Katowice i Pago + Magazyn + Lemoniady), `/api/captain/inventory/products` = 104 (FORUM) i 107 (SUPERSAM) produktów; jeden lokal warszawski bez zmian. Żadnego submitu. — FORUM i SUPERSAM zaliczone 2026-10-09 (tabela wyżej); brakuje lokalu warszawskiego.
 - [ ] SUPERSAM: e-mail lokalu (DW) — puste, `notes` lokalu to mówi.
 - [ ] Kontakty dostawców po odpowiedzi Marka: e-mail / metoda, minimum, dni dostaw, godzina graniczna (do tego czasu zamówienia idą do managera, `manual`).
 - [ ] Ceny wierszy z pustą ceną (tabela „Odstępstwa”).

@@ -349,7 +349,7 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 1.4 Migration 0029 applied on prod by the operator and recorded; Warsaw captain screens unchanged after deploy
+- [ ] 1.4 Migration 0029 applied on prod by the operator and recorded; Warsaw captain screens unchanged after deploy — 0029 applied and recorded 2026-10-09; Warsaw screen check still open
 
 ### Phase 2: Frontend — tabs, backup cards, hint
 
@@ -361,7 +361,7 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 2.4 On prod after deploy: Warsaw captain sees the same tabs minus empty ones; FORUM/SUPERSAM captains see only their city suppliers
+- [ ] 2.4 On prod after deploy: Warsaw captain sees the same tabs minus empty ones; FORUM/SUPERSAM captains see only their city suppliers — FORUM/SUPERSAM pass 2026-10-09 (GET smoke); Warsaw still open
 
 ### Phase 3: Prod master data (operator-run SQL)
 
@@ -383,5 +383,5 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 4.2 GET smoke passes for FORUM, SUPERSAM and one Warsaw token on prod
+- [ ] 4.2 GET smoke passes for FORUM, SUPERSAM and one Warsaw token on prod — FORUM 4 tabs / 104 products, SUPERSAM 5 tabs / 107 products pass 2026-10-09 (rollout-notes.md); Warsaw token still open
 - [ ] 4.3 Friday training: captains see only their suppliers; no test order dispatched
