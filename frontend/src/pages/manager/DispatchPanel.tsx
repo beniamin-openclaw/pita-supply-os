@@ -223,7 +223,12 @@ export function DispatchPanel({
       {method === "manual" && (
         <div className="space-y-3 text-sm">
           <p className="text-slate-700">{t("manager.manualNote")}</p>
-          <div className="flex flex-wrap items-center gap-2">{markOrderedButton}</div>
+          {/* The list is what gets picked in the warehouse (krakow-katowice-rollout:
+              Katowice goods from Warsaw are one manual order). */}
+          <div className="flex flex-wrap items-center gap-2">
+            {markOrderedButton}
+            {copyListButton}
+          </div>
           {emptyNote}
         </div>
       )}

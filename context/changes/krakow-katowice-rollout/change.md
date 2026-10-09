@@ -3,7 +3,7 @@ change_id: krakow-katowice-rollout
 title: Roll out Kraków Forum and Katowice Supersam with a per-location supplier catalog
 status: implementing
 created: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-09
 archived_at: null
 ---
 

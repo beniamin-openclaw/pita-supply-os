@@ -34,6 +34,8 @@ See `research.md`. In short:
 
 - No change to suggestion math, stored suggestion fields or the suggestion-review report (backup lines mixing into averages is accepted for now).
 - No Pago/Transport for Kraków/Katowice (`PAGO_ENTITY` hardcode stays; Pago products are count-only at both locations).
+  Changed for Katowice on 2026-10-09 (operator): step B2 makes Pago, Magazyn własny Mory and Filber one manual SUPERSAM-scoped supplier
+  ("Pago + Magazyn + Lemoniady", one order from Warsaw, still outside Transport zbiorczy) and adds Coca-Cola Katowice (portal). Kraków unchanged.
 - No per-location delivery rules for the city suppliers until Marek gives days (calendar falls back to `suppliers.delivery_days`).
 - No new products (Ręcznik 100 mb, Papryka Red Sweet), no JAX-GRILL/DIX mapping, no Kuchnie Świata mayonnaise 2,8 kg mapping — wait for Marek.
 - No per-product fallback to shared rows at an own-catalog location (a product with no scoped row there is count-only).
@@ -328,6 +330,9 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 - Open-order window: `captain_submitted_at` (else `order_date`) on or after today − 7 days in Warsaw dates, so the same weekday last week still counts (8 calendar days inclusive). Docstrings say so.
 - The captain supplier fallback stays on any non-401 error, not only 404: if the new endpoint fails, Warsaw keeps its old tabs; at FORUM/SUPERSAM the fallback only adds empty Warsaw tabs (orderable and submit stay scoped on the server). The legacy `/captain` page uses the same loader.
 - Impl review (2026-10-08, Opus): no blocker. Added tests for the captain edit of a backup line, manager add-line and `include_unconfigured` scoping, the queue backup exclusion, manager count-detail scoping/price and seed tab parity (25 cases in `test_location_catalog.py`). Rollback kill switch, a pre-deploy "no shared multi-supplier product" check and a duplicate-row audit went into the prod SQL / rollout notes.
+- Step B2 (2026-10-09, operator decision): `prod-sql-B2-katowice-warsaw-cola.sql` — `SUP_COCACOLA_KAT` (portal, 8 rows) and `SUP_WARSZAWA_KAT` "Pago + Magazyn + Lemoniady" (manual, minimum 0, 16 rows), both alerts off, rows copied 1:1 from the Warsaw rows (source in `notes`, Warsaw goods named "(Pago)/(Magazyn)/(Filber)"); data only, no backend change. Settings notes get an appended `[2026-10-09 B2: …]` marker so step A's notes stay restorable. Rollback: `rollback.sql` R-0 now covers the 2 suppliers (181 → 205 scoped rows), PART 2 gained R-B2; `rollback-B2-off.sql` switches B2 off alone.
+- Manager dispatch, `manual` method: "Kopiuj listę" next to "Oznacz jako zamówione" (the pick list for the Warsaw warehouse; carries the (Pago)/(Magazyn)/(Filber) labels via `supplier_product_name`).
+- A backup line hides its stored suggestion: manager table shows "—" in Sugestia, captain order detail shows `stan:` only and no deviation (the suggestion belongs to the primary supplier).
 - Known limit for training: at an own-catalog location a count-only product (Pago, Mory, drinks, own production) has no supplier row, so the inventory screen shows no pack input/hint for it — counted in base units.
 
 ## Progress
@@ -367,6 +372,8 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 #### Manual
 
 - [ ] 3.2 Operator runs A, C, then B after deploy; audit queries return the expected counts
+- [x] 3.3 Step B2 + rollback matrix pass on prod-snapshot copies (apply, re-run refusal, full rollback byte-identical, kill switch, B2-off, order guard)
+- [ ] 3.4 Operator runs B2 after B; audit (a)–(e) return the stated results
 
 ### Phase 4: Deploy, access, go-live
 

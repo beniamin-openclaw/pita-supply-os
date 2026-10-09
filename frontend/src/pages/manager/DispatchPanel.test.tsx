@@ -102,6 +102,13 @@ describe("DispatchPanel — other channels untouched", () => {
     expect(gmail).toHaveAttribute("href", expect.stringContaining("mail.google.com"));
     expect(screen.queryByText("Przejdź do ekranu Transport")).toBeNull();
   });
+
+  it("manual channel offers mark-as-ordered and the pick list (krakow-katowice-rollout)", () => {
+    renderPanel(makeDetail({ ordering_method: "manual" }));
+    expect(screen.getByRole("button", { name: "Oznacz jako zamówione ✓" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Kopiuj listę" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Otwórz w Gmail" })).toBeNull();
+  });
 });
 
 // Map-backed localStorage stub (same pattern as nameSuggestions.test.ts).

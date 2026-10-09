@@ -194,13 +194,22 @@ export function OrderLineTable({
                   )}
                 </td>
 
-                {/* Sugestia (algorithm) */}
+                {/* Sugestia (algorithm). A backup line stores one (submit math is
+                    shared) but it belongs to the primary supplier — show none. */}
                 <td
                   className="px-3 py-2 whitespace-nowrap tabular-nums text-slate-700"
-                  title={`${line.suggested_qty_base} ${line.inventory_unit}`}
+                  title={
+                    line.is_backup === true
+                      ? undefined
+                      : `${line.suggested_qty_base} ${line.inventory_unit}`
+                  }
                 >
-                  {line.suggested_qty_purchase}
-                  {suggestionCaseHint !== null && (
+                  {line.is_backup === true ? (
+                    <span className="text-slate-400">—</span>
+                  ) : (
+                    line.suggested_qty_purchase
+                  )}
+                  {line.is_backup !== true && suggestionCaseHint !== null && (
                     <div className="text-[11px] text-slate-500">
                       {t("manager.caseHint", { split: suggestionCaseHint })}
                     </div>

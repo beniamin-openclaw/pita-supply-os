@@ -32,7 +32,7 @@ A captain at FORUM or SUPERSAM sees only their city suppliers with thresholds fr
 
 **In scope:** migration 0029, catalog module wired into every location-blind consumer, captain supplier list endpoint, backup rows, open-order hint (captain + manager), prod SQL A/B/C + rollback + audit, docs.
 
-**Out of scope:** suggestion math, Pago/Transport for the new cities, new products awaiting Marek, per-location delivery rules, finance/eBiuro, rewriting the legacy sync scripts.
+**Out of scope:** suggestion math, Transport zbiorczy for the new cities (Katowice orders Pago/Mory/Filber as one manual order from Warsaw — step B2, 2026-10-09), new products awaiting Marek, per-location delivery rules, finance/eBiuro, rewriting the legacy sync scripts.
 
 ## Architecture / Approach
 

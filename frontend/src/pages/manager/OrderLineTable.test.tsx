@@ -216,4 +216,16 @@ describe("OrderLineTable — backup + open orders elsewhere", () => {
     expect(screen.queryByText("+1%")).toBeNull();
     expect(screen.queryByText("+50%")).toBeNull();
   });
+
+  it("shows no stored suggestion on a backup line (it belongs to the primary)", () => {
+    renderTable([
+      makeLine({ is_backup: true, suggested_qty_purchase: 36, captain_final_qty_purchase: 2 }),
+    ]);
+    expect(screen.queryByText("36")).toBeNull();
+  });
+
+  it("still shows the suggestion on a primary line", () => {
+    renderTable([makeLine({ suggested_qty_purchase: 36, captain_final_qty_purchase: 2 })]);
+    expect(screen.getByText("36")).toBeInTheDocument();
+  });
 });

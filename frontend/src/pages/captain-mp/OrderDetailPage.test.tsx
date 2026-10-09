@@ -158,3 +158,32 @@ describe("OrderDetailPage — manager-changed banner", () => {
     expect(screen.queryByText(/zmienione przez menedżera/)).not.toBeInTheDocument();
   });
 });
+
+describe("OrderDetailPage — backup line (krakow-katowice-rollout)", () => {
+  it("shows stock only and no deviation on a backup line", async () => {
+    renderPage(
+      makeOrder("captain_submitted", [
+        makeLine("OL-1", 2, 0, {
+          is_backup: true,
+          suggested_qty_purchase: 36,
+          delta_vs_suggestion_pct: 0.92,
+        }),
+      ]),
+    );
+    await waitFor(() => expect(screen.getByText("Pozycje zamówienia")).toBeInTheDocument());
+    expect(screen.queryByText(/sugestia/)).not.toBeInTheDocument();
+    expect(screen.queryByText("+92%")).not.toBeInTheDocument();
+    expect(screen.getByText(/stan: 2/)).toBeInTheDocument();
+  });
+
+  it("keeps the suggestion and the deviation on a primary line", async () => {
+    renderPage(
+      makeOrder("captain_submitted", [
+        makeLine("OL-1", 2, 0, { suggested_qty_purchase: 36, delta_vs_suggestion_pct: 0.92 }),
+      ]),
+    );
+    await waitFor(() => expect(screen.getByText("Pozycje zamówienia")).toBeInTheDocument());
+    expect(screen.getByText(/sugestia: 36/)).toBeInTheDocument();
+    expect(screen.getByText("+92%")).toBeInTheDocument();
+  });
+});

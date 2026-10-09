@@ -869,6 +869,10 @@ export const STRINGS = {
     pl: "stan: {stock} {inventoryUnit} · sugestia: {suggested} {purchaseUnit}",
     en: "stock: {stock} {inventoryUnit} · suggestion: {suggested} {purchaseUnit}",
   },
+  "orders.detail.stockOnly": {
+    pl: "stan: {stock} {inventoryUnit}",
+    en: "stock: {stock} {inventoryUnit}",
+  },
   "orders.detail.orderedSecondary": {
     pl: "Zamówiono: {value} {unit}",
     en: "Ordered: {value} {unit}",

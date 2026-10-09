@@ -2,7 +2,11 @@
 -- krakow-katowice-rollout — ROLLBACK (run only on operator instruction)
 -- Two parts, run SEPARATELY, in this order:
 --   PART 1  R-0 KILL SWITCH — run ALONE and FIRST, BEFORE any Railway / Vercel rollback.
---           Deactivates the 7 city suppliers and every scoped supplier_products row.
+--           Deactivates the 7 city suppliers, the 2 step-B2 suppliers (SUP_COCACOLA_KAT,
+--           SUP_WARSZAWA_KAT — when B2 was applied) and every scoped supplier_products row
+--           (181 after B, 205 after B2).
+--           (To switch off ONLY step B2 and keep Kraków / Katowice running, use
+--            rollback-B2-off.sql instead — no code rollback needed for that.)
 --           Why: the old backend ignores supplier_products.location_id and lists every active
 --           supplier as a tab, so after a code rollback Bukat Kraków & co. would show at all
 --           Warsaw locations; and the old _primary_supplier_product picks the lowest
@@ -10,7 +14,8 @@
 --           so SP_BUKAT_KRK_Pxxx (sorts before SP_BUKAT_Pxxx) would take over Warsaw pack hints
 --           and stock value. Deactivated rows are invisible to both old and new code.
 --   (then)  code rollback on Railway / Vercel, if needed.
---   PART 2  optional full data rollback: R-B (delete B) -> R-C (re-insert C) -> R-A (undo A),
+--   PART 2  optional full data rollback: R-B2 (delete B2) -> R-B (delete B) -> R-C (re-insert C)
+--           -> R-A (undo A),
 --           one transaction, opt-in: uncomment the SET LOCAL line under its BEGIN.
 --           Each section checks whether its step was applied and skips itself (NOTICE) when it
 --           was not, so PART 2 works after A only, after A+C, or after A+C+B (with or without
@@ -26,38 +31,48 @@
 -- PART 1 — R-0 KILL SWITCH (run alone, first)
 -- ############################################################
 
--- R-0 STEP 0 (read-only) -> city_suppliers 7, scoped_rows 181, scoped_other_suppliers 0
---   (scoped_rows differs only if the city catalog was edited after 2026-10-08 — then put the
+-- R-0 STEP 0 (read-only) -> city_suppliers 7, b2_suppliers 0 or 2, scoped_rows 181 (no B2) or
+--   205 (with B2), scoped_other_suppliers 0
+--   (scoped_rows differs only if a city catalog was edited after 2026-10-09 — then put the
 --    new number into the guard below before running)
 SELECT (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT')) AS city_suppliers,
        (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT') AND active) AS city_suppliers_active,
+       (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) AS b2_suppliers,
        (SELECT count(*) FROM supplier_products WHERE location_id IS NOT NULL) AS scoped_rows,
        (SELECT count(*) FROM supplier_products WHERE location_id IS NOT NULL AND active) AS scoped_rows_active,
        (SELECT count(*) FROM supplier_products
-         WHERE location_id IS NOT NULL AND supplier_id NOT IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT')) AS scoped_other_suppliers;
+         WHERE location_id IS NOT NULL AND supplier_id NOT IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT', 'SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) AS scoped_other_suppliers;
 
 BEGIN;
 DO $$
-DECLARE n int;
+DECLARE
+  n int;
+  b2 int;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT'))
      AND NOT EXISTS (SELECT 1 FROM supplier_products WHERE location_id IS NOT NULL) THEN
     RAISE NOTICE 'R-0: step B not applied — nothing to switch off';
     RETURN;
   END IF;
-  UPDATE suppliers SET active = false WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT');
+  SELECT count(*) INTO b2 FROM suppliers WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT');
+  IF b2 NOT IN (0, 2) THEN
+    RAISE EXCEPTION 'R-0: % of the 2 step-B2 suppliers exist — partial state, check by hand', b2;
+  END IF;
+  -- The old backend lists every active supplier as a tab everywhere, so the B2 pair must go
+  -- dark too (and SP_COCACOLA_KAT_Pxxx sorts before SP_COCACOLA_Pxxx in the old primary pick).
+  UPDATE suppliers SET active = false WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT', 'SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT');
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 7 THEN RAISE EXCEPTION 'R-0: matched % city suppliers, expected 7', n; END IF;
+  IF n <> 7 + b2 THEN RAISE EXCEPTION 'R-0: matched % city / B2 suppliers, expected %', n, 7 + b2; END IF;
   UPDATE supplier_products SET active = false WHERE location_id IS NOT NULL;
   GET DIAGNOSTICS n = ROW_COUNT;
-  IF n <> 181 THEN
-    RAISE EXCEPTION 'R-0: matched % scoped rows, expected 181 (city catalog edited since 2026-10-08? check STEP 0, fix the number)', n;
+  IF n <> 181 + 12 * b2 THEN
+    RAISE EXCEPTION 'R-0: matched % scoped rows, expected % (a city catalog edited since 2026-10-09? check STEP 0, fix the number)', n, 181 + 12 * b2;
   END IF;
 END $$;
 COMMIT;
 
 -- R-0 audit -> 0 / 0
-SELECT (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT') AND active) AS city_suppliers_active,
+SELECT (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT', 'SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT') AND active) AS city_and_b2_suppliers_active,
        (SELECT count(*) FROM supplier_products WHERE location_id IS NOT NULL AND active) AS scoped_rows_active;
 
 -- ############################################################
@@ -72,6 +87,44 @@ BEGIN
   IF coalesce(current_setting('rollout.krk_kat_data_rollback', true), '') <> 'yes' THEN
     RAISE EXCEPTION 'PART 2 not confirmed: uncomment the SET LOCAL line under BEGIN';
   END IF;
+END $$;
+
+-- R-B2: Katowice Coca-Cola + Warsaw goods (step B2, 2026-10-09) — must go before R-B
+DO $$
+DECLARE n int;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM suppliers WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT'))
+     AND NOT EXISTS (SELECT 1 FROM supplier_products WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) THEN
+    RAISE NOTICE 'R-B2: step B2 not applied, skipping';
+    RETURN;
+  END IF;
+  IF EXISTS (SELECT 1 FROM orders WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT'))
+     OR EXISTS (SELECT 1 FROM receipts WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT'))
+     OR EXISTS (SELECT 1 FROM order_lines ol JOIN supplier_products sp USING (supplier_product_id)
+                 WHERE sp.supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT'))
+     OR EXISTS (SELECT 1 FROM receipt_lines rl JOIN supplier_products sp USING (supplier_product_id)
+                 WHERE sp.supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) THEN
+    RAISE EXCEPTION 'R-B2: orders / receipts reference the B2 suppliers — keep PART 1 (deactivated) instead';
+  END IF;
+  IF EXISTS (SELECT 1 FROM transport_batches WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT'))
+     OR EXISTS (SELECT 1 FROM supplier_delivery_rules WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) THEN
+    RAISE EXCEPTION 'R-B2: transport batches / delivery rules reference the B2 suppliers — remove them by hand first or keep PART 1';
+  END IF;
+  UPDATE location_product_settings
+     SET notes = btrim(regexp_replace(notes, ' ?\[2026-10-09 B2: [^]]*\]', '', 'g'))
+   WHERE location_id = 'SUPERSAM' AND notes LIKE '%[2026-10-09 B2: %';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 24 THEN RAISE EXCEPTION 'R-B2: stripped the B2 marker from % settings rows, expected 24', n; END IF;
+  DELETE FROM supplier_products
+   WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT') AND location_id = 'SUPERSAM';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 24 THEN RAISE EXCEPTION 'R-B2: deleted % catalog rows, expected 24', n; END IF;
+  IF EXISTS (SELECT 1 FROM supplier_products WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) THEN
+    RAISE EXCEPTION 'R-B2: other rows reference the B2 suppliers — check by hand';
+  END IF;
+  DELETE FROM suppliers WHERE supplier_id IN ('SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT');
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 2 THEN RAISE EXCEPTION 'R-B2: deleted % suppliers, expected 2', n; END IF;
 END $$;
 
 -- R-B: city suppliers + scoped catalog
@@ -214,12 +267,12 @@ END $$;
 COMMIT;
 
 -- Audit after rollback -> FORUM 114 / SUPERSAM 116 rows, 0 stamped rows, both locations
--- inactive with own_catalog false, 0 city suppliers, 0 scoped rows
+-- inactive with own_catalog false, 0 city / B2 suppliers, 0 scoped rows
 SELECT location_id, count(*) AS settings,
        count(*) FILTER (WHERE notes LIKE '%2026-10-08 arkusz KRK/KAT%') AS stamped
   FROM location_product_settings WHERE location_id IN ('FORUM','SUPERSAM') GROUP BY 1 ORDER BY 1;
 SELECT location_id, active, own_catalog, delivery_address, company_nip, phone
   FROM locations WHERE location_id IN ('FORUM','SUPERSAM') ORDER BY 1;
-SELECT (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT')) AS city_suppliers,
+SELECT (SELECT count(*) FROM suppliers WHERE supplier_id IN ('SUP_BUKAT_KRK', 'SUP_DISPACK_KRK', 'SUP_DISPACK_KAT', 'SUP_KUCHNIE_KRK', 'SUP_KUCHNIE_KAT', 'SUP_SELGROS_KRK', 'SUP_SELGROS_KAT', 'SUP_COCACOLA_KAT', 'SUP_WARSZAWA_KAT')) AS city_and_b2_suppliers,
        (SELECT count(*) FROM supplier_products WHERE location_id IS NOT NULL) AS scoped_rows;
 

@@ -2,7 +2,7 @@
 
 Data: 2026-10-08 · Projekt Supabase: `lpzhphufjwrndfogkfub` · Start lokali: liczenie w niedzielę 11.10, zamówienia od poniedziałku 12.10.
 Źródła: arkusz Marka „Miasta poza Warszawą” (Dysk `1i-sXUd5zQUyA4YASKkb9SBl61r3sV5M5fazagnsJnpg`, zakładki Katowice i Kraków), progi Forum z sierpnia (prod), decyzje operatora z 2026-10-08 (1–10), dane lokali od operatora (adres, spółka, NIP, telefon).
-Pliki: `prod-sql-A-locations-settings.sql` → `prod-sql-C-delete-template.sql` → deploy kodu → `prod-sql-B-suppliers-catalog.sql`; `rollback.sql`. Pliki SQL generuje skrypt z odczytów prod (tylko SELECT); nic nie zostało zapisane w prod.
+Pliki: `prod-sql-A-locations-settings.sql` → `prod-sql-C-delete-template.sql` → deploy kodu → `prod-sql-B-suppliers-catalog.sql` → `prod-sql-B2-katowice-warsaw-cola.sql` (2026-10-09); `rollback.sql`, `rollback-B2-off.sql`. Pliki SQL generuje skrypt z odczytów prod (tylko SELECT); nic nie zostało zapisane w prod.
 
 ## Stan przed zmianą (sprawdzony 2026-10-08, tylko odczyt)
 
@@ -52,6 +52,7 @@ FORUM — 24 wiersze z progiem (reszta 0/0/0); SUPERSAM — wszystkie 0/0/0:
 4. **C** — osobne wywołanie, operator przy ekranie: DELETE 26 wierszy szablonu (kopia literalna w pliku i w `rollback.sql`).
 5. **Deploy kodu** (Railway + Vercel) i sprawdzenie: `/health` na nowym commicie + nowy hash bundla (lessons: merged ≠ live).
 6. **B** — 7 dostawców + 181 wierszy katalogu z `location_id`. **Nigdy przed deployem**: stary backend ignoruje `location_id`, więc katalog miejski pokazałby się we wszystkich lokalach warszawskich.
+6a. **B2** (2026-10-09) — Katowice: Coca-Cola Katowice + „Pago + Magazyn + Lemoniady” (2 dostawców, 24 wiersze z `location_id = 'SUPERSAM'`). Tylko po B (blok sprawdza B i przerywa bez niego); ten sam powód „nigdy przed deployem”.
 7. Dopiero po B: kody kapitanów FORUM / SUPERSAM w Railway (`SUPPLY_OS_CAPTAIN_TOKENS`). Między A a B stary kod pokazałby tym lokalom katalog warszawski — kodów nie wydawać wcześniej.
 
 ## Kontrola przed deployem (tylko odczyt, przed merge) — oczekiwane 0 wierszy
@@ -85,6 +86,7 @@ Wynik 2026-10-08 na prod (wariant sprzed 0029, MCP Supabase, tylko odczyt): **0 
 - **Szare pozycje** (decyzja 6): tylko jednoznaczne dopasowania; jest główny w lokalu → zapasowy, brak → główny 0/0/0; niejednoznaczne → „Wstrzymane”. Kuchnie Świata: Feta Hotos → P014 (KAT główny 0/0/0, KRK zapasowy), Olej TopQ → P041 zapasowy, Majonez dekoracyjny → pominięty.
 - **Pominięte** (decyzja 7): JAX-GRILL, DIX, Ręcznik 100 mb, Papryka Red Sweet i wszystko, co wymagałoby nowego produktu.
 - **Tylko liczenie** (decyzja 8): próg 0/0/0, bez wiersza katalogu — Pago, Mory, napoje (Coca-Cola, Filber, Pepsi), produkcja własna; w Katowicach też tzatziki i tirokafteri. Niezerowe wartości Forum (P024 4/15, P026 2/11, P019 0,5/2) → 0/0/0 z dopiskiem.
+  **Zmiana 2026-10-09 (operator), tylko Katowice:** Coca-Cola, Pago, Mory i lemoniady Filber są zamawiane — krok B2, sekcja „Krok B2” niżej. W Krakowie bez zmian.
 - **Usunięcie** (decyzja 9): każdy wiersz progów FORUM/SUPERSAM spoza zestawu końcowego — krok C.
 - **Wiersze katalogu** (decyzja 10): id `SP_<dostawca bez SUP_>_<produkt>`, `location_id` = lokal, `is_backup` wg decyzji, jednostki / zaokrąglanie / order_note / opakowanie zbiorcze z najbliższego wiersza warszawskiego (źródło w `notes` każdego wiersza), nazwa z arkusza, cena z Warszawy („cena z Warszawy”) albo pusta („cena do uzupełnienia”) gdy opakowanie się różni, `display_order` = pozycja w sekcji dostawcy w arkuszu danego miasta. Selgros: bez opakowania zbiorczego i bez order_note (poza frytkami).
 
@@ -251,7 +253,7 @@ Upsert w A dotyka 101 wierszy (FORUM 35 + 4, SUPERSAM 59 + 3); A sprawdza tę li
 
 ## Tylko liczenie (próg 0/0/0, bez wiersza katalogu)
 
-Produkt jest na liście inwentaryzacji, ale żaden dostawca miejski go nie ma, więc nie da się go zamówić w aplikacji. Audyt B (e) liczy te wiersze: FORUM 33, SUPERSAM 36.
+Produkt jest na liście inwentaryzacji, ale żaden dostawca miejski go nie ma, więc nie da się go zamówić w aplikacji. Audyt B (e) liczy te wiersze: FORUM 33, SUPERSAM 36. **Po B2 (2026-10-09) SUPERSAM 12** — wiersze Mory, Pago, Coca-Cola i Filber poniżej są w Katowicach zamawiane (krok B2); zostają nabiał Katowice i produkcja własna.
 
 | Lokal | Produkty | Powód |
 |---|---|---|
@@ -268,6 +270,21 @@ Produkt jest na liście inwentaryzacji, ale żaden dostawca miejski go nie ma, w
 | SUPERSAM | P064 Cappy Jabłko, P065 Cappy Pomarańcza, P066 Fanta, P067 Sprite, P068 Coca-Cola 0,33 l puszka, P069 Coca-Cola Zero 0,33 l puszka, P070 Kropla Beskidu Niegazowana, P071 Kropla Beskidu Gazowana | Coca-Cola |
 | SUPERSAM | P075 Lemoniada Lemon, P076 Lemoniada Orange, P077 Lemoniada Grapefruit | napoje Filber |
 | SUPERSAM | P129 Rolki do kasy 80 na 80, P183 Rolki do kasy 80 na 20 | Mory, rolki |
+
+## Krok B2 — Katowice: Coca-Cola + „Pago + Magazyn + Lemoniady” (decyzja operatora 2026-10-09)
+
+Plik `prod-sql-B2-katowice-warsaw-cola.sql`, po B. Sam zapis danych — kod się nie zmienia (katalog per lokal z 0029 już to obsługuje).
+
+| Dostawca | Nazwa (zakładka kapitana) | Metoda | Minimum | Alerty sugestii | Wiersze (SUPERSAM) |
+|---|---|---|---|---|---|
+| `SUP_COCACOLA_KAT` | Coca-Cola Katowice | `portal` — https://cchbcshop.com/websitePL/login (jak SUP_COCACOLA) | puste (do potw.) → chip „poniżej 400 zł” informacyjny | wył. | 8: P068, P069, P066, P067, P064, P065, P070, P071 |
+| `SUP_WARSZAWA_KAT` | Pago + Magazyn + Lemoniady | `manual` — manager zbiera towar w Warszawie („Kopiuj listę”) i oznacza jako zamówione; poza Transportem zbiorczym | 0 (towar wewnętrzny) | wył. | 16: Pago P024, P026, P027, P028 · Magazyn P019, P089, P090, P091, P092, P098, P129, P183, P133 · Filber P075, P076, P077 |
+
+- Każdy wiersz to kopia aktywnego wiersza warszawskiego (jednostki, zaokrąglanie, cena, order_note, SKU, opakowanie zbiorcze, odbiór z magazynu); źródło w `notes` („kopia SP_… (Warszawa)”). Nazwa u Warszawy z dopiskiem źródła: „Gyros 15 KG (Pago)”, „Boxy PB (Magazyn)”, „Lemoniada Lemon (Filber)” — widać ją w „Kopiuj listę” i w kolumnie kodu; karta kapitana pokazuje nazwę produktu.
+- Progi tych 24 produktów w SUPERSAM zostają 0/0/0 (arkusz Marka ich nie ma), dlatego alerty są wyłączone: kapitan wpisuje ilość bez powodu, sugestia = 0, u managera „ponad cel”. Do notatek progów dopisany znacznik `[2026-10-09 B2: zamawiane …]` (stara notatka zostaje — rollback zdejmuje tylko znacznik).
+- Jedno zamówienie z zakładki „Pago + Magazyn + Lemoniady” = jedno zamówienie dla Katowic, niezależnie od tego, czy towar jest z Pago, z magazynu czy od Filbera.
+
+Audyt B2 (STEP 2): (a) `SUP_COCACOLA_KAT` portal 8, `SUP_WARSZAWA_KAT` manual 16, oba alerty wył., SUPERSAM · (b) kopia ≠ źródło: 0 wierszy · (b2) znacznik B2: 24 / 24 · (c) tylko liczenie w SUPERSAM: 12, wszystkie 0/0/0 · (d) dwa główne wiersze jednego produktu: 0 · (e) katalog wspólny = jak B. Blok DO przerywa, gdy: brak 0029, SUPERSAM nie `own_catalog`+`active`, brak B, B2 już jest, brak któregokolwiek z 24 aktywnych wierszy źródłowych lub progów SUPERSAM, produkt ma już wiersz SUPERSAM, albo zmienił się katalog wspólny.
 
 ## Usunięte w kroku C (26 wierszy; kopia literalna w pliku C i w `rollback.sql` R-C)
 
@@ -426,6 +443,11 @@ Odstępstwa od wiersza warszawskiego (pełna lista pól w VALUES pliku B, źród
 | B (g) | aktywne wspólne wiersze na produkt | `c7fa486d3ab4f85dc1030996edd444ce` |
 | B (h) | wiersz miejski w lokalu bez `own_catalog` | 0 wierszy |
 | B (i) | duplikat aktywnego wiersza (lokal, dostawca, produkt) | 0 wierszy |
+| B2 (a) | dostawcy B2 | `SUP_COCACOLA_KAT` portal 8 · `SUP_WARSZAWA_KAT` manual 16 · alerty wył. |
+| B2 (b), (d) | kopia ≠ źródło / dwa główne w lokalu | 0 / 0 wierszy |
+| B2 (b2) | znacznik B2 w progach SUPERSAM | 24 / 24 |
+| B2 (c) | tylko liczenie SUPERSAM | 12, wszystkie 0/0/0 |
+| B2 (e) | katalog wspólny | jak B (f) |
 
 Blok DO w B dodatkowo przerywa (RAISE), gdy: liczba dostawców ≠ 7, wierszy ≠ 181, liczba głównych/zapasowych dowolnego dostawcy różni się od tabeli, zapasowy nie ma głównego, wiersz miejski nie ma progu, produkt jest nieaktywny, wiersz miejski stoi w lokalu bez `own_catalog`, produkt ma dwa główne w jednym lokalu, jest duplikat (lokal, dostawca, produkt) albo zmienił się katalog wspólny (liczba, aktywne, md5 — przed vs po w tej samej transakcji).
 
@@ -446,13 +468,27 @@ Jednorazowa baza na Postgres 16.14 (Homebrew, `127.0.0.1`, poza prod): wszystkie
 | rollback po samym A / po A+C / bez zmian | sekcje niewykonanych kroków pomijają się (NOTICE); za każdym razem md5 4 tabel = stan sprzed A |
 | A+C+B + zamówienie testowe (draft) na SUP_BUKAT_KRK, potem rollback z PART 2 | PART 1 wyłącza katalog; PART 2 przerywa w R-B („orders / receipts reference the city catalog”), dane zostają (wyłączone) |
 
+### Próba B2 + rollback (2026-10-09, kopie tej samej bazy)
+
+| Test | Wynik |
+|---|---|
+| B2 przed B | przerywa: „step B not applied (7 city suppliers expected)” |
+| A → C → B → B2, potem B2 drugi raz | 9 dostawców, 205 wierszy z `location_id`, 24 znaczniki, FORUM 104 / SUPERSAM 107 progów; audyty (a)–(e) jak wyżej; drugi raz przerywa: „B2 already applied” |
+| A → C → B → B2 → `rollback.sql` z PART 2 | md5 4 tabel = stan sprzed A (także notatki progów) |
+| to samo bez zgody na PART 2 | PART 1: 0 aktywnych z 9 dostawców, 0 aktywnych z 205 wierszy; PART 2 przerywa; potem PART 2 ze zgodą → md5 = stan sprzed A |
+| A → C → B (bez B2) → pełny rollback | md5 = stan sprzed A (R-0 liczy 181, R-B2 pomija się) |
+| `rollback-B2-off.sql` dwa razy | 2 dostawców B2 i 24 wiersze nieaktywne, B nietknięte (7 / 181 aktywnych); drugi raz bez zmian; potem pełny rollback → md5 = stan sprzed A |
+| zamówienie (draft) na `SUP_WARSZAWA_KAT` + pełny rollback | PART 1 wyłącza wszystko; PART 2 przerywa w R-B2 („orders / receipts reference the B2 suppliers”) |
+| katalog wspólny przed / po B2 | wiersze identyczne bajt w bajt |
+
 ## Rollback
 
 Kolejność (`rollback.sql`):
 
-1. **PART 1 — wyłącznik awaryjny (R-0), sam i najpierw, PRZED jakimkolwiek cofnięciem kodu na Railway/Vercel.** Wyłącza 7 dostawców miejskich i wszystkie 181 wiersze katalogu z `location_id` (sprawdza liczby: 7 i 181). Powód: stary backend ignoruje `location_id` i pokazuje zakładkę każdego aktywnego dostawcy, więc po cofnięciu kodu Bukat Kraków i reszta pojawiłyby się we wszystkich lokalach warszawskich; do tego stary `_primary_supplier_product` bierze najniższe `supplier_product_id` spośród aktywnych wierszy (`main:supply-os-v1/app/main.py:2761-2790`), a `SP_BUKAT_KRK_Pxxx` sortuje się przed `SP_BUKAT_Pxxx` — podpowiedzi opakowań i wartość stanu w Warszawie przeszłyby na wiersze krakowskie. Wyłączone wiersze są niewidoczne dla starego i nowego kodu.
+0. **Tylko B2** (Katowice przestaje zamawiać Coca-Colę i „Pago + Magazyn + Lemoniady”, reszta działa): `rollback-B2-off.sql` — wyłącza 2 dostawców i 24 wiersze, nic nie kasuje, kod zostaje. Włączenie z powrotem: dwa UPDATE na końcu pliku.
+1. **PART 1 — wyłącznik awaryjny (R-0), sam i najpierw, PRZED jakimkolwiek cofnięciem kodu na Railway/Vercel.** Wyłącza 7 dostawców miejskich, 2 dostawców B2 (jeśli B2 było) i wszystkie wiersze katalogu z `location_id` (sprawdza liczby: 7 + 0/2 i 181/205). Powód: stary backend ignoruje `location_id` i pokazuje zakładkę każdego aktywnego dostawcy, więc po cofnięciu kodu Bukat Kraków i reszta pojawiłyby się we wszystkich lokalach warszawskich; do tego stary `_primary_supplier_product` bierze najniższe `supplier_product_id` spośród aktywnych wierszy (`main:supply-os-v1/app/main.py:2761-2790`), a `SP_BUKAT_KRK_Pxxx` sortuje się przed `SP_BUKAT_Pxxx` — podpowiedzi opakowań i wartość stanu w Warszawie przeszłyby na wiersze krakowskie. Wyłączone wiersze są niewidoczne dla starego i nowego kodu.
 2. **Cofnięcie kodu** (Railway / Vercel), jeśli potrzebne. Po cofnięciu kodu FORUM/SUPERSAM (`active=true`) widziałyby katalog warszawski — jeśli lokale już pracują, zdjąć ich kody z `SUPPLY_OS_CAPTAIN_TOKENS` albo uprzedzić managera. `locations.active` nie blokuje kapitana w obecnym kodzie.
-3. **PART 2 — pełne cofnięcie danych (opcjonalnie, osobnym wywołaniem).** Wymaga odkomentowania `SET LOCAL rollout.krk_kat_data_rollback = 'yes'` — bez tego pierwszy blok przerywa i PART 2 nic nie zapisuje (ochrona przed uruchomieniem całego pliku naraz). R-B kasuje 181 wierszy i 7 dostawców (przerywa, jeśli istnieje zamówienie / przyjęcie / transport / reguła dostaw dla nich — wtedy zostaje PART 1), R-C przywraca 26 wierszy z kopii, R-A przywraca 94 progów z dopisku „przed a/b/c”, kasuje 7 nowych i wraca lokale do stanu z 2026-10-08 (`own_catalog=false`, `active=false`). Każda sekcja pomija się sama, gdy jej kroku nie było.
+3. **PART 2 — pełne cofnięcie danych (opcjonalnie, osobnym wywołaniem).** Wymaga odkomentowania `SET LOCAL rollout.krk_kat_data_rollback = 'yes'` — bez tego pierwszy blok przerywa i PART 2 nic nie zapisuje (ochrona przed uruchomieniem całego pliku naraz). R-B2 (jeśli B2 było) zdejmuje 24 znaczniki z progów i kasuje 24 wiersze + 2 dostawców B2 (przerywa przy zamówieniu / przyjęciu / transporcie / regule dostaw), R-B kasuje 181 wierszy i 7 dostawców (przerywa, jeśli istnieje zamówienie / przyjęcie / transport / reguła dostaw dla nich — wtedy zostaje PART 1), R-C przywraca 26 wierszy z kopii, R-A przywraca 94 progów z dopisku „przed a/b/c”, kasuje 7 nowych i wraca lokale do stanu z 2026-10-08 (`own_catalog=false`, `active=false`). Każda sekcja pomija się sama, gdy jej kroku nie było.
 4. **Migracja 0029** — zostaje (addytywna); jej cofnięcie opisuje nagłówek 0029, tylko po PART 2.
 
 ## Dane publiczne (sprawdzone 2026-10-08, nikt nie był kontaktowany)
@@ -488,7 +524,7 @@ Nie wpisane (jedno źródło, sprzeczne albo ogólne dla całej sieci):
 2. Selgros Kraków: które pozycje mają mieć progi (dziś wszystkie 0/0/0 poza masłem 3/9), w jakie dni przyjeżdża.
 3. Katowice: skąd tzatziki, tirokafteri i feta (dziś tylko liczenie; feta Hotos w Kuchniach Świata jako główny 0/0/0).
 4. Kontakty, sposób zamawiania, minimum i dni dostaw: Dis-Pack (Kraków, Katowice), Kuchnie Świata (który oddział obsługuje Katowice), Selgros (Kraków, Katowice), Bukat Kraków.
-5. Pago, Mory, napoje (Coca-Cola, Filber, Pepsi) w obu miastach — dziś tylko liczenie.
+5. Pago, Mory, napoje (Coca-Cola, Filber, Pepsi) w Krakowie — dziś tylko liczenie. Katowice: od 2026-10-09 zamawiane (B2) — do potwierdzenia konto Coca-Cola (cchbcshop) z adresem dostawy Katowice i minimum; progi 24 produktów (dziś 0/0/0, bez sugestii); jak często i czym towar z Warszawy jedzie do Katowic.
 6. Pozycje wstrzymane (tabela wyżej): JAX-GRILL i DIX vs Fenix/Tenzi, ręcznik 100 mb vs „papier w roli duży”, Papryka Red Sweet vs Florinis, Majonez dekoracyjny vs Fanex, Jogurt grecki 400 g, tacki 23/12 cm, Grill Cleaner Tytan, zmywaki Jan Niezbędny (ile w opak.), słomki 25 szt, sosjerki / wieczka / torby / torebki w paczkach po 50, Vileda „ten mniejszy”, końcówka szczotki; kawa, mleko, zapalniczka, butelka na sos (nowe produkty?).
 7. Przeliczenia z sekcji „Uwagi i ryzyka”.
 
@@ -500,8 +536,9 @@ Nie wpisane (jedno źródło, sprzeczne albo ogólne dla całej sieci):
 - [ ] C: osobno, przy ekranie; STEP 0 → 26 × `match`, potem DELETE.
 - [ ] Deploy kodu; `/health` na nowym commicie + nowy hash bundla Vercel.
 - [ ] B: dopiero po deployu; STEP 0 (zanotować 0c), STEP 1, STEP 2 (a)–(i).
+- [ ] B2: po B; STEP 0 (7 / 181 / 0 / 0, 24 wiersze źródłowe, 36), STEP 1, STEP 2 (a)–(e).
 - [ ] Kody kapitanów FORUM / SUPERSAM w `SUPPLY_OS_CAPTAIN_TOKENS` — dopiero po B; kody tylko na czacie, nie w repo.
-- [ ] Smoke po B, wyłącznie GET, kodem każdego lokalu: zakładki = tylko dostawcy miejscy, `/api/captain/inventory/products` = 104 (FORUM) i 107 (SUPERSAM) produktów; jeden lokal warszawski bez zmian. Żadnego submitu.
+- [ ] Smoke po B, wyłącznie GET, kodem każdego lokalu: zakładki = tylko dostawcy miejscy (SUPERSAM: + Coca-Cola Katowice i Pago + Magazyn + Lemoniady), `/api/captain/inventory/products` = 104 (FORUM) i 107 (SUPERSAM) produktów; jeden lokal warszawski bez zmian. Żadnego submitu.
 - [ ] SUPERSAM: e-mail lokalu (DW) — puste, `notes` lokalu to mówi.
 - [ ] Kontakty dostawców po odpowiedzi Marka: e-mail / metoda, minimum, dni dostaw, godzina graniczna (do tego czasu zamówienia idą do managera, `manual`).
 - [ ] Ceny wierszy z pustą ceną (tabela „Odstępstwa”).

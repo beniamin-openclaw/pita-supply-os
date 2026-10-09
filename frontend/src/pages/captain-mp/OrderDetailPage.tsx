@@ -270,12 +270,19 @@ export function OrderDetailPage() {
                         <span className="break-words">{line.product_name_pl}</span>
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
-                        {tParts("orders.detail.stockSuggestion", {
-                          stock: line.current_stock_qty_base,
-                          inventoryUnit: <UnitLabel>{line.inventory_unit}</UnitLabel>,
-                          suggested: line.suggested_qty_purchase,
-                          purchaseUnit: <UnitLabel>{line.purchase_unit}</UnitLabel>,
-                        })}
+                        {line.is_backup === true
+                          ? // Backup source: the stored suggestion belongs to the
+                            // primary supplier — stock only, no deviation below.
+                            tParts("orders.detail.stockOnly", {
+                              stock: line.current_stock_qty_base,
+                              inventoryUnit: <UnitLabel>{line.inventory_unit}</UnitLabel>,
+                            })
+                          : tParts("orders.detail.stockSuggestion", {
+                              stock: line.current_stock_qty_base,
+                              inventoryUnit: <UnitLabel>{line.inventory_unit}</UnitLabel>,
+                              suggested: line.suggested_qty_purchase,
+                              purchaseUnit: <UnitLabel>{line.purchase_unit}</UnitLabel>,
+                            })}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -345,8 +352,9 @@ export function OrderDetailPage() {
                               })}
                             </div>
                           )}
-                          {!(line.suggested_qty_purchase === 0 && caseOf(line) === null) &&
-                          typeof line.delta_vs_suggestion_pct === "number" ? (
+                          {line.is_backup === true ? null : !(
+                              line.suggested_qty_purchase === 0 && caseOf(line) === null
+                            ) && typeof line.delta_vs_suggestion_pct === "number" ? (
                             // A stored deviation is shown — also on a bulk-pack
                             // line whose case suggestion is 0 but whose need was
                             // not (plan-review F1). Suggestion 0 WITHOUT a case
