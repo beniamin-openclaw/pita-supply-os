@@ -371,15 +371,15 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 3.2 Operator runs A, C, then B after deploy; audit queries return the expected counts
+- [x] 3.2 Operator runs A, C, then B after deploy; audit queries return the expected counts — prod 2026-10-09 (rollout-notes.md „Wykonanie na prod”)
 - [x] 3.3 Step B2 + rollback matrix pass on prod-snapshot copies (apply, re-run refusal, full rollback byte-identical, kill switch, B2-off, order guard)
-- [ ] 3.4 Operator runs B2 after B; audit (a)–(e) return the stated results
+- [x] 3.4 Operator runs B2 after B; audit (a)–(e) return the stated results — prod 2026-10-09
 
 ### Phase 4: Deploy, access, go-live
 
 #### Automated
 
-- [ ] 4.1 CI green on the PR
+- [x] 4.1 CI green on the PR — d8c8797 (PR #62, merged as 7b03cf9)
 
 #### Manual
 
