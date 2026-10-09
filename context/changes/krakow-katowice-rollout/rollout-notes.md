@@ -528,15 +528,34 @@ Nie wpisane (jedno źródło, sprzeczne albo ogólne dla całej sieci):
 6. Pozycje wstrzymane (tabela wyżej): JAX-GRILL i DIX vs Fenix/Tenzi, ręcznik 100 mb vs „papier w roli duży”, Papryka Red Sweet vs Florinis, Majonez dekoracyjny vs Fanex, Jogurt grecki 400 g, tacki 23/12 cm, Grill Cleaner Tytan, zmywaki Jan Niezbędny (ile w opak.), słomki 25 szt, sosjerki / wieczka / torby / torebki w paczkach po 50, Vileda „ten mniejszy”, końcówka szczotki; kawa, mleko, zapalniczka, butelka na sos (nowe produkty?).
 7. Przeliczenia z sekcji „Uwagi i ryzyka”.
 
+## Wykonanie na prod (2026-10-09, MCP Supabase `lpzhphufjwrndfogkfub`)
+
+Kolejność jak w „Kolejność wdrożenia”. Każdy plik uruchomiony dosłownie (blok DO = jedna transakcja), audyty po każdym kroku.
+
+| Krok | Wynik |
+|---|---|
+| Stan przed | 0029 nieobecna; progi FORUM 114 / SUPERSAM 116; oba lokale `active=false`; 0 dostawców miejskich; katalog 260 / 172 / `c6389820fb87c3e57ad862cb70b82a52`; 0 zamówień FORUM/SUPERSAM; md5 progów `d997ba0effe8e0a7c4be34c864960ae2` = baza próbna `krkdry` |
+| Kontrola przed deployem | 0 wierszy |
+| Migracja 0029 | zastosowana; 3 kolumny, check i indeks są; 0 wierszy z `location_id` / `is_backup` |
+| A | STEP 0 zgodny z „Diff przed”; audyt (a) FORUM 35 / 4 / 118, SUPERSAM 59 / 3 / 119; (b)(c)(e) 0; (d) oba lokale `active` + `own_catalog`, adres, spółka, NIP, telefon; SUPERSAM bez e-maila |
+| C | STEP 0: 26 × `match`; po DELETE FORUM 104 / SUPERSAM 107, (b)(c) 0; md5 progów FORUM `c9f46ec77edcf639c655799cf8128a28`, SUPERSAM `ad391fb844d00dd17b6baae9a4dab32f` — identyczne z próbą lokalną |
+| Merge + deploy | CI 9/9 zielone na PR #62; merge `7b03cf9`; Railway (deployment 6958917690) i Vercel (6958928603) `success` na `7b03cf9`; `/health` ok; bundle `index-BIWyUTQY.js` → `index-BTKigPar.js` (zawiera `orders.detail.stockOnly`) |
+| B | STEP 0: 0 / 0 / 260 / 172 / `c6389820…` / `c7fa486d…` / 0 zamówień; STEP 1 bez błędu; audyt (a) jak tabela „Katalog miejski”, (b)(c)(d)(h)(i) 0, (e) FORUM 33 / SUPERSAM 36 wszystkie 0/0/0, (f) 260 / 172 / `c6389820…` / 0 `is_backup`, (g) `c7fa486d…`; odcisk 181 wierszy `e18e37b6af774b123b3b5316d2cea517` i 7 dostawców `2633044f416df34241dae050cd8e4760` = próba lokalna bajt w bajt |
+| B2 | STEP 0: 7 / 181 / 0 / 0, 24 wiersze źródłowe, tylko liczenie SUPERSAM 36 (0 niezerowych), 0 zamówień; STEP 1 bez błędu; audyt (a) Coca-Cola Katowice portal 8 + Pago + Magazyn + Lemoniady manual 16, alerty wył., minimum NULL / 0; (b) 0 z 24; (b2) 24 / 24; (c) 12, 0 niezerowych; (d) 0; (e) 260 / 172 / `c6389820…`; odcisk 24 wierszy `3dce70f49f31cf70f56afaa6165d10e5` i 2 dostawców `f8043d9b4f26cf9db38006c8babe7ca2` = próba lokalna |
+
+Zakładki kapitana po B2 (dostawcy z aktywnymi wierszami w lokalu): FORUM — Bukat Kraków, Dis-Pack Kraków, Kuchnie Świata Kraków, Selgros Kraków; SUPERSAM — Coca-Cola Katowice, Dis-Pack Katowice, Kuchnie Świata Katowice, Pago + Magazyn + Lemoniady, Selgros Katowice.
+
+Okno A → deploy: A ustawił oba lokale na `active=true` ok. 5 minut przed startem nowego backendu (Railway `success` 10:56 UTC). Kody kapitanów FORUM/SUPERSAM według planu wchodzą dopiero po B; w tym oknie nie powstało żadne zamówienie w tych lokalach (B STEP 0: 0).
+
 ## Do zrobienia przez operatora
 
-- [ ] Kontrola przed deployem (SELECT wyżej) tuż przed merge → 0 wierszy.
-- [ ] Migracja 0029 na prod (przed A).
-- [ ] A: STEP 0 (zapisać wynik tutaj), STEP 1, STEP 2 — liczby jak w „Diff przed” / „Audyt”.
-- [ ] C: osobno, przy ekranie; STEP 0 → 26 × `match`, potem DELETE.
-- [ ] Deploy kodu; `/health` na nowym commicie + nowy hash bundla Vercel.
-- [ ] B: dopiero po deployu; STEP 0 (zanotować 0c), STEP 1, STEP 2 (a)–(i).
-- [ ] B2: po B; STEP 0 (7 / 181 / 0 / 0, 24 wiersze źródłowe, 36), STEP 1, STEP 2 (a)–(e).
+- [x] Kontrola przed deployem (SELECT wyżej) tuż przed merge → 0 wierszy.
+- [x] Migracja 0029 na prod (przed A).
+- [x] A: STEP 0 (zapisać wynik tutaj), STEP 1, STEP 2 — liczby jak w „Diff przed” / „Audyt”.
+- [x] C: osobno, przy ekranie; STEP 0 → 26 × `match`, potem DELETE.
+- [x] Deploy kodu; `/health` na nowym commicie + nowy hash bundla Vercel.
+- [x] B: dopiero po deployu; STEP 0 (zanotować 0c), STEP 1, STEP 2 (a)–(i).
+- [x] B2: po B; STEP 0 (7 / 181 / 0 / 0, 24 wiersze źródłowe, 36), STEP 1, STEP 2 (a)–(e).
 - [ ] Kody kapitanów FORUM / SUPERSAM w `SUPPLY_OS_CAPTAIN_TOKENS` — dopiero po B; kody tylko na czacie, nie w repo.
 - [ ] Smoke po B, wyłącznie GET, kodem każdego lokalu: zakładki = tylko dostawcy miejscy (SUPERSAM: + Coca-Cola Katowice i Pago + Magazyn + Lemoniady), `/api/captain/inventory/products` = 104 (FORUM) i 107 (SUPERSAM) produktów; jeden lokal warszawski bez zmian. Żadnego submitu.
 - [ ] SUPERSAM: e-mail lokalu (DW) — puste, `notes` lokalu to mówi.
