@@ -13,6 +13,9 @@ Uruchamia go jedna z trzech dróg:
 (a) Ben w edytorze SQL Supabase;
 (b) agent, po dodaniu reguły zezwalającej na `execute_sql` w ustawieniach Claude Code;
 (c) sesja na mini z pominięciem uprawnień, za wyraźną zgodą Bena.
+**17.10 wybrana droga (b):** Ben dodał reguły allow (Supabase `execute_sql`, `apply_migration`, odczyty;
+Vercel tylko podgląd) na laptopie i na mini. Agent dalej wgrywa wyłącznie pliki z guardem i audytem,
+po review, w kolejności z pliku lane'u. Reguły zostają na czas fali A; do zdjęcia w Etapie 6.
 
 ---
 
@@ -36,17 +39,18 @@ Te rzeczy istnieją tylko lokalnie albo na gałęziach i mogą przepaść.
 
 Na prodzie (odczyt 17.10): SLONY aktywny, 5 dostawców GDA, 130 pozycji, są już 2 zamówienia.
 Brakuje:
-- [ ] 1.1 (SQL gotowy: `gdansk-rollout/prod-sql-3-corrections.sql`; zapis zablokowany, czeka na drogę a/b/c) Korekta od Marka (16.10). Kuchnie Świata, Selgros i Blue Service: termin „dzień
+- [x] 1.1 (17.10: Ben wkleił `gdansk-rollout/prod-sql-3-corrections.sql` w edytorze Supabase; audyt agenta OK:
+      3× „(Magazyn)”, 17:00 dla KUCHNIE/SELGROS/BLUESERV, COCACOLA i WARSZAWA bez zmian) Korekta od Marka (16.10). Kuchnie Świata, Selgros i Blue Service: termin „dzień
       wcześniej do 17:00” (dziś wszystkie mają `cutoff_time` NULL). Tzatziki/tiro/feta zostają
       w „Pago + Magazyn”, a etykieta zmienia się z „(Bukat)” na „(Magazyn)”. Coca-Cola i Pago bez zmian.
 - [ ] 1.2 ~~DELETE 12 pustych pozycji~~ **wstrzymane (D15)**. Spis z natury z 16.10 (`INV-20261016-SLO-da3c42`)
       ma stany na 7 z nich: Coca-Cola 0,33 puszka 119, Cola Zero 102, Cappy jabłko 16, Cappy pomarańcza 19,
       rolki 57/30 24, Top Glass Tenzi 8, papryka Florina 3. Zera mają: ocet, cukier w saszetkach,
       Tenzi do szyb i Top Grill. Ocet spirytusowy (P037) nie był liczony.
-- [ ] 1.3 DROP tymczasowej funkcji `gdansk_rollout_step1(boolean)`: w tym samym pliku co 1.1.
+- [x] 1.3 DROP tymczasowej funkcji `gdansk_rollout_step1(boolean)`: w tym samym pliku co 1.1 (audyt 17.10: fn = 0).
 - [ ] 1.4 Ben potwierdza, że `SLONY:<kod demo SLONY>` jest w Railway i że kapitan się loguje
       (2 zamówienia sugerują, że tak). Po demo zmienić kod na trudniejszy do zgadnięcia (review F8).
-- [ ] 1.5 Audyt + odhaczenie `gdansk-rollout/plan.md`. Reszta czeka na pakiet od Marka (Etap 3).
+- [x] 1.5 Audyt (17.10) + odhaczenie `gdansk-rollout/plan.md`. Reszta czeka na pakiet od Marka (Etap 3).
 
 ## Etap 2 — Decyzje Bena (jedna sesja tutaj, ~20 min)
 
@@ -241,7 +245,7 @@ dzielą plików, więc mogą iść równolegle.
 
 - [x] Zebranie: sesja z mini 16.10, repo, Wispr, Gmail, sesje laptopa, weryfikacja vs kod (`inputs/`)
 - [x] Etap 0 — zabezpieczenie (17.10, PR #63)
-- [ ] Etap 1 — Gdańsk
+- [ ] Etap 1 — Gdańsk (1.1, 1.3, 1.5 zrobione 17.10; 1.2 wstrzymane D15; 1.4 czeka na Bena)
 - [x] Etap 2 — decyzje (17.10: D1–D20 podjęte)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
