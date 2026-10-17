@@ -66,6 +66,27 @@ describe("ConfirmSubmitDialog — sent today", () => {
     expect(screen.getByRole("button", { name: "Wyślij mimo to" })).toBeInTheDocument();
   });
 
+  it("defaults to no warning when the prop is omitted", () => {
+    render(
+      <LangProvider>
+        <ConfirmSubmitDialog
+          open
+          lineCount={3}
+          deviationCount={0}
+          reasonCount={0}
+          criticalMissing={[]}
+          onConfirm={() => {}}
+          onCancel={() => {}}
+        />
+      </LangProvider>,
+    );
+    expect(screen.queryByTestId("confirm-sent-today")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog").getAttribute("aria-describedby")).toBe(
+      "confirm-submit-summary",
+    );
+    expect(screen.getByRole("button", { name: "Tak, wyślij" })).toBeInTheDocument();
+  });
+
   it("keeps the plain confirm without any warning", () => {
     renderDialog(null);
     expect(screen.queryByTestId("confirm-sent-today")).not.toBeInTheDocument();

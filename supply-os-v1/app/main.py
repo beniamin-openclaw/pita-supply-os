@@ -521,7 +521,13 @@ def _captain_supplier_orders(
       ``order_id``.
 
     Supplier level only: the order lines are not read, so an open order whose
-    lines the Manager zeroed still counts (its status says it is open)."""
+    lines the Manager zeroed still counts (its status says it is open).
+
+    An order the Manager created from Transport ("add location",
+    ``captain_user == "manager-default"``) is never ``sent_today``: no one at
+    the location sent it, and it may still be empty (removed at send). Showing
+    "already sent today" for it could stop the Captain's real order. It still
+    counts as an open order on later days (information only)."""
     since = today - timedelta(days=_OPEN_ORDER_WINDOW_DAYS)
 
     def _newest_key(order: Order, day: date) -> tuple[date, float, str]:
@@ -535,7 +541,8 @@ def _captain_supplier_orders(
             continue
         day = _order_submit_day(order)
         key = _newest_key(order, day)
-        if day == today and order.status not in _NOT_SENT_STATUSES:
+        manager_created = order.captain_user == "manager-default"
+        if day == today and order.status not in _NOT_SENT_STATUSES and not manager_created:
             current = sent.get(order.supplier_id)
             if current is None or key > current[0]:
                 sent[order.supplier_id] = (key, _supplier_order_ref(order, day))

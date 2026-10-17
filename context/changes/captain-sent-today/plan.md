@@ -192,12 +192,23 @@ None. No schema change; the response change is additive (two optional fields).
 
 ## Open questions
 
-- A Transport add-location order (`main.py:5975-5985`, `manager_claimed`,
-  `captain_submitted_at = now`) counts as that location's order: it shows the ✓
-  and the "sent today" notice, and later the open-order hint. Accepted for now —
-  the goods do go to that location; revisit if Captains find it confusing.
+- Resolved after impl-review (W1): a Transport add-location order
+  (`manager_claimed`, `captain_user = "manager-default"`, `captain_submitted_at`
+  = the Manager's click) is never `sent_today`. No one at the location sent it
+  and it may still be empty (removed at send), so "already sent today" could
+  stop the Captain's real order. It still shows as the open-order hint on later
+  days. Test: `test_transport_add_location_order_is_never_sent_today`.
+- Backlog (impl-review O1): `load_orders()` reads the whole `orders` table on
+  every Captain screen load; a `load_orders_since(location_id, since)` in all
+  three backends would serve this and `_open_orders_elsewhere`.
 - A screen left open past midnight drops yesterday's ✓ on the next render, but
   yesterday's order shows as the open order only after a reload or a submit.
+
+## Impl-review (Opus) applied
+
+- W1 Transport orders (above); notices: the `role="status"` region stays
+  mounted, each "Zobacz zamówienie" is described by its own notice; a test for
+  the dialog's default `sentToday`.
 
 ## References
 

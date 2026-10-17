@@ -129,6 +129,29 @@ def test_newest_order_today_wins():
     assert sent["SUP_A"].captain_submitted_at == _utc(TODAY, 12, 5)
 
 
+def test_transport_add_location_order_is_never_sent_today():
+    # Manager "add location" in Transport: manager_claimed, captain_user
+    # "manager-default", captain_submitted_at = the Manager's click — possibly
+    # still empty. It must not tell the Captain "already sent today".
+    manager_added = _order(
+        "O_TRANSPORT", "SUP_A", OrderStatus.MANAGER_CLAIMED, submitted_at=_utc(TODAY, 9)
+    )
+    manager_added.captain_user = "manager-default"
+    captain_own = _order(
+        "O_CAPTAIN", "SUP_A", OrderStatus.CAPTAIN_SUBMITTED, submitted_at=_utc(TODAY, 7)
+    )
+    captain_own.captain_user = "WOLA"
+    assert main_mod._captain_supplier_orders([manager_added], "WOLA", TODAY) == ({}, {})
+    # The Captain's own earlier order still counts, the newer Transport one does not.
+    sent, _ = main_mod._captain_supplier_orders([manager_added, captain_own], "WOLA", TODAY)
+    assert sent["SUP_A"].order_id == "O_CAPTAIN"
+    # On a later day it is an ordinary open order (information only).
+    _, open_ = main_mod._captain_supplier_orders(
+        [manager_added], "WOLA", TODAY + timedelta(days=1)
+    )
+    assert open_["SUP_A"].order_id == "O_TRANSPORT"
+
+
 def test_other_location_is_ignored():
     orders = [
         _order("O_KEN", "SUP_A", OrderStatus.CAPTAIN_SUBMITTED,
