@@ -353,6 +353,22 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
     expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
   });
 
+  it("backup: 'zamówione' is the Warsaw day of the submit, not the UTC order_date", () => {
+    renderCard(
+      makeItem({
+        is_backup: true,
+        primary_supplier_names: ["Bukat"],
+        open_orders_elsewhere: [
+          { ...ref, order_date: "2026-10-12", captain_submitted_at: "2026-10-12T22:30:00Z" },
+        ],
+      }),
+      makeLine(),
+    );
+    expect(screen.getByTestId("backup-info").textContent).toBe(
+      "Zapasowy · główny: Bukat · zamówione 13.10",
+    );
+  });
+
   it("backup without primary names still has an honest tile label", () => {
     renderCard(makeItem({ is_backup: true }), makeLine({ current_stock_qty_base: 1 }));
     expect(screen.getByTestId("backup-info").textContent).toBe("Zapasowy");

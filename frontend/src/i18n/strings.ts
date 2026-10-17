@@ -144,10 +144,6 @@ export const STRINGS = {
     en: "need {base} {inventoryUnit} → {purchase} {purchaseUnit}",
   },
   "card.backupBadge": { pl: "zapasowy", en: "backup" },
-  "card.suggestionAtPrimary": {
-    pl: "Sugestia u: {names}",
-    en: "Suggestion at: {names}",
-  },
   "card.suggestionAtPrimaryTile": { pl: "u {names}", en: "at {names}" },
   "card.suggestionAtPrimaryAria": {
     pl: "Sugestia u dostawcy głównego: {names}",

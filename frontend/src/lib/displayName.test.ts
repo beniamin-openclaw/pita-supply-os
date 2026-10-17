@@ -30,6 +30,8 @@ describe("stripBulkSuffix", () => {
     "Olej 5L (1)",
     "Olej 5L/1",
     "Zupa 400g/12g",
+    "Cukier w saszetkach 5g/200 szt",
+    "Cieciorka w zalewie 400g/240g",
     "",
   ])("leaves %j unchanged", (input: string) => {
     expect(stripBulkSuffix(input)).toBe(input);

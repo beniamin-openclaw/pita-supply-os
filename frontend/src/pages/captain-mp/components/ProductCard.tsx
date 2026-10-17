@@ -14,7 +14,7 @@
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lucide-react";
 import type { OrderableItem, CardState } from "../types";
 import type { OpenOrderRef } from "../../../types";
-import { formatDayMonth } from "../../../lib/dates";
+import { formatDayMonth, warsawTodayIso } from "../../../lib/dates";
 import { stripBulkSuffix } from "../../../lib/displayName";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
@@ -92,12 +92,24 @@ function StateIcon({ state }: { state: CardState }) {
   }
 }
 
+// Warsaw calendar day an open order was placed: the submit moment, as the
+// backend's 7-day window reads it (`_open_orders_elsewhere`) and as the
+// Captain's own order list shows it. `order_date` is only the fallback: it is
+// the UTC day, one day early for a submit between 00:00 and 02:00 Warsaw.
+function orderedDayIso(order: OpenOrderRef): string {
+  if (order.captain_submitted_at) {
+    const submitted: Date = new Date(order.captain_submitted_at);
+    if (!Number.isNaN(submitted.getTime())) return warsawTodayIso(submitted);
+  }
+  return order.order_date || "";
+}
+
 function newestOpenOrderDate(orders: OpenOrderRef[] | undefined): string | null {
   if (!orders || orders.length === 0) return null;
-  const newest: OpenOrderRef = orders.reduce((a: OpenOrderRef, b: OpenOrderRef) =>
-    (b.order_date || "") > (a.order_date || "") ? b : a,
-  );
-  return newest.order_date ? formatDayMonth(newest.order_date) : null;
+  const newest: string = orders
+    .map((o: OpenOrderRef) => orderedDayIso(o))
+    .reduce((a: string, b: string) => (b > a ? b : a), "");
+  return newest ? formatDayMonth(newest) : null;
 }
 
 export function ProductCard({
