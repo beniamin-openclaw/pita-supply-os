@@ -103,4 +103,44 @@ describe("ReceiveDeliveryPage received-by message (N4)", () => {
     await waitFor(() => expect(screen.queryByText(MSG)).toBeNull());
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  it("keeps the error out of the field's accessible name (it is only the description)", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: CONFIRM }));
+    const alert = await screen.findByRole("alert");
+    // input[list] → combobox. The name must stay the label alone; the error is
+    // announced once, via aria-describedby.
+    const field = screen.getByRole("combobox", { name: "Kto odebrał" });
+    expect(field.getAttribute("aria-describedby")).toBe(alert.id);
+  });
+
+  it("submits once with the trimmed name when the name is filled", async () => {
+    receiptSubmit.mockResolvedValue({ receipt_id: "R-1" });
+    renderPage();
+    const btn = await screen.findByRole("button", { name: CONFIRM });
+    fireEvent.change(screen.getByPlaceholderText("Imię i nazwisko"), {
+      target: { value: "  Ela  " },
+    });
+    fireEvent.click(btn);
+    await waitFor(() => expect(receiptSubmit).toHaveBeenCalledTimes(1));
+    expect(receiptSubmit.mock.calls[0][0]).toMatchObject({
+      order_id: "ORD-1",
+      received_by: "Ela",
+      lines: [{ order_line_id: "L1", received_qty_purchase: 2 }],
+    });
+  });
+
+  it("still disables the button while a delivered line is blank (recount gate unchanged)", async () => {
+    renderPage();
+    const btn = await screen.findByRole("button", { name: CONFIRM });
+    fireEvent.change(screen.getByPlaceholderText("Imię i nazwisko"), {
+      target: { value: "Ela" },
+    });
+    fireEvent.change(screen.getByLabelText("Dostarczono — Produkt 1"), {
+      target: { value: "" },
+    });
+    await waitFor(() => expect((btn as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(btn);
+    expect(receiptSubmit).not.toHaveBeenCalled();
+  });
 });

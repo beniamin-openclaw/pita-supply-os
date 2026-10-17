@@ -258,29 +258,39 @@ export function ReceiveDeliveryPage() {
               </div>
             )}
 
-            <label className="mb-4 block">
-              <span className="text-sm font-semibold text-slate-900">
-                {t("delivery.receivedByLabel")}
-              </span>
-              <input
-                ref={receivedByRef}
-                type="text"
-                value={receivedBy}
-                onChange={(e) => setReceivedBy(e.target.value)}
-                aria-invalid={showNameError}
-                aria-describedby={showNameError ? "delivery-received-by-error" : undefined}
-                placeholder={t("delivery.receivedByPlaceholder")}
-                readOnly={receiptSaved}
-                autoComplete="name"
-                list="delivery-received-by-suggestions"
-                className={`mt-1 w-full rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  receiptSaved
-                    ? "border-slate-200 bg-slate-100 text-slate-500"
-                    : showNameError
-                      ? "border-red-500"
-                      : "border-slate-300"
-                }`}
-              />
+            {/* The error sits OUTSIDE the <label>: inside it, its text joined the
+                input's accessible name ("Kto odebrał Wpisz, kto odebrał…") and
+                was read twice together with aria-describedby. */}
+            <div className="mb-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-900">
+                  {t("delivery.receivedByLabel")}
+                </span>
+                <input
+                  ref={receivedByRef}
+                  type="text"
+                  value={receivedBy}
+                  onChange={(e) => setReceivedBy(e.target.value)}
+                  aria-invalid={showNameError}
+                  aria-describedby={showNameError ? "delivery-received-by-error" : undefined}
+                  placeholder={t("delivery.receivedByPlaceholder")}
+                  readOnly={receiptSaved}
+                  autoComplete="name"
+                  list="delivery-received-by-suggestions"
+                  className={`mt-1 scroll-mt-20 w-full rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    receiptSaved
+                      ? "border-slate-200 bg-slate-100 text-slate-500"
+                      : showNameError
+                        ? "border-red-500"
+                        : "border-slate-300"
+                  }`}
+                />
+                <datalist id="delivery-received-by-suggestions">
+                  {receivedBySuggestions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </label>
               {showNameError && (
                 <p
                   id="delivery-received-by-error"
@@ -290,12 +300,7 @@ export function ReceiveDeliveryPage() {
                   {t("delivery.receivedByRequired")}
                 </p>
               )}
-              <datalist id="delivery-received-by-suggestions">
-                {receivedBySuggestions.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-            </label>
+            </div>
 
             <div className="mb-4">
               {order.lines.map((line) => (

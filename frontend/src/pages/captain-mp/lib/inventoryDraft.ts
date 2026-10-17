@@ -7,7 +7,7 @@
 // `auth.ts`), so the key is scoped by a short fingerprint of that token. The
 // raw token is never written into a key.
 
-import { clearDraft, loadDraft, saveDraft } from "../../../auth";
+import { clearDraft } from "../../../auth";
 
 /** Fixed key used before N19 (shared by every location on the device). */
 export const LEGACY_INVENTORY_DRAFT_KEY = "__inventory__";
@@ -28,22 +28,11 @@ export function inventoryDraftKey(token: string | null | undefined): string {
   return `${LEGACY_INVENTORY_DRAFT_KEY}:${captainScope(token)}`;
 }
 
-interface ScopedLegacyDraft {
-  state?: { scope?: string };
-}
-
 /**
- * One-shot cleanup of the pre-N19 shared draft. If it recorded a scope that
- * matches this location it is moved to the new key; otherwise (the old format
- * never recorded one) it cannot be attributed to a location, so it is dropped
- * rather than loaded at the wrong place.
+ * One-shot removal of the pre-N19 shared draft. The old format never recorded a
+ * location, so it cannot be attributed to one; it is dropped (once, on first
+ * load after deploy) rather than offered at the wrong location.
  */
-export function migrateLegacyInventoryDraft(token: string | null | undefined): void {
-  const legacy = loadDraft<ScopedLegacyDraft["state"]>(LEGACY_INVENTORY_DRAFT_KEY);
-  if (!legacy) return;
-  const scope = legacy.state?.scope;
-  if (scope && scope === captainScope(token) && !loadDraft(inventoryDraftKey(token))) {
-    saveDraft(inventoryDraftKey(token), legacy.state);
-  }
+export function removeLegacyInventoryDraft(): void {
   clearDraft(LEGACY_INVENTORY_DRAFT_KEY);
 }

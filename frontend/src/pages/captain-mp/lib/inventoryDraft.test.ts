@@ -8,7 +8,7 @@ import {
   captainScope,
   inventoryDraftKey,
   LEGACY_INVENTORY_DRAFT_KEY,
-  migrateLegacyInventoryDraft,
+  removeLegacyInventoryDraft,
 } from "./inventoryDraft";
 
 let store: Map<string, string>;
@@ -59,40 +59,19 @@ describe("per-location draft isolation", () => {
   });
 });
 
-describe("migrateLegacyInventoryDraft", () => {
-  it("drops an unattributed legacy draft without loading it anywhere", () => {
+describe("removeLegacyInventoryDraft", () => {
+  it("removes the legacy shared key and leaves scoped keys untouched", () => {
     saveDraft(LEGACY_INVENTORY_DRAFT_KEY, STATE);
-    migrateLegacyInventoryDraft("tok-wola");
+    saveDraft(inventoryDraftKey("tok-wola"), STATE);
+    saveDraft(inventoryDraftKey("tok-bracka"), STATE);
+    removeLegacyInventoryDraft();
     expect(loadDraft(LEGACY_INVENTORY_DRAFT_KEY)).toBeNull();
-    expect(loadDraft(inventoryDraftKey("tok-wola"))).toBeNull();
-  });
-
-  it("moves a legacy draft that records a matching location to the new key once", () => {
-    saveDraft(LEGACY_INVENTORY_DRAFT_KEY, { ...STATE, scope: captainScope("tok-wola") });
-    migrateLegacyInventoryDraft("tok-wola");
-    expect(loadDraft(LEGACY_INVENTORY_DRAFT_KEY)).toBeNull();
-    expect(loadDraft<typeof STATE>(inventoryDraftKey("tok-wola"))?.state.lines).toEqual(
-      STATE.lines,
-    );
-  });
-
-  it("drops a legacy draft recorded for a different location", () => {
-    saveDraft(LEGACY_INVENTORY_DRAFT_KEY, { ...STATE, scope: captainScope("tok-bracka") });
-    migrateLegacyInventoryDraft("tok-wola");
-    expect(loadDraft(LEGACY_INVENTORY_DRAFT_KEY)).toBeNull();
-    expect(loadDraft(inventoryDraftKey("tok-wola"))).toBeNull();
-  });
-
-  it("does not overwrite an existing new-key draft", () => {
-    const key = inventoryDraftKey("tok-wola");
-    saveDraft(key, { ...STATE, timestamp: 99 });
-    saveDraft(LEGACY_INVENTORY_DRAFT_KEY, { ...STATE, scope: captainScope("tok-wola") });
-    migrateLegacyInventoryDraft("tok-wola");
-    expect(loadDraft<typeof STATE>(key)?.state.timestamp).toBe(99);
+    expect(loadDraft(inventoryDraftKey("tok-wola"))).not.toBeNull();
+    expect(loadDraft(inventoryDraftKey("tok-bracka"))).not.toBeNull();
   });
 
   it("is a no-op when there is no legacy draft", () => {
-    migrateLegacyInventoryDraft("tok-wola");
+    removeLegacyInventoryDraft();
     expect(store.size).toBe(0);
   });
 });
