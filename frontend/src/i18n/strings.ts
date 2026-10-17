@@ -177,6 +177,18 @@ export const STRINGS = {
   },
   "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
   "stock.didYouMeanNo": { pl: "Nie", en: "No" },
+  // N1: the same quantity typed into BOTH fields ("2 kartony" + "24 szt"
+  // for 24 szt) doubles it. Shared by the stock and the order input.
+  "packEntry.duplicate": {
+    pl: "Razem {total}. Czy {loose} to te same {packs}?",
+    en: "That is {total} in total. Is {loose} the same as {packs}?",
+  },
+  "packEntry.duplicateYes": { pl: "Tak, tylko {fixed}", en: "Yes, only {fixed}" },
+  "packEntry.duplicateNo": { pl: "Nie, razem {total}", en: "No, {total} in total" },
+  "packEntry.looseOverPack": {
+    pl: "Luzem jest więcej niż {pack}. Razem {total}. Sprawdź, czy nic nie jest wpisane dwa razy.",
+    en: "Loose is more than {pack}. {total} in total. Check that nothing is entered twice.",
+  },
 
   // Grams typed for a piece-counted product (name carries the weight).
   "gramsHint.didYouMean": {

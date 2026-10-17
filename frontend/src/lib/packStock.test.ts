@@ -7,6 +7,7 @@ import {
   formatBaseQty,
   suggestPackCount,
   formatCaseQty,
+  detectDoubleEntry,
 } from "./packStock";
 
 describe("splitPackStock", () => {
@@ -92,4 +93,36 @@ describe("formatCaseQty (D35, twin of gmail_url._format_case_qty)", () => {
   it("splits a float artefact like 18.000000000000004 as whole cases", () => {
     expect(formatCaseQty(0.1 * 3 * 60, 6, "skrzynka", "kg")).toBe("3 skrzynki (18 kg)");
   });
+});
+
+describe("detectDoubleEntry (N1, Browary/Intermlecz 02.10)", () => {
+  it.each([
+    // The 02.10 order lines: the same quantity typed into both fields.
+    [2, 24, 12, 24], // halloumi order: 2 kartony + 24 szt -> meant 24
+    [4, 48, 12, 48], // halloumi stock: 4 kartony + 48 szt -> meant 48
+    [5, 20, 4, 20], // frytki order: 5 kartonów + 20 paczek -> meant 20
+    [6, 36, 6, 36], // pomidor order: 6 skrzynek + 36 kg -> meant 36
+    [1, 4.2, 4.2, 4.2], // fractional pack size
+  ])("packs %s + loose %s (upp %s) is a duplicate of %s", (packs, loose, upp, fixed) => {
+    expect(detectDoubleEntry({ packs, loose, upp })).toEqual({ kind: "duplicate", fixed });
+  });
+
+  it("loose of a whole pack or more next to packs is a warning without a fix", () => {
+    expect(detectDoubleEntry({ packs: 2, loose: 30, upp: 12 })).toEqual({ kind: "looseOverPack" });
+    expect(detectDoubleEntry({ packs: 1, loose: 12, upp: 6 })).toEqual({ kind: "looseOverPack" });
+  });
+
+  it.each([
+    [2, 4, 12], // a real remainder
+    ["", 24, 12], // loose only: 24 szt is fine
+    [0, 24, 12],
+    [2, "", 12],
+    [2, 0, 12],
+    [2, 2, 1], // ×1 unit: no pack at all
+  ] as Array<[number | "", number | "", number]>)(
+    "packs %s + loose %s (upp %s) is fine",
+    (packs, loose, upp) => {
+      expect(detectDoubleEntry({ packs, loose, upp })).toBeNull();
+    },
+  );
 });

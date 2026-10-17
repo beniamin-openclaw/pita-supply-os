@@ -79,6 +79,34 @@ export function suggestPackCount(args: {
 }
 
 /**
+ * N1 (Browary/Intermlecz, 02.10): a Captain typed the same quantity into BOTH
+ * fields — "2 kartony" AND "24 szt" for 24 szt — and the sum ordered 48. The
+ * pair "packs > 0 and loose = packs × upp" is that signature: the combined
+ * value is exactly double what was meant. `duplicate` carries the corrected
+ * quantity (loose dropped). Loose of a whole pack or more next to packs is not
+ * a clean duplicate but still never meant ("2 kartony + 30 szt"): `looseOverPack`,
+ * a warning without a fix. Otherwise null. Pure; the UI never blocks on it.
+ */
+export type DoubleEntry =
+  | { kind: "duplicate"; fixed: number }
+  | { kind: "looseOverPack" }
+  | null;
+
+export function detectDoubleEntry(args: {
+  packs: number | "";
+  loose: number | "";
+  upp: number;
+}): DoubleEntry {
+  const { packs, loose, upp } = args;
+  if (!isPackBased(upp)) return null;
+  if (typeof packs !== "number" || !(packs > 0)) return null;
+  if (typeof loose !== "number" || !(loose > 0)) return null;
+  if (Math.abs(loose - packs * upp) < EPS) return { kind: "duplicate", fixed: round3(packs * upp) };
+  if (loose >= upp - EPS) return { kind: "looseOverPack" };
+  return null;
+}
+
+/**
  * D35 wording of a purchase quantity with a bulk pack, for the supplier e-mail
  * and the copy lists — twin of gmail_url._format_case_qty, Polish only:
  *   whole cases   -> "6 kartonów (24 paczki)"

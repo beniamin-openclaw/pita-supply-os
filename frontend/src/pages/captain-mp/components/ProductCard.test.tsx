@@ -368,3 +368,111 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
     expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
   });
 });
+
+// N1 — Marek 02.10: "Dubluje zamówienie, daje X2" (Browary, Intermlecz). Prod
+// ORD-20261002-BRO-INTE-b0cd66: halloumi (karton = 12 szt) stock 96, order 48
+// (manager cut to 24); frytki (karton = 4 paczki) stock 32, order 40 (cut to
+// 20). Both match the same number typed into the [kartony] AND [szt] fields.
+describe("ProductCard — N1 double entry in [cases] + [loose]", () => {
+  const halloumi = (): OrderableItem =>
+    makeItem({
+      product_id: "P015",
+      product_name_pl: "Halloumi",
+      inventory_unit: "szt",
+      purchase_unit: "szt",
+      units_per_purchase_unit: 1,
+      rounding_rule: "full_only",
+      target_stock_qty_base: 72,
+      max_stock_qty_base: 72,
+      supplier_product_id: "SP_INTERMLECZ_P015",
+      supplier_product_name: "EURIAL REHA HALLOUMI SER DO GRILLOWANIA 200g/12",
+      case_unit: "karton",
+      units_per_case: 12,
+    });
+
+  it("repro: 2 kartony + 24 szt orders 48 and the card says so; 'Tak' fixes it to 24", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
+    // The sum is what the two fields mean today — the bug Marek saw.
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 48 }),
+    );
+    // The prompt is visible without leaving the field.
+    expect(
+      screen.getByText(innermostText("Razem 48 szt. Czy 24 szt to te same 2 kartony?")),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 24 szt" }));
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 24 }),
+    );
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("2");
+    expect((screen.getByLabelText("Zamawiasz, szt") as HTMLInputElement).value).toBe("0");
+    expect(screen.queryByText(/te same/)).not.toBeInTheDocument();
+  });
+
+  it("the stock field gets the same prompt (4 kartony + 48 szt -> 48)", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015" }),
+    );
+    retype(screen.getByLabelText("Obecny stan, karton"), "4");
+    retype(screen.getByLabelText("Obecny stan, szt"), "48");
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ current_stock_qty_base: 96 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 48 szt" }));
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ current_stock_qty_base: 48 }),
+    );
+  });
+
+  it("'Nie' keeps the sum and hides the prompt for that pair", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 0 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
+    fireEvent.click(screen.getByRole("button", { name: "Nie, razem 48 szt" }));
+    expect(screen.queryByText(/te same/)).not.toBeInTheDocument();
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 48 }),
+    );
+  });
+
+  it("a real remainder (2 kartony + 4 szt) shows no prompt; a loose over a carton warns", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "4" } });
+    expect(screen.queryByText(/te same|Luzem jest/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "30" } });
+    expect(
+      screen.getByText(
+        innermostText(
+          "Luzem jest więcej niż karton. Razem 54 szt. Sprawdź, czy nic nie jest wpisane dwa razy.",
+        ),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("a restored value (draft 48) splits to 4 kartony + 0 and shows no prompt", () => {
+    renderCard(
+      halloumi(),
+      makeLine({
+        product_id: "P015",
+        supplier_product_id: "SP_INTERMLECZ_P015",
+        current_stock_qty_base: 48,
+        captain_final_qty_purchase: 48,
+      }),
+    );
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("4");
+    expect(screen.queryByText(/te same|Luzem jest/)).not.toBeInTheDocument();
+  });
+});

@@ -889,3 +889,36 @@ def test_submit_case_uncounted_over_max():
     r = client.post("/api/captain/submit", json=_pomidor_body(None, 43), headers=WOLA_AUTH)
     assert r.status_code == 400
     assert "over MAX (43 > 42)" in r.json()["detail"]
+
+
+# ---------- N1: "Dubluje zamówienie, daje X2" (Browary/Intermlecz, 02.10) ----------
+# The Captain's [cases] + [loose] fields combine on the client into ONE purchase
+# quantity; the backend never sees the pair. Prod ORD-20261002-BRO-INTE-b0cd66
+# stored 48 szt halloumi / 40 paczek frytki — exactly what the client sent after
+# the same number was typed into both fields. The backend half of the
+# regression: the submit path stores and words the quantity it receives, with
+# no second case multiplication (the fix itself is the client prompt).
+
+
+def test_submit_case_quantity_is_stored_once_not_multiplied_by_the_case(mocker):
+    """6 crates of 6 kg arrive as 36 kg and are stored as 36 kg (not 72, not 216)."""
+    mocked_append_lines = _patch_sheet_master_data(mocker)
+    body = _pomidor_body(0, 36, reason_code="EVENT_HIGH_TRAFFIC")
+    r = client.post("/api/captain/submit", json=body, headers=WOLA_AUTH)
+    assert r.status_code == 200, r.text
+    appended = mocked_append_lines.call_args[0][0][0]
+    assert appended.captain_final_qty_purchase == 36
+    assert appended.captain_final_qty_base == 36
+
+
+@pytest.mark.parametrize(
+    "qty, expected",
+    [
+        (24, "2 kartony (24 szt)"),  # what Browary meant on 02.10
+        (48, "4 kartony (48 szt)"),  # what the doubled entry sent
+    ],
+)
+def test_case_wording_of_the_browary_halloumi_line(qty, expected):
+    from app import gmail_url
+
+    assert gmail_url._format_case_qty(qty, 12, "karton", "szt") == expected

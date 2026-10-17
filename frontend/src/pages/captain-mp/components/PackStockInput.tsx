@@ -7,6 +7,9 @@
 // Also the Captain's ORDER input for a product with a bulk pack (feedback-1001
 // D22, `copy="order"`): "[cases] + [loose purchase units]", emitting one
 // combined purchase quantity, so drafts and buildPayloadLines never change.
+//
+// N1: typing the same quantity into both fields ("2 kartony" + "24 szt") sums
+// to double; a second soft prompt names the total and offers the one-tap fix.
 
 import { useState, type FocusEvent, type ReactNode } from "react";
 
@@ -16,6 +19,7 @@ import { packUnitLabel } from "../../../i18n/packUnits";
 import { PackQty, UnitLabel } from "./UnitLabel";
 import {
   combinePackStock,
+  detectDoubleEntry,
   formatBaseQty,
   splitPackStock,
   suggestPackCount,
@@ -118,6 +122,8 @@ export function PackStockInput({
   // The prompt only follows the Captain's own typing — never old data on mount.
   const [touched, setTouched] = useState(false);
   const [dismissedLoose, setDismissedLoose] = useState<number | "" | null>(null);
+  // The double-entry prompt is dismissed for one exact pair only.
+  const [dismissedPair, setDismissedPair] = useState<string | null>(null);
 
   // Re-seed on an EXTERNAL value change only (draft restore, supplier switch,
   // snapshot pre-fill). The parent echoing back what we just emitted equals
@@ -165,6 +171,17 @@ export function PackStockInput({
     references,
   });
   const showPrompt = suggested !== null && touched && !focused && dismissedLoose !== pair.loose;
+
+  // Shown while typing too (not only after blur): the Captain may go straight
+  // from the loose field to "Wyślij", and the doubled order must be visible.
+  const doubleEntry = detectDoubleEntry({ packs: pair.packs, loose: pair.loose, upp });
+  const pairKey = `${pair.packs}|${pair.loose}`;
+  const showDouble = doubleEntry !== null && touched && dismissedPair !== pairKey;
+  const qtyWithUnit = (n: number, unit: string): ReactNode => (
+    <>
+      {formatBaseQty(n, lang)} <UnitLabel>{packUnitLabel(n, unit, lang)}</UnitLabel>
+    </>
+  );
 
   // Only focus inside the two FIELDS suppresses the prompt — focusing the
   // prompt's own buttons must not unmount it before the click lands.
@@ -229,6 +246,47 @@ export function PackStockInput({
           {reading}
         </div>
       </div>
+      {showDouble && doubleEntry !== null && typeof combined === "number" && (
+        <div
+          role="status"
+          className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          {doubleEntry.kind === "duplicate" ? (
+            <>
+              <span>
+                {tParts("packEntry.duplicate", {
+                  total: qtyWithUnit(combined, baseUnit),
+                  loose: qtyWithUnit(Number(pair.loose), baseUnit),
+                  packs: <PackQty n={Number(pair.packs)} unit={packUnit} lang={lang} />,
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={() => emit({ packs: pair.packs, loose: 0 })}
+                className="rounded-full bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {tParts("packEntry.duplicateYes", {
+                  fixed: qtyWithUnit(doubleEntry.fixed, baseUnit),
+                })}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDismissedPair(pairKey)}
+                className="rounded-full border border-amber-400 bg-white px-3 py-1.5 text-sm text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {tParts("packEntry.duplicateNo", { total: qtyWithUnit(combined, baseUnit) })}
+              </button>
+            </>
+          ) : (
+            <span>
+              {tParts("packEntry.looseOverPack", {
+                pack: packUnitLabel(1, packUnit, lang),
+                total: qtyWithUnit(combined, baseUnit),
+              })}
+            </span>
+          )}
+        </div>
+      )}
       {showPrompt && suggested !== null && (
         <div
           role="status"
