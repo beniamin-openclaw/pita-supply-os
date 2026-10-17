@@ -189,12 +189,17 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       - Sebastian: Fuzetea, Kinley, Burn i kategorie.
 - [ ] 4.14 **Raport Krakowa 11.10** (seniorbrospb@, do Georgiosa; przeczytany w całości 17.10). Część Supply OS:
       - termin Bukat 16:00 zamiast 17:00: **zrobione** 17.10 (Lane D plik 1, reguła `DR-BUKAT-KRK-ALL`), czeka na kontrolę na żywo;
-      - halloumi cięte w kg: **zrobione** 17.10 (P192, FORUM, D8). Halloumi w stanie w kg zamiast szt: **nie zrobione**,
-        P015 jest liczone w sztukach (200 g) we wszystkich 12 lokalach. Zmiana jednostki = osobna decyzja Bena (W49);
-      - pita na sztuki zamiast kartonów: **nie robimy** (D8, jedna jednostka na produkt, W49). Trzeba to odpisać Krakowowi;
-      - Thamma Lemon i Mastiha: czekają na dostawcę i cenę od Marka (Etap 3 pkt 2);
-      - kolejność napojów jak na papierowej liście: **nie zrobione**. Potrzebna papierowa lista z Forum; potem SQL kolejności kart
-        dla FORUM (ten sam mechanizm co 4.5);
+      - halloumi cięte w kg: **zrobione** 17.10 (P192, FORUM, D8). Halloumi zamawiane zostaje w szt (200 g);
+        **Ben 17.10:** obok wpisanej ilości pokazać w nawiasie, ile to kg (np. „12 szt (2,4 kg)”). Mały patch ekranu
+        kapitana, fala B (Lane C); `lib/gramsHint.ts` już czyta 200 g z nazwy;
+      - pita: spis już działa w kartonach + opakowaniach (`PackStockInput`: P026 opak = 10 szt, karton = 12 opak,
+        aplikacja sama sumuje). Luźne pity wpisuje się jako ułamek opakowania (3 szt = 0,3). Osobnej jednostki „sztuka”
+        nie dodajemy (D8, jedna jednostka na produkt, W49), bo zamówienie i sugestia liczą w opakowaniach;
+      - Thamma Lemon i Mastiha: Ben nie wie, co to (17.10). Pytanie wraca do Krakowa (co to i od kogo), nie do Marka;
+      - kolejność napojów = arkusze „Inwentaryzacja” (karty DRUK). Kod jest na main (`inventory-card-order`, 0027),
+        ale na prodzie `inventory_order` jest pusty wszędzie (odczyt 17.10: 0 produktów, 0 nadpisań), czyli punkt 4.5
+        nie poszedł. Do zrobienia: odświeżyć `inventory-card-order/prod-sql.sql` (nowe produkty po 28.09, np. P190–P192),
+        review, wgrać. Dotyczy wszystkich lokali, nie tylko Forum;
       - pkt 5 raportu był niekompletny (sama autorka tak pisze).
       Reszta raportu (sprzęt, eventy Forum, menu Fast, zespół, premia Eryka, szkolenie Kamala) nie dotyczy Supply OS: zostaje u Georgiosa.
 
