@@ -242,10 +242,10 @@ dzielą plików, więc mogą iść równolegle.
 - [x] Zebranie: sesja z mini 16.10, repo, Wispr, Gmail, sesje laptopa, weryfikacja vs kod (`inputs/`)
 - [x] Etap 0 — zabezpieczenie (17.10, PR #63)
 - [ ] Etap 1 — Gdańsk
-- [ ] Etap 2 — decyzje (17.10: D1–D4, D6–D9, D11–D19 podjęte; D5, D6 blokada/ostrzeżenie, D10, D20 otwarte)
+- [ ] Etap 2 — decyzje (17.10: D1–D4, D6–D20 podjęte; otwarte: D5 potwierdzenie, D6 blokada czy ostrzeżenie)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
-- [ ] Etap 5 — fala A
+- [ ] Etap 5 — fala A (17.10: karty sesji Lane C, E, D zaproponowane Benowi; Lane M po Lane C)
 - [ ] Etap 5 — fala B
 - [ ] Etap 5 — fala C
 - [ ] Etap 6 — porządki
