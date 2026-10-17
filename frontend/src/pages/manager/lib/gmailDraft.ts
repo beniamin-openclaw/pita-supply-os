@@ -500,7 +500,7 @@ export async function requestGmailAccessToken(
 export async function createGmailDraft(
   accessToken: string,
   rawBase64Url: string,
-): Promise<{ id: string }> {
+): Promise<{ id: string; messageId: string }> {
   const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
     method: "POST",
     headers: {
@@ -510,8 +510,10 @@ export async function createGmailDraft(
     body: JSON.stringify({ message: { raw: rawBase64Url } }),
   });
   await throwIfNotOk(resp);
-  const data = (await resp.json()) as { id: string };
-  return data;
+  const data = (await resp.json()) as { id: string; message?: { id?: string } };
+  // message.id opens this draft in the Gmail UI (orderEmailDraft
+  // gmailDraftOpenUrl); "" when Gmail leaves it out.
+  return { id: data.id, messageId: data.message?.id ?? "" };
 }
 
 /** The access token was rejected (expired or revoked). The token cache is

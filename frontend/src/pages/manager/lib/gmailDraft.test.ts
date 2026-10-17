@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 import { STRINGS, interpolateTemplate, type Lang } from "../../../i18n";
 import type { StringKey } from "../../../i18n/strings";
@@ -8,6 +8,7 @@ import {
   buildGmailAuthUrl,
   buildMimeMessage,
   buildPagoDraftEmail,
+  createGmailDraft,
   parseOAuthCallbackHash,
   toBase64Url,
 } from "./gmailDraft";
@@ -509,5 +510,35 @@ describe("buildDriverDraftEmail", () => {
     expect(bodyText).toContain("Pickup date: 2026-10-06");
     expect(bodyText).toContain("Driver: to be confirmed");
     expect(bodyText).toContain("Notes:");
+  });
+});
+
+describe("createGmailDraft (supplier-email-v21 WP3)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubFetch(json: unknown): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(json), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("returns the draft id and its message id (the one the Gmail UI opens)", async () => {
+    const fetchMock = stubFetch({ id: "r-1", message: { id: "m-1", threadId: "t-1" } });
+    await expect(createGmailDraft("tok", "cmF3")).resolves.toStrictEqual({
+      id: "r-1",
+      messageId: "m-1",
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://gmail.googleapis.com/gmail/v1/users/me/drafts");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ message: { raw: "cmF3" } });
+  });
+
+  it("gives an empty message id when Gmail leaves it out", async () => {
+    stubFetch({ id: "r-2" });
+    await expect(createGmailDraft("tok", "cmF3")).resolves.toStrictEqual({
+      id: "r-2",
+      messageId: "",
+    });
   });
 });

@@ -1,4 +1,5 @@
 // order-email-v2: the verified Gmail draft path in the dispatch panel.
+// supplier-email-v21 WP3: one "Wyślij" button; the rest behind "Inne opcje".
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -12,7 +13,7 @@ vi.mock("./lib/orderEmailDraft", async (importOriginal) => {
   return {
     ...real,
     getGoogleClientId: vi.fn(() => "client-id"),
-    createVerifiedOrderDraft: vi.fn(async () => ({ draftId: "r-1" })),
+    createVerifiedOrderDraft: vi.fn(async () => ({ draftId: "r-1", messageId: "m-1" })),
   };
 });
 
@@ -100,7 +101,7 @@ beforeEach(() => {
   });
   vi.mocked(orderDraft.getGoogleClientId).mockReturnValue("client-id");
   vi.mocked(orderDraft.createVerifiedOrderDraft).mockReset();
-  vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({ draftId: "r-1" });
+  vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({ draftId: "r-1", messageId: "m-1" });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -109,13 +110,13 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
     renderPanel(makeDetail());
     expect(screen.getByText("Pita Bros Bracka <bracka@pitabros.pl>")).toBeInTheDocument();
     expect(screen.getByText("pitabrosbracka@gmail.com")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Zrób draft w Gmailu" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Wyślij" })).toBeEnabled();
   });
 
   it("a verified draft dispatches with the signer and the mailbox", async () => {
     const onDispatch = renderPanel(makeDetail());
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+      fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
     });
     const call = vi.mocked(orderDraft.createVerifiedOrderDraft).mock.calls[0][0];
     expect(call.mailbox).toBe("biuro@pitabros.pl");
@@ -125,7 +126,35 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
     expect(call.body).toContain("Marek Złotopolski");
     expect(onDispatch).toHaveBeenCalledWith("email", "marek@pitabros.pl", {
       draftMailbox: "biuro@pitabros.pl",
+      draftUrl: "https://mail.google.com/mail/?authuser=biuro%40pitabros.pl#drafts?compose=m-1",
     });
+  });
+
+  it("a draft without a message id falls back to the Drafts folder link", async () => {
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
+      draftId: "r-1",
+      messageId: "",
+    });
+    const onDispatch = renderPanel(makeDetail());
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
+    });
+    expect(onDispatch).toHaveBeenCalledWith("email", "marek@pitabros.pl", {
+      draftMailbox: "biuro@pitabros.pl",
+      draftUrl: "https://mail.google.com/mail/?authuser=biuro%40pitabros.pl#drafts",
+    });
+  });
+
+  it("the link and copy actions sit behind a closed 'Inne opcje'", () => {
+    renderPanel(makeDetail());
+    const summary = screen.getByText("Inne opcje");
+    const details = summary.closest("details");
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute("open");
+    expect(screen.getByText("Otwórz w Gmail").closest("details")).toBe(details);
+    expect(screen.getByText("Otwórz w Gmail")).not.toBeVisible();
+    // The old label is gone from this panel (ResendPanel keeps it).
+    expect(screen.queryByRole("button", { name: "Zrób draft w Gmailu" })).toBeNull();
   });
 
   it("a failed draft does not dispatch and shows the reason", async () => {
@@ -134,14 +163,14 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
     );
     const onDispatch = renderPanel(makeDetail());
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+      fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
     });
     expect(onDispatch).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent("beniamin@pitabros.pl");
   });
 
   it("while drafting the fallback link is inert", async () => {
-    let finish: (v: { draftId: string }) => void = () => {};
+    let finish: (v: { draftId: string; messageId: string }) => void = () => {};
     vi.mocked(orderDraft.createVerifiedOrderDraft).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve;
@@ -149,14 +178,14 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
     );
     const onDispatch = renderPanel(makeDetail());
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+      fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
     });
     expect(screen.queryByRole("link", { name: "Otwórz w Gmail" })).toBeNull();
     const inert = screen.getByText("Otwórz w Gmail");
     expect(inert).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(inert);
     expect(onDispatch).not.toHaveBeenCalled();
-    await act(async () => finish({ draftId: "r-1" }));
+    await act(async () => finish({ draftId: "r-1", messageId: "m-1" }));
     expect(onDispatch).toHaveBeenCalledTimes(1);
   });
 
@@ -164,14 +193,14 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
     const onDraftingChange = vi.fn();
     renderPanel(makeDetail(), vi.fn(), { onDraftingChange });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+      fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
     });
     expect(onDraftingChange.mock.calls).toEqual([[true], [false]]);
 
     vi.mocked(orderDraft.createVerifiedOrderDraft).mockRejectedValue(new Error("x"));
     onDraftingChange.mockClear();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Zrób draft w Gmailu" }));
+      fireEvent.click(screen.getByRole("button", { name: "Wyślij" }));
     });
     expect(onDraftingChange.mock.calls).toEqual([[true], [false]]);
   });
@@ -186,7 +215,7 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
   it("without a client id: no draft button, the link still works", () => {
     vi.mocked(orderDraft.getGoogleClientId).mockReturnValue("");
     const onDispatch = renderPanel(makeDetail());
-    expect(screen.queryByRole("button", { name: "Zrób draft w Gmailu" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Wyślij" })).toBeNull();
     // DW falls back to the link's rule (office copy + location mailbox).
     expect(screen.getByText("biuro@pitabros.pl, pitabrosbracka@gmail.com")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("link", { name: "Otwórz w Gmail" }));
@@ -195,7 +224,7 @@ describe("DispatchPanel — Gmail draft (order-email-v2)", () => {
 
   it("transport branch still renders no Gmail control", () => {
     renderPanel(makeDetail({ ordering_method: "transport" }));
-    expect(screen.queryByRole("button", { name: "Zrób draft w Gmailu" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Wyślij" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Otwórz w Gmail" })).toBeNull();
   });
 });

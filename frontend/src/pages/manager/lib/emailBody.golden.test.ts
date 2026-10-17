@@ -101,7 +101,14 @@ const scenarios = readdirSync(FIXTURES)
 describe("order e-mail golden fixtures (shared with the backend)", () => {
   it("finds the scenarios", () => {
     expect(scenarios).toEqual(
-      expect.arrayContaining(["bracka_bukat", "case_lines", "ken_edge_cases", "wola_intermlecz"]),
+      expect.arrayContaining([
+        "bracka_bukat",
+        "bracka_extras_date",
+        "case_lines",
+        "extras_edge_cases",
+        "ken_edge_cases",
+        "wola_intermlecz",
+      ]),
     );
   });
 

@@ -36,6 +36,11 @@ import {
   seedDrafts,
 } from "./manager/lib/draftState";
 import { isOrderEditable } from "./manager/lib/managerLine";
+import {
+  type DraftedOrder,
+  gmailDraftsUrl,
+  openDraftTab,
+} from "./manager/lib/orderEmailDraft";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
 // location_id as an optional filter, so omitting it returns every location. It
@@ -78,9 +83,10 @@ export function ManagerPage() {
   // detail (the queue/detail endpoints don't carry the compose URL).
   const [dispatchedLinks, setDispatchedLinks] = useState<Record<string, string>>({});
   // Orders sent this session through a verified Gmail draft -> the mailbox
-  // holding the draft (order-email-v2). Session-only, like dispatchedLinks:
-  // the DispatchPanel unmounts once the order turns manager_sent.
-  const [draftedOrders, setDraftedOrders] = useState<Record<string, string>>({});
+  // holding the draft, its link and whether the tab opened (order-email-v2,
+  // supplier-email-v21). Session-only, like dispatchedLinks: the DispatchPanel
+  // unmounts once the order turns manager_sent.
+  const [draftedOrders, setDraftedOrders] = useState<Record<string, DraftedOrder>>({});
   // Order with a Gmail draft in progress (order-email-v2). While set, the page
   // refuses every other action — switching orders mid-draft used to drop the
   // dispatch silently (or build it from another order's lines).
@@ -368,7 +374,12 @@ export function ManagerPage() {
         if (opts?.draftMailbox) {
           showToast(t("manager.draft.done", { mailbox: opts.draftMailbox }), true);
           const mailbox = opts.draftMailbox;
-          setDraftedOrders((prev) => ({ ...prev, [orderId]: mailbox }));
+          const url = opts.draftUrl || gmailDraftsUrl(mailbox);
+          // Open THAT draft only now — the order is marked sent, so the manager
+          // never holds an open draft the app did not record (WP3). A blocked
+          // tab leaves the amber "not sent yet" line with the link.
+          const opened = openDraftTab(url);
+          setDraftedOrders((prev) => ({ ...prev, [orderId]: { mailbox, url, opened } }));
         } else {
           showToast(
             t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
@@ -641,7 +652,7 @@ export function ManagerPage() {
               draftingId={draftingId}
               cutoffIso={selectedCutoffIso}
               dispatchedEmailUrl={selectedId ? dispatchedLinks[selectedId] ?? null : null}
-              draftedMailbox={selectedId ? draftedOrders[selectedId] ?? null : null}
+              drafted={selectedId ? draftedOrders[selectedId] ?? null : null}
               drafts={drafts}
               availableToAdd={availableToAdd}
               onAddLine={handleAddLine}

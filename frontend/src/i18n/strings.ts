@@ -679,8 +679,21 @@ export const STRINGS = {
     en: "Fallback: “Open in Gmail” opens a compose window — pick the sender there by hand; CC also includes {office}.",
   },
   "manager.draft.done": {
-    pl: "Szkic utworzony w {mailbox} — zamówienie oznaczone jako wysłane.",
-    en: "Draft created in {mailbox} — order marked as sent.",
+    pl: "Szkic utworzony w {mailbox}, zamówienie oznaczone jako wysłane — e-mail wyślij z Gmaila.",
+    en: "Draft created in {mailbox}, order marked as sent — send the e-mail from Gmail.",
+  },
+  // supplier-email-v21 WP3: one "Wyślij" = verified draft + dispatch + open
+  // THAT draft. The app still never sends; the manager sends it from Gmail.
+  "manager.draft.send": { pl: "Wyślij", en: "Send" },
+  "manager.draft.sendHint": {
+    pl: "Tworzy szkic w {mailbox} i otwiera go, jeśli przeglądarka pozwoli. Samą wiadomość wysyłasz z Gmaila.",
+    en: "Creates a draft in {mailbox} and opens it if the browser allows. You send the message itself from Gmail.",
+  },
+  "manager.draft.moreOptions": { pl: "Inne opcje", en: "More options" },
+  "manager.draft.openDraft": { pl: "Otwórz szkic", en: "Open draft" },
+  "manager.draft.notSentYet": {
+    pl: "Szkic w {mailbox} NIE jest jeszcze wysłany — otwórz go i kliknij Wyślij w Gmailu.",
+    en: "The draft in {mailbox} is NOT sent yet — open it and click Send in Gmail.",
   },
   "manager.draft.doneResend": {
     pl: "Szkic dosyłki utworzony w {mailbox}.",

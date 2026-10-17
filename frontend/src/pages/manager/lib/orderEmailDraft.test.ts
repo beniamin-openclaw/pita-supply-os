@@ -9,7 +9,7 @@ vi.mock("./gmailDraft", async (importOriginal) => {
     ...real,
     requestGmailAccessToken: vi.fn(async () => "tok"),
     getGmailProfileEmail: vi.fn(async () => "biuro@pitabros.pl"),
-    createGmailDraft: vi.fn(async () => ({ id: "r-1" })),
+    createGmailDraft: vi.fn(async () => ({ id: "r-1", messageId: "m-1" })),
     getGmailDraftFrom: vi.fn(async () => '"Pita Bros Bracka" <bracka@pitabros.pl>'),
     deleteGmailDraft: vi.fn(async () => undefined),
     clearGmailTokenCache: vi.fn(),
@@ -24,6 +24,9 @@ import {
   createVerifiedDraftWithToken,
   createVerifiedOrderDraft,
   describeDraftError,
+  gmailDraftOpenUrl,
+  gmailDraftsUrl,
+  openDraftTab,
   SenderRewrittenError,
   WrongMailboxError,
 } from "./orderEmailDraft";
@@ -51,7 +54,7 @@ describe("createVerifiedOrderDraft", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("happy path: pre-selects the mailbox, sends From/To/Cc, returns the draft id", async () => {
-    await expect(createVerifiedOrderDraft(args)).resolves.toEqual({ draftId: "r-1" });
+    await expect(createVerifiedOrderDraft(args)).resolves.toStrictEqual({ draftId: "r-1", messageId: "m-1" });
     expect(gmail.requestGmailAccessToken).toHaveBeenCalledWith("client", {
       loginHint: "biuro@pitabros.pl",
       reuse: true,
@@ -78,7 +81,7 @@ describe("createVerifiedOrderDraft", () => {
 
   it("mailbox comparison is case-insensitive", async () => {
     vi.mocked(gmail.getGmailProfileEmail).mockResolvedValueOnce("Biuro@PitaBros.pl");
-    await expect(createVerifiedOrderDraft(args)).resolves.toEqual({ draftId: "r-1" });
+    await expect(createVerifiedOrderDraft(args)).resolves.toStrictEqual({ draftId: "r-1", messageId: "m-1" });
   });
 
   it("rewritten From: the draft is deleted and the error names the address", async () => {
@@ -162,7 +165,7 @@ describe("createVerifiedDraftWithToken", () => {
       ...draftArgs,
       attachments: [{ filename: "zow.pdf", base64: "JVBERi0=", mimeType: "application/pdf" }],
     });
-    expect(res).toEqual({ id: "r-1" });
+    expect(res).toStrictEqual({ id: "r-1", messageId: "m-1" });
     expect(gmail.requestGmailAccessToken).not.toHaveBeenCalled();
     expect(vi.mocked(gmail.createGmailDraft).mock.calls[0][0]).toBe("tok");
     const mime = decodeRaw(vi.mocked(gmail.createGmailDraft).mock.calls[0][1]);
@@ -238,5 +241,39 @@ describe("describeDraftError / addressFromHeader", () => {
   it("extracts a bare address", () => {
     expect(addressFromHeader('"Pita Bros Bracka" <bracka@pitabros.pl>')).toBe("bracka@pitabros.pl");
     expect(addressFromHeader(" biuro@pitabros.pl ")).toBe("biuro@pitabros.pl");
+  });
+});
+
+describe("gmailDraftOpenUrl / openDraftTab (supplier-email-v21 WP3)", () => {
+  const folder = "https://mail.google.com/mail/?authuser=biuro%40pitabros.pl#drafts";
+
+  it("links the one draft by its message id, encoded", () => {
+    expect(gmailDraftsUrl("biuro@pitabros.pl")).toBe(folder);
+    expect(gmailDraftOpenUrl("biuro@pitabros.pl", "18f2a")).toBe(`${folder}?compose=18f2a`);
+    expect(gmailDraftOpenUrl("biuro@pitabros.pl", " a/b+c ")).toBe(`${folder}?compose=a%2Fb%2Bc`);
+  });
+
+  it("falls back to the Drafts folder without a message id", () => {
+    expect(gmailDraftOpenUrl("biuro@pitabros.pl", "")).toBe(folder);
+    expect(gmailDraftOpenUrl("biuro@pitabros.pl", "   ")).toBe(folder);
+    expect(gmailDraftOpenUrl("biuro@pitabros.pl", undefined)).toBe(folder);
+    expect(gmailDraftOpenUrl("biuro@pitabros.pl", null)).toBe(folder);
+  });
+
+  it("reports whether the browser opened the tab and cuts the opener", () => {
+    const tab = { opener: {} as unknown } as Window;
+    const open = vi.spyOn(window, "open").mockReturnValue(tab);
+    expect(openDraftTab(`${folder}?compose=m-1`)).toBe(true);
+    expect(open).toHaveBeenCalledWith(`${folder}?compose=m-1`, "_blank");
+    expect(tab.opener).toBeNull();
+
+    open.mockReturnValue(null);
+    expect(openDraftTab(folder)).toBe(false);
+
+    open.mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    expect(openDraftTab(folder)).toBe(false);
+    open.mockRestore();
   });
 });

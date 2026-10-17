@@ -136,7 +136,7 @@ export interface VerifiedDraftArgs {
 export async function createVerifiedDraftWithToken(
   token: string,
   args: VerifiedDraftArgs,
-): Promise<{ id: string }> {
+): Promise<{ id: string; messageId: string }> {
   const mime = buildMimeMessage({
     from: args.from,
     to: args.to,
@@ -145,14 +145,14 @@ export async function createVerifiedDraftWithToken(
     bodyText: args.body,
     attachments: args.attachments ?? [],
   });
-  const { id } = await createGmailDraft(token, toBase64Url(mime));
+  const { id, messageId } = await createGmailDraft(token, toBase64Url(mime));
   const stored = addressFromHeader(await getGmailDraftFrom(token, id));
   if (!sameAddress(stored, args.from.email)) {
     // Best effort: a failed delete must not hide the real problem.
     await deleteGmailDraft(token, id).catch(() => undefined);
     throw new SenderRewrittenError(stored);
   }
-  return { id };
+  return { id, messageId };
 }
 
 /**
@@ -163,16 +163,16 @@ export async function createVerifiedDraftWithToken(
  */
 export async function createVerifiedOrderDraft(
   args: VerifiedOrderDraftArgs,
-): Promise<{ draftId: string }> {
+): Promise<{ draftId: string; messageId: string }> {
   const token = await acquireVerifiedGmailToken({ clientId: args.clientId, mailbox: args.mailbox });
-  const { id } = await createVerifiedDraftWithToken(token, {
+  const { id, messageId } = await createVerifiedDraftWithToken(token, {
     from: args.from,
     to: args.to,
     cc: args.cc,
     subject: args.subject,
     body: args.body,
   });
-  return { draftId: id };
+  return { draftId: id, messageId };
 }
 
 /** Polish/English message for a failed draft, naming what to do next. */
@@ -205,4 +205,58 @@ export function describeDraftError(
 /** Gmail Drafts folder of a given account. */
 export function gmailDraftsUrl(mailbox: string): string {
   return `https://mail.google.com/mail/?authuser=${encodeURIComponent(mailbox)}#drafts`;
+}
+
+/**
+ * Open ONE draft (supplier-email-v21 WP3): set to false to fall back to the
+ * Drafts folder everywhere if the live check on biuro@ shows the single-draft
+ * link misbehaving (it opens the list or an empty compose window).
+ */
+export const OPEN_SINGLE_DRAFT = true;
+
+/**
+ * The draft itself in the Gmail UI of `mailbox`: the drafts view with the
+ * compose window of the draft's `message.id` (the form API-created drafts are
+ * opened with, community-documented; Google publishes no URL contract). An
+ * empty id, or OPEN_SINGLE_DRAFT off, gives the Drafts folder. The id belongs
+ * to the draft as created — once the draft is edited in Gmail its message id
+ * changes and the link may open the list instead, which is still a safe
+ * landing.
+ */
+export function gmailDraftOpenUrl(mailbox: string, messageId: string | null | undefined): string {
+  const id = (messageId ?? "").trim();
+  if (!OPEN_SINGLE_DRAFT || !id) return gmailDraftsUrl(mailbox);
+  return `${gmailDraftsUrl(mailbox)}?compose=${encodeURIComponent(id)}`;
+}
+
+/** A per-order draft sent this session (supplier-email-v21 WP3): where it
+ *  lives, its link, and whether the browser let the page open it. */
+export interface DraftedOrder {
+  mailbox: string;
+  url: string;
+  /** false = the tab was blocked (or never tried): the order shows a
+   *  persistent "not sent yet — Otwórz szkic" call to action. */
+  opened: boolean;
+}
+
+/**
+ * Try to open `url` in a new tab; true when the browser allowed it. Called
+ * after several awaits, so a popup blocker usually stops it on the first send
+ * after a page load (the Google sign-in popup used up the click). Opened
+ * WITHOUT "noopener" because with it window.open always returns null and a
+ * block could not be told from success; the opener is cut right away.
+ */
+export function openDraftTab(url: string): boolean {
+  try {
+    const tab = window.open(url, "_blank");
+    if (!tab) return false;
+    try {
+      tab.opener = null;
+    } catch {
+      // cross-origin already — nothing to cut
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }

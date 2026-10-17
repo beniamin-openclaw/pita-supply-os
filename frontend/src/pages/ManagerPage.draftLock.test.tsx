@@ -1,6 +1,8 @@
 // order-email-v2 impl-review W1: while a Gmail draft is being created the page
 // is locked — switching orders or releasing/cancelling must not drop the
 // dispatch that follows the verified draft, nor build it from another order.
+// supplier-email-v21 WP3: "Wyślij" opens THAT draft after the dispatch; a
+// blocked tab leaves an amber "not sent yet — Otwórz szkic" line.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -127,10 +129,27 @@ beforeEach(() => {
     total_value_estimate_pln: 0,
   });
 });
+let openSpy: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  // Default: the browser allows the draft tab. jsdom has no real window.open.
+  openSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
+});
 afterEach(() => {
+  openSpy.mockRestore();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
+
+const DRAFT_URL = "https://mail.google.com/mail/?authuser=biuro%40pitabros.pl#drafts?compose=m-1";
+
+/** After the dispatch the refetched ORD-1 is sent, as on the server. */
+function sentAfterDispatch(): void {
+  vi.mocked(api.managerOrder).mockImplementation(async (id: string) =>
+    id === "ORD-1" && vi.mocked(api.managerDispatch).mock.calls.length > 0
+      ? { ...DETAILS[id], status: "manager_sent" }
+      : DETAILS[id],
+  );
+}
 
 function renderPage() {
   render(
@@ -142,18 +161,21 @@ function renderPage() {
   );
 }
 
-describe("ManagerPage — page lock during a Gmail draft", () => {
+// Whole-page renders: the first one pays the module warm-up (~4 s locally),
+// so the 5 s default flakes under a loaded full run.
+describe("ManagerPage — page lock during a Gmail draft", { timeout: 15_000 }, () => {
   it("refuses other actions mid-draft, then dispatches the clicked order", async () => {
-    let finish: (v: { draftId: string }) => void = () => {};
+    let finish: (v: { draftId: string; messageId: string }) => void = () => {};
     vi.mocked(orderDraft.createVerifiedOrderDraft).mockReturnValue(
       new Promise((resolve) => {
         finish = resolve;
       }),
     );
+    const open = openSpy;
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
-    const draftButton = await screen.findByRole("button", { name: "Zrób draft w Gmailu" });
+    const draftButton = await screen.findByRole("button", { name: "Wyślij" });
     act(() => {
       fireEvent.click(draftButton);
     });
@@ -165,12 +187,15 @@ describe("ManagerPage — page lock during a Gmail draft", () => {
     expect(screen.getByRole("button", { name: "Odrzuć do poprawy" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Anuluj zamówienie" })).toBeDisabled();
 
-    await act(async () => finish({ draftId: "r-1" }));
+    await act(async () => finish({ draftId: "r-1", messageId: "m-1" }));
     await waitFor(() => expect(api.managerDispatch).toHaveBeenCalledTimes(1));
     expect(vi.mocked(api.managerDispatch).mock.calls[0][0]).toMatchObject({
       order_id: "ORD-1",
       manager_finals: [{ order_line_id: "ORD-1-L1", manager_final_qty_purchase: 5 }],
     });
+    // The draft itself opens only after the dispatch, never before it.
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(DRAFT_URL, "_blank");
 
     // Lock released: the other order opens normally.
     fireEvent.click(screen.getByRole("button", { name: /Pita Bros Wola → Bukat/ }));
@@ -184,7 +209,7 @@ describe("ManagerPage — page lock during a Gmail draft", () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
-    const draftButton = await screen.findByRole("button", { name: "Zrób draft w Gmailu" });
+    const draftButton = await screen.findByRole("button", { name: "Wyślij" });
     await act(async () => {
       fireEvent.click(draftButton);
     });
@@ -192,5 +217,51 @@ describe("ManagerPage — page lock during a Gmail draft", () => {
     expect(screen.getByRole("button", { name: "Odrzuć do poprawy" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: /Pita Bros Wola → Bukat/ }));
     await waitFor(() => expect(api.managerOrder).toHaveBeenCalledWith("ORD-2"));
+  });
+
+  it("a blocked tab leaves an amber 'not sent yet' line linking the draft", async () => {
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
+      draftId: "r-1",
+      messageId: "m-1",
+    });
+    const open = openSpy.mockReturnValue(null);
+    sentAfterDispatch();
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
+    const sendButton = await screen.findByRole("button", { name: "Wyślij" });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+    await waitFor(() => expect(api.managerDispatch).toHaveBeenCalledTimes(1));
+    expect(open).toHaveBeenCalledWith(DRAFT_URL, "_blank");
+
+    const line = await screen.findByText(/NIE jest jeszcze wysłany/);
+    expect(line).toHaveTextContent("biuro@pitabros.pl");
+    expect(screen.getByRole("link", { name: "Otwórz szkic" })).toHaveAttribute("href", DRAFT_URL);
+    expect(screen.getByRole("link", { name: "Otwórz szkice" })).toHaveAttribute(
+      "href",
+      "https://mail.google.com/mail/?authuser=biuro%40pitabros.pl#drafts",
+    );
+  });
+
+  it("an opened tab shows the green line with the same draft link", async () => {
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
+      draftId: "r-1",
+      messageId: "m-1",
+    });
+    sentAfterDispatch();
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
+    const sendButton = await screen.findByRole("button", { name: "Wyślij" });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+    expect(await screen.findByRole("link", { name: "Otwórz szkic" })).toHaveAttribute(
+      "href",
+      DRAFT_URL,
+    );
+    expect(screen.queryByText(/NIE jest jeszcze wysłany/)).toBeNull();
   });
 });

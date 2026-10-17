@@ -248,6 +248,40 @@ def _visible_lines(
     return visible
 
 
+# Marker on an off-catalogue row — plaintext has no colour, so the words are
+# the highlight. Literal (supplier copy is always Polish), twin in emailBody.ts.
+EXTRA_ITEM_MARKER = "(spoza katalogu)"
+_EXTRA_ITEM_SEP = " - "
+
+
+def _extra_item_rows(extra_items: str) -> list[tuple[str, str]]:
+    """(product, qty) cells of the Captain's off-catalogue items — twin of
+    ``extraItemRows`` in emailBody.ts (supplier-email-v21 WP1).
+
+    ``extra_items`` is free text, one item per line, written by the Captain UI
+    as ``{name} - {qty} {unit}`` (captain-mp/lib/extraItems.ts). Each line is
+    trimmed (which also drops a ``\r``), blank lines are skipped, and the
+    trimmed line splits at the FIRST " - " — the same separator rule as the
+    Captain parser. A line without one (or with nothing before it) is kept
+    whole as the product with an empty qty. Splits on "\n" only, never
+    ``splitlines()``, so both twins see the same lines."""
+    rows: list[tuple[str, str]] = []
+    for raw in extra_items.split("\n"):
+        line = raw.strip()
+        if not line:
+            continue
+        i = line.find(_EXTRA_ITEM_SEP)
+        if i < 0:
+            product, qty = line, ""
+        else:
+            product = line[:i].strip()
+            qty = line[i + len(_EXTRA_ITEM_SEP):].strip()
+        if not product:
+            product, qty = line, ""
+        rows.append((product, qty))
+    return rows
+
+
 def _build_subject(
     order: Order,
     location: Optional[Location],
@@ -278,9 +312,11 @@ def _build_body(
     signer: Optional[OrderEmailSigner] = None,
     include_delivery_date: bool = False,
 ) -> str:
-    """Plaintext Polish body (order-email-v2 layout, approved 2026-09-28).
-    Lines with effective qty 0 are skipped. Byte-identical to the TS twin
-    ``buildEmailBody`` — both are pinned by tests/fixtures/order_email/."""
+    """Plaintext Polish body (order-email-v2 layout, approved 2026-09-28, with
+    the supplier-email-v21 changes of 12.10: off-catalogue items as numbered
+    table rows, company data before the sign-off). Lines with effective qty 0
+    are skipped. Byte-identical to the TS twin ``buildEmailBody`` — both are
+    pinned by tests/fixtures/order_email/."""
     body_lines: list[str] = []
     body_lines.append("Dzień dobry,")
     body_lines.append("")
@@ -334,13 +370,18 @@ def _build_body(
             qty_text = f"{_format_qty(qty)} {unit_label}"
         body_lines.append(f"{idx}.  | {product_name} | {qty_text}".rstrip())
 
+    # Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b) as rows of
+    # the same table, numbered on from the catalogue lines and marked
+    # (supplier-email-v21 WP1 — no separate section any more).
+    for idx, (product, qty) in enumerate(
+        _extra_item_rows(order.extra_items), start=len(visible) + 1
+    ):
+        row = f"{idx}.  | {product} {EXTRA_ITEM_MARKER}"
+        if qty:
+            row += f" | {qty}"
+        body_lines.append(row)
+
     body_lines.append("")
-    # Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b), own section,
-    # skipped when empty.
-    if order.extra_items.strip():
-        body_lines.append("Pozycje spoza katalogu:")
-        body_lines.append(order.extra_items.strip())
-        body_lines.append("")
     # Order-level Captain comment — NOT the manager send-back `notes` field.
     if order.captain_note.strip():
         body_lines.append("Komentarz:")
@@ -351,7 +392,8 @@ def _build_body(
 
     # Delivery line: the date only while the switch is on (delivery-calendar);
     # otherwise a blank the manager may fill in by hand. The 11:00 window is
-    # fixed for all locations (owner request).
+    # fixed for all locations (owner request) — per-location hours are WP2,
+    # waiting for the hours from Marek (Westfield delivers until 10:00).
     day = _email_delivery_date(order, include_delivery_date)
     day_text = _delivery_day_long(day) if day is not None else BLANK_DELIVERY_DATE
     body_lines.append(f"Dostawa: {day_text}, od godziny 11:00")
@@ -363,6 +405,17 @@ def _build_body(
     if phone:
         body_lines.append(f"Telefon lokalu: {phone}")
     body_lines.append("")
+    # Operating-company block (feedback r5): each location orders under its own
+    # spółka; suppliers need the invoicing entity + NIP in every order email.
+    # Before the sign-off since supplier-email-v21 ("najpierw dane firmy, a
+    # potem stopka", 12.10).
+    if location is not None and location.company_name:
+        body_lines.append(location.company_name)
+        if location.company_address:
+            body_lines.append(location.company_address)
+        if location.company_nip:
+            body_lines.append(f"NIP: {location.company_nip}")
+        body_lines.append("")
     body_lines.append("Pozdrawiam,")
     # Signature = the sending manager (a per-browser choice, _meta signers);
     # "Pita Bros" when no signer is configured.
@@ -377,14 +430,6 @@ def _build_body(
             body_lines.append(" · ".join(contact))
     else:
         body_lines.append("Pita Bros")
-    # Operating-company footer (feedback r5): each location orders under its own
-    # spółka; suppliers need the invoicing entity + NIP in every order email.
-    if location is not None and location.company_name:
-        body_lines.append(location.company_name)
-        if location.company_address:
-            body_lines.append(location.company_address)
-        if location.company_nip:
-            body_lines.append(f"NIP: {location.company_nip}")
     body_lines.append(f"(zamówienie #{order.order_id})")
 
     return "\n".join(body_lines)

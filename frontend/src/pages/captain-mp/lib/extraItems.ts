@@ -2,11 +2,12 @@
 // the Captain needs that are NOT in the supplier catalogue (e.g. "we have an
 // event, we need something we don't normally stock"). This module is the pure
 // serialise/parse pair between the row-based UI state (ExtraItemsControl) and
-// the flat `extra_items` free-text field the backend stores verbatim and both
-// email builders (frontend emailBody.ts + backend gmail_url.py) render under
-// the "Pozycje spoza katalogu:" heading. The backend never parses this string
-// — it is opaque free text end to end — so the exact per-line format is a
-// frontend-only decision, kept here so it's unit-tested independent of the UI.
+// the flat `extra_items` free-text field the backend stores verbatim. Both
+// email builders (frontend emailBody.ts `extraItemRows` + backend gmail_url.py
+// `_extra_item_rows`) split each line at the first " - " into the Produkt and
+// Ilość cells of the supplier table (supplier-email-v21) — so changing the
+// separator here means changing those twins and their shared golden fixtures
+// too. This module is unit-tested independent of the UI.
 
 /** One "+ dodaj produkt" row. All three fields are plain strings — this is a
  *  free-text add for something outside master data, not a validated quantity

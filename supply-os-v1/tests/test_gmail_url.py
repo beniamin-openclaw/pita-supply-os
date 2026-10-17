@@ -467,9 +467,10 @@ def test_build_url_combines_name_address_city():
 
 
 def test_company_footer_appended_when_present():
-    """Company footer (spółka + adres + NIP) rides under 'Pozdrawiam, Pita Bros'
-    when the location carries company_* fields; without them the footer block is
-    skipped entirely (feedback r5)."""
+    """Company block (spółka + adres + NIP) sits BEFORE 'Pozdrawiam,' when the
+    location carries company_* fields (supplier-email-v21: "najpierw dane firmy,
+    a potem stopka"); without them the block and its blank line are skipped
+    entirely (feedback r5)."""
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     products = {"P027": _make_product("P027", "Souvlaki")}
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
@@ -492,16 +493,18 @@ def test_company_footer_appended_when_present():
         )
     )
     assert (
-        "Pozdrawiam,\nPita Bros\nPita Bros sp. z o.o.\n"
+        "\n\nPita Bros sp. z o.o.\n"
         "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633\n"
-        "(zamówienie #"
+        "\nPozdrawiam,\nPita Bros\n(zamówienie #"
     ) in with_company
 
     without_company = _body_of(
         Location(location_id="WOLA", location_name="Pita Bros Wola")
     )
     assert "NIP:" not in without_company
-    assert "Pozdrawiam,\nPita Bros\n(zamówienie" in without_company
+    assert "ADRES DOSTAWY: Pita Bros Wola\n\nPozdrawiam,\nPita Bros\n(zamówienie" in (
+        without_company
+    )
 
 
 # ---------- feedback r7: empty delivery-date line + standing office CC ----------
@@ -639,18 +642,23 @@ def test_cc_comma_list_survives_url_encoding_as_single_param():
 # ---------- training-feedback-0901 Phase 1b: ad-hoc items + order comment ----------
 
 
-def test_ad_hoc_items_block_included_when_present():
+def test_ad_hoc_items_are_numbered_table_rows():
+    """supplier-email-v21 WP1: each off-catalogue line is a row of the product
+    table, numbered on from the catalogue lines and marked; no own section."""
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
-    order = _make_order(lines=[line], extra_items="2x cytryny\n1 kg limonek")
+    order = _make_order(lines=[line], extra_items="2x cytryny\nLimonki - 1 kg")
     supplier = _make_supplier()
     products = {"P027": _make_product("P027", "Souvlaki")}
     products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
 
     url = build_draft_url(order, supplier, [line], products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
-    assert "Pozycje spoza katalogu:" in body
-    assert "2x cytryny" in body
-    assert "1 kg limonek" in body
+    assert "Pozycje spoza katalogu:" not in body
+    assert (
+        "1.  | P027 karton | 1 karton\n"
+        "2.  | 2x cytryny (spoza katalogu)\n"
+        "3.  | Limonki (spoza katalogu) | 1 kg\n\n"
+    ) in body
 
 
 def test_ad_hoc_items_block_omitted_when_empty():
@@ -663,6 +671,7 @@ def test_ad_hoc_items_block_omitted_when_empty():
     url = build_draft_url(order, supplier, [line], products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
     assert "Pozycje spoza katalogu:" not in body
+    assert "(spoza katalogu)" not in body
 
 
 def test_captain_note_block_included_when_present():
@@ -690,9 +699,9 @@ def test_captain_note_block_omitted_when_empty():
     assert "Komentarz:" not in body
 
 
-def test_ad_hoc_items_and_captain_note_both_present_are_separately_sectioned():
-    """Both blocks can appear together, each under its own header, and neither
-    is confused with the catalogue table above."""
+def test_ad_hoc_rows_come_before_the_captain_note():
+    """Extras close the product table; the Captain note keeps its own section
+    after it."""
     line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
     order = _make_order(
         lines=[line],
@@ -706,9 +715,27 @@ def test_ad_hoc_items_and_captain_note_both_present_are_separately_sectioned():
     url = build_draft_url(order, supplier, [line], products, None)
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
     lines_ = body.split("\n")
-    assert lines_.index("Pozycje spoza katalogu:") < lines_.index("Komentarz:")
-    assert "1 karton serwetek" in body
-    assert "poprawiona ilość" in body
+    assert lines_.index("2.  | 1 karton serwetek (spoza katalogu)") < lines_.index("Komentarz:")
+    assert "Komentarz:\npoprawiona ilość\n" in body
+
+
+@pytest.mark.parametrize(
+    "raw,rows",
+    [
+        ("", []),
+        ("Serwetki - 5 opak", [("Serwetki", "5 opak")]),
+        ("  Serwetki - 5 opak  \r\n\r\n   \r\n", [("Serwetki", "5 opak")]),
+        ("Mięta - ", [("Mięta -", "")]),
+        ("Sos - ostry - 2 l", [("Sos", "ostry - 2 l")]),
+        (" - 3 szt", [("- 3 szt", "")]),
+        ("Lód\nMięta 2 pęczki", [("Lód", ""), ("Mięta 2 pęczki", "")]),
+    ],
+)
+def test_extra_item_rows_splitter(raw, rows):
+    """Twin of extraItemRows (emailBody.test.ts): trim, skip blanks, split the
+    trimmed line at the first " - "; the shared golden extras_edge_cases pins
+    the same cases across both builders."""
+    assert gmail_url._extra_item_rows(raw) == rows
 
 
 # ---------- Bulk packs (feedback-1001 D35) — twin of packStock.test.ts formatCaseQty ----------

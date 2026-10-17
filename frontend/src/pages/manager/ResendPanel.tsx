@@ -29,7 +29,7 @@ import {
   createVerifiedOrderDraft,
   describeDraftError,
   getGoogleClientId,
-  gmailDraftsUrl,
+  gmailDraftOpenUrl,
 } from "./lib/orderEmailDraft";
 import { splitRecipients } from "./lib/transport";
 import { useOrderEmailSigner } from "./lib/useOrderEmailSigner";
@@ -86,7 +86,11 @@ export function ResendPanel({
   const sender = (detail.sender_email ?? "").trim();
   const draftAvailable = isEmail && Boolean(clientId && mailbox && sender);
   const [drafting, setDrafting] = useState(false);
-  const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [draftResult, setDraftResult] = useState<{
+    ok: boolean;
+    msg: string;
+    url?: string;
+  } | null>(null);
   const canDraft = draftAvailable && !noEmail && !dirty && !drafting;
   const canOpenGmail = isEmail && !noEmail && !tooLong && !dirty && !drafting;
 
@@ -97,7 +101,7 @@ export function ResendPanel({
     onDraftingChange?.(true);
     try {
       // First call of the handler — it opens the Google popup synchronously.
-      await createVerifiedOrderDraft({
+      const { messageId } = await createVerifiedOrderDraft({
         clientId,
         mailbox,
         from: { name: detail.location_name, email: sender },
@@ -106,7 +110,11 @@ export function ResendPanel({
         subject,
         body,
       });
-      setDraftResult({ ok: true, msg: t("manager.draft.doneResend", { mailbox }) });
+      setDraftResult({
+        ok: true,
+        msg: t("manager.draft.doneResend", { mailbox }),
+        url: gmailDraftOpenUrl(mailbox, messageId),
+      });
     } catch (e) {
       setDraftResult({ ok: false, msg: describeDraftError(e, t, { mailbox, sender }) });
     } finally {
@@ -224,14 +232,14 @@ export function ResendPanel({
           }
         >
           {draftResult.msg}{" "}
-          {draftResult.ok && (
+          {draftResult.ok && draftResult.url && (
             <a
-              href={gmailDraftsUrl(mailbox)}
+              href={draftResult.url}
               target="_blank"
               rel="noopener noreferrer"
               className="underline"
             >
-              {t("manager.draft.openDrafts")}
+              {t("manager.draft.openDraft")}
             </a>
           )}
         </p>

@@ -22,7 +22,7 @@ import { DeliverySection } from "./DeliverySection";
 import { DeliveryDateMarker } from "./DeliveryDateMarker";
 import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
 import { DispatchPanel, type DispatchOpts } from "./DispatchPanel";
-import { gmailDraftsUrl } from "./lib/orderEmailDraft";
+import { type DraftedOrder, gmailDraftsUrl } from "./lib/orderEmailDraft";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
 import { ResendPanel } from "./ResendPanel";
@@ -51,9 +51,10 @@ interface OrderDetailPaneProps {
   cutoffIso?: string | null;
   /** Compose URL from a dispatch done this session — clickable on a sent order. */
   dispatchedEmailUrl?: string | null;
-  /** Mailbox holding the verified Gmail draft created this session for this
-   *  order (order-email-v2) — shows "Szkic w Gmailu (…) — Otwórz szkice". */
-  draftedMailbox?: string | null;
+  /** The verified Gmail draft created this session for this order
+   *  (order-email-v2, supplier-email-v21) — shows "Szkic w Gmailu (…)" with
+   *  "Otwórz szkic"; amber "not sent yet" when the tab did not open. */
+  drafted?: DraftedOrder | null;
   /** Live per-line draft state (qty + comment), keyed by order_line_id. */
   drafts: DraftMap;
   /** Orderable products that can still be added to this order (claimed only). */
@@ -93,7 +94,7 @@ export function OrderDetailPane({
   draftingId,
   cutoffIso,
   dispatchedEmailUrl,
-  draftedMailbox,
+  drafted,
   drafts,
   availableToAdd,
   onAddLine,
@@ -349,10 +350,10 @@ export function OrderDetailPane({
            compose link (when this session just dispatched it) plus the
            "dosyłka" rebuild from the current quantities (Phase 6). */
         <>
-          {(dispatchedEmailUrl || draftedMailbox) && (
+          {(dispatchedEmailUrl || drafted) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-              {draftedMailbox && <DraftedLine mailbox={draftedMailbox} />}
-              {dispatchedEmailUrl && !draftedMailbox && (
+              {drafted && <DraftedLine drafted={drafted} />}
+              {dispatchedEmailUrl && !drafted && (
                 <a
                   href={dispatchedEmailUrl}
                   target="_blank"
@@ -407,8 +408,8 @@ export function OrderDetailPane({
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-          {draftedMailbox ? (
-            <DraftedLine mailbox={draftedMailbox} />
+          {drafted ? (
+            <DraftedLine drafted={drafted} />
           ) : dispatchedEmailUrl ? (
             <a
               href={dispatchedEmailUrl}
@@ -435,21 +436,47 @@ export function OrderDetailPane({
   );
 }
 
-/** "Szkic w Gmailu (biuro@…) — Otwórz szkice" on an order this session just
- *  sent through a verified Gmail draft (order-email-v2). */
-function DraftedLine({ mailbox }: { mailbox: string }) {
+/** "Szkic w Gmailu (biuro@…) — Otwórz szkic" on an order this session just
+ *  sent through a verified Gmail draft (order-email-v2). When the browser
+ *  blocked the tab (supplier-email-v21 WP3) the line turns amber and says the
+ *  e-mail is NOT sent yet — the "Otwórz szkic" click is a fresh gesture, so it
+ *  always opens. The folder link stays as a backup for an edited draft. */
+function DraftedLine({ drafted }: { drafted: DraftedOrder }) {
   const { t } = useT();
+  const { mailbox, url, opened } = drafted;
+  const tone = opened
+    ? "border-green-400 text-green-800 hover:bg-green-50 focus-visible:ring-green-500"
+    : "border-amber-400 text-amber-900 hover:bg-amber-50 focus-visible:ring-amber-500";
   return (
-    <span className="inline-flex flex-wrap items-center gap-2 text-sm text-green-800">
-      <span className="font-semibold">{t("manager.draft.sentLine", { mailbox })}</span>
+    <span
+      role={opened ? undefined : "status"}
+      className={
+        opened
+          ? "inline-flex flex-wrap items-center gap-2 text-sm text-green-800"
+          : "inline-flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+      }
+    >
+      <span className="font-semibold">
+        {opened ? t("manager.draft.sentLine", { mailbox }) : t("manager.draft.notSentYet", { mailbox })}
+      </span>
       <a
-        href={gmailDraftsUrl(mailbox)}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-lg border border-green-400 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+        className={`rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 ${tone}`}
       >
-        {t("manager.draft.openDrafts")}
+        {t("manager.draft.openDraft")}
       </a>
+      {url !== gmailDraftsUrl(mailbox) && (
+        <a
+          href={gmailDraftsUrl(mailbox)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs underline"
+        >
+          {t("manager.draft.openDrafts")}
+        </a>
+      )}
     </span>
   );
 }
