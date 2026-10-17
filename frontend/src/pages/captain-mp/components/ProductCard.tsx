@@ -13,6 +13,9 @@
 
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lucide-react";
 import type { OrderableItem, CardState } from "../types";
+import type { OpenOrderRef } from "../../../types";
+import { formatDayMonth } from "../../../lib/dates";
+import { stripBulkSuffix } from "../../../lib/displayName";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
@@ -89,6 +92,14 @@ function StateIcon({ state }: { state: CardState }) {
   }
 }
 
+function newestOpenOrderDate(orders: OpenOrderRef[] | undefined): string | null {
+  if (!orders || orders.length === 0) return null;
+  const newest: OpenOrderRef = orders.reduce((a: OpenOrderRef, b: OpenOrderRef) =>
+    (b.order_date || "") > (a.order_date || "") ? b : a,
+  );
+  return newest.order_date ? formatDayMonth(newest.order_date) : null;
+}
+
 export function ProductCard({
   item,
   line,
@@ -99,6 +110,10 @@ export function ProductCard({
   const { t, tParts, lang } = useT();
   const isBackup = item.is_backup === true;
   const otherSuppliers = item.other_suppliers ?? [];
+  // Backup card (captain-backup-card-names, D10 A): the suggestion lives at the
+  // primary supplier, so the tile and one combined info line say so.
+  const primaryNames: string = (item.primary_supplier_names ?? []).join(", ");
+  const newestOrderDate: string | null = newestOpenOrderDate(item.open_orders_elsewhere);
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
   const colors = STATE_STYLES[state];
@@ -172,13 +187,13 @@ export function ProductCard({
   return (
     <div
       id={cardId}
-      className={`rounded-xl shadow-sm border border-gray-200 border-l-4 ${colors.border} ${colors.wash} overflow-hidden mb-3 transition-colors duration-150`}
+      className={`rounded-xl shadow-sm border ${isBackup ? "border-dashed border-slate-400" : "border-gray-200"} border-l-4 ${colors.border} ${colors.wash} overflow-hidden mb-3 transition-colors duration-150`}
     >
       <div className="p-4">
         {/* Title row */}
         <div className="flex justify-between items-start gap-2 mb-1">
           <h3 className="font-semibold text-slate-900 leading-tight">
-            {item.product_name_pl}
+            {stripBulkSuffix(item.product_name_pl)}
           </h3>
           {isBackup && (
             <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
@@ -247,14 +262,18 @@ export function ProductCard({
           (item.open_orders_elsewhere?.length ?? 0) > 0 ||
           (!isBackup && otherSuppliers.length > 0)) && (
           <div className="-mt-2 mb-3 space-y-1">
-            {isBackup && (item.primary_supplier_names?.length ?? 0) > 0 && (
-              <div className="text-xs text-slate-600">
-                {t("card.suggestionAtPrimary", {
-                  names: (item.primary_supplier_names ?? []).join(", "),
-                })}
+            {isBackup && (
+              <div className="text-xs text-slate-600" data-testid="backup-info">
+                {[
+                  t("card.backupInfoLabel"),
+                  primaryNames ? t("card.backupInfoPrimary", { names: primaryNames }) : null,
+                  newestOrderDate ? t("card.backupInfoOrdered", { date: newestOrderDate }) : null,
+                ]
+                  .filter((part: string | null) => part !== null)
+                  .join(" · ")}
               </div>
             )}
-            <OpenOrdersElsewhere orders={item.open_orders_elsewhere} scope="card" />
+            {!isBackup && <OpenOrdersElsewhere orders={item.open_orders_elsewhere} scope="card" />}
             {!isBackup && otherSuppliers.length > 0 && (
               <div className="text-xs text-slate-500">
                 {t("card.alsoFromSuppliers", {
@@ -385,7 +404,11 @@ export function ProductCard({
             }}
             disabled={isBackup || line.current_stock_qty_base === ""}
             aria-label={
-              isBackup || line.current_stock_qty_base === ""
+              isBackup
+                ? primaryNames
+                  ? t("card.suggestionAtPrimaryAria", { names: primaryNames })
+                  : t("card.suggestionBackupAria")
+                : line.current_stock_qty_base === ""
                 ? t("card.suggestionMissing")
                 : t("card.acceptSuggestion", { count: suggestedPurchase, unit: item.purchase_unit })
             }
@@ -397,9 +420,17 @@ export function ProductCard({
             <div
               id={suggestId}
               aria-live="polite"
-              className="font-bold text-slate-900 tabular-nums text-lg"
+              className={`font-bold text-slate-900 tabular-nums ${
+                isBackup && primaryNames ? "text-sm text-center leading-tight break-words" : "text-lg"
+              }`}
             >
-              {isBackup || line.current_stock_qty_base === "" ? "—" : suggestedPurchase}
+              {isBackup
+                ? primaryNames
+                  ? t("card.suggestionAtPrimaryTile", { names: primaryNames })
+                  : "—"
+                : line.current_stock_qty_base === ""
+                ? "—"
+                : suggestedPurchase}
             </div>
             {!isBackup && line.current_stock_qty_base !== "" && (
               <div className="text-xs text-slate-700 mt-0.5 text-center leading-tight">

@@ -311,22 +311,66 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
     captain_submitted_at: null,
   };
 
-  it("backup: no suggestion offered, note with primary names, badge", () => {
+  it("backup: dashed frame, tile shows the primary supplier, one info line", () => {
     const { onChangeSpy } = renderCard(
       makeItem({
         is_backup: true,
         suggestion_alerts_enabled: false,
         primary_supplier_names: ["Bukat", "Pago"],
       }),
-      makeLine({ current_stock_qty_base: 0 }),
+      makeLine({ current_stock_qty_base: 5 }),
     );
     expect(screen.getByText("zapasowy")).toBeInTheDocument();
-    expect(screen.getByText("Sugestia u: Bukat, Pago")).toBeInTheDocument();
-    const tile = screen.getByRole("button", { name: /sugestia/i });
+    expect(screen.getByTestId("backup-info").textContent).toBe("Zapasowy · główny: Bukat, Pago");
+    // The old separate line is gone.
+    expect(screen.queryByText("Sugestia u: Bukat, Pago")).toBeNull();
+    const tile = screen.getByRole("button", { name: "Sugestia u dostawcy głównego: Bukat, Pago" });
     expect(tile).toBeDisabled();
-    expect(tile.textContent).toContain("—");
+    expect(tile.textContent).toContain("u Bukat, Pago");
+    expect(tile.textContent).not.toContain("—");
+    expect(tile.getAttribute("aria-label")).not.toMatch(/najpierw wpisz/);
+    expect(document.querySelector(".rounded-xl")?.className).toContain("border-dashed");
     fireEvent.click(tile);
     expect(onChangeSpy).not.toHaveBeenCalled();
+  });
+
+  it("backup: info line carries the newest open-order date, no duplicate block", () => {
+    renderCard(
+      makeItem({
+        is_backup: true,
+        primary_supplier_names: ["Bukat"],
+        open_orders_elsewhere: [
+          ref,
+          { ...ref, order_id: "O2", order_date: "2026-10-12" },
+          { ...ref, order_id: "O3", order_date: "2026-10-03" },
+        ],
+      }),
+      makeLine(),
+    );
+    expect(screen.getByTestId("backup-info").textContent).toBe(
+      "Zapasowy · główny: Bukat · zamówione 12.10",
+    );
+    expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
+  });
+
+  it("backup without primary names still has an honest tile label", () => {
+    renderCard(makeItem({ is_backup: true }), makeLine({ current_stock_qty_base: 1 }));
+    expect(screen.getByTestId("backup-info").textContent).toBe("Zapasowy");
+    expect(
+      screen.getByRole("button", { name: /Dostawca zapasowy/ }).getAttribute("aria-label"),
+    ).not.toMatch(/najpierw wpisz/);
+  });
+
+  it("non-backup card keeps a solid frame and the open-order block", () => {
+    renderCard(makeItem({ open_orders_elsewhere: [ref] }), makeLine());
+    expect(document.querySelector(".rounded-xl")?.className).not.toContain("border-dashed");
+    expect(screen.queryByTestId("backup-info")).toBeNull();
+    expect(screen.getByTestId("open-orders-elsewhere")).toBeInTheDocument();
+  });
+
+  it("captain view hides the /N pack suffix in the card title", () => {
+    renderCard(makeItem({ product_name_pl: "MELVIT KASZA PĘCZAK 900g/10" }), makeLine());
+    expect(screen.getByText("MELVIT KASZA PĘCZAK 900g")).toBeInTheDocument();
   });
 
   it("open order elsewhere with a delivery date", () => {
