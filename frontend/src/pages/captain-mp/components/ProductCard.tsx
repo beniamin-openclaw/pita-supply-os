@@ -20,6 +20,7 @@ import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
 import { baseToPacks, caseOf, isPackBased } from "../../../lib/packUnits";
 import { formatBaseQty } from "../../../lib/packStock";
+import { formatPiecesAsKg, isPieceUnit, pieceGramsFromNames } from "../../../lib/gramsHint";
 import { packUnitLabel } from "../../../i18n/packUnits";
 import { PackStockInput } from "./PackStockInput";
 import { GramsHint } from "./GramsHint";
@@ -133,6 +134,20 @@ export function ProductCard({
   // Pack used by the stock field + the threshold header (inventory units).
   const stockPackSize: number = itemCase ? itemCase.size * upp : upp;
   const stockPackUnit: string = itemCase ? itemCase.unit : item.purchase_unit;
+
+  // Read-only kg reading for a piece count whose name carries the per-piece
+  // weight (captain-kg-reading). ×1 reads both names (like GramsHint); a pack
+  // row reads only product_name_pl — a case product's supplier name tends to
+  // describe the purchase pack, not one inventory unit.
+  const pieceGrams: number | null = pieceGramsFromNames(
+    packBased ? [item.product_name_pl] : [item.product_name_pl, item.supplier_product_name],
+  );
+  // The ×1 caption line only; a pack row hands pieceGrams to PackStockInput.
+  const kgCapable: boolean =
+    !packBased && pieceGrams !== null && isPieceUnit(item.inventory_unit);
+  const currentKg: string | null = kgCapable
+    ? formatPiecesAsKg(line.current_stock_qty_base, pieceGrams, item.inventory_unit, lang)
+    : null;
 
   const handleCurrentChange = (v: number | "") => {
     onChange({ ...line, current_stock_qty_base: v });
@@ -318,6 +333,7 @@ export function ProductCard({
               baseUnit={item.inventory_unit}
               label={t("card.currentStock")}
               references={[previousStock, item.target_stock_qty_base]}
+              gramsPerUnit={pieceGrams}
             />
           </div>
         )}
@@ -364,6 +380,17 @@ export function ProductCard({
               className="mt-0.5 text-[11px] leading-tight text-right"
             >
               <UnitLabel>{item.inventory_unit}</UnitLabel>
+              {/* kg reading on its own reserved line: the column is ~94 px at
+                  375 px, so "szt (2,4 kg)" inline would re-wrap while typing. */}
+              {kgCapable && (
+                <div
+                  data-testid={`current-kg-${item.product_id}`}
+                  aria-live="polite"
+                  className="min-h-[1rem] text-slate-500 tabular-nums"
+                >
+                  {currentKg !== null && t("stock.kgReading", { kg: currentKg })}
+                </div>
+              )}
             </div>
           </div>
           )}
