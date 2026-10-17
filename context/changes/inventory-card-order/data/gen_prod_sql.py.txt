@@ -241,17 +241,23 @@ w(f"""-- inventory-card-order — prod data step: inventory-card positions
 --
 -- Refreshed 2026-10-17 (first generated 2026-09-28, never applied). What changed:
 --   * Cards: the 12 "Inwentaryzacja" workbooks were re-downloaded from Drive on
---     2026-10-17 (last edited 10-12.10). card_order.json is byte-identical to
---     28.09 and positions.json is unchanged ({n_template} template products,
---     {n_overrides} overrides). 22 products were renamed on prod since 28.09; 16 of
---     those names no longer matched the card text, so alias.json now maps them
---     to the product ids they resolved to on 28.09.
---   * Prod since 28.09: new products P189-P192 (none is on a card);
+--     2026-10-17 (last edited 10-12.10); the card text is unchanged since 28.09.
+--     22 products were renamed on prod since 28.09; 16 of those names no longer
+--     matched the card text, so alias.json maps them to the product ids they
+--     resolved to on 28.09. The "Cappy Jabłko" / "Cappy Pomarańcza" card rows
+--     also map to the 0,25 l glass P190 / P191 now (like "Coca Cola" -> P068 +
+--     P186), so a location stocking the glass keeps it at its card position.
+--     Template {n_template} products (28.09: 165): P190/P191 sit right after
+--     P064/P065, so every later template position moved by +20. Overrides
+--     {n_overrides} (the same products as 28.09, values shifted with the template).
+--   * Prod since 28.09: new products P189-P192 (P190/P191 sit on the cards
+--     through the Cappy alias; P189 and P192 are on no card, so extras);
 --     P139 inactive; settings +56 / -32 (FORUM and SUPERSAM own catalogs,
 --     SLONY, WESTFIELD, ELEKTROWNIA; WOLA Cappy P064/P065 -> 0,25 l glass
 --     P190/P191). Inactive locations today: KAMIENICA, KULINARNA, STARY_BROWAR
 --     (positioned anyway). Every override still matches a setting (1c empty).
---   * Step 2 is now ONE guarded DO block: it locks the two tables, re-checks
+--   * Step 2 is now ONE guarded DO block under lock_timeout 5s: it locks the
+--     two tables (or fails fast if it cannot within 5 s), re-checks
 --     the before-state (positions all NULL, product and settings fingerprints
 --     equal to the snapshot) and asserts every row count and the card-order
 --     audits before COMMIT; any mismatch RAISEs and nothing is written.
@@ -369,8 +375,12 @@ SELECT
 -- Any guard that fails RAISEs; the DO block then aborts the transaction and
 -- nothing is written (run ROLLBACK if your client leaves it open). Then re-run
 -- step 1, take a new snapshot and re-run the pipeline.
+-- lock_timeout: if another session holds a conflicting lock on products or
+-- location_product_settings for more than 5 s, the LOCK fails ("canceling
+-- statement due to lock timeout"), nothing is written; re-run when it is quiet.
 
 BEGIN;
+SET LOCAL lock_timeout = '5s';
 
 DO $$
 DECLARE
