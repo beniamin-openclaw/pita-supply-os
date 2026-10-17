@@ -1,0 +1,83 @@
+# Supplier Groups Implementation Plan
+
+## Overview
+
+Two Manager-side changes from Ben's D4 (17.10):
+
+1. The Manager supplier filters (queue and archive) show Pago and Magazyn Mory as one option,
+   "Pago + Magazyn Mory", that matches orders of either supplier.
+2. A Filber order can be marked as ordered without the e-mail, the way a manual supplier
+   (Coca-Cola) is marked today.
+
+Frontend only. No backend code change, no migration, no prod SQL.
+
+## Current State Analysis
+
+- `frontend/src/pages/ManagerPage.tsx` builds `supplierOptions` with
+  `pages/manager/lib/supplierOptions.ts` `buildSupplierOptions` (manager-queue-control) and filters
+  the lanes with `q.supplier_id === selectedSupplierId`. `pages/manager/ManagerArchivePage.tsx`
+  does the same over the archive list.
+- `pages/manager/lib/transport.ts` `TRANSPORT_CHIP_SUPPLIER_IDS = ["SUP_PAGO", "SUP_MORY"]` names
+  the pair for the Transport filter chips.
+- Filber (`SUP_FILBER`) is an `email` supplier (seed `suppliers.csv`). `DispatchPanel.tsx` (Lane E,
+  not edited here) offers the Gmail link and the draft for e-mail, and "Oznacz jako zamówione"
+  only for the manual/phone/portal channels.
+- `POST /api/manager/dispatch` takes a free `sent_method` string and branches on the supplier's
+  `ordering_method`, not on `sent_method`. For an e-mail supplier it returns a
+  `gmail_compose_url` whatever `sent_method` says; it sends no e-mail itself.
+
+## Desired End State
+
+- One filter option "Pago + Magazyn Mory" (id `GRP_PAGO_MORY`) replaces the two in both Manager
+  filters whenever at least one of them is listed; selecting it shows Pago and Mory orders.
+- A claimed Filber order shows a "Zamówione (bez e-maila)" button next to Release/Cancel. After a
+  confirm it dispatches with `sent_method: "manual"`, with the live draft quantities, like every
+  other dispatch. Disabled while busy or when every line is 0.
+- A dispatch with a non-email `sent_method` keeps no compose URL on the page, so the sent order
+  does not show "Otwórz email do dostawcy" for an e-mail that never went out.
+
+## What We're NOT Doing
+
+- No data change: Pago and Mory stay separate suppliers. No grouping in the Captain screens
+  (`captain-mp/**` belongs to Lane C; a follow-up for the coordinator if Ben wants it there).
+- No Filber in the Pago Transport run, no new aggregation layer.
+- No edit to `DispatchPanel.tsx` (Lane E). The button lives in `OrderDetailPane.tsx`.
+- No backend change. The backend still returns a compose URL for the manual dispatch of an e-mail
+  supplier; the frontend ignores it. The `sent_method` stored on the order is `manual`, which the
+  history and the archive already show.
+
+## Implementation Approach
+
+1. `frontend/src/lib/supplierGroups.ts` (new): `PAGO_MORY_SUPPLIER_IDS`, `SUPPLIER_GROUPS`,
+   `supplierFilterMatches(selectedId, supplierId)`, `groupSupplierOptions(options, label)`,
+   `MARK_ORDERED_EMAIL_SUPPLIER_IDS = ["SUP_FILBER"]`. `lib/transport.ts`
+   `TRANSPORT_CHIP_SUPPLIER_IDS` points at the same pair.
+2. `ManagerPage.tsx` and `ManagerArchivePage.tsx`: group the options, filter with the matcher.
+   `handleDispatch` stores the compose URL only for `sent_method === "email"`.
+3. `OrderDetailPane.tsx`: the Filber button (allowlisted id + `ordering_method === "email"`).
+4. i18n: `manager.filter.group.pagoMory`, `manager.markOrderedNoEmail`,
+   `manager.markOrderedNoEmailHint`, `manager.markOrderedNoEmailConfirm`.
+5. Tests: `lib/supplierGroups.test.ts`, `pages/manager/OrderDetailPane.test.tsx`,
+   `pages/ManagerPage.supplierGroups.test.tsx`, and the backend contract
+   `test_dispatch_email_supplier_marked_ordered_without_email` in
+   `supply-os-v1/tests/test_manager_dispatch.py` (an e-mail supplier dispatched as manual ends
+   `manager_sent` with `sent_method` manual, no e-mail sent).
+
+## Success Criteria
+
+- `python -m pytest`, `ruff check .`, `npm run build`, `npm run lint`, `npm run test` pass.
+- Live check after deploy (Ben, prod): the filter shows "Pago + Magazyn Mory" and lists both
+  suppliers' orders; a claimed Filber order shows "Zamówione (bez e-maila)" and moves to the sent
+  lane with no e-mail link. If Filber is not an e-mail supplier on prod, the button stays hidden
+  and the existing "Oznacz jako zamówione" in the dispatch panel covers it.
+
+## Progress
+
+> Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
+
+- [x] 1 Helpers + Transport chips
+- [x] 2 Manager and archive filters, compose-URL guard
+- [x] 3 Filber button
+- [x] 4 Tests
+- [ ] 5 Verify + reviews addressed
+- [ ] 6 PR open, CI green

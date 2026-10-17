@@ -46,6 +46,7 @@ import {
 } from "./manager/lib/orderEmailDraft";
 import { QUEUE_LANE_LIMIT } from "./manager/lib/queueAge";
 import { buildSupplierOptions } from "./manager/lib/supplierOptions";
+import { groupSupplierOptions, supplierFilterMatches } from "../lib/supplierGroups";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
 // location_id as an optional filter, so omitting it returns every location. It
@@ -439,8 +440,10 @@ export function ManagerPage() {
           );
         }
         // Keep any server-built compose URL so "Otwórz email" works on the sent
-        // detail (email channel only; null for portal/phone/manual).
-        if (resp.gmail_compose_url) {
+        // detail (email channel only; null for portal/phone/manual). A Filber
+        // "zamówione (bez e-maila)" is sent as "manual" on an e-mail supplier:
+        // the backend still builds a URL, but no e-mail went out, so no link.
+        if (resp.gmail_compose_url && sentMethod === "email") {
           setDispatchedLinks((prev) => ({ ...prev, [orderId]: resp.gmail_compose_url! }));
         }
         refreshAll(orderId);
@@ -513,9 +516,11 @@ export function ManagerPage() {
   // groups render. Both ephemeral. effectiveSupplierId resolves at render so a
   // supplier that drops out of the options after a refresh falls back to "all"
   // — no setState-in-effect.
+  // Pago and Magazyn Mory show as one option (D4, lib/supplierGroups.ts).
   const supplierOptions = useMemo(
-    () => buildSupplierOptions(allSuppliers, [submitted, claimed, sent, closed]),
-    [allSuppliers, submitted, claimed, sent, closed],
+    () =>
+      groupSupplierOptions(buildSupplierOptions(allSuppliers, [submitted, claimed, sent, closed]), t),
+    [allSuppliers, submitted, claimed, sent, closed, t],
   );
 
   // Location options (bracka-rollout). Derived from all FOUR lanes, unlike the
@@ -548,7 +553,10 @@ export function ManagerPage() {
   const filterQueue = (arr: ManagerQueueItem[] | null) => {
     if (arr === null) return null;
     let out = arr;
-    if (effectiveSupplierId) out = out.filter((q) => q.supplier_id === effectiveSupplierId);
+    if (effectiveSupplierId) {
+      const sel = effectiveSupplierId;
+      out = out.filter((q) => supplierFilterMatches(sel, q.supplier_id));
+    }
     if (effectiveLocationId) out = out.filter((q) => q.location_id === effectiveLocationId);
     return out;
   };

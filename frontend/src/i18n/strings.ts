@@ -1445,6 +1445,18 @@ export const STRINGS = {
   "manager.transport.filter.citiesLabel": { pl: "Miasta", en: "Cities" },
   "manager.transport.filter.chip.pago": { pl: "Pago", en: "Pago" },
   "manager.transport.filter.chip.mory": { pl: "Magazyn Mory", en: "Magazyn Mory" },
+  // Manager queue/archive filter: Pago and Mory as one option (supplier-groups, D4).
+  "manager.filter.group.pagoMory": { pl: "Pago + Magazyn Mory", en: "Pago + Magazyn Mory" },
+  // Filber (D4): mark an e-mail supplier's order as ordered without the e-mail.
+  "manager.markOrderedNoEmail": { pl: "Zamówione (bez e-maila)", en: "Ordered (no e-mail)" },
+  "manager.markOrderedNoEmailHint": {
+    pl: "Gdy zamówienie poszło inną drogą (telefon, kierowca, sklep). E-mail nie zostanie wysłany.",
+    en: "When the order went another way (phone, driver, shop). No e-mail is sent.",
+  },
+  "manager.markOrderedNoEmailConfirm": {
+    pl: "Oznaczyć jako zamówione BEZ wysyłania e-maila do dostawcy?",
+    en: "Mark as ordered WITHOUT sending the e-mail to the supplier?",
+  },
   "manager.transport.filter.lastChipTitle": {
     pl: "Co najmniej jeden dostawca musi zostać włączony.",
     en: "At least one supplier has to stay on.",
