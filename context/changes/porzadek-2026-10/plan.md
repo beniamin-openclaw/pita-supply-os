@@ -88,12 +88,12 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
 | D7 | tak: Kraków i Katowice wysyłane mailem tam, gdzie mamy adres i minimum |
 | D8 | tak: „cięte” jako osobna pozycja do liczenia (halloumi, gyros), wszystkie lokale, które kroją |
 | D9 | tak: kategoria „Materiały / inne”, w której lokal wpisuje dowolną pozycję tekstem (zgłoszenie, nie produkt z katalogu) |
-| D10 | Ben prosi o wyjaśnienie (17.10) |
+| D10 | wszystkie warianty A ze strony „Supply OS ze spotkań” (karta zapasowa z własnym wyglądem, „wysłane dziś” z bazy + ostrzeżenie przed drugim zamówieniem, jedna konwencja zera od managera, filtr miasta bez przekreślenia, „u głównego” u managera, jedna linijka zapasowego, audyt dubli + unikalny indeks, ostrzeżenie „masz już otwarte zamówienie u tego dostawcy”, test dwóch kolumn w Transporcie; zadania: tabela gotowości, lista błędów w Trello u Marka, lokal SZKOLENIE, koszty dostaw od Marka, audyt nadstanów KAT, różnica ceny na karcie zapasowej, przegląd progów Krakowa ok. 27.10, sprawdzenie HappyScribe) |
 | D11–D15 | tak (rekomendacje); D14: PR #59 zielony i gotowy, scala Ben (agentowi klasyfikator blokuje merge) |
 | D16 | **bez obejścia dla kapitana**: to nie powinno się zdarzać, Marek ma to ogarnąć procesowo. Wynik sprawdzenia poniżej |
 | D17, D18 | tak (rekomendacje) |
 | D19 | „Molotov” = **Westfield Mokotów**. Prośby Mirsini z 04.10 (Fuzetea, Burn, napoje w szkle po 24, rolki w chemii, gyros cięty) dotyczą WESTFIELD |
-| D20 | Ben prosi o wyjaśnienie (17.10) |
+| D20 | zamówienia tylko w aplikacji, nie trzeba dzwonić. Kto chce coś omówić, dzwoni na hotline. Ogłoszenie na czacie (4.13) |
 
 ### D16: co się stało (odczyt z produ 17.10)
 
@@ -113,6 +113,14 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
   (2) Etap 4.1 rozszerzony: przejść te 47 zamówień i stare nieprzyjęte z Markiem; każde oznaczyć jako wysłane albo anulować.
   (3) Opcjonalnie w kodzie: znacznik „przejęte > 24 h” w kolejce managera (bez zmian u kapitana).
   (4) Pago/Mory: wrócić do Transportu w aplikacji albo świadomie zostać przy arkuszu (to jest D4/WP9).
+- **Decyzja Bena (17.10): Marek robi wszystko przez aplikację, a kontrola jest regularna.**
+  - Codziennie w dni robocze o 9:00 przychodzi raport tylko do odczytu z produ:
+    - zamówienia wysłane przez kapitana i nieprzejęte > 24 h;
+    - przejęte, a nieoznaczone jako wysłane > 24 h;
+    - wysłane, a bez przyjęcia > 3 dni;
+    - liczba Transportów Pago/Mory w ostatnich 7 dniach.
+  - Co poniedziałek jest zestawienie tygodnia do rozmowy z Markiem.
+  - Zadanie zaplanowane `supply-os-kontrola-marka` w Claude (laptop). Docelowo przejdzie na mini, żeby działało bez laptopa.
 
 ## Etap 3 — Pakiet danych od Marka (jeden mail, agent pisze draft, Ben wysyła)
 
@@ -173,6 +181,9 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       - Sebastian: Fuzetea, Kinley, Burn i kategorie.
 
 ## Etap 5 — Kontrakty pracy (osobne sesje kodujące)
+
+Kontrakty fali A po decyzjach z 17.10: `contracts.md` (Lane C, E, M, D). Wiadomości na czat: `chat-messages.md`.
+Mail do Marka (Etap 3): szkic w Gmailu z 17.10, wysyła Ben.
 
 Kolejność według terminu 31.10. Każdy lane to jedna sesja przechodząca pełny cykl 10x
 (new → plan → plan-review → implement → impl-review → /verify → PR). Lane'y w jednej fali nie
