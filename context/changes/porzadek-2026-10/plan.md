@@ -56,12 +56,12 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
 |---|---|---|---|
 | D1 | Próg odchylenia 20% czy 25% | zostaje 25% (tak jest w kodzie i w archiwum) | — |
 | D2 | Włączyć datę dostawy w mailu (`SUPPLY_OS_ORDER_EMAIL_DELIVERY_DATE_ENABLED`) | tak | WP1 |
-| D3 | Sufiks „/12” w nazwach: obcinać w widoku czy w danych; na których ekranach | obcinać tylko w widoku kapitana; mail i PDF zostają z nazwą fakturową | WP4 |
+| D3 | Sufiks „/12” w nazwach: obcinać w widoku czy w danych; na których ekranach | obcinać tylko w widoku kapitana; mail i PDF zostają z nazwą fakturową. **Czat (B46):** Marek pisze, że dopiski „po ile pakowane” w mailu mylą sortownię Intermleczu. Dla dostawców, których to dotyczy, obcinać też w mailu (Marek wskaże których) | WP4 |
 | D4 | Pago+Mory jako jedna kategoria: przeniesienie w danych czy grupowanie tylko w UI? Filber: towarzysz w transporcie czy przycisk „zamówione”? | grupowanie tylko w UI (dane bez zmian); Filber dostaje przycisk „zamówione”, bez trzeciej warstwy agregacji | WP9 |
 | D5 | „Zamknij bez przyjęcia” | nowa akcja managera dla `manager_sent` z powodem i śladem; tylko manager | WP10 |
-| D6 | Obowiązkowe stany do 31.10 | ostrzeżenie zamiast twardej blokady, wszystkie lokale poza Norblinem i Elektrownią | WP12 |
+| D6 | Obowiązkowe stany do 31.10 | ostrzeżenie zamiast twardej blokady, wszystkie lokale poza Norblinem i Elektrownią. **Czat:** 02.10 Marek dopuścił zamówienia bez stanów (B47), a 15.10 jedna z osób zgłasza „same zera” (B59), więc ostrzeżenie jest lepsze niż blokada | WP12 |
 | D7 | Dostawcy Kraków/Katowice: `manual` czy `email` | `email` tam, gdzie mamy adres i minimum (Dis-Pack, Bukat KRK) | WP7 |
-| D8 | Kraków: halloumi w kawałkach, pita na sztuki | halloumi cięte jako osobna pozycja produkcji; pita bez zmian (jedna jednostka na produkt, W49) | WP14 |
+| D8 | Kraków: halloumi w kawałkach, pita na sztuki | halloumi cięte jako osobna pozycja produkcji; pita bez zmian (jedna jednostka na produkt, W49). **Czat:** to samo dotyczy gyrosa ciętego (pytanie Bena 06.09 do dziś bez odpowiedzi, Molotov 04.10) i halloumi w Warszawie (Alla 02.10). Pozycja „cięte” tylko do liczenia, bez sugestii zamówienia, we wszystkich lokalach, które kroją | WP14, WP8 |
 | D9 | Kategoria materiałów eksploatacyjnych i zakupy poza Warszawą (poniedziałek 19.10) | po huddle 19.10 | WP16 |
 | D10 | Wybór opcji na stronie „Supply OS ze spotkań” (wyszarzanie, podwójny ✓, karta zapasowa) | wybrać tam i wkleić „Kopiuj decyzje” | WP5, WP6 |
 | D11 | Filtr managera pokazuje wszystkich aktywnych dostawców (Spec Food) | tak | WP11 |
@@ -69,6 +69,11 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
 | D13 | Lemoniady Filber P075–P077 w zakładce Katowic | zostają | WP7 |
 | D14 | Przyszłość lane'ów bocznych: PR #59 (guard AGENTS.md), `10x-autonomous-workflow-v2`, H-01, `captain-history-and-draft-ux` (sharp-fermat) | #59 merge; reszta: osobna decyzja w Etapie 6 | Etap 6 |
 | D15 | Gdańsk: 7 „pustych” pozycji ma stan w spisie z 16.10 (Coca-Cola puszki, Cappy, rolki, Top Glass, papryka) | zostawić wszystkie 12. Marek dopisuje dostawcę i progi dla tych 7 (Coca-Cola puszki → SUP_COCACOLA_GDA). Zera usunąć dopiero po jego potwierdzeniu | Etap 1, Etap 3 |
+| D16 | Kapitan nie może potwierdzić odbioru, gdy zamówienie wisi „u menedżera”, choć towar dojechał (Bracka 09.09, 13.10, 16.10) | kapitan przyjmuje dostawę takiego zamówienia z ostrzeżeniem i śladem w historii; w kolejce managera znacznik „u managera > 24 h” | WP10 (rozszerzony) |
+| D17 | Gąbki: zamawiać w paczkach (opak. 10 szt) zamiast na sztuki (Wola 15.10: zamówione 10, dowieźli 2) | tak, paczki. Unieważnia W24 i zgadza się z nazwą Marka „Gąbki do naczyń 10szt” | WP8 |
+| D18 | Koperty i spinacze: magazyn Mory (W71, 12.10) czy Blue Service (KEN 02.10: „zamówiłam 2 razy, nie dojechało”) | Mory, ale najpierw w 4.1 sprawdzić, czy zamówienia KEN z Mory w ogóle wyszły; czego Mory nie ma, zostaje w Blue Service | WP8 |
+| D19 | „Molotov”: czy to lokal w Supply OS? (Mirsini 04.10 prosi o Fuzetea, Burn, skrzynki 24, rolki, gyros cięty) | pytanie do Bena, w repo nie ma takiego lokalu | WP8 |
+| D20 | Zasada z 02.09 „informujcie Marka przez hotline” | nieaktualna: wszystko tylko przez aplikację (W46). Napisać to raz na czacie | komunikat |
 
 ## Etap 3 — Pakiet danych od Marka (jeden mail, agent pisze draft, Ben wysyła)
 
@@ -86,7 +91,14 @@ Jedna lista zamiast pięciu wątków. Marek odpowiada w arkuszu albo punkt po pu
    Ceny Selgrosa spoza faktur.
 5. **KAN 1350:** poprawione mapowanie rolek w arkuszu i potwierdzenie, którą rolkę Browary powinny dostać.
 6. **Zasady:** „Zasady zamawiania Warszawa” do akceptacji Bena; zasady odbioru skrzynek i butli (z Bartkiem).
-7. Odpowiedzi na pytania o korekty z tygodnia 1 (mail z 06.09).
+7. Odpowiedzi na pytania o korekty z tygodnia 1 (mail z 06.09), tylko w miejscach, gdzie kapitanowie nie odpisali
+   na czacie. KEN i Wola odpisali 06.09, Browary częściowo.
+8. **Z czatu Connecteam:**
+   - dostawca Burna, bo Elektrownia, Westfield i Molotov o niego proszą, a dziś nie ma aktywnego dostawcy;
+   - jednostka zakupu serwetek do podajnika i ręczników ZZ, które jedni liczą w kartonach, a inni w małych paczkach;
+   - u których dostawców dopiski „po ile pakowane” w nazwach przeszkadzają (D3);
+   - waga kartonu souvlaki na KEN: prod ma 5 kg, Khushi liczy 6 kg;
+   - które z 24 pozycji Katowic to cola 250 ml i woda 330 ml w szkle (skrzynka 24).
 
 ## Etap 4 — Weryfikacje i porządki operatora (Ben fizycznie, prowadzę krok po kroku)
 
@@ -109,7 +121,17 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       smoke GET jednym tokenem warszawskim (R-37).
 - [ ] 4.10 **Eksport WZ za wrzesień:** 101 zdjęć czeka na klucz `service_role`. Decyzja: dokończyć albo odpuścić.
 - [ ] 4.11 **Drafty w Gmailu:** sugestie dla Marka z 28.09 (prawdopodobnie zastąpi je mail z Etapu 3), Chefs Culinar (wpisać datę).
-- [ ] 4.12 **Connecteam:** czatu „Pita Supply OS” nie da się odczytać przez API. Wkleić zrzuty albo eksport.
+- [x] 4.12 **Connecteam:** czat odczytany 17.10 z archiwum na droplecie (139 wiadomości) → `inputs/connecteam-chat.md`.
+      Zrzutów ekranu nie ma w archiwum (0 plików mediów dla tej rozmowy). Zobaczenie ich wymaga synchronizacji mediów, którą uruchamia operator.
+- [ ] 4.13 **Odpowiedzi na czacie** (agent pisze propozycje, Ben wysyła):
+      - Rajeshwari: lokal i id zamówienia z „samymi zerami” (15.10) oraz o czym był jej mail z 12.10;
+      - Nataliia: co to „Ankaja”;
+      - Tushar: co to „bombila 330 ml”;
+      - Khushi: gyros 3 szt i waga kartonu souvlaki;
+      - Mirsini: Molotov (D19);
+      - Marek: czy zmienił status zamówienia Coca-Coli (16.10);
+      - Sahil: butelki w Katowicach;
+      - Sebastian: Fuzetea, Kinley, Burn i kategorie.
 
 ## Etap 5 — Kontrakty pracy (osobne sesje kodujące)
 
@@ -122,13 +144,20 @@ dzielą plików, więc mogą iść równolegle.
   Do tego WP3 = jeden przycisk „Wyślij”, który tworzy draft i otwiera właśnie ten draft.
   Pliki: `gmail_url.py`, `emailBody.ts`, `DispatchPanel.tsx`, `orderEmailDraft.ts` + testy golden.
   Później WP2 (godziny dostaw per lokal, migracja), gdy Marek poda godziny.
-- **Lane C (kapitan):** WP6 = podwójny ✓ „wysłane” odtwarzany po odświeżeniu (`CaptainMP.tsx:110`).
+- **Lane C (kapitan):** **N1 — pierwsze, pilne:** Marek 02.10 zgłosił, że wpis „kartony + luzem” podwaja ilość
+  w zamówieniu Browarów do Intermleczu (×2). Najpierw odtworzyć to testem (frontend `captain-mp` + backend `order_qty.py`),
+  potem naprawić. Błąd zmienia ilość u dostawcy.
+  N4 = przy przyjęciu dostawy jasny komunikat „wpisz, kto odebrał” zamiast martwego przycisku (03.10).
+  N13 = prośba o liczbę skrzynek do oddania także dla Coca-Coli Katowice (`supplierPrompts.ts`).
+  WP6 = podwójny ✓ „wysłane” odtwarzany po odświeżeniu (`CaptainMP.tsx:110`).
   WP5 = karta zapasowa nie wygląda na pustą, dodatki Selgrosa jako lista (po D10).
 - **Lane M (manager):** WP11 = wszyscy aktywni dostawcy w filtrze (D11). WP10 = „zamknij bez przyjęcia” (D5).
 - **Lane D (dane prod, tylko SQL + audyt, aplikuje operator):** gotowe od ręki:
   - Kraków: cutoff Bukatu 16:00 jako reguła dostaw (pn/śr/pt), kontakty i minima z 15.10 (D7), e-mail Supersamu, cebula FORUM ok. 1 kg.
   - Warszawa: przyprawa souvlaki na Browarach 0,5/2/2; majonez i musztarda na Browarach (kg → szt); rolki Woli max 5 op.;
     progi gąbek 0,5/1,5; zmiana „box” na „karton” dla Corfu.
+  - Z czatu: Cappy jabłko i pomarańcza w szkle po 24 na Woli (Tushar 27.09 i 04.10, Sławek 30.09); najpierw sprawdzić stan na prodzie.
+    Fuzetea i Kinley na Powiślu, Fuzetea na Westfield (dostawca Coca-Cola). Gyros KEN 3 szt (Khushi 08.10).
 
 **Fala B — po decyzjach z Etapu 2**
 - WP4 nazwy produktów (D3). WP9 Pago+Mory i Filber (D4). WP12 obowiązkowe stany (D6).

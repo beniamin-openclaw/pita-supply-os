@@ -19,11 +19,11 @@ Kontynuacja przerwanej sesji z 16.10 na Mac mini (mini-supply-os, transkrypt
 - `laptop-sessions.md` — stan końcowy sesji Claude 28.09–14.10.
 - `repo-wip.md` — lane'y, gałęzie, worktree, niepotwierdzone weryfikacje, migracje.
 - `crosscheck.md` — ustalenia vs. to, co jest w kodzie/na prodzie.
+- `connecteam-chat.md` — czat „Pita Supply OS” (28.08–16.10) z archiwum na droplecie, B1–B60, N1–N18.
 
 ## Plan
-`plan.md`: etapy 0–6 (zabezpieczenie → Gdańsk → decyzje D1–D14 → pakiet do Marka →
+`plan.md`: etapy 0–6 (zabezpieczenie → Gdańsk → decyzje D1–D20 → pakiet do Marka →
 weryfikacje operatora → kontrakty pracy w falach A–D → porządki repo).
 
 ## Źródła niedostępne
-- Connecteam czat „Pita Supply OS”: API nie ma odczytu wiadomości (tylko lista rozmów i wysyłka).
 - Granola: 0 spotkań w oknie 30 dni. HappyScribe: brak podsumowań na maszynach.
