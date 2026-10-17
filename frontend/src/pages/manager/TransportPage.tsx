@@ -45,6 +45,7 @@ import {
   leadSupplierView,
   orderSupplierId,
   lineSupplierId,
+  transportAddAllTargets,
   transportOrdersFor,
   transportSuppliers,
   transportScopeFromChips,
@@ -663,7 +664,7 @@ export function TransportPage(): ReactElement {
   }, [detail, drafts, refreshDetail, showToast, t]);
 
   // ---- Feature 4 (v4 feedback round 2): ONE matrix-wide add-product --------
-  // Adds `productId` to EVERY member order where it's orderable and not
+  // Adds `productId` to every member LOCATION where it's orderable and not
   // already present (each order's own orderable entry supplies its
   // supplier_product_id — see buildTransportAddAllOptions). One busy state,
   // one refreshDetail after every call settles; a partial failure names the
@@ -676,17 +677,13 @@ export function TransportPage(): ReactElement {
   const handleAddProductAll = useCallback(
     (productId: string, sectionSupplierId: string) => {
       if (!detail) return;
-      const targets = transportOrdersFor(detail, sectionSupplierId)
-        .filter((order) => !order.lines.some((l) => l.product_id === productId))
-        .map((order) => {
-          // Add-to-all never uses the one-off override: only orders whose
-          // location normally carries the product get it.
-          const item = (orderableByOrderId[order.order_id] ?? []).find(
-            (o) => o.product_id === productId && o.configured_for_location !== false,
-          );
-          return item ? { order, item } : null;
-        })
-        .filter((v): v is { order: TransportBatchOrder; item: OrderableItem } => v !== null);
+      // One line per location: with two orders from one location only the
+      // first that can take it gets the product (transport-location-columns).
+      const targets = transportAddAllTargets(
+        transportOrdersFor(detail, sectionSupplierId),
+        productId,
+        orderableByOrderId,
+      );
       if (targets.length === 0) return;
 
       setAddAllBusy(true);
@@ -726,7 +723,7 @@ export function TransportPage(): ReactElement {
   // to that location's order, so the pickup, the e-mail and the goods receipt
   // all carry it. Drafts are preserved — other unsaved edits survive the add.
   const handleAddProductOne = useCallback(
-    (order: TransportBatchOrder, item: OrderableItem) => {
+    (order: TransportBatchOrder, item: OrderableItem, label: string = order.location_name) => {
       if (!detail) return;
       setAddAllBusy(true);
       api
@@ -740,7 +737,7 @@ export function TransportPage(): ReactElement {
           showToast(
             t("manager.transport.matrix.addOneOk", {
               product: item.product_name_pl,
-              location: order.location_name,
+              location: label,
             }),
             true,
           );
@@ -749,7 +746,7 @@ export function TransportPage(): ReactElement {
         .catch((e: ApiError) => {
           showToast(
             t("manager.transport.matrix.addProductAllError", {
-              locations: `${order.location_name}: ${e.detail}`,
+              locations: `${label}: ${e.detail}`,
             }),
             false,
           );
@@ -809,9 +806,9 @@ export function TransportPage(): ReactElement {
   // ---- v2 draft workstation: remove order --------------------------------------
 
   const handleRemoveOrder = useCallback(
-    (order: TransportBatchOrder) => {
+    (order: TransportBatchOrder, label: string = order.location_name) => {
       if (!detail) return;
-      if (!window.confirm(t("manager.transport.removeOrder.confirm", { location: order.location_name }))) {
+      if (!window.confirm(t("manager.transport.removeOrder.confirm", { location: label }))) {
         return;
       }
       setBusyOrderId(order.order_id);

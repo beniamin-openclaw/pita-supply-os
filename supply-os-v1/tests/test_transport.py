@@ -733,6 +733,80 @@ def test_batch_detail_aggregate_math(mocker):
     assert len(line["per_location"]) == 2
 
 
+# ---------- two orders from one location (transport-location-columns, D10 A) ----------
+
+
+def test_create_combines_two_orders_from_the_same_location(mocker):
+    """Create has no per-location dedupe: two open KEN orders for one supplier
+    both join the batch. The draft matrix must therefore cope with two member
+    orders that share a location (it merges them into one column)."""
+    orders = [
+        _order("ORD-K1", location_id="KEN", status=OrderStatus.CAPTAIN_SUBMITTED),
+        _order("ORD-K2", location_id="KEN", status=OrderStatus.MANAGER_CLAIMED),
+    ]
+    _enable_sheet_backend_for_create(mocker, orders=orders)
+    r = client.post(
+        "/api/manager/transport/create",
+        headers=MANAGER_AUTH,
+        json={"supplier_id": "SUP_PAGO", "order_ids": ["ORD-K1", "ORD-K2"]},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["combined"] == ["ORD-K1", "ORD-K2"]
+    assert r.json()["skipped"] == []
+
+
+def test_batch_detail_keeps_two_same_location_orders_apart(mocker):
+    """The contract the merged matrix column relies on: both member orders stay
+    separate entries in `orders` (one save per order), `location_ids` lists the
+    location once, and the aggregate keeps one per_location entry per line,
+    summing into the product total."""
+    tid = "TRN-20260520-PAGO-dup001"
+    orders = [
+        _order(
+            "ORD-K1",
+            location_id="KEN",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference=tid,
+        ),
+        _order(
+            "ORD-K2",
+            location_id="KEN",
+            status=OrderStatus.MANAGER_CLAIMED,
+            supplier_order_reference=tid,
+        ),
+    ]
+    lines = [
+        _line("ORD-K1", "OL-1", captain_qty=2.0),
+        _line("ORD-K2", "OL-2", captain_qty=3.0),
+    ]
+    batches = [
+        TransportBatch(
+            transport_id=tid,
+            supplier_id="SUP_PAGO",
+            status="draft",
+            created_at=datetime(2026, 5, 20, 9, 0, tzinfo=timezone.utc),
+        )
+    ]
+    _enable_sheet_backend(
+        mocker,
+        orders=orders,
+        lines=lines,
+        locations=[_location("KEN", "Pita Bros KEN")],
+        transport_batches=batches,
+    )
+    r = client.get(f"/api/manager/transport/batch/{tid}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert sorted(o["order_id"] for o in detail["orders"]) == ["ORD-K1", "ORD-K2"]
+    assert {o["location_name"] for o in detail["orders"]} == {"Pita Bros KEN"}
+    assert detail["location_ids"] == ["KEN"]
+    assert len(detail["lines"]) == 1
+    line = detail["lines"][0]
+    assert line["total_qty_purchase"] == 5.0
+    assert len(line["per_location"]) == 2
+    assert {e["location_id"] for e in line["per_location"]} == {"KEN"}
+
+
 # ---------- batch_supplier_id: header vs group[0] (training-feedback-0901 Phase 4) ----------
 
 def test_batch_detail_supplier_id_from_header_when_present(mocker):

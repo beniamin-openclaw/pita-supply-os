@@ -1641,6 +1641,24 @@ export const STRINGS = {
     en: "Remove {location} from the transport",
   },
   "manager.transport.matrix.qtyAria": { pl: "{product} — {location}", en: "{product} — {location}" },
+  // Two orders from one location share a column (transport-location-columns).
+  "manager.transport.matrix.one.ordersAtLocation": { pl: "{n} zamówienie", en: "{n} order" },
+  "manager.transport.matrix.few.ordersAtLocation": { pl: "{n} zamówienia", en: "{n} orders" },
+  "manager.transport.matrix.many.ordersAtLocation": { pl: "{n} zamówień", en: "{n} orders" },
+  "manager.transport.matrix.orderTag": { pl: "zam. {n}", en: "order {n}" },
+  "manager.transport.matrix.locationOrder": {
+    pl: "{location}, zam. {n}",
+    en: "{location}, order {n}",
+  },
+  "manager.transport.matrix.cellTotal": { pl: "razem {qty}", en: "total {qty}" },
+  "manager.transport.matrix.removeOrderAria": {
+    pl: "Usuń zamówienie {n} lokalu {location} z transportu",
+    en: "Remove order {n} of {location} from the transport",
+  },
+  "manager.transport.matrix.qtyOrderAria": {
+    pl: "{product} — {location}, zamówienie {n}",
+    en: "{product} — {location}, order {n}",
+  },
   // v4 feedback round 2 (feature 4): ONE matrix-wide "+ Dodaj produkt" row,
   // replacing the per-location pickers.
   "manager.transport.matrix.addProductAllOk": {

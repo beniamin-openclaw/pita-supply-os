@@ -1,5 +1,10 @@
 // Editable product x location matrix for a DRAFT Transport batch (v2,
-// to-ordering-pago ADDENDUM v2). Columns = member orders (one per location);
+// to-ordering-pago ADDENDUM v2). Columns = locations; a batch can hold two
+// orders from one location (create has no per-location dedupe), and they share
+// one column (transport-location-columns, D10 A): the header names the
+// location once with "zam. 1", "zam. 2" (one remove button each), and a cell
+// stacks one input per order carrying the product plus a "razem" total. Each
+// input still writes its own order line, so drafts and saves stay per order;
 // rows = the union of products across every order's full lines
 // (lib/transport.ts's buildTransportMatrix). A cell shows the order's
 // effective qty for that product (manager_final once the Manager set it, an
@@ -29,14 +34,17 @@ import { Loader2, Plus, X } from "lucide-react";
 
 import { useT } from "../../../i18n";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
+import { roundQty } from "../../../components/ui/number";
 import { AddProductPicker } from "../../../components/ui/AddProductPicker";
 import type { OrderableItem, TransportBatchOrder } from "../../../types";
 import {
   buildTransportAddAllOptions,
   buildTransportMatrix,
   draftQtyFor,
+  groupTransportColumns,
   orderAddOneOptions,
   type TransportDraftMap,
+  type TransportLocationColumn,
 } from "../lib/transport";
 import {
   lineVisualStateWithQty,
@@ -54,9 +62,11 @@ interface TransportMatrixProps {
   onQtyChange: (orderId: string, orderLineId: string, qty: number) => void;
   orderableByOrderId: Record<string, OrderableItem[]>;
   onAddProductAll: (productId: string) => void;
-  onAddProductOne: (order: TransportBatchOrder, item: OrderableItem) => void;
+  // `label` names the target for toasts and confirms: the location, or
+  // "Ken, zam. 2" when the location has more than one order in the batch.
+  onAddProductOne: (order: TransportBatchOrder, item: OrderableItem, label: string) => void;
   addAllBusy: boolean;
-  onRemoveOrder: (order: TransportBatchOrder) => void;
+  onRemoveOrder: (order: TransportBatchOrder, label: string) => void;
   busyOrderId: string | null;
 }
 
@@ -73,14 +83,56 @@ export function TransportMatrix({
   onRemoveOrder,
   busyOrderId,
 }: TransportMatrixProps) {
-  const { t } = useT();
+  const { t, tPlural } = useT();
   const rows = buildTransportMatrix(orders);
+  const columns: TransportLocationColumn[] = groupTransportColumns(orders);
   const addAllOptions = editable ? buildTransportAddAllOptions(orders, orderableByOrderId) : [];
-  const [addOneOrderId, setAddOneOrderId] = useState<string>("");
-  const addOneOrder: TransportBatchOrder | undefined =
-    orders.find((o) => o.order_id === addOneOrderId) ?? orders[0];
+  const [addOneLocationId, setAddOneLocationId] = useState<string>("");
+  const addOneColumn: TransportLocationColumn | undefined =
+    columns.find((c) => c.location_id === addOneLocationId) ?? columns[0];
+  // A one-location add lands on the location's first order; products any of
+  // the location's orders already carry are left out, so a merged column
+  // never gets a second line for the same product.
+  const addOneOrder: TransportBatchOrder | undefined = addOneColumn?.orders[0];
   const addOneOptions: OrderableItem[] =
-    editable && addOneOrder ? orderAddOneOptions(addOneOrder, orderableByOrderId) : [];
+    editable && addOneColumn && addOneOrder
+      ? orderAddOneOptions(addOneOrder, orderableByOrderId).filter(
+          (item) =>
+            !addOneColumn.orders.some((o) => o.lines.some((l) => l.product_id === item.product_id)),
+        )
+      : [];
+
+  const labelFor = (col: TransportLocationColumn, orderNo: number): string =>
+    col.orders.length > 1
+      ? t("manager.transport.matrix.locationOrder", { location: col.location_name, n: orderNo })
+      : col.location_name;
+
+  const removeButton = (
+    col: TransportLocationColumn,
+    order: TransportBatchOrder,
+    orderNo: number | null,
+  ) => (
+    <button
+      type="button"
+      disabled={busyOrderId === order.order_id}
+      onClick={() => onRemoveOrder(order, labelFor(col, orderNo ?? 1))}
+      aria-label={
+        orderNo === null
+          ? t("manager.transport.matrix.removeColumnAria", { location: order.location_name })
+          : t("manager.transport.matrix.removeOrderAria", {
+              location: order.location_name,
+              n: orderNo,
+            })
+      }
+      className="rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+    >
+      {busyOrderId === order.order_id ? (
+        <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+      ) : (
+        <X size={14} aria-hidden="true" />
+      )}
+    </button>
+  );
 
   return (
     <div>
@@ -94,61 +146,88 @@ export function TransportMatrix({
               <th className="text-left font-semibold px-3 py-2">
                 {t("manager.transport.detail.productCol")}
               </th>
-              {orders.map((order) => (
-                <th key={order.order_id} className="text-right font-semibold px-3 py-2 whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <span>{order.location_name}</span>
-                    {editable && (
-                      <button
-                        type="button"
-                        disabled={busyOrderId === order.order_id}
-                        onClick={() => onRemoveOrder(order)}
-                        aria-label={t("manager.transport.matrix.removeColumnAria", {
-                          location: order.location_name,
-                        })}
-                        className="rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              {columns.map((col) => {
+                const multi = col.orders.length > 1;
+                return (
+                  <th
+                    key={col.location_id}
+                    className="text-right font-semibold px-3 py-2 whitespace-nowrap align-top"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span>{col.location_name}</span>
+                      {editable && !multi && removeButton(col, col.orders[0], null)}
+                    </div>
+                    {multi && (
+                      <div
+                        className="mt-0.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-[11px] font-normal text-amber-700"
+                        data-testid={`orders-at-${col.location_id}`}
                       >
-                        {busyOrderId === order.order_id ? (
-                          <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                        ) : (
-                          <X size={14} aria-hidden="true" />
-                        )}
-                      </button>
+                        <span>
+                          {tPlural("manager.transport.matrix", "ordersAtLocation", col.orders.length)}
+                        </span>
+                        {col.orders.map((o, i) => (
+                          <span
+                            key={o.order_id}
+                            className="inline-flex items-center gap-0.5 text-slate-500"
+                            title={o.order_id}
+                          >
+                            {t("manager.transport.matrix.orderTag", { n: i + 1 })}
+                            {editable && removeButton(col, o, i + 1)}
+                          </span>
+                        ))}
+                      </div>
                     )}
-                  </div>
-                </th>
-              ))}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, rowIdx) => (
+            {rows.map((row) => (
               <tr key={row.product_id} className="border-t border-gray-100">
                 <td className="px-3 py-2">
                   {row.product_name_pl}
                   <span className="ml-1 text-xs text-slate-400">{row.purchase_unit}</span>
                 </td>
-                {orders.map((order) => {
-                  const line = row.linesByOrderId[order.order_id];
-                  if (!line) {
+                {columns.map((col) => {
+                  const multi = col.orders.length > 1;
+                  const entries = col.orders.flatMap((order, i) => {
+                    const line = row.linesByOrderId[order.order_id];
+                    return line ? [{ order, line, orderNo: i + 1 }] : [];
+                  });
+                  if (entries.length === 0) {
                     // "+" only for a product on the location's list — a one-off
-                    // outside it goes through the picker's checkbox step.
-                    const addable = editable
-                      ? (orderableByOrderId[order.order_id] ?? []).find(
+                    // outside it goes through the picker's checkbox step. With
+                    // two orders it adds to the first one that can take it.
+                    let addTarget: TransportBatchOrder | undefined;
+                    let addTargetNo = 1;
+                    let addable: OrderableItem | undefined;
+                    if (editable) {
+                      for (const [i, order] of col.orders.entries()) {
+                        addable = (orderableByOrderId[order.order_id] ?? []).find(
                           (o) =>
                             o.product_id === row.product_id &&
                             o.configured_for_location !== false,
-                        )
-                      : undefined;
+                        );
+                        if (addable) {
+                          addTarget = order;
+                          addTargetNo = i + 1;
+                          break;
+                        }
+                      }
+                    }
                     return (
-                      <td key={order.order_id} className="px-3 py-2 text-right text-slate-300">
-                        {addable ? (
+                      <td key={col.location_id} className="px-3 py-2 text-right text-slate-300">
+                        {addable && addTarget ? (
                           <button
                             type="button"
                             disabled={addAllBusy}
-                            onClick={() => onAddProductOne(order, addable)}
+                            onClick={() =>
+                              onAddProductOne(addTarget, addable, labelFor(col, addTargetNo))
+                            }
                             aria-label={t("manager.transport.matrix.addCellAria", {
                               product: row.product_name_pl,
-                              location: order.location_name,
+                              location: labelFor(col, addTargetNo),
                             })}
                             className="inline-flex items-center rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                           >
@@ -160,58 +239,93 @@ export function TransportMatrix({
                       </td>
                     );
                   }
-                  const qty = draftQtyFor(drafts, order.order_id, line);
-                  const zeroed =
-                    lineVisualStateWithQty(line.captain_final_qty_purchase, qty) === "cancelled";
+                  const cells = entries.map((e) => {
+                    const qty = draftQtyFor(drafts, e.order.order_id, e.line);
+                    const zeroed =
+                      lineVisualStateWithQty(e.line.captain_final_qty_purchase, qty) ===
+                      "cancelled";
+                    return { ...e, qty, zeroed };
+                  });
+                  const anyZeroed = cells.some((c) => c.zeroed);
+                  const total = cells.reduce((sum, c) => sum + c.qty, 0);
                   return (
                     <td
-                      key={order.order_id}
-                      className={`px-3 py-2 text-right ${zeroed ? "bg-amber-50" : ""}`}
-                      data-zeroed={zeroed || undefined}
+                      key={col.location_id}
+                      className={`px-3 py-2 text-right ${anyZeroed ? "bg-amber-50" : ""}`}
+                      data-zeroed={anyZeroed || undefined}
                     >
-                      {editable ? (
-                        <DecimalInput
-                          value={qty}
-                          onChange={(v) => onQtyChange(order.order_id, line.order_line_id, v === "" ? 0 : v)}
-                          aria-label={t("manager.transport.matrix.qtyAria", {
-                            product: row.product_name_pl,
-                            location: order.location_name,
-                          })}
-                          data-mx-col={order.order_id}
-                          data-mx-row={rowIdx}
-                          // Enter = hop to the cell one row BELOW in the same
-                          // column (operator request v5.2: fast keyboard entry
-                          // down a location's column). Skips "–" rows (a column
-                          // without that product renders no input) by probing
-                          // successive row indices; selects the target's text
-                          // so typing overwrites. No-op on the last cell.
-                          onKeyDown={(e) => {
-                            if (e.key !== "Enter") return;
-                            e.preventDefault();
-                            const root = e.currentTarget.closest("table");
-                            if (!root) return;
-                            for (let next = rowIdx + 1; next < rows.length; next++) {
-                              const target = root.querySelector<HTMLInputElement>(
-                                `input[data-mx-col="${order.order_id}"][data-mx-row="${next}"]`,
-                              );
-                              if (target) {
-                                target.focus();
-                                target.select();
-                                return;
-                              }
-                            }
-                          }}
-                          className={`w-20 rounded border px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            zeroed ? MANAGER_ZERO_INPUT_CLASS : "border-gray-300"
-                          }`}
-                        />
-                      ) : (
-                        <span
-                          className={`tabular-nums ${zeroed ? MANAGER_ZERO_TEXT_CLASS : ""}`}
-                        >
-                          {qty}
-                        </span>
-                      )}
+                      <div className="flex flex-col items-end gap-1">
+                        {cells.map((c) => (
+                          <div key={c.order.order_id} className="flex items-center justify-end gap-1">
+                            {multi && (
+                              <span className="text-[11px] text-slate-500" title={c.order.order_id}>
+                                {t("manager.transport.matrix.orderTag", { n: c.orderNo })}
+                              </span>
+                            )}
+                            {editable ? (
+                              <DecimalInput
+                                value={c.qty}
+                                onChange={(v) =>
+                                  onQtyChange(c.order.order_id, c.line.order_line_id, v === "" ? 0 : v)
+                                }
+                                aria-label={
+                                  multi
+                                    ? t("manager.transport.matrix.qtyOrderAria", {
+                                        product: row.product_name_pl,
+                                        location: col.location_name,
+                                        n: c.orderNo,
+                                      })
+                                    : t("manager.transport.matrix.qtyAria", {
+                                        product: row.product_name_pl,
+                                        location: col.location_name,
+                                      })
+                                }
+                                data-mx-col={col.location_id}
+                                // Enter = hop to the next input DOWN the
+                                // location's column (operator request v5.2:
+                                // fast keyboard entry). Inputs are visited in
+                                // document order, so stacked inputs of a
+                                // merged column come one after another and
+                                // "–" rows are skipped. Selects the target's
+                                // text so typing overwrites. No-op on the last.
+                                onKeyDown={(e) => {
+                                  if (e.key !== "Enter") return;
+                                  e.preventDefault();
+                                  const root = e.currentTarget.closest("table");
+                                  if (!root) return;
+                                  const column = Array.from(
+                                    root.querySelectorAll<HTMLInputElement>(
+                                      `input[data-mx-col="${col.location_id}"]`,
+                                    ),
+                                  );
+                                  const target = column[column.indexOf(e.currentTarget) + 1];
+                                  if (target) {
+                                    target.focus();
+                                    target.select();
+                                  }
+                                }}
+                                className={`w-20 rounded border px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  c.zeroed ? MANAGER_ZERO_INPUT_CLASS : "border-gray-300"
+                                }`}
+                              />
+                            ) : (
+                              <span
+                                className={`tabular-nums ${c.zeroed ? MANAGER_ZERO_TEXT_CLASS : ""}`}
+                              >
+                                {c.qty}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {cells.length > 1 && (
+                          <div
+                            className="text-[11px] font-semibold text-slate-600 tabular-nums"
+                            data-testid={`cell-total-${col.location_id}-${row.product_id}`}
+                          >
+                            {t("manager.transport.matrix.cellTotal", { qty: roundQty(total) })}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   );
                 })}
@@ -219,7 +333,7 @@ export function TransportMatrix({
             ))}
             {editable && addAllOptions.length > 0 && (
               <tr>
-                <td colSpan={orders.length + 1} className="px-3 py-2">
+                <td colSpan={columns.length + 1} className="px-3 py-2">
                   <AddProductPicker
                     items={addAllOptions}
                     disabled={addAllBusy}
@@ -228,29 +342,31 @@ export function TransportMatrix({
                 </td>
               </tr>
             )}
-            {editable && addOneOrder && (
+            {editable && addOneColumn && addOneOrder && (
               <tr>
-                <td colSpan={orders.length + 1} className="px-3 py-2">
+                <td colSpan={columns.length + 1} className="px-3 py-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs text-slate-600">
                       {t("manager.transport.matrix.addOneLabel")}
                     </span>
                     <select
-                      value={addOneOrder.order_id}
-                      onChange={(e) => setAddOneOrderId(e.target.value)}
+                      value={addOneColumn.location_id}
+                      onChange={(e) => setAddOneLocationId(e.target.value)}
                       aria-label={t("manager.transport.matrix.addOneLocationAria")}
                       className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      {orders.map((o) => (
-                        <option key={o.order_id} value={o.order_id}>
-                          {o.location_name}
+                      {columns.map((c) => (
+                        <option key={c.location_id} value={c.location_id}>
+                          {c.location_name}
                         </option>
                       ))}
                     </select>
                     <AddProductPicker
                       items={addOneOptions}
                       disabled={addAllBusy}
-                      onSelect={(item) => onAddProductOne(addOneOrder, item)}
+                      onSelect={(item) =>
+                        onAddProductOne(addOneOrder, item, labelFor(addOneColumn, 1))
+                      }
                     />
                   </div>
                 </td>
