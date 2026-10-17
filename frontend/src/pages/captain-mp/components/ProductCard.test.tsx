@@ -395,15 +395,19 @@ describe("ProductCard — N1 double entry in [cases] + [loose]", () => {
       halloumi(),
       makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
     );
-    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
+    const packs = screen.getByLabelText("Zamawiasz, karton");
+    const loose = screen.getByLabelText("Zamawiasz, szt");
+    fireEvent.focus(packs);
+    fireEvent.change(packs, { target: { value: "2" } });
+    fireEvent.focus(loose);
+    fireEvent.change(loose, { target: { value: "24" } });
     // The sum is what the two fields mean today — the bug Marek saw.
     expect(onChangeSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ captain_final_qty_purchase: 48 }),
     );
-    // The prompt is visible without leaving the field.
+    // The prompt is visible while the loose field still has focus.
     expect(
-      screen.getByText(innermostText("Razem 48 szt. Czy 24 szt to te same 2 kartony?")),
+      screen.getByText(innermostText("Razem 48 szt. Czy 24 szt i 2 kartony to ta sama ilość?")),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 24 szt" }));
     expect(onChangeSpy).toHaveBeenLastCalledWith(
@@ -411,10 +415,24 @@ describe("ProductCard — N1 double entry in [cases] + [loose]", () => {
     );
     expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("2");
     expect((screen.getByLabelText("Zamawiasz, szt") as HTMLInputElement).value).toBe("0");
-    expect(screen.queryByText(/te same/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
+    // Focus goes back to the loose field, not to <body>.
+    expect(document.activeElement).toBe(screen.getByLabelText("Zamawiasz, szt"));
   });
 
-  it("the stock field gets the same prompt (4 kartony + 48 szt -> 48)", () => {
+  it("one carton + 12 szt asks without gendered grammar", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "12" } });
+    expect(
+      screen.getByText(innermostText("Razem 24 szt. Czy 12 szt i 1 karton to ta sama ilość?")),
+    ).toBeInTheDocument();
+  });
+
+  it("the stock field asks when the sum is above the target (4 kartony + 48 szt = 96 > 72)", () => {
     const { onChangeSpy } = renderCard(
       halloumi(),
       makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015" }),
@@ -424,10 +442,26 @@ describe("ProductCard — N1 double entry in [cases] + [loose]", () => {
     expect(onChangeSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ current_stock_qty_base: 96 }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 48 szt" }));
+    // On a count, keeping the sum is the main (first) button.
+    const keep = screen.getByRole("button", { name: "Nie, razem 96 szt" });
+    const fix = screen.getByRole("button", { name: "Tak, tylko 48 szt" });
+    expect(keep.compareDocumentPosition(fix) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(fix);
     expect(onChangeSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ current_stock_qty_base: 48 }),
     );
+  });
+
+  it("a stock count under the target is never questioned (2 kartony + 24 szt = 48)", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015" }),
+    );
+    retype(screen.getByLabelText("Obecny stan, karton"), "2");
+    retype(screen.getByLabelText("Obecny stan, szt"), "24");
+    expect(screen.queryByText(/ta sama ilość|cała ilość/)).not.toBeInTheDocument();
+    retype(screen.getByLabelText("Obecny stan, szt"), "30");
+    expect(screen.queryByText(/ta sama ilość|cała ilość/)).not.toBeInTheDocument();
   });
 
   it("'Nie' keeps the sum and hides the prompt for that pair", () => {
@@ -438,41 +472,55 @@ describe("ProductCard — N1 double entry in [cases] + [loose]", () => {
     fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
     fireEvent.click(screen.getByRole("button", { name: "Nie, razem 48 szt" }));
-    expect(screen.queryByText(/te same/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
     expect(onChangeSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ captain_final_qty_purchase: 48 }),
     );
   });
 
-  it("a real remainder (2 kartony + 4 szt) shows no prompt; a loose over a carton warns", () => {
+  it("a real remainder (2 kartony + 4 szt) shows no prompt; a loose over a carton asks", () => {
     renderCard(
       halloumi(),
       makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
     );
     fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "4" } });
-    expect(screen.queryByText(/te same|Luzem jest/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ta sama ilość|cała ilość/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "30" } });
     expect(
-      screen.getByText(
-        innermostText(
-          "Luzem jest więcej niż karton. Razem 54 szt. Sprawdź, czy nic nie jest wpisane dwa razy.",
-        ),
-      ),
+      screen.getByText(innermostText("Razem 54 szt. Czy 30 szt to już cała ilość?")),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Nie, razem 54 szt" }));
+    expect(screen.queryByText(/cała ilość/)).not.toBeInTheDocument();
   });
 
-  it("a restored value (draft 48) splits to 4 kartony + 0 and shows no prompt", () => {
+  it("tile path: tap the suggestion (2 kartony), then type an own total of 30 szt", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Zaakceptuj sugestię/ }));
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("2");
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "30" } });
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 54 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 30 szt" }));
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 30 }),
+    );
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("0");
+  });
+
+  it("an external change (tapping the tile) clears an open prompt", () => {
     renderCard(
       halloumi(),
-      makeLine({
-        product_id: "P015",
-        supplier_product_id: "SP_INTERMLECZ_P015",
-        current_stock_qty_base: 48,
-        captain_final_qty_purchase: 48,
-      }),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
     );
-    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("4");
-    expect(screen.queryByText(/te same|Luzem jest/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
+    expect(screen.getByText(/ta sama ilość/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Zaakceptuj sugestię/ }));
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
   });
 });

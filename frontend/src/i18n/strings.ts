@@ -180,14 +180,16 @@ export const STRINGS = {
   // N1: the same quantity typed into BOTH fields ("2 kartony" + "24 szt"
   // for 24 szt) doubles it. Shared by the stock and the order input.
   "packEntry.duplicate": {
-    pl: "Razem {total}. Czy {loose} to te same {packs}?",
-    en: "That is {total} in total. Is {loose} the same as {packs}?",
+    pl: "Razem {total}. Czy {loose} i {packs} to ta sama ilość?",
+    en: "That is {total} in total. Are {loose} and {packs} the same amount?",
   },
   "packEntry.duplicateYes": { pl: "Tak, tylko {fixed}", en: "Yes, only {fixed}" },
   "packEntry.duplicateNo": { pl: "Nie, razem {total}", en: "No, {total} in total" },
+  // Order only: N cases (often from the suggestion tile) + the Captain's own
+  // total typed into the loose field ("6 skrzynek + 30 kg").
   "packEntry.looseOverPack": {
-    pl: "Luzem jest więcej niż {pack}. Razem {total}. Sprawdź, czy nic nie jest wpisane dwa razy.",
-    en: "Loose is more than {pack}. {total} in total. Check that nothing is entered twice.",
+    pl: "Razem {total}. Czy {loose} to już cała ilość?",
+    en: "That is {total} in total. Is {loose} the whole amount?",
   },
 
   // Grams typed for a piece-counted product (name carries the weight).

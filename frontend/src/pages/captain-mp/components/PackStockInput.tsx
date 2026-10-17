@@ -10,6 +10,8 @@
 //
 // N1: typing the same quantity into both fields ("2 kartony" + "24 szt") sums
 // to double; a second soft prompt names the total and offers the one-tap fix.
+// On the stock copy it only shows when the sum is above every reference (a
+// real count of "2 zgrzewki + 12 szt" is normal) and "Nie" is the main button.
 
 import { useState, type FocusEvent, type ReactNode } from "react";
 
@@ -146,7 +148,7 @@ export function PackStockInput({
   const packsId = `${idPrefix}-packs`;
   const looseId = `${idPrefix}-loose`;
   const readingId = `${idPrefix}-reading`;
-  const ariaDescribedBy = describedBy ? `${readingId} ${describedBy}` : readingId;
+  const doubleId = `${idPrefix}-double`;
 
   let reading: ReactNode[] | null = null;
   if (combined !== "") {
@@ -174,14 +176,76 @@ export function PackStockInput({
 
   // Shown while typing too (not only after blur): the Captain may go straight
   // from the loose field to "Wyślij", and the doubled order must be visible.
-  const doubleEntry = detectDoubleEntry({ packs: pair.packs, loose: pair.loose, upp });
+  const doubleEntry = detectDoubleEntry({
+    packs: pair.packs,
+    loose: pair.loose,
+    upp,
+    mode: copy,
+    references,
+  });
   const pairKey = `${pair.packs}|${pair.loose}`;
-  const showDouble = doubleEntry !== null && touched && dismissedPair !== pairKey;
+  const showDouble =
+    doubleEntry !== null && touched && dismissedPair !== pairKey && typeof combined === "number";
+  const ariaDescribedBy = [readingId, showDouble ? doubleId : null, describedBy ?? null]
+    .filter((id): id is string => id !== null && id !== "")
+    .join(" ");
   const qtyWithUnit = (n: number, unit: string): ReactNode => (
     <>
       {formatBaseQty(n, lang)} <UnitLabel>{packUnitLabel(n, unit, lang)}</UnitLabel>
     </>
   );
+  // The prompt's buttons unmount on click: hand focus back to the loose field.
+  const refocusLoose = (): void => {
+    const el = document.getElementById(looseId);
+    if (el instanceof HTMLInputElement) el.focus();
+  };
+  const fixDouble = (next: Pair): void => {
+    emit(next);
+    refocusLoose();
+  };
+  const keepDouble = (): void => {
+    setDismissedPair(pairKey);
+    refocusLoose();
+  };
+  const PRIMARY_BTN =
+    "rounded-full bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+  const SECONDARY_BTN =
+    "rounded-full border border-amber-400 bg-white px-3 py-1.5 text-sm text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+  // Stock: halving a true count over-orders, so keeping the sum is the main
+  // button. Order: the doubled order is the likely mistake.
+  const fixIsPrimary = copy === "order";
+
+  const fixButton: ReactNode =
+    doubleEntry === null ? null : (
+      <button
+        type="button"
+        onClick={() =>
+          fixDouble(
+            doubleEntry.kind === "duplicate"
+              ? { packs: pair.packs, loose: 0 }
+              : { packs: 0, loose: pair.loose },
+          )
+        }
+        className={fixIsPrimary ? PRIMARY_BTN : SECONDARY_BTN}
+      >
+        {tParts("packEntry.duplicateYes", {
+          fixed: qtyWithUnit(
+            doubleEntry.kind === "duplicate" ? doubleEntry.fixed : Number(pair.loose),
+            baseUnit,
+          ),
+        })}
+      </button>
+    );
+  const keepButton: ReactNode =
+    typeof combined !== "number" ? null : (
+      <button
+        type="button"
+        onClick={keepDouble}
+        className={fixIsPrimary ? SECONDARY_BTN : PRIMARY_BTN}
+      >
+        {tParts("packEntry.duplicateNo", { total: qtyWithUnit(combined, baseUnit) })}
+      </button>
+    );
 
   // Only focus inside the two FIELDS suppresses the prompt — focusing the
   // prompt's own buttons must not unmount it before the click lands.
@@ -248,42 +312,32 @@ export function PackStockInput({
       </div>
       {showDouble && doubleEntry !== null && typeof combined === "number" && (
         <div
+          id={doubleId}
           role="status"
           className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >
-          {doubleEntry.kind === "duplicate" ? (
-            <>
-              <span>
-                {tParts("packEntry.duplicate", {
+          <span>
+            {doubleEntry.kind === "duplicate"
+              ? tParts("packEntry.duplicate", {
                   total: qtyWithUnit(combined, baseUnit),
                   loose: qtyWithUnit(Number(pair.loose), baseUnit),
                   packs: <PackQty n={Number(pair.packs)} unit={packUnit} lang={lang} />,
+                })
+              : tParts("packEntry.looseOverPack", {
+                  total: qtyWithUnit(combined, baseUnit),
+                  loose: qtyWithUnit(Number(pair.loose), baseUnit),
                 })}
-              </span>
-              <button
-                type="button"
-                onClick={() => emit({ packs: pair.packs, loose: 0 })}
-                className="rounded-full bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                {tParts("packEntry.duplicateYes", {
-                  fixed: qtyWithUnit(doubleEntry.fixed, baseUnit),
-                })}
-              </button>
-              <button
-                type="button"
-                onClick={() => setDismissedPair(pairKey)}
-                className="rounded-full border border-amber-400 bg-white px-3 py-1.5 text-sm text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                {tParts("packEntry.duplicateNo", { total: qtyWithUnit(combined, baseUnit) })}
-              </button>
+          </span>
+          {fixIsPrimary ? (
+            <>
+              {fixButton}
+              {keepButton}
             </>
           ) : (
-            <span>
-              {tParts("packEntry.looseOverPack", {
-                pack: packUnitLabel(1, packUnit, lang),
-                total: qtyWithUnit(combined, baseUnit),
-              })}
-            </span>
+            <>
+              {keepButton}
+              {fixButton}
+            </>
           )}
         </div>
       )}
