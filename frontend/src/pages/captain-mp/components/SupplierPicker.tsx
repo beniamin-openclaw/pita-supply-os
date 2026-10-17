@@ -17,7 +17,9 @@ interface SupplierPickerProps {
   /** Number of orderable lines per supplier — used for badge.
    * Empty record = unknown (don't show count). */
   lineCounts: Record<string, number>;
-  /** Suppliers already submitted in this session. */
+  /** Suppliers with an order already sent today (Europe/Warsaw) — from the
+   *  server's `sent_today` plus this session's submits (captain-sent-today),
+   *  so the ✓ survives a reload. */
   sentSuppliers: Set<string>;
 }
 
@@ -65,6 +67,7 @@ export function SupplierPicker({
                 <Check size={16} className="text-green-700" aria-hidden="true" />
               )}
               <span>{supplier.supplier_name}</span>
+              {isSent && <span className="sr-only">{t("supplier.sentToday")}</span>}
               {!isActive && typeof count === "number" && count > 0 && (
                 <span
                   className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none ${

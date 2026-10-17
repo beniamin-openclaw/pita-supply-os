@@ -27,6 +27,24 @@ export const STRINGS = {
   // Supplier picker ---------------------------------------------------------
   "supplier.navLabel": { pl: "Dostawcy", en: "Suppliers" },
   "supplier.lineCountLabel": { pl: "{count} pozycji", en: "{count} items" },
+  // Screen-reader text for the ✓ on a tab (captain-sent-today).
+  "supplier.sentToday": { pl: "wysłano dziś", en: "sent today" },
+
+  // Supplier-level notices on the order screen (captain-sent-today, WP6 + D10 A).
+  // Information only — the Captain can always send another order.
+  "captain.sentToday": {
+    pl: "Dziś już wysłano zamówienie do {supplier} ({time}).",
+    en: "An order to {supplier} was already sent today ({time}).",
+  },
+  "captain.sentTodayNoTime": {
+    pl: "Dziś już wysłano zamówienie do {supplier}.",
+    en: "An order to {supplier} was already sent today.",
+  },
+  "captain.openOrder": {
+    pl: "Masz już otwarte zamówienie u tego dostawcy (z {date}, status: {status}).",
+    en: "You already have an open order with this supplier (from {date}, status: {status}).",
+  },
+  "captain.showOrder": { pl: "Zobacz zamówienie", en: "View order" },
 
   // Captain page-level ------------------------------------------------------
   "captain.suppliersLoading": { pl: "Ładowanie dostawców…", en: "Loading suppliers…" },
@@ -394,6 +412,15 @@ export const STRINGS = {
   "confirm.back": { pl: "Wróć i popraw", en: "Go back and fix" },
   "confirm.send": { pl: "Tak, wyślij", en: "Yes, send" },
   "confirm.sendAnyway": { pl: "Wyślij mimo to", en: "Send anyway" },
+  // Second order to the same supplier on the same day (captain-sent-today).
+  "confirm.sentToday": {
+    pl: "Dziś już wysłano zamówienie do {supplier} ({time}). Wysłać kolejne?",
+    en: "An order to {supplier} was already sent today ({time}). Send another one?",
+  },
+  "confirm.sentTodayNoTime": {
+    pl: "Dziś już wysłano zamówienie do {supplier}. Wysłać kolejne?",
+    en: "An order to {supplier} was already sent today. Send another one?",
+  },
 
   // Dates helpers -----------------------------------------------------------
   "dates.cutoff.value": { pl: "Wyślij do dziś {time}", en: "Send by {time} today" },

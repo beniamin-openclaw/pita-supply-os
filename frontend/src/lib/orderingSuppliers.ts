@@ -7,7 +7,7 @@
 //
 // Mirrors `_INTERNAL_SUPPLIER_ID` in supply-os-v1/app/main.py — keep in sync.
 
-import type { Supplier } from "../types";
+import type { CaptainSupplier, Supplier } from "../types";
 
 export const INTERNAL_SUPPLIER_ID = "SUP_INTERNAL";
 
@@ -29,11 +29,13 @@ export function pickDefaultSupplier<T extends Pick<Supplier, "supplier_id">>(
  * when the scoped call fails (e.g. 404 from an older backend during the deploy
  * window) so the screen never breaks. The client-side ordering filter stays on
  * top of both. A 401 is NOT retried — the global call needs the same token.
+ * Fallback rows carry no sent-today / open-order state (captain-sent-today):
+ * the screen then simply shows no ✓ and no notices.
  */
 export async function loadCaptainSuppliers(
-  scoped: () => Promise<Supplier[]>,
+  scoped: () => Promise<CaptainSupplier[]>,
   global: () => Promise<Supplier[]>,
-): Promise<Supplier[]> {
+): Promise<CaptainSupplier[]> {
   try {
     return (await scoped()).filter(isOrderingSupplier);
   } catch (err) {

@@ -6,7 +6,14 @@
 import type { ReasonCode } from "../../types";
 import type { ExtraItemRow } from "./lib/extraItems";
 
-export type { OrderableItem, Supplier, Location, ReasonCode } from "../../types";
+export type {
+  CaptainSupplier,
+  CaptainSupplierOrderRef,
+  OrderableItem,
+  Supplier,
+  Location,
+  ReasonCode,
+} from "../../types";
 
 /** 4-state visual vocabulary plus a "not entered yet" grey. */
 export type CardState = "green" | "yellow" | "orange" | "red" | "grey";

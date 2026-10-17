@@ -50,6 +50,8 @@ from .models import (
     CaptainOrderListItem,
     CaptainSubmitRequest,
     CaptainSubmitResponse,
+    CaptainSupplier,
+    CaptainSupplierOrderRef,
     DeliveryProposal,
     InventoryCount,
     InventoryCountDetail,
@@ -395,6 +397,18 @@ _OPEN_ORDER_STATUSES = (
 _OPEN_ORDER_WINDOW_DAYS = 7
 
 
+def _order_submit_day(order: Order) -> date:
+    """Europe/Warsaw calendar day ``order`` was submitted:
+    ``captain_submitted_at`` in Warsaw, else ``order_date``. ``order_date`` is
+    the UTC date (``captain_submit``), one day early between 00:00 and 02:00
+    Warsaw, so the timestamp wins whenever there is one. Shared by the
+    product-level open-order hint and the Captain tab state (captain-sent-today)
+    so the two never disagree about "today"."""
+    if order.captain_submitted_at is not None:
+        return order.captain_submitted_at.astimezone(_WARSAW_TZ).date()
+    return order.order_date
+
+
 def _open_orders_elsewhere(
     backend,
     location_id: str,
@@ -425,11 +439,7 @@ def _open_orders_elsewhere(
                 continue
             if order.order_id == exclude_order_id or order.supplier_id == exclude_supplier_id:
                 continue
-            submitted = (
-                order.captain_submitted_at.astimezone(_WARSAW_TZ).date()
-                if order.captain_submitted_at is not None
-                else order.order_date
-            )
+            submitted = _order_submit_day(order)
             if submitted < since:
                 continue
             orders.append(order)
@@ -477,6 +487,89 @@ def _open_orders_elsewhere(
         return {}
 
 
+# Statuses that never count as "sent": a draft never left the location and a
+# cancelled order will not be delivered (captain-sent-today).
+_NOT_SENT_STATUSES = (OrderStatus.DRAFT, OrderStatus.CANCELLED)
+
+
+def _supplier_order_ref(order: Order, submitted_on: date) -> CaptainSupplierOrderRef:
+    return CaptainSupplierOrderRef(
+        order_id=order.order_id,
+        status=order.status,
+        order_date=order.order_date,
+        submitted_on=submitted_on,
+        captain_submitted_at=order.captain_submitted_at,
+        requested_delivery_date=order.requested_delivery_date,
+    )
+
+
+def _captain_supplier_orders(
+    orders: list[Order],
+    location_id: str,
+    today: date,
+) -> tuple[dict[str, CaptainSupplierOrderRef], dict[str, CaptainSupplierOrderRef]]:
+    """``(sent_today, open_order)`` keyed by supplier_id for ``location_id``
+    (captain-sent-today). Pure — ``today`` is the Europe/Warsaw date.
+
+    - sent_today: the newest order submitted on ``today`` (``_order_submit_day``)
+      whose status is not cancelled or draft. Newest = latest
+      ``captain_submitted_at``, then ``order_id``.
+    - open_order: the newest open order (``_OPEN_ORDER_STATUSES``) submitted in
+      ``[today − 7 days, today)`` — the window of ``_open_orders_elsewhere``.
+      Today's orders are left to ``sent_today`` so one order never produces two
+      notices. Newest = latest submit day, then ``captain_submitted_at``, then
+      ``order_id``.
+
+    Supplier level only: the order lines are not read, so an open order whose
+    lines the Manager zeroed still counts (its status says it is open)."""
+    since = today - timedelta(days=_OPEN_ORDER_WINDOW_DAYS)
+
+    def _newest_key(order: Order, day: date) -> tuple[date, float, str]:
+        ts = order.captain_submitted_at.timestamp() if order.captain_submitted_at else 0.0
+        return (day, ts, order.order_id)
+
+    sent: dict[str, tuple[tuple[date, float, str], CaptainSupplierOrderRef]] = {}
+    open_: dict[str, tuple[tuple[date, float, str], CaptainSupplierOrderRef]] = {}
+    for order in orders:
+        if order.location_id != location_id:
+            continue
+        day = _order_submit_day(order)
+        key = _newest_key(order, day)
+        if day == today and order.status not in _NOT_SENT_STATUSES:
+            current = sent.get(order.supplier_id)
+            if current is None or key > current[0]:
+                sent[order.supplier_id] = (key, _supplier_order_ref(order, day))
+        elif since <= day < today and order.status in _OPEN_ORDER_STATUSES:
+            current = open_.get(order.supplier_id)
+            if current is None or key > current[0]:
+                open_[order.supplier_id] = (key, _supplier_order_ref(order, day))
+    return (
+        {sid: ref for sid, (_, ref) in sent.items()},
+        {sid: ref for sid, (_, ref) in open_.items()},
+    )
+
+
+def _captain_supplier_orders_safe(
+    backend, location_id: str
+) -> tuple[dict[str, CaptainSupplierOrderRef], dict[str, CaptainSupplierOrderRef]]:
+    """``_captain_supplier_orders`` over the backend's orders, NEVER raising:
+    a non-persistent backend (seed — orders are not stored) or any read error
+    returns ``({}, {})`` (logged), like ``_open_orders_elsewhere``. The Captain
+    tab list must load even when the order read fails."""
+    if not _is_persistent(backend):
+        return {}, {}
+    try:
+        today = datetime.now(_WARSAW_TZ).date()
+        return _captain_supplier_orders(backend.load_orders(), location_id, today)
+    except Exception:  # noqa: BLE001 — a hint must never fail the tab list
+        log.warning(
+            "captain supplier order state failed for %s — continuing without it",
+            location_id,
+            exc_info=True,
+        )
+        return {}, {}
+
+
 def _supplier_alerts_enabled(suppliers: list[Supplier], supplier_id: str) -> bool:
     """The supplier's ``suggestion_alerts_enabled`` flag; True (alerts on, the
     historical behaviour) when the supplier is unknown."""
@@ -512,13 +605,19 @@ def captain_orderable(
     )
 
 
-@app.get("/api/captain/suppliers", response_model=list[Supplier])
+@app.get("/api/captain/suppliers", response_model=list[CaptainSupplier])
 def captain_suppliers(location_id: str = Depends(require_captain)):
     """The suppliers this Captain can order from: active, not on-site
     production, with at least one orderable product at the token's location
     (krakow-katowice-rollout — Kraków and Katowice see only their city
-    suppliers, and empty tabs disappear everywhere). Same shape and order as
-    ``GET /api/suppliers``, which the Manager and Transport keep using."""
+    suppliers, and empty tabs disappear everywhere). Same order and fields as
+    ``GET /api/suppliers``, which the Manager and Transport keep using.
+
+    Each row also carries the location's own orders with the supplier
+    (captain-sent-today): ``sent_today`` (the tab's ✓ and the second-order
+    warning) and ``open_order`` (the "open order with this supplier" hint).
+    Both None on the seed backend or when the order read fails — never an
+    error (``_captain_supplier_orders_safe``)."""
     backend = _choose_backend()
     products_by_id = {p.product_id: p for p in backend.load_products()}
     settings_pids = {
@@ -538,7 +637,18 @@ def captain_suppliers(location_id: str = Depends(require_captain)):
         ).values()
         for sp in rows
     }
-    return [s for s in suppliers if s.supplier_id in with_items and is_orderable_supplier(s)]
+    orderable = [
+        s for s in suppliers if s.supplier_id in with_items and is_orderable_supplier(s)
+    ]
+    sent_today, open_orders = _captain_supplier_orders_safe(backend, location_id)
+    return [
+        CaptainSupplier(
+            **s.model_dump(),
+            sent_today=sent_today.get(s.supplier_id),
+            open_order=open_orders.get(s.supplier_id),
+        )
+        for s in orderable
+    ]
 
 
 def _load_delivery_rules_safe(backend) -> list[SupplierDeliveryRule]:

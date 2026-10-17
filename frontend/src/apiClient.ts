@@ -15,6 +15,7 @@ import type {
   CaptainOrderListItem,
   CaptainSubmitRequest,
   CaptainSubmitResponse,
+  CaptainSupplier,
   DeliveryProposal,
   FinanceAliasRequest,
   FinanceOverview,
@@ -364,8 +365,10 @@ export const api = {
   // use and 401 silently (the same bug `api.suppliers` shipped once before
   // gaining this same optional param — see lessons.md).
   // Captain-scoped tabs: active, non-internal suppliers with at least one
-  // orderable product at the captain's location (krakow-katowice-rollout).
-  captainSuppliers: () => apiGet<Supplier[]>("/api/captain/suppliers", "captain"),
+  // orderable product at the captain's location (krakow-katowice-rollout),
+  // each with the location's own sent-today / open order (captain-sent-today).
+  captainSuppliers: () =>
+    apiGet<CaptainSupplier[]>("/api/captain/suppliers", "captain"),
   locations: (role: Role = "captain") => apiGet<Location[]>("/api/locations", role),
   // Captain
   orderable: (supplier_id: string) =>
