@@ -43,8 +43,17 @@ Frontend only. No backend code change, no migration, no prod SQL.
 - No Filber in the Pago Transport run, no new aggregation layer.
 - No edit to `DispatchPanel.tsx` (Lane E). The button lives in `OrderDetailPane.tsx`.
 - No backend change. The backend still returns a compose URL for the manual dispatch of an e-mail
-  supplier; the frontend ignores it. The `sent_method` stored on the order is `manual`, which the
-  history and the archive already show.
+  supplier; the frontend ignores it. The backend's "@" gate also still applies: a supplier whose
+  address is a placeholder gets a 400 even for "bez e-maila". Prod Filber has a real address
+  (`wyspypiwne@filber.pl`, set 16.07, `context/archive/2026-07-15-feedback-r4-suppliers-master-data/change.md`);
+  the seed's `TBD` does not.
+- The order stores `sent_method = "manual"`, but no Manager screen shows `sent_method` today and
+  dispatch writes no order event. So after the fact the app does not tell a Filber order marked
+  by hand from one e-mailed. The post-send "Dosyłka" composer (`ResendPanel.tsx`) also still offers
+  an e-mail top-up for such an order. Follow-up candidate: expose `sent_method` on the Manager
+  detail and show "zamówione bez e-maila" (and the copy-list instead of the e-mail top-up).
+- Filber is allowlisted by id (`MARK_ORDERED_EMAIL_SUPPLIER_IDS`). If more suppliers need this,
+  move it to a supplier flag, as `suggestion_alerts_enabled` did.
 
 ## Implementation Approach
 
@@ -69,15 +78,26 @@ Frontend only. No backend code change, no migration, no prod SQL.
 - Live check after deploy (Ben, prod): the filter shows "Pago + Magazyn Mory" and lists both
   suppliers' orders; a claimed Filber order shows "Zamówione (bez e-maila)" and moves to the sent
   lane with no e-mail link. If Filber is not an e-mail supplier on prod, the button stays hidden
-  and the existing "Oznacz jako zamówione" in the dispatch panel covers it.
+  and the existing "Oznacz jako zamówione" in the dispatch panel covers it. Read-only check
+  before: `SELECT supplier_id, ordering_method, email FROM suppliers WHERE supplier_id = 'SUP_FILBER';`
+  (expect `email` and an address with "@").
+
+## Impl review (13290a8)
+
+No blockers or majors. Addressed: the plan's wrong claim that the history shows `sent_method`
+(corrected above, with the follow-up), the "@" gate and the post-send top-up written down, a prod
+read-only check added to the live check, tests for the busy/drafting lock, a sent Filber order and
+a non-email Filber, and the backend test now pins the compose URL the frontend guard drops. Left
+as is: the hint lives only in `title` (the confirm carries the message on touch screens), and the
+archive-page grouping has no own test (same helper and matcher as the queue, which is tested).
 
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
-- [x] 1 Helpers + Transport chips
-- [x] 2 Manager and archive filters, compose-URL guard
-- [x] 3 Filber button
-- [x] 4 Tests
-- [ ] 5 Verify + reviews addressed
+- [x] 1 Helpers + Transport chips — 13290a8
+- [x] 2 Manager and archive filters, compose-URL guard — 13290a8
+- [x] 3 Filber button — 13290a8
+- [x] 4 Tests — 13290a8
+- [x] 5 Verify + reviews addressed
 - [ ] 6 PR open, CI green

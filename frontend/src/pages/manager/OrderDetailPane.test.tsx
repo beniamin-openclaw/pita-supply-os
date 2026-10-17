@@ -57,6 +57,7 @@ function renderPane(
   detail: ManagerOrderDetail,
   onDispatch: (orderId: string, sentMethod: string) => void = () => {},
   drafts: DraftMap = {},
+  lock: { busyId?: string | null; draftingId?: string | null } = {},
 ): void {
   render(
     <MemoryRouter>
@@ -65,7 +66,8 @@ function renderPane(
           selectedId={detail.order_id}
           detail={detail}
           loading={false}
-          busyId={null}
+          busyId={lock.busyId ?? null}
+          draftingId={lock.draftingId ?? null}
           drafts={drafts}
           availableToAdd={[]}
           onAddLine={() => {}}
@@ -119,6 +121,28 @@ describe("OrderDetailPane — Filber mark-ordered without e-mail (D4)", () => {
   it("is not offered for another e-mail supplier", () => {
     renderPane(makeDetail({ supplier_id: "SUP_BUKAT", supplier_name: "Bukat" }));
     expect(screen.getByRole("link", { name: "Otwórz w Gmail" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", BUTTON)).toBeNull();
+  });
+
+  it("is disabled while an action or a Gmail draft runs on the order", () => {
+    renderPane(makeDetail(), () => {}, {}, { busyId: "ORD-1" });
+    expect(screen.getByRole("button", BUTTON)).toBeDisabled();
+  });
+
+  it("is disabled while a Gmail draft is being created", () => {
+    renderPane(makeDetail(), () => {}, {}, { draftingId: "ORD-1" });
+    expect(screen.getByRole("button", BUTTON)).toBeDisabled();
+  });
+
+  it("is not offered on a sent Filber order", () => {
+    renderPane(makeDetail({ status: "manager_sent", editable_after_send: true }));
+    expect(screen.queryByRole("button", BUTTON)).toBeNull();
+  });
+
+  it("is not offered when Filber is not an e-mail supplier", () => {
+    renderPane(makeDetail({ ordering_method: "manual" }));
+    // The dispatch panel's own mark-as-ordered covers that case.
+    expect(screen.getByRole("button", { name: "Oznacz jako zamówione ✓" })).toBeInTheDocument();
     expect(screen.queryByRole("button", BUTTON)).toBeNull();
   });
 

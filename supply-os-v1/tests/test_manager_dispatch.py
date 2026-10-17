@@ -724,6 +724,9 @@ def test_dispatch_email_supplier_marked_ordered_without_email(mocker):
     r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "manager_sent"
+    # The URL is still built (a string, nothing is sent); the frontend guard
+    # in ManagerPage.handleDispatch drops it for a non-email send.
+    assert r.json()["gmail_compose_url"]
     _, kwargs = mocks["update_order"].call_args
     assert kwargs.get("status") == OrderStatus.MANAGER_SENT.value
     assert kwargs.get("sent_method") == "manual"
