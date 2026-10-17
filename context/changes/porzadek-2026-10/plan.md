@@ -6,9 +6,13 @@ Pełne dowody leżą w `inputs/`; tabela ustaleń ze statusem jest w `inputs/cro
 (źródła W = Wispr, M/MD = mail, S = sesje).
 
 **Zasada pracy.** Decyzje zapadają tutaj. Kod piszą osobne sesje według kontraktów z Etapu 5:
-jedna sesja na jeden zestaw plików. Zapisów na prod agent z laptopa nie zrobi, bo klasyfikator
-je blokuje. SQL na prod przygotowuje agent jako diff + guard + audit. Uruchamia go operator
-albo lane na mini, jeśli Ben wyraźnie się na to zgodzi.
+jedna sesja na jeden zestaw plików. Odczyty z produ działają. Zapisy na prod (UPDATE/DELETE/DDL)
+blokuje klasyfikator trybu auto w Claude Code („Production Deploy”). Blokuje je nawet wtedy, gdy
+Ben zgodził się na czacie (05.10 i 17.10). Agent przygotowuje więc SQL jako diff + guard + audit.
+Uruchamia go jedna z trzech dróg:
+(a) Ben w edytorze SQL Supabase;
+(b) agent, po dodaniu reguły zezwalającej na `execute_sql` w ustawieniach Claude Code;
+(c) sesja na mini z pominięciem uprawnień, za wyraźną zgodą Bena.
 
 ---
 
@@ -16,27 +20,30 @@ albo lane na mini, jeśli Ben wyraźnie się na to zgodzi.
 
 Te rzeczy istnieją tylko lokalnie albo na gałęziach i mogą przepaść.
 
-- [ ] 0.1 Commit + push tej gałęzi: `context/changes/gdansk-rollout/` (było tylko na mini,
+- [x] 0.1 Commit + push tej gałęzi: `context/changes/gdansk-rollout/` (było tylko na mini,
       niezacommitowane) + `context/changes/porzadek-2026-10/`.
-- [ ] 0.2 Docs PR z `origin/claude/rollout-katowice-krakow-b96616` (b844dfb, 455822e:
+- [x] 0.2 Docs PR z `origin/claude/rollout-katowice-krakow-b96616` (b844dfb, 455822e:
       log prod 0029/A/C/B/B2, kody FORUM/SUPERSAM, smoke GET).
-- [ ] 0.3 Docs z `origin/claude/transport-v2` (a633703). Wchodzą do main razem z archiwizacją R-36 (Etap 6).
-- [ ] 0.4 Commit niezacommitowanych plików z innych worktree:
+- [x] 0.3 Docs z `origin/claude/transport-v2` (a633703). Wchodzą do main razem z archiwizacją R-36 (Etap 6).
+- [x] 0.4 Commit niezacommitowanych plików z innych worktree:
       materiały szkoleniowe `docs/pita-supply-os-v1/training/2026-10-09-captain-training/`
       (worktree wonderful-albattani) oraz strona decyzji
       `context/meetings/supply-os-ze-spotkan.html` (worktree przepisz-nr-normlanie).
-- [ ] 0.5 Roadmapa: poprawić nieaktualne wiersze R-33 i R-37. Dopisać R-38 gdansk-rollout
+- [x] 0.5 Roadmapa: poprawić nieaktualne wiersze R-33 i R-37. Dopisać R-38 gdansk-rollout
       oraz dwa brakujące wiersze: inventory-card-order i transport-pago-mory-combined.
 
 ## Etap 1 — Domknięcie Gdańska (SLONY) (agent przygotowuje, operator zatwierdza)
 
 Na prodzie (odczyt 17.10): SLONY aktywny, 5 dostawców GDA, 130 pozycji, są już 2 zamówienia.
 Brakuje:
-- [ ] 1.1 Korekta od Marka (16.10). Kuchnie Świata, Selgros i Blue Service: termin „dzień
+- [ ] 1.1 (SQL gotowy: `gdansk-rollout/prod-sql-3-corrections.sql`; zapis zablokowany, czeka na drogę a/b/c) Korekta od Marka (16.10). Kuchnie Świata, Selgros i Blue Service: termin „dzień
       wcześniej do 17:00” (dziś wszystkie mają `cutoff_time` NULL). Tzatziki/tiro/feta zostają
       w „Pago + Magazyn”, a etykieta zmienia się z „(Bukat)” na „(Magazyn)”. Coca-Cola i Pago bez zmian.
-- [ ] 1.2 DELETE 12 pustych pozycji szablonu (133 → 121 ustawień). Konektor poprosi o potwierdzenie.
-- [ ] 1.3 DROP tymczasowej funkcji `gdansk_rollout_step1`.
+- [ ] 1.2 ~~DELETE 12 pustych pozycji~~ **wstrzymane (D15)**. Spis z natury z 16.10 (`INV-20261016-SLO-da3c42`)
+      ma stany na 7 z nich: Coca-Cola 0,33 puszka 119, Cola Zero 102, Cappy jabłko 16, Cappy pomarańcza 19,
+      rolki 57/30 24, Top Glass Tenzi 8, papryka Florina 3. Zera mają: ocet, cukier w saszetkach,
+      Tenzi do szyb i Top Grill. Ocet spirytusowy (P037) nie był liczony.
+- [ ] 1.3 DROP tymczasowej funkcji `gdansk_rollout_step1(boolean)`: w tym samym pliku co 1.1.
 - [ ] 1.4 Ben potwierdza, że `SLONY:<kod demo SLONY>` jest w Railway i że kapitan się loguje
       (2 zamówienia sugerują, że tak). Po demo zmienić kod na trudniejszy do zgadnięcia (review F8).
 - [ ] 1.5 Audyt + odhaczenie `gdansk-rollout/plan.md`. Reszta czeka na pakiet od Marka (Etap 3).
@@ -61,6 +68,7 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
 | D12 | Raport strat i eksport GoStock: w V1 czy później | później, zgodnie z „najpierw analiza” Georgiosa (W55) | WP18, WP19 |
 | D13 | Lemoniady Filber P075–P077 w zakładce Katowic | zostają | WP7 |
 | D14 | Przyszłość lane'ów bocznych: PR #59 (guard AGENTS.md), `10x-autonomous-workflow-v2`, H-01, `captain-history-and-draft-ux` (sharp-fermat) | #59 merge; reszta: osobna decyzja w Etapie 6 | Etap 6 |
+| D15 | Gdańsk: 7 „pustych” pozycji ma stan w spisie z 16.10 (Coca-Cola puszki, Cappy, rolki, Top Glass, papryka) | zostawić wszystkie 12. Marek dopisuje dostawcę i progi dla tych 7 (Coca-Cola puszki → SUP_COCACOLA_GDA). Zera usunąć dopiero po jego potwierdzeniu | Etap 1, Etap 3 |
 
 ## Etap 3 — Pakiet danych od Marka (jeden mail, agent pisze draft, Ben wysyła)
 
@@ -150,7 +158,7 @@ dzielą plików, więc mogą iść równolegle.
 ## Progress
 
 - [x] Zebranie: sesja z mini 16.10, repo, Wispr, Gmail, sesje laptopa, weryfikacja vs kod (`inputs/`)
-- [ ] Etap 0 — zabezpieczenie
+- [x] Etap 0 — zabezpieczenie (17.10, PR #63)
 - [ ] Etap 1 — Gdańsk
 - [ ] Etap 2 — decyzje
 - [ ] Etap 3 — pakiet do Marka
