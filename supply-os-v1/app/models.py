@@ -468,6 +468,10 @@ class ManagerQueueItem(BaseModel):
     status: OrderStatus
     captain_user: Optional[str] = None
     captain_submitted_at: Optional[datetime] = None
+    # When the order was marked sent (manager-queue-control, D16): the sent lane
+    # flags an order still without a receipt more than 3 days after this. None
+    # on every lane before manager_sent and on a legacy row without the stamp.
+    manager_sent_at: Optional[datetime] = None
     ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     line_count: int
     total_value_estimate_pln: Optional[float] = None

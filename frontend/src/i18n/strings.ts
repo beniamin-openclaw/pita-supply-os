@@ -2194,6 +2194,40 @@ export const STRINGS = {
     en: "No orders in the selected period.",
   },
 
+  // Stalled-order markers (manager-queue-control, D16) ---------------------
+  "manager.queue.claimedOverdue": { pl: "przejęte > 24 h", en: "claimed > 24 h" },
+  "manager.queue.claimedOverdueTooltip": {
+    pl: "Przejęte i jeszcze niewysłane, a kapitan wysłał je ponad 24 h temu. Aplikacja nie zapisuje godziny przejęcia, więc czas liczy się od wysłania przez kapitana.",
+    en: "Claimed and not sent yet, and the captain sent it more than 24 h ago. The app does not store the claim time, so the clock starts at the captain's send.",
+  },
+  "manager.queue.claimedOverdueCount": { pl: "{n} > 24 h", en: "{n} > 24 h" },
+  "manager.queue.claimedOverdueCountSr": {
+    pl: "{n} przejętych ponad 24 h temu",
+    en: "{n} claimed more than 24 h ago",
+  },
+  "manager.queue.sentUnreceived": {
+    pl: "wysłane > 3 dni bez przyjęcia",
+    en: "sent > 3 days, not received",
+  },
+  "manager.queue.sentUnreceivedTooltip": {
+    pl: "Wysłane do dostawcy ponad 3 dni temu, a lokal jeszcze nie przyjął dostawy.",
+    en: "Sent to the supplier more than 3 days ago and the location has not received it yet.",
+  },
+  "manager.queue.sentUnreceivedCount": { pl: "{n} > 3 dni", en: "{n} > 3 days" },
+  "manager.queue.sentUnreceivedCountSr": {
+    pl: "{n} wysłanych ponad 3 dni temu bez przyjęcia",
+    en: "{n} sent more than 3 days ago, not received",
+  },
+  // Lane at its load cap: older orders are not loaded, so counts are lower bounds.
+  "manager.queue.laneCapped": { pl: "{n}+", en: "{n}+" },
+  "manager.queue.laneCappedTooltip": {
+    pl: "Pokazujemy {n} najnowszych. Starsze zamówienia nie są tu wczytane, więc liczniki mogą być zaniżone.",
+    en: "Showing the newest {n}. Older orders are not loaded here, so the counts may be low.",
+  },
+
+  // Manager table, backup line's suggestion cell (manager-queue-control, D10 A).
+  "manager.backupAtPrimary": { pl: "u głównego", en: "at the primary" },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
   "manager.queue.draftUnsentChip": { pl: "Szkic niewysłany", en: "Draft not sent" },
   "manager.queue.draftUnsentChipTooltip": {

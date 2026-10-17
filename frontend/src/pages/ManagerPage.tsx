@@ -23,6 +23,7 @@ import type {
   ManagerQueueItem,
   OrderableItem,
   OrderingMethod,
+  Supplier,
 } from "../types";
 import { ManagerFilterBar } from "./manager/ManagerFilterBar";
 import { ManagerQueue, type QueueLane } from "./manager/ManagerQueue";
@@ -43,6 +44,8 @@ import {
   openDraftTab,
   saveDraftedOrders,
 } from "./manager/lib/orderEmailDraft";
+import { QUEUE_LANE_LIMIT } from "./manager/lib/queueAge";
+import { buildSupplierOptions } from "./manager/lib/supplierOptions";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
 // location_id as an optional filter, so omitting it returns every location. It
@@ -57,6 +60,9 @@ export function ManagerPage() {
   const [sent, setSent] = useState<ManagerQueueItem[] | null>(null);
   const [closed, setClosed] = useState<ManagerQueueItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Master-data suppliers for the filter (manager-queue-control, D11). null =
+  // not loaded or failed; the filter then falls back to the queue's suppliers.
+  const [allSuppliers, setAllSuppliers] = useState<Supplier[] | null>(null);
 
   // Queue filters (S-05) — ephemeral, client-side.
   const [filterSupplierId, setFilterSupplierId] = useState<string | null>(null);
@@ -137,8 +143,11 @@ export function ManagerPage() {
   const loadQueue = useCallback(() => {
     Promise.all([
       api.managerQueue(undefined, "captain_submitted"),
-      api.managerQueue(undefined, "manager_claimed"),
-      api.managerQueue(undefined, "manager_sent"),
+      // Claimed + sent at the backend's 200 clamp, not the default 50: the
+      // stalled orders the D16 markers count are the OLDEST in their lane, and
+      // the sent lane only drains on receipt (manager-queue-control).
+      api.managerQueue(undefined, "manager_claimed", QUEUE_LANE_LIMIT),
+      api.managerQueue(undefined, "manager_sent", QUEUE_LANE_LIMIT),
       api.managerQueue(undefined, "closed"),
     ])
       .then(([sub, clm, snt, cls]) => {
@@ -162,6 +171,23 @@ export function ManagerPage() {
     const interval = setInterval(loadQueue, 20_000);
     return () => clearInterval(interval);
   }, [loadQueue]);
+
+  // Suppliers change rarely — one load per visit. "manager" role: this screen
+  // holds no captain token (lessons.md). A failure only narrows the filter.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .suppliers("manager")
+      .then((list) => {
+        if (!cancelled) setAllSuppliers(list);
+      })
+      .catch(() => {
+        if (!cancelled) setAllSuppliers(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Tracks the most recently requested detail order id so async responses can
   // detect staleness (the user picked another order before this one resolved).
@@ -481,20 +507,16 @@ export function ManagerPage() {
     return orderableForSelected.filter((o) => !present.has(o.product_id));
   }, [detail, orderableForSelected]);
 
-  // Queue filters (S-05): supplier options derive from the loaded queue (only
-  // suppliers that have orders → no dead options); the lanes toggle which groups
-  // render. Both ephemeral. effectiveSupplierId resolves at render so a supplier
-  // that drops out of the queue after a refresh falls back to "all" — no
-  // setState-in-effect.
-  const supplierOptions = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const arr of [submitted, claimed, sent]) {
-      for (const q of arr ?? []) byId.set(q.supplier_id, q.supplier_name);
-    }
-    return [...byId.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [submitted, claimed, sent]);
+  // Queue filters (S-05): the supplier options are every active ordering
+  // supplier plus any supplier with orders in the queue (D11 — Spec Food had no
+  // orders, so a queue-only list never showed it); the lanes toggle which
+  // groups render. Both ephemeral. effectiveSupplierId resolves at render so a
+  // supplier that drops out of the options after a refresh falls back to "all"
+  // — no setState-in-effect.
+  const supplierOptions = useMemo(
+    () => buildSupplierOptions(allSuppliers, [submitted, claimed, sent, closed]),
+    [allSuppliers, submitted, claimed, sent, closed],
+  );
 
   // Location options (bracka-rollout). Derived from all FOUR lanes, unlike the
   // supplier options above: a location whose only orders are already closed

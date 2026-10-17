@@ -1384,6 +1384,7 @@ def manager_queue(
                 status=order.status,
                 captain_user=order.captain_user,
                 captain_submitted_at=order.captain_submitted_at,
+                manager_sent_at=order.manager_sent_at,
                 ordered_by=order.ordered_by,
                 line_count=len(lines),
                 total_value_estimate_pln=order.total_value_estimate_pln,
@@ -1413,8 +1414,8 @@ def manager_queue(
     # queue (an "inbox"). cutoff_iso still rides on each item as a badge but is
     # not a sort key — a supplier without a parseable cutoff must not sink a
     # fresh order to the bottom. captain_submitted_at is the proxy timestamp for
-    # every lane (the queue model doesn't carry manager_sent_at; the dashboard
-    # pulls full detail via /order/{id} when it needs the sent timestamp).
+    # every lane (manager_sent_at is null before the sent lane, so it can't be
+    # the shared key).
     items.sort(
         key=lambda it: -(it.captain_submitted_at.timestamp()
                          if it.captain_submitted_at else 0.0)

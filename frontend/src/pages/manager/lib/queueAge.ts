@@ -36,3 +36,43 @@ export function splitClosedLane(
   }
   return { recent, archived };
 }
+
+/** Hours after the captain's send at which a still-claimed order is flagged
+ *  "przejęte > 24 h" (manager-queue-control, D16). */
+export const CLAIMED_OVERDUE_HOURS = 24;
+
+/** Hours after the manager's send at which an order still without a receipt
+ *  is flagged "wysłane > 3 dni bez przyjęcia" (manager-queue-control, D16). */
+export const SENT_UNRECEIVED_HOURS = 72;
+
+/** Orders loaded per claimed/sent lane (the backend's clamp). The lane is
+ *  newest-first, so past this cap the oldest (stalled) orders drop out. */
+export const QUEUE_LANE_LIMIT = 200;
+
+const MS_PER_HOUR = 3_600_000;
+
+/** Elapsed hours since `iso` (fractional, not calendar days), or null for a missing
+ *  or unparseable timestamp. */
+function hoursSince(iso: string | null | undefined, now: Date): number | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  return (now.getTime() - then) / MS_PER_HOUR;
+}
+
+/** A claimed order still unsent more than 24 h after the captain sent it.
+ *  Measured from captain_submitted_at because the app stores no claim time
+ *  (`manager_claim` writes only the status), so this is when the captain
+ *  started waiting, not when the manager took the order. */
+export function isClaimedOverdue(item: ManagerQueueItem, now: Date = new Date()): boolean {
+  if (item.status !== "manager_claimed") return false;
+  const hours = hoursSince(item.captain_submitted_at, now);
+  return hours !== null && hours > CLAIMED_OVERDUE_HOURS;
+}
+
+/** A sent order with no receipt more than 3 days (72 h) after it was sent. */
+export function isSentUnreceived(item: ManagerQueueItem, now: Date = new Date()): boolean {
+  if (item.status !== "manager_sent" || item.received_count > 0) return false;
+  const hours = hoursSince(item.manager_sent_at, now);
+  return hours !== null && hours > SENT_UNRECEIVED_HOURS;
+}

@@ -493,6 +493,9 @@ export interface ManagerQueueItem {
   status: OrderStatus;
   captain_user?: string;
   captain_submitted_at?: string; // ISO datetime
+  // When the order was marked sent (manager-queue-control, D16). Pydantic
+  // Optional → optional here; null before the sent lane / on legacy rows.
+  manager_sent_at?: string | null;
   ordered_by?: string | null; // free-text "who orders" (shown as "Zamówił: X")
   line_count: number;
   total_value_estimate_pln?: number | null;

@@ -18,6 +18,11 @@
 // only" row pairs a location select with a picker over that order's full
 // supplier list (one-off items outside the location's list behind the picker's
 // checkbox). Both write the line onto that location's order.
+//
+// A cell the Manager zeroed while the captain asked for more is amber and
+// struck through, read-only and editable — the same convention as the order
+// table (manager-queue-control, D10 A). A line the Manager added at 0 has a
+// captain qty of 0 and stays plain.
 
 import { useState } from "react";
 import { Loader2, Plus, X } from "lucide-react";
@@ -33,6 +38,11 @@ import {
   orderAddOneOptions,
   type TransportDraftMap,
 } from "../lib/transport";
+import {
+  lineVisualStateWithQty,
+  MANAGER_ZERO_INPUT_CLASS,
+  MANAGER_ZERO_TEXT_CLASS,
+} from "../lib/managerLine";
 
 interface TransportMatrixProps {
   orders: TransportBatchOrder[];
@@ -151,8 +161,14 @@ export function TransportMatrix({
                     );
                   }
                   const qty = draftQtyFor(drafts, order.order_id, line);
+                  const zeroed =
+                    lineVisualStateWithQty(line.captain_final_qty_purchase, qty) === "cancelled";
                   return (
-                    <td key={order.order_id} className="px-3 py-2 text-right">
+                    <td
+                      key={order.order_id}
+                      className={`px-3 py-2 text-right ${zeroed ? "bg-amber-50" : ""}`}
+                      data-zeroed={zeroed || undefined}
+                    >
                       {editable ? (
                         <DecimalInput
                           value={qty}
@@ -185,10 +201,16 @@ export function TransportMatrix({
                               }
                             }
                           }}
-                          className="w-20 rounded border border-gray-300 px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className={`w-20 rounded border px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            zeroed ? MANAGER_ZERO_INPUT_CLASS : "border-gray-300"
+                          }`}
                         />
                       ) : (
-                        <span className="tabular-nums">{qty}</span>
+                        <span
+                          className={`tabular-nums ${zeroed ? MANAGER_ZERO_TEXT_CLASS : ""}`}
+                        >
+                          {qty}
+                        </span>
                       )}
                     </td>
                   );

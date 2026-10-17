@@ -5,7 +5,13 @@ import { MemoryRouter } from "react-router-dom";
 import { LangProvider } from "../../i18n";
 import type { ManagerQueueItem } from "../../types";
 import { ManagerQueue } from "./ManagerQueue";
-import { inQueueDays, splitClosedLane } from "./lib/queueAge";
+import {
+  inQueueDays,
+  isClaimedOverdue,
+  isSentUnreceived,
+  QUEUE_LANE_LIMIT,
+  splitClosedLane,
+} from "./lib/queueAge";
 
 function makeItem(overrides: Partial<ManagerQueueItem> = {}): ManagerQueueItem {
   return {
@@ -165,5 +171,117 @@ describe("ManagerQueue — delivery calendar marker", () => {
     renderQueue({ submitted: [makeItem({ requested_delivery_date: "2026-10-02" })] });
     expect(screen.queryByTestId("delivery-date-marker")).toBeNull();
     expect(screen.queryByTestId("coverage-days")).toBeNull();
+  });
+});
+
+describe("queueAge — stalled-order helpers (manager-queue-control, D16)", () => {
+  const now = new Date("2026-10-17T12:00:00Z");
+  const hoursAgo = (h: number): string => new Date(now.getTime() - h * 3_600_000).toISOString();
+
+  it("flags a claimed order more than 24 h after the captain's send", () => {
+    expect(
+      isClaimedOverdue(
+        makeItem({ status: "manager_claimed", captain_submitted_at: hoursAgo(25) }),
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isClaimedOverdue(
+        makeItem({ status: "manager_claimed", captain_submitted_at: hoursAgo(23) }),
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not flag other lanes or a missing timestamp", () => {
+    expect(
+      isClaimedOverdue(
+        makeItem({ status: "captain_submitted", captain_submitted_at: hoursAgo(48) }),
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isClaimedOverdue(makeItem({ status: "manager_claimed", captain_submitted_at: undefined }), now),
+    ).toBe(false);
+  });
+
+  it("flags a sent order with no receipt more than 3 days after it was sent", () => {
+    expect(
+      isSentUnreceived(makeItem({ status: "manager_sent", manager_sent_at: hoursAgo(73) }), now),
+    ).toBe(true);
+    expect(
+      isSentUnreceived(makeItem({ status: "manager_sent", manager_sent_at: hoursAgo(71) }), now),
+    ).toBe(false);
+  });
+
+  it("does not flag a received sent order, a legacy row without a stamp, or another lane", () => {
+    expect(
+      isSentUnreceived(
+        makeItem({ status: "manager_sent", manager_sent_at: hoursAgo(200), received_count: 1 }),
+        now,
+      ),
+    ).toBe(false);
+    expect(isSentUnreceived(makeItem({ status: "manager_sent", manager_sent_at: null }), now)).toBe(
+      false,
+    );
+    expect(isSentUnreceived(makeItem({ status: "closed", manager_sent_at: hoursAgo(200) }), now)).toBe(
+      false,
+    );
+  });
+});
+
+describe("ManagerQueue — stalled-order chips and header counts (D16)", () => {
+  it("marks a claimed order unsent 24 h after the captain's send and counts it", () => {
+    renderQueue({
+      claimed: [
+        makeItem({ order_id: "OLD", status: "manager_claimed", captain_submitted_at: isoDaysAgo(2) }),
+        makeItem({ order_id: "NEW", status: "manager_claimed" }),
+      ],
+    });
+    expect(screen.getAllByText("przejęte > 24 h")).toHaveLength(1);
+    expect(screen.getByTestId("stalled-count-claimed")).toHaveTextContent("1 > 24 h");
+  });
+
+  it("counts sent orders without a receipt after 3 days on the collapsed lane", () => {
+    renderQueue({
+      sent: [
+        makeItem({ order_id: "S1", status: "manager_sent", manager_sent_at: isoDaysAgo(4) }),
+        makeItem({
+          order_id: "S2",
+          status: "manager_sent",
+          manager_sent_at: isoDaysAgo(4),
+          received_count: 1,
+        }),
+        makeItem({ order_id: "S3", status: "manager_sent", manager_sent_at: isoDaysAgo(1) }),
+      ],
+    });
+    expect(screen.getByTestId("stalled-count-sent")).toHaveTextContent("1 > 3 dni");
+    fireEvent.click(screen.getByRole("button", { name: /Zamówione/ }));
+    expect(screen.getAllByText("wysłane > 3 dni bez przyjęcia")).toHaveLength(1);
+  });
+
+  it("shows no count when nothing has stalled", () => {
+    renderQueue({ claimed: [makeItem({ status: "manager_claimed" })] });
+    expect(screen.queryByTestId("stalled-count-claimed")).toBeNull();
+    expect(screen.queryByText("przejęte > 24 h")).toBeNull();
+  });
+
+  it("gives screen readers a full sentence instead of the short badge", () => {
+    renderQueue({
+      claimed: [
+        makeItem({ status: "manager_claimed", captain_submitted_at: isoDaysAgo(2) }),
+      ],
+    });
+    expect(screen.getByText("1 przejętych ponad 24 h temu")).toHaveClass("sr-only");
+    expect(screen.getByText("1 > 24 h")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("marks a lane at its load cap with a plus", () => {
+    const sent = Array.from({ length: QUEUE_LANE_LIMIT }, (_, i) =>
+      makeItem({ order_id: `S${i}`, status: "manager_sent" }),
+    );
+    renderQueue({ sent });
+    expect(screen.getByTestId("lane-count-sent")).toHaveTextContent(`${QUEUE_LANE_LIMIT}+`);
+    expect(screen.getByTestId("lane-count-claimed")).toHaveTextContent("0");
   });
 });

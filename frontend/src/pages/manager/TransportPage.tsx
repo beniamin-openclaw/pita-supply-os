@@ -1138,7 +1138,7 @@ export function TransportPage(): ReactElement {
                       className={`rounded-lg border px-3 py-1.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
                         on
                           ? "border-blue-300 bg-blue-50 text-blue-900"
-                          : "border-slate-200 bg-white text-slate-400 line-through hover:bg-slate-50"
+                          : "border-dashed border-slate-300 bg-white text-slate-500 hover:bg-slate-50"
                       }`}
                     >
                       {city}
