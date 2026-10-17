@@ -1,0 +1,160 @@
+2 A=Kuchnie świata
+3 A=Aviko 806704 Frytki proste 9,5mm Premium Super Crunch Fries 2,5kg/4 Aviko 806704 | B=Sztuka | C=10.0 | D=36.0
+4 A=Frytki z batatów proste 9,5mm Sweet potato, 2,27kg/5 Aviko 809564 | B=Sztuka | C=2.0 | D=4.0
+5 A=Ser na grilla 200g/12 Reha | B=Sztuka | C=24.0 | D=72.0
+6 A=Falafel standard. bób/ciecierzyca mroż. 5kg | B=Karton | C=0.5 | D=1.5
+7 A=Frytura oleina słonecznikowa Deep Fry 15L EFFO | B=Sztuka | C=1.0 | D=2.0
+8 A=Sos Sriracha Original 730ml/12 F.Goose | B=Sztuka | C=2.0 | D=4.0
+9 A=Papryka Red Sweet czerwona grillowana 450g/12 Zanae e | B=Sztuka | C=0.5 | D=1.0
+10 A=Oliwki czarne z/p Kalamata Superior (261-290), 2kg/3,1kg Olivellas | B=Bidon | C=0.5 | D=1.5
+12 A=Selgros
+13 A=horeca.gdansk@selgros.pl
+14 A=Awokado | B=szt | C=2.0 | D=4.0
+15 A=Cebula czerwona (duże)  | B=kg | C=5.0 | D=15.0
+16 A=Cytryna | B=kg | C=0.5 | D=2.0
+17 A=Ogórek | B=kg | C=0.5 | D=2.0
+18 A=Papryka zielona (nie czerwona) | B=kg | C=0.5 | D=2.0
+19 A=Sałata bolero mix 150gr (lub inny mix jak nie będzie bolero bez buraka) | B=op | C=5.0 | D=20.0
+20 A=Rucola 100gr | B=op | C=5.0 | D=20.0
+21 A=Natka Pietruszki | B=kg | C=0.3 | D=1.0
+22 A=Pomidor (twardy, duży) | B=kg | C=12.0 | D=48.0
+23 A=Czosnek obrany | B=kg | C=0.2 | D=0.5
+24 A=Cebula Biała | B=kg | C=0.2 | D=1.0
+25 A=Oliwa z Oliwek tania 1L | B=szt | C=2.0 | D=7.0
+26 A=Masło roślinne MR 500g | B=szt | C=3.0 | D=6.0
+27 A=Cieciorka puszka mała | B=szt | C=6.0 | D=14.0
+28 A=Kasza Pęczak 1kg | B=szt | C=2.0 | D=3.0
+29 A=MUSZTARDA Stołowa 3 kg | B=szt | C=1.0 | D=2.0
+30 A=Ketchup Fanex VII 1,1 kg  | B=szt | C=2.0 | D=6.0
+31 A=Fanex Majonez 4kg Sałatkowy | B=szt | C=1.0 | D=2.0
+32 A=Olej Uniwersalny Rzepakowy 5 L | B=szt | C=0.5 | D=2.0
+33 A=Miód 1 kg | B=szt | C=1.0 | D=2.0
+34 A=Fasolka Szparagowa Mrożona 2,5 kg | B=szt | C=0.5 | D=1.5
+35 A=Woda 5L | B=szt | C=3.0 | D=7.0
+36 A=Frytki Aviko Super Crunch 9,5 | B=szt | C=10.0 | D=36.0
+37 A=Frytki z batatów Avico 2,27 KG | B=szt | C=2.0 | D=5.0
+38 A=Domestos 5L | B=szt | C=1.0 | D=3.0
+39 A=Ludwik 5L | B=szt | C=1.0 | D=3.0
+40 A=Sól drobna 1kg | B=szt | C=1.0 | D=3.0
+41 A=Oregano duże | B=szt | C=1.0 | D=2.0
+42 A=Papryka słodka - mielona duża (nie ostra, nie wędzona) | B=szt | C=1.0 | D=2.0
+43 A=Liść Laurowy  | B=op | C=0.5 | D=1.0
+44 A=Ziele Angielskie | B=szt | C=0.5 | D=1.0
+45 A=Sól saszetki 2gr | B=op | C=1.0 | D=2.0
+46 A=Pieprz saszetki 2gr | B=op | C=1.0 | D=2.0
+47 A=Pieprz czarny mielony duży | B=op | C=0.5 | D=2.0
+48 A=Rękawiczki jednorazowe M Czarne | B=szt
+49 A=Rękawiczki jednorazowe L Czarne | B=szt
+50 A=Rękawiczki jednorazowe S Czarne | B=szt
+51 A=Rękawiczki jednorazowe XL Czarne | B=szt
+52 A=Tacki papierowe 23cm/12cm 250szt | B=op
+53 A=Papier w roli duży | B=szt
+54 A=Reczniki papierowe ZZ Top seler | B=karton
+55 A=Worki na śmieci 120L | B=op
+56 A=Worki na śmieci 160L | B=op
+57 A=Druciaki duże 5szt | B=op
+58 A=Grill Cleaner Spray Tytan 750 ml | B=szt
+59 A=Zmywaki kuchenne Jan Niezbedny | B=op
+60 A=Zszywki 24/6 op. 1000szt | B=op
+61 A=Słomki papierowe niebieskie 25szt | B=op
+62 A=Kawa Nescafe 500gr | B=szt
+63 A=Mleko 1L 3,2 | B=szt
+64 A=Folia aluminiowa duża | B=szt
+65 A=Folia spożywcza duża | B=szt
+66 A=Sosjerka 80ml x50szt plastikowa | B=op
+67 A=Wieczko do sosjerki x50szt plastikowe | B=op
+68 A=Torby papierowe na wynos duże 50szt | B=op
+69 A=Frytki Aviko Super Crunch 9,5 | B=op
+70 A=Butelka przezroczysta na sos 1L | B=szt
+71 A=Torebki papierowe fałdowane 50szt | B=op
+72 A=Torebka na frytki kwadratowa | B=op
+73 A=Zapalniczka długa | B=szt
+74 A=Ścierki z mikrofibry kolorowe 5szt | B=op
+75 A=Końcówka szczotki do zamiatania (bez kija) | B=szt
+76 A=Zapas (Vileda mop płaski Ultra, ten mniejszy) | B=szt
+77 A=Marker permanentny czarny | B=szt
+78 A=Marker  Czarny White Board (zmywalny) | B=szt
+79 A=Miska papierowa bowl 1300ml + pokrywki 50szt | B=op
+80 A=Kubeczki papierowe 150ml | B=op
+81 A=Ser Halloumi Reha | B=szt
+82 A=Ser Feta 200gr | B=szt
+84 A=Cola
+85 A=https://cchbcshop.com/websitePL/pl/
+86 A=0.25 RGB SZKŁO X24 COCA-COLA | B=Skrzynka   | C=1.0 | D=4.0
+87 A=0.25 RGB SZKŁO X24 COCA-COLA ZERO | B=Skrzynka   | C=1.0 | D=5.0
+88 A=0.25 RGB SZKŁO X24 SPRITE | B=Skrzynka   | C=0.5 | D=1.5
+89 A=0.25 RGB SZKŁO X24 FANTA ORANGE | B=Skrzynka   | C=0.5 | D=1.5
+90 A=0.25 RGB SZKŁO X24 CAPPY ORANGE | B=Skrzynka   | C=0.5 | D=1.5
+91 A=0.25 RGB SZKŁO X24 CAPPY APPLE | B=Skrzynka   | C=0.5 | D=1.5
+92 A=0.33 NRG SZKŁO X24 WODA KROPLA BESKIDU | B=Zgrzewka | C=1.5 | D=4.0
+93 A=0.33 NRG SZKŁO X24 WODA KROPLA DELICE GAZOWANA | B=Zgrzewka | C=1.0 | D=2.0
+95 A=Pago + Magazyn + Lemoniady
+96 A=Gyros 15 KG | B=Sztuka | C=4.0 | D=15.0
+97 A=Souvlaki Kurczak karton 50 szt | B=Karton | C=3.0 | D=22.0
+98 A=Souvlaki Wieprz karton 50 szt | B=Karton | C=1.0 | D=4.0
+99 A=Pita KARTON (120) szt | B=Karton | C=2.0 | D=8.0
+100 A=Tzatzyki pojemnik 3 kg | B=Pojemnik | C=4.0 | D=28.0
+101 A=Tirokafteri pojemnik 2 kg  | B=Pojemnik | C=2.0 | D=4.0
+102 A=Feta blok 2 kg | B=Pojemnik | C=1.0 | D=2.0
+103 A=Przyprawa do souvlakow 2kg | B=Pojemnik | C=1.0 | D=2.0
+104 A=Boxy PB | B=Opakowanie | C=1.0 | D=3.0
+105 A=Boxy bezowe bez logo | B=Opakowanie | C=1.0 | D=3.0
+106 A=Papier do Pita (PB) | B=Opakowanie | C=1.0 | D=2.0
+107 A=Papier Termiczny | B=Opakowanie | C=1.0 | D=2.0
+108 A=Serwetki PB | B=Opakowanie | C=6.0 | D=12.0
+109 A=Rolki do kasy 80/20 10szt | B=Opakowanie | C=2.0 | D=12.0
+110 A=Rolki do kasy 80/80  6szt | B=Opakowanie | C=2.0 | D=20.0
+111 A=Lemoniada Grapefruit 12szt | B=Karton | C=1.0 | D=3.0
+112 A=Lemoniada Lemon 12szt | B=Karton | C=1.0 | D=3.0
+113 A=Lemoniada Orange 12szt | B=Karton | C=1.0 | D=3.0
+115 A=BlueService
+116 A=Miska/pojemnik papierowy na sałatkę 1300ml PE(185) kraft 50 sztuk | C=2.0 | D=5.0
+117 A=Pokrywka do miski na sałatkę (185) 1100/1300 ml opak 100 sztuk | C=2.0 | D=5.0
+118 A=Pojemnik/pucharek PET okrągły z łączonym wieczkiem 750ml/ opak. 50 sztuk | C=2.0 | D=5.0
+119 A=Pojemnik/pucharek PET okrągły z łączonym wieczkiem 250ml/ opak. 50 sztuk | C=2.0 | D=5.0
+120 A=Pojemnik na sos/sosjerka 80 ml PP transparent opak. 100 sztuk | C=10.0 | D=20.0
+121 A=Pokrywka do pojemnika na sos PET opak. 100 sztuk | C=5.0 | D=12.0
+122 A=Torebki na frytki prostokątne 12x10 a200 | C=2.0 | D=5.0
+123 A=TORBA PAP szara UCHWYT PŁASKI 320x220x250 -250 szt. | C=2.0 | D=4.0
+124 A=Torebki papierowe fałdowane 18x6x35 opakowanie 250 sztuk | C=2.0 | D=6.0
+125 A=Folia aluminiowa 45 cm 1,5 kg | C=2.0 | D=7.0
+126 A=Folia spożywcza 45 cm/ 180m | C=2.0 | D=7.0
+127 A=Papier do pieczenie 28/50 m | C=2.0 | D=7.0
+128 A=Łyżeczki do lodów za 1000 | C=0.0 | D=0.0
+129 A=Nóż WPC wielokrotnego użytku opak. 100 sztuk | C=1.0 | D=3.0
+130 A=Widelce WPC wielokrotnego użytku opak.100 sztuk | C=1.0 | D=3.0
+131 A=1021 Serwetki Ellis Napkins 9000 szt.	 | C=0.0 | D=0.0
+132 A=Ręcznik zz Cliver szary 4000 sztuk | C=1.0 | D=3.0
+133 A=Domestos 5L Pine | C=1.0 | D=3.0
+134 A=Płyn do naczyń Ludwik 5L | C=1.0 | D=3.0
+135 A=Mydło do rąk 5L | C=0.5 | D=1.5
+136 A=Płyn do mycia szyb Cif Window & Multisurface 750 ml | C=2.0 | D=8.0
+137 A=Płyn Uniwersalny Tytan 5L | C=0.0 | D=0.0
+138 A=Feniks Professional Grill Cleaner 1L. (nie Tenzi, nie Royal) !!! | C=2.0 | D=10.0
+139 A=Feniks Professional Degreaser/odtłuszczacz 1L | C=2.0 | D=6.0
+140 A=Rękawiczki nitrylowe CZARNE !!!roz.XL | C=5.0 | D=10.0
+141 A=Rękawiczki nitrylowe CZARNE !!!roz.L | C=5.0 | D=20.0
+142 A=Rękawiczki nitrylowe CZARNE !!!roz.M | C=5.0 | D=20.0
+143 A=Rękawiczki nitrylowe CZARNE !!!roz.S | C=5.0 | D=10.0
+144 A=Zmywak kuchenny DUŻE opakowanie | C=3.0 | D=12.0
+145 A=Druciaki duże okrągłe lepszej jakości | C=3.0 | D=12.0
+146 A=Ścierka z mikrofibry 30x30 cm mix kolor | C=5.0 | D=12.0
+147 A=Worki na śmieci 60L czarne LDPE 50 szt. | C=0.0 | D=0.0
+148 A=Worki na śmieci 120L czarne LDPE 25 szt | C=3.0 | D=10.0
+149 A=Worki na śmieci 160L czaarne LDPE 10 szt | C=0.0 | D=0.0
+150 A=Słomki niebieskie papierowe 8x197 a250 | C=1.0 | D=2.0
+151 A=Aroma Patyczki zapachowe | C=0.0 | D=0.0
+152 A=Attis odświeżacz powietrza 300 ml | C=0.5 | D=2.0
+153 A=Marker czarny Pentel | C=1.0 | D=4.0
+154 A=Zszywki 24/6 10x1000 | C=3.0 | D=12.0
+155 A=Papier xero a4 ryza | C=0.0 | D=0.0
+156 A=Szczotlka do zamiatania na kiju Vileda | C=0.0 | D=0.0
+157 A=Koperty c6 białe a25 50 pcs | C=1.0 | D=3.0
+158 A=Szufelka ze zmiotką  | C=1.0 | D=2.0
+159 A=Marker podświetlacz | C=1.0 | D=3.0
+160 A=Płyn do podłogi 5L | C=0.0 | D=0.0
+161 A=Długopis | C=2.0 | D=5.0
+162 A=Papier duży w roli | C=0.0 | D=0.0
+163 A=Cleaner w sprayu do stolikow drewnianych lakierowanych | C=0.0 | D=0.0
+164 A=Kubek papierowy biały 200 ml opak 100 sztuk | C=0.0 | D=0.0
+165 A=Tacki papierowe 14x25 100 sztuk | C=3.0 | D=10.0
