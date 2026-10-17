@@ -205,7 +205,8 @@ export function OrderLineTable({
                   }
                 >
                   {line.is_backup === true ? (
-                    <span className="text-slate-400">—</span>
+                    // D10 A: the suggestion lives with the primary supplier.
+                    <span className="text-xs text-slate-500">{t("manager.backupAtPrimary")}</span>
                   ) : (
                     line.suggested_qty_purchase
                   )}

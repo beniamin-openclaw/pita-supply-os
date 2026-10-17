@@ -222,6 +222,8 @@ describe("OrderLineTable — backup + open orders elsewhere", () => {
       makeLine({ is_backup: true, suggested_qty_purchase: 36, captain_final_qty_purchase: 2 }),
     ]);
     expect(screen.queryByText("36")).toBeNull();
+    // D10 A: the suggestion cell says where the suggestion lives.
+    expect(screen.getByText("u głównego")).toBeInTheDocument();
   });
 
   it("still shows the suggestion on a primary line", () => {

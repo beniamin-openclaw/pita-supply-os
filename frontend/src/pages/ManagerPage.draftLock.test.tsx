@@ -21,6 +21,7 @@ vi.mock("../apiClient", async (importOriginal) => {
       managerOrderable: vi.fn(async () => []),
       managerDispatch: vi.fn(),
       managerRelease: vi.fn(),
+      suppliers: vi.fn(async () => []),
     },
   };
 });
