@@ -15,7 +15,10 @@ Uruchamia go jedna z trzech dróg:
 (c) sesja na mini z pominięciem uprawnień, za wyraźną zgodą Bena.
 **17.10 wybrana droga (b):** Ben dodał reguły allow (Supabase `execute_sql`, `apply_migration`, odczyty;
 Vercel tylko podgląd) na laptopie i na mini. Agent dalej wgrywa wyłącznie pliki z guardem i audytem,
-po review, w kolejności z pliku lane'u. Reguły zostają na czas fali A; do zdjęcia w Etapie 6.
+po review, w kolejności z pliku lane'u, i loguje każde wgranie (kto, jaka droga, wynik audytu).
+Reguły `execute_sql`/`apply_migration` zdejmuje Ben **do 31.10.2026** (koniec fali A; Etap 6).
+Gdańsk krok 3 poszedł jeszcze drogą (a) (Ben w edytorze), pliki Lane D z 17.10 drogą (b)
+(log: `porzadek-data-2026-10/prod-sql-applied.md`).
 
 ---
 
