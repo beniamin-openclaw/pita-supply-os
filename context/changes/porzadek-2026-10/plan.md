@@ -164,7 +164,7 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       (agent przygotuje SELECT, uruchomi go operator).
 - [ ] 4.3 **R-36 Transport v2:** E2E pierwszego kursu Marka i logowanie Marka na biuro@. Potem archiwizacja.
 - [ ] 4.4 **R-33 order-email-v2:** pkt 4.4/4.5 (draft Gmail na żywo, dosyłka, link awaryjny).
-- [ ] 4.5 **inventory-card-order:** zastosować `prod-sql.sql` (kolejność kart) i `prod-sql-pago-mory.sql`
+- [~] 4.5 **inventory-card-order:** `prod-sql.sql` (kolejność kart) **wgrany 17.10** po odświeżeniu i review (log `inventory-card-order/verification/prod-sql-applied-2026-10-17.md`); zostaje `prod-sql-pago-mory.sql`
       (najpierw SELECT, czy już nie poszło). Kontrole na żywo 4.6–4.8.
 - [ ] 4.6 **transport-pago-mory-combined 5.3:** potwierdzić na podstawie kursu z 05.10.
 - [ ] 4.7 **R-34 resztki:** 7 bloków DELETE (Cappy P190/P191 są dziś niewidoczne w części lokali) przy ekranie Supabase.
@@ -196,10 +196,8 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
         aplikacja sama sumuje). Luźne pity wpisuje się jako ułamek opakowania (3 szt = 0,3). Osobnej jednostki „sztuka”
         nie dodajemy (D8, jedna jednostka na produkt, W49), bo zamówienie i sugestia liczą w opakowaniach;
       - Thamma Lemon i Mastiha: Ben nie wie, co to (17.10). Pytanie wraca do Krakowa (co to i od kogo), nie do Marka;
-      - kolejność napojów = arkusze „Inwentaryzacja” (karty DRUK). Kod jest na main (`inventory-card-order`, 0027),
-        ale na prodzie `inventory_order` jest pusty wszędzie (odczyt 17.10: 0 produktów, 0 nadpisań), czyli punkt 4.5
-        nie poszedł. Do zrobienia: odświeżyć `inventory-card-order/prod-sql.sql` (nowe produkty po 28.09, np. P190–P192),
-        review, wgrać. Dotyczy wszystkich lokali, nie tylko Forum;
+      - kolejność napojów = arkusze „Inwentaryzacja” (karty DRUK): **zrobione 17.10** dla wszystkich lokali
+        (SQL odświeżony pod prod, 12 arkuszy pobranych na nowo, review, wgrany z audytem; patrz 4.5);
       - pkt 5 raportu był niekompletny (sama autorka tak pisze).
       Reszta raportu (sprzęt, eventy Forum, menu Fast, zespół, premia Eryka, szkolenie Kamala) nie dotyczy Supply OS: zostaje u Georgiosa.
 
