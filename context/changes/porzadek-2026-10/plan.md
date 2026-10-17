@@ -75,6 +75,45 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
 | D19 | „Molotov”: czy to lokal w Supply OS? (Mirsini 04.10 prosi o Fuzetea, Burn, skrzynki 24, rolki, gyros cięty) | pytanie do Bena, w repo nie ma takiego lokalu | WP8 |
 | D20 | Zasada z 02.09 „informujcie Marka przez hotline” | nieaktualna: wszystko tylko przez aplikację (W46). Napisać to raz na czacie | komunikat |
 
+### Decyzje Bena (17.10)
+
+| # | Decyzja |
+|---|---|
+| D1 | zostaje próg 25% (rekomendacja) |
+| D2 | tak: data dostawy w mailu (flaga `SUPPLY_OS_ORDER_EMAIL_DELIVERY_DATE_ENABLED` na Railway) |
+| D3 | tak: obcinać w widoku kapitana; w mailu tylko u dostawców wskazanych przez Marka |
+| D4 | tak: Pago+Mory grupowane tylko w UI, Filber dostaje przycisk „zamówione” |
+| D5 | **do potwierdzenia**: w wiadomości z 17.10 padły trzy „tak” na D2–D5 (cztery punkty) |
+| D6 | stany obowiązkowe dla wszystkich lokali poza Norblinem i Elektrownią, **do odwołania** (nie do 31.10). Na koniec opisać w podsumowaniu, co działa i co wdrożono. **Do potwierdzenia: blokada wysłania czy ostrzeżenie** |
+| D7 | tak: Kraków i Katowice wysyłane mailem tam, gdzie mamy adres i minimum |
+| D8 | tak: „cięte” jako osobna pozycja do liczenia (halloumi, gyros), wszystkie lokale, które kroją |
+| D9 | tak: kategoria „Materiały / inne”, w której lokal wpisuje dowolną pozycję tekstem (zgłoszenie, nie produkt z katalogu) |
+| D10 | Ben prosi o wyjaśnienie (17.10) |
+| D11–D15 | tak (rekomendacje); D14: PR #59 zielony i gotowy, scala Ben (agentowi klasyfikator blokuje merge) |
+| D16 | **bez obejścia dla kapitana**: to nie powinno się zdarzać, Marek ma to ogarnąć procesowo. Wynik sprawdzenia poniżej |
+| D17, D18 | tak (rekomendacje) |
+| D19 | „Molotov” = **Westfield Mokotów**. Prośby Mirsini z 04.10 (Fuzetea, Burn, napoje w szkle po 24, rolki w chemii, gyros cięty) dotyczą WESTFIELD |
+| D20 | Ben prosi o wyjaśnienie (17.10) |
+
+### D16: co się stało (odczyt z produ 17.10)
+
+- **Westfield, Coca-Cola** `ORD-20261011-WES-COCA-2115aa`: kapitan wysłał 11.10 (niedziela) o 12:21.
+  Mirsini 13.10 o 11:07 pisze, że towar dojechał, a zamówienie dalej jest „u managera”.
+  Manager oznaczył je jako wysłane (portal) 13.10 o 17:26, czyli po dostawie. Do dziś nie ma przyjęcia w aplikacji (`manager_sent`).
+  Wniosek: zamówione w portalu Coca-Coli, a w aplikacji odznaczone 2 dni później. Śladu błędu technicznego nie ma,
+  ale aplikacja nie zapisuje zdarzeń („przejęte o…”) dla tych zamówień (`order_events` puste), więc godziny przejęcia nie znamy.
+- **Bracka, Coca-Cola** `ORD-20261013-BRA-COCA-955bcc`: wysłane 13.10 o 16:41. Od 4 dni jest „przejęte”, ani razu nie oznaczone jako wysłane.
+- **Skala:** 47 zamówień sprzed 16.10 stoi jako „przejęte”: Pago 22, Mory 13, Filber 4, Coca-Cola 3 + 1 Katowice, Kraków 2,
+  Magazyn Katowice 1, Intermlecz Wola 1. Żadne z nich nie jest w Transporcie.
+  **Ostatni Transport wysłany z aplikacji: 05.10.** Pago i Mory idą od tamtej pory poza aplikacją (arkusz Ordering).
+  Do tego ok. 70 zamówień „wysłanych”, ale nieprzyjętych, sięgających czerwca.
+  KEN Mory „przejęte” ×3 zgadza się ze skargą Khushi z 02.10 („zamówiłam 2 razy, nie dojechało”), patrz D18.
+- **Co dalej:**
+  (1) Marek oznacza „wysłane” w chwili zamówienia u dostawcy, także przy portalu i Pago/Mory.
+  (2) Etap 4.1 rozszerzony: przejść te 47 zamówień i stare nieprzyjęte z Markiem; każde oznaczyć jako wysłane albo anulować.
+  (3) Opcjonalnie w kodzie: znacznik „przejęte > 24 h” w kolejce managera (bez zmian u kapitana).
+  (4) Pago/Mory: wrócić do Transportu w aplikacji albo świadomie zostać przy arkuszu (to jest D4/WP9).
+
 ## Etap 3 — Pakiet danych od Marka (jeden mail, agent pisze draft, Ben wysyła)
 
 Jedna lista zamiast pięciu wątków. Marek odpowiada w arkuszu albo punkt po punkcie.
@@ -192,7 +231,7 @@ dzielą plików, więc mogą iść równolegle.
 - [x] Zebranie: sesja z mini 16.10, repo, Wispr, Gmail, sesje laptopa, weryfikacja vs kod (`inputs/`)
 - [x] Etap 0 — zabezpieczenie (17.10, PR #63)
 - [ ] Etap 1 — Gdańsk
-- [ ] Etap 2 — decyzje
+- [ ] Etap 2 — decyzje (17.10: D1–D4, D6–D9, D11–D19 podjęte; D5, D6 blokada/ostrzeżenie, D10, D20 otwarte)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
 - [ ] Etap 5 — fala A
