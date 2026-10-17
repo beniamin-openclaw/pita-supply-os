@@ -249,7 +249,9 @@ dzielą plików, więc mogą iść równolegle.
 - [x] Etap 2 — decyzje (17.10: D1–D20 podjęte)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
-- [ ] Etap 5 — fala A (17.10: sesje Lane C, E, D uruchomione; Lane M po Lane C; D6 dopisane do Lane C jako pkt 8)
+- [ ] Etap 5 — fala A (17.10: Lane C PR #64 #65 #66 #69 #70 (D6); Lane E PR #73; Lane M PR #68 #71 #72, D5 w toku;
+      Lane D PR #67 — pliki 1–4 wgrane na prod 17.10, log `porzadek-data-2026-10/prod-sql-applied.md`;
+      pominięte do Marka: rolki 57 mm Woli, rolki papieru Westfield, Burn, progi napojów KAT/Westfield/Powiśle)
 - [ ] Etap 5 — fala B
 - [ ] Etap 5 — fala C
 - [ ] Etap 6 — porządki
