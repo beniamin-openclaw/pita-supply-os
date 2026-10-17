@@ -11,6 +11,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ProductListToolbar } from "../../../components/ui/ProductListToolbar";
 import { useT } from "../../../i18n";
+import { stripBulkSuffix } from "../../../lib/displayName";
 import { categoryLabel } from "../../../i18n/categoryLabels";
 import { packUnitLabel } from "../../../i18n/packUnits";
 import { caseOf, isPackBased } from "../../../lib/packUnits";
@@ -219,7 +220,7 @@ export function InventoryCountGrid({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 break-words">
-                              {p.product_name_pl}
+                              {stripBulkSuffix(p.product_name_pl)}
                             </span>
                             {p.is_critical && (
                               <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
