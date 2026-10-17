@@ -151,7 +151,7 @@ Jedna lista zamiast pięciu wątków. Marek odpowiada w arkuszu albo punkt po pu
    - dostawca Burna, bo Elektrownia, Westfield i Molotov o niego proszą, a dziś nie ma aktywnego dostawcy;
    - jednostka zakupu serwetek do podajnika i ręczników ZZ, które jedni liczą w kartonach, a inni w małych paczkach;
    - u których dostawców dopiski „po ile pakowane” w nazwach przeszkadzają (D3);
-   - waga kartonu souvlaki na KEN: prod ma 5 kg, Khushi liczy 6 kg;
+   - ~~waga kartonu souvlaki na KEN~~ rozstrzygnięte (Ben 17.10): 5 kg, tak jak na prodzie;
    - które z 24 pozycji Katowic to cola 250 ml i woda 330 ml w szkle (skrzynka 24).
 
 ## Etap 4 — Weryfikacje i porządki operatora (Ben fizycznie, prowadzę krok po kroku)
@@ -179,13 +179,24 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       Zrzutów ekranu nie ma w archiwum (0 plików mediów dla tej rozmowy). Zobaczenie ich wymaga synchronizacji mediów, którą uruchamia operator.
 - [ ] 4.13 **Odpowiedzi na czacie** (agent pisze propozycje, Ben wysyła):
       - Rajeshwari: lokal i id zamówienia z „samymi zerami” (15.10) oraz o czym był jej mail z 12.10;
-      - Nataliia: co to „Ankaja”;
-      - Tushar: co to „bombila 330 ml”;
-      - Khushi: gyros 3 szt i waga kartonu souvlaki;
+      - ~~Nataliia: co to „Ankaja”~~ odpada (Ben 17.10): Ankaja to osoba, nie produkt;
+      - ~~Tushar: co to „bombila 330 ml”~~ odpada (Ben 17.10): wiadomość z 07.09 nieaktualna, Bombili nie używamy.
+        Na prodzie P135 „Bombilla” już nieaktywna, bez lokali i z nieaktywnym katalogiem (odczyt 17.10), więc nic do wgrania;
+      - Khushi: gyros 3 szt (karton souvlaki 5 kg zostaje, Ben 17.10);
       - Mirsini: Molotov (D19);
       - Marek: czy zmienił status zamówienia Coca-Coli (16.10);
       - Sahil: butelki w Katowicach;
       - Sebastian: Fuzetea, Kinley, Burn i kategorie.
+- [ ] 4.14 **Raport Krakowa 11.10** (seniorbrospb@, do Georgiosa; przeczytany w całości 17.10). Część Supply OS:
+      - termin Bukat 16:00 zamiast 17:00: **zrobione** 17.10 (Lane D plik 1, reguła `DR-BUKAT-KRK-ALL`), czeka na kontrolę na żywo;
+      - halloumi cięte w kg: **zrobione** 17.10 (P192, FORUM, D8). Halloumi w stanie w kg zamiast szt: **nie zrobione**,
+        P015 jest liczone w sztukach (200 g) we wszystkich 12 lokalach. Zmiana jednostki = osobna decyzja Bena (W49);
+      - pita na sztuki zamiast kartonów: **nie robimy** (D8, jedna jednostka na produkt, W49). Trzeba to odpisać Krakowowi;
+      - Thamma Lemon i Mastiha: czekają na dostawcę i cenę od Marka (Etap 3 pkt 2);
+      - kolejność napojów jak na papierowej liście: **nie zrobione**. Potrzebna papierowa lista z Forum; potem SQL kolejności kart
+        dla FORUM (ten sam mechanizm co 4.5);
+      - pkt 5 raportu był niekompletny (sama autorka tak pisze).
+      Reszta raportu (sprzęt, eventy Forum, menu Fast, zespół, premia Eryka, szkolenie Kamala) nie dotyczy Supply OS: zostaje u Georgiosa.
 
 ## Etap 5 — Kontrakty pracy (osobne sesje kodujące)
 
@@ -252,7 +263,7 @@ dzielą plików, więc mogą iść równolegle.
 - [x] Etap 2 — decyzje (17.10: D1–D20 podjęte)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
-- [ ] Etap 5 — fala A (17.10: Lane C PR #64 #65 #66 #69 #70 (D6); Lane E PR #73; Lane M PR #68 #71 #72, D5 w toku;
+- [ ] Etap 5 — fala A (17.10: Lane C PR #64 #65 #66 #69 #70 (D6); Lane E PR #73 zmergowany 17.10 (`da672f9`), czeka na flagę Railway; Lane M PR #68 #71 #72, D5 w toku;
       Lane D PR #67 — pliki 1–4 wgrane na prod 17.10, log `porzadek-data-2026-10/prod-sql-applied.md`;
       pominięte do Marka: rolki 57 mm Woli, rolki papieru Westfield, Burn, progi napojów KAT/Westfield/Powiśle)
 - [ ] Etap 5 — fala B
