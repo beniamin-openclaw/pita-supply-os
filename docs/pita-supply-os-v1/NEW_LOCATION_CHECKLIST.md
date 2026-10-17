@@ -25,6 +25,10 @@ do dostawcy, więc muszą być poprawne przed pierwszą wysyłką.
       przed pierwszą wysyłką; bez niego mail idzie z samego biuro@.
 - [ ] Telefon lokalu → `locations.phone` (forma do wyświetlenia, np. „600 722 252”) — drukowany w mailu
       jako „Telefon lokalu:”.
+- [ ] Ostrzeżenie o stanach → `locations.require_stock_count`. Nowy lokal dostaje `true` sam (domyślna
+      wartość kolumny, decyzja D6 z 17.10): przed wysłaniem kapitan widzi ostrzeżenie, gdy nie wpisał
+      stanów albo wszystkie wpisane to 0; wysyłki nie blokuje. `false` tylko na decyzję właściciela
+      (jak NORBLIN i ELEKTROWNIA).
 
 ## 2. Produkty i progi min/max
 

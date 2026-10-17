@@ -13,6 +13,8 @@ import type { CaptainSupplier, OrderableItem } from "../../types";
 const captainSuppliers = vi.fn();
 const orderable = vi.fn();
 const captainSubmit = vi.fn();
+const inventoryCounts = vi.fn();
+const inventoryCount = vi.fn();
 vi.mock("../../apiClient", () => ({
   ApiError: class ApiError extends Error {
     status = 0;
@@ -21,8 +23,8 @@ vi.mock("../../apiClient", () => ({
   api: {
     captainSuppliers: () => captainSuppliers(),
     suppliers: () => Promise.reject(new Error("global list unused")),
-    inventoryCounts: () => Promise.resolve([]),
-    inventoryCount: () => Promise.reject(new Error("unused")),
+    inventoryCounts: () => inventoryCounts(),
+    inventoryCount: (id: string) => inventoryCount(id),
     orderable: (id: string) => orderable(id),
     captainDeliveryProposal: () => Promise.reject(new Error("no proposal")),
     captainSubmit: (req: unknown) => captainSubmit(req),
@@ -92,6 +94,10 @@ beforeEach(() => {
   captainSuppliers.mockReset();
   orderable.mockReset();
   captainSubmit.mockReset();
+  inventoryCounts.mockReset();
+  inventoryCount.mockReset();
+  inventoryCounts.mockResolvedValue([]);
+  inventoryCount.mockRejectedValue(new Error("unused"));
   captainSuppliers.mockResolvedValue([BUKAT]);
   captainSubmit.mockResolvedValue({
     order_id: "ORD-T",
@@ -149,6 +155,57 @@ describe("CaptainMP — stock-count warning (D6)", () => {
     expect(screen.queryByTestId("confirm-stock-warning")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tak, wyślij" }));
     await waitFor(() => expect(captainSubmit).toHaveBeenCalledTimes(1));
+  });
+
+  it("flag on, an inventory count exists: the block points to 'Wypełnij puste' (B59)", async () => {
+    setLocationFlag(true);
+    inventoryCounts.mockResolvedValue([
+      {
+        count_id: "CNT-1",
+        location_id: "WOLA",
+        count_date: "2026-10-16",
+        count_submitted_at: "2026-10-16T18:00:00Z",
+        count_user: "Ola",
+        line_count: 2,
+      },
+    ]);
+    inventoryCount.mockResolvedValue({
+      count_id: "CNT-1",
+      location_id: "WOLA",
+      location_name: "Pita Bros Wola",
+      count_date: "2026-10-16",
+      count_submitted_at: "2026-10-16T18:00:00Z",
+      count_user: "Ola",
+      line_count: 2,
+      notes: "",
+      lines: ["P1", "P2"].map((pid) => ({
+        product_id: pid,
+        product_name_pl: `Produkt ${pid}`,
+        product_category: "Chłodnia",
+        inventory_unit: "szt",
+        is_critical: false,
+        current_stock_qty_base: pid === "P1" ? 7 : 0,
+        count_comment: "",
+      })),
+    });
+    await renderScreen();
+    const fill = await screen.findByRole("button", { name: "Wypełnij puste" });
+    await waitFor(() => expect(fill).toBeEnabled());
+    type("final-P1", "40");
+    openConfirm();
+
+    expect(screen.getByTestId("confirm-stock-warning")).toHaveTextContent(
+      "Jest remanent w aplikacji: wróć i kliknij „Wypełnij puste” albo wyślij mimo to.",
+    );
+    const back = screen.getAllByRole("button", { name: "Wróć i popraw" });
+    fireEvent.click(back[back.length - 1]);
+
+    // Pulling the count in fills the blank stocks; the warning goes away.
+    fireEvent.click(screen.getByRole("button", { name: "Wypełnij puste" }));
+    openConfirm();
+    expect(screen.queryByTestId("confirm-stock-warning")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tak, wyślij" })).toBeInTheDocument();
+    expect(captainSubmit).not.toHaveBeenCalled();
   });
 
   it("flag off (Norblin): no warning even with no stock typed", async () => {

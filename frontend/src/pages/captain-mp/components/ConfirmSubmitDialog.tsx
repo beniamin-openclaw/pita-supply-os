@@ -15,7 +15,9 @@
 // Stock-count warning (captain-stock-count-warning, D6): `stockWarning` adds
 // one more non-blocking block when no stock was counted ("missing") or every
 // entered stock is 0 ("allZero"). Decided by `lib/stockCountWarning.ts`; the
-// parent passes "none" at locations with the flag off.
+// parent passes "none" at locations with the flag off. With an inventory count
+// on screen (`stockPrefillAvailable`) the "missing" block points to the prefill
+// control's "Wypełnij puste" instead of asking for a recount (B59).
 
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
@@ -49,6 +51,9 @@ interface ConfirmSubmitDialogProps {
   sentToday?: SentTodayWarning | null;
   /** Stock-count warning kind (D6). "none" or absent = no block. */
   stockWarning?: StockCountWarning;
+  /** An inventory count can fill the blank stocks (the prefill control is on
+   *  screen): the "missing" block then points to "Wypełnij puste" (B59). */
+  stockPrefillAvailable?: boolean;
 }
 
 export function ConfirmSubmitDialog({
@@ -64,6 +69,7 @@ export function ConfirmSubmitDialog({
   coverageDays = null,
   sentToday = null,
   stockWarning = "none",
+  stockPrefillAvailable = false,
 }: ConfirmSubmitDialogProps) {
   const { t, tPlural, formatDateTime } = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -161,7 +167,7 @@ export function ConfirmSubmitDialog({
         aria-describedby={describedBy}
         tabIndex={-1}
         onKeyDown={onTrapKeyDown}
-        className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 outline-none"
+        className="relative w-full sm:max-w-md max-h-[90dvh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 outline-none"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
@@ -260,11 +266,13 @@ export function ConfirmSubmitDialog({
                   {t(stockWarning === "missing" ? "confirm.stockMissing" : "confirm.stockAllZero")}
                 </div>
                 <div className="mt-1 text-sm text-amber-900">
-                  {t(
-                    stockWarning === "missing"
-                      ? "confirm.stockMissingAsk"
-                      : "confirm.stockAllZeroAsk",
-                  )}
+                  {stockWarning !== "missing"
+                    ? t("confirm.stockAllZeroAsk")
+                    : stockPrefillAvailable
+                      ? t("confirm.stockMissingAskPrefill", {
+                          button: t("captain.prefillFillEmpties"),
+                        })
+                      : t("confirm.stockMissingAsk")}
                 </div>
               </div>
             </div>

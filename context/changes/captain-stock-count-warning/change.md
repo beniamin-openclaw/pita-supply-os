@@ -72,6 +72,10 @@ order is sent exactly as before.
 4. **Copy.** Polish first, short and plain, in `src/i18n/strings.ts` (pl + en):
    "Nie wpisano stanów" / "Wszystkie wpisane stany to 0", each followed by
    "Wróć i policz albo wyślij mimo to." / "Sprawdź je. Wróć i popraw albo wyślij mimo to."
+   When the location has an inventory count on screen (the prefill control is shown), the
+   `missing` block reads "Jest remanent w aplikacji: wróć i kliknij „Wypełnij puste” albo wyślij
+   mimo to." instead (PR #70 review): B59 was a count made in Inwentaryzacja that never reached
+   the order screen, so "go back and count" would ask for a recount that already exists.
 5. **Scope limits.** Only the new-order submit (`CaptainMP`). The edit screen
    (`OrderEditPage`) and the backend submit are unchanged; nothing is blocked server-side.
 6. **Every supplier tab, Pago included.** The flag is per location, so the warning applies on

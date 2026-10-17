@@ -437,6 +437,13 @@ export const STRINGS = {
     pl: "Wróć i policz albo wyślij mimo to.",
     en: "Go back and count, or send anyway.",
   },
+  // Same block when the location has an inventory count on screen to pull in
+  // (B59: a count done in Inwentaryzacja never reached the order screen, whose
+  // blank fields show a grey "0" placeholder). {button} = captain.prefillFillEmpties.
+  "confirm.stockMissingAskPrefill": {
+    pl: "Jest remanent w aplikacji: wróć i kliknij „{button}” albo wyślij mimo to.",
+    en: "There is an inventory count in the app: go back and tap “{button}”, or send anyway.",
+  },
   "confirm.stockAllZero": {
     pl: "Wszystkie wpisane stany to 0",
     en: "Every stock count you entered is 0",

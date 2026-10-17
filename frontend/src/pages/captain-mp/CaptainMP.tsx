@@ -1181,6 +1181,7 @@ export function CaptainMP() {
         reasonCount={stats.reasonCount}
         criticalMissing={criticalMissing}
         stockWarning={stockWarning}
+        stockPrefillAvailable={showPrefillControl}
         deliveryDate={displayedDeliveryDate || undefined}
         coverageDays={activeChoice.coverage ?? null}
         sentToday={

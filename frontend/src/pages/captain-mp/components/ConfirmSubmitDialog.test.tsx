@@ -102,7 +102,11 @@ describe("ConfirmSubmitDialog — sent today", () => {
 
 function renderStockDialog(
   stockWarning: StockCountWarning | undefined,
-  extra: { criticalMissing?: string[]; sentToday?: SentTodayWarning | null } = {},
+  extra: {
+    criticalMissing?: string[];
+    sentToday?: SentTodayWarning | null;
+    stockPrefillAvailable?: boolean;
+  } = {},
 ): { onConfirm: ReturnType<typeof vi.fn>; onCancel: ReturnType<typeof vi.fn> } {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
@@ -118,6 +122,7 @@ function renderStockDialog(
         onCancel={onCancel}
         sentToday={extra.sentToday ?? null}
         stockWarning={stockWarning}
+        stockPrefillAvailable={extra.stockPrefillAvailable}
       />
     </LangProvider>,
   );
@@ -137,6 +142,25 @@ describe("ConfirmSubmitDialog — stock-count warning (D6)", () => {
     expect(send).toBeEnabled();
     fireEvent.click(send);
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("missing with an inventory count on screen: points to 'Wypełnij puste' (B59)", () => {
+    const { onConfirm } = renderStockDialog("missing", { stockPrefillAvailable: true });
+    const block = screen.getByTestId("confirm-stock-warning");
+    expect(block).toHaveTextContent("Nie wpisano stanów");
+    expect(block).toHaveTextContent(
+      "Jest remanent w aplikacji: wróć i kliknij „Wypełnij puste” albo wyślij mimo to.",
+    );
+    expect(block).not.toHaveTextContent("Wróć i policz");
+    fireEvent.click(screen.getByRole("button", { name: "Wyślij mimo to" }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("allZero keeps its copy when an inventory count is on screen", () => {
+    renderStockDialog("allZero", { stockPrefillAvailable: true });
+    expect(screen.getByTestId("confirm-stock-warning")).toHaveTextContent(
+      "Sprawdź je. Wróć i popraw albo wyślij mimo to.",
+    );
   });
 
   it("allZero: shows its own copy", () => {
