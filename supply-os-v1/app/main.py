@@ -229,6 +229,7 @@ def _build_orderable_item(
     other_suppliers: Optional[list[dict]] = None,
     primary_supplier_names: Optional[list[str]] = None,
     open_orders_elsewhere: Optional[list[OpenOrderRef]] = None,
+    require_stock_count: bool = True,
 ) -> dict:
     """Compose one line for the Captain Submit screen.
 
@@ -240,7 +241,13 @@ def _build_orderable_item(
 
     ``other_suppliers`` / ``primary_supplier_names`` / ``open_orders_elsewhere``
     feed the "also at / already ordered at" hint for a product offered by two
-    or more suppliers at the location; all empty otherwise."""
+    or more suppliers at the location; all empty otherwise.
+
+    ``require_stock_count`` is the LOCATION's flag (``Location.
+    require_stock_count``, captain-stock-count-warning), repeated on every item
+    like ``suggestion_alerts_enabled``: the response is a bare list, so a
+    top-level field would break its shape. The Captain's confirm dialog warns,
+    never blocks, on missing or all-zero stock counts when it is True."""
     product = products_by_id[sp.product_id]
     # No setting = a Manager one-off outside the location's list
     # (manager-add-any-product): thresholds read 0, flagged below.
@@ -275,6 +282,8 @@ def _build_orderable_item(
         # Bulk pack (migration 0028) — None on both when the product has none.
         "case_unit": sp.case_unit,
         "units_per_case": sp.units_per_case,
+        # Location flag (migration 0030) — see the docstring.
+        "require_stock_count": require_stock_count,
     }
 
 
@@ -324,15 +333,20 @@ def _build_orderable_items(
     shared rows, or only the location's own rows when it has ``own_catalog``),
     scoped over every supplier BEFORE the supplier filter. Each item also
     lists the product's other suppliers at the location; ``with_open_orders``
-    (the Captain screen) adds their open orders for multi-supplier products."""
+    (the Captain screen) adds their open orders for multi-supplier products.
+
+    Every item carries the location's ``require_stock_count`` (True when the
+    location is unknown, the column's default)."""
     products_by_id = {p.product_id: p for p in backend.load_products()}
     settings_by_pid = {
         s.product_id: s
         for s in backend.load_location_product_settings()
         if s.location_id == location_id
     }
+    locations = backend.load_locations()
+    require_stock_count = _location_requires_stock_count(locations, location_id)
     effective = effective_supplier_products(
-        backend.load_supplier_products(), location_id, backend.load_locations()
+        backend.load_supplier_products(), location_id, locations
     )
     sps = [
         sp
@@ -383,9 +397,17 @@ def _build_orderable_items(
                     else []
                 ),
                 open_orders_elsewhere=open_by_pid.get(sp.product_id, []),
+                require_stock_count=require_stock_count,
             )
         )
     return items
+
+
+def _location_requires_stock_count(locations: list[Location], location_id: str) -> bool:
+    """The location's ``require_stock_count`` flag (captain-stock-count-warning);
+    True (the warning on, the column default) when the location is unknown."""
+    location = next((loc for loc in locations if loc.location_id == location_id), None)
+    return location.require_stock_count if location is not None else True
 
 
 # Open = still on its way to the location (krakow-katowice-rollout hint).
@@ -601,7 +623,9 @@ def captain_orderable(
     complete.
 
     Each item carries the supplier's ``suggestion_alerts_enabled`` so the card
-    knows whether to show deviation alerts (pago-suggestion-no-alerts)."""
+    knows whether to show deviation alerts (pago-suggestion-no-alerts), and the
+    token location's ``require_stock_count`` so the confirm dialog knows whether
+    to warn about missing or all-zero stock counts (captain-stock-count-warning)."""
     backend = _choose_backend()
     return _build_orderable_items(
         backend,

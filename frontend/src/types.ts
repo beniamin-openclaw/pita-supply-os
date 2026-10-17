@@ -150,6 +150,11 @@ export interface OrderableItem {
   other_suppliers?: OtherSupplierRef[];
   // Open orders for this location + product at OTHER suppliers (captain only).
   open_orders_elsewhere?: OpenOrderRef[];
+  // LOCATION flag repeated on every item (captain-stock-count-warning, D6,
+  // migration 0030): true = the confirm dialog warns, never blocks, when the
+  // supplier's cards carry no stock count or only zeros. Absent = true (older
+  // backend, items rebuilt on the edit screen). False at NORBLIN, ELEKTROWNIA.
+  require_stock_count?: boolean;
 }
 
 // Captain Submit -------------------------------------------------------------

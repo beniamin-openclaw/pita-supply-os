@@ -72,7 +72,8 @@ function supplierRow(
   };
 }
 
-// ×1 unit, target 50: stock 0 → suggestion 50; ordering 50 is green (no reason).
+// ×1 unit, target 50: stock 10 → suggestion 40; ordering 40 is green (no reason).
+// A real count (not 0) keeps the D6 stock-count warning out of these dialogs.
 function makeItem(id: string): OrderableItem {
   return {
     product_id: id,
@@ -109,8 +110,8 @@ function renderScreen(): void {
 
 function fillOrder(id: string): void {
   fireEvent.change(document.getElementById("order-ordered-by")!, { target: { value: "Ola" } });
-  fireEvent.change(document.getElementById(`current-${id}`)!, { target: { value: "0" } });
-  fireEvent.change(document.getElementById(`final-${id}`)!, { target: { value: "50" } });
+  fireEvent.change(document.getElementById(`current-${id}`)!, { target: { value: "10" } });
+  fireEvent.change(document.getElementById(`final-${id}`)!, { target: { value: "40" } });
 }
 
 function tab(name: string): HTMLElement {

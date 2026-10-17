@@ -221,6 +221,12 @@ def _schema():
     location_supplier_catalog = (
         MIGRATIONS_DIR / "0029_location_supplier_catalog.sql"
     ).read_text()
+    # 0030 adds locations.require_stock_count (NOT NULL DEFAULT true,
+    # captain-stock-count-warning); _LOCATION_COLUMNS references it, so the
+    # locations insert below errors against a pre-0030 schema.
+    location_require_stock_count = (
+        MIGRATIONS_DIR / "0030_location_require_stock_count.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -251,6 +257,7 @@ def _schema():
         conn.exec_driver_sql(inventory_order)
         conn.exec_driver_sql(supplier_product_case)
         conn.exec_driver_sql(location_supplier_catalog)
+        conn.exec_driver_sql(location_require_stock_count)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -538,6 +545,47 @@ def test_location_catalog_roundtrip_and_backup_check():
                 "DELETE FROM supplier_products WHERE supplier_product_id = 'SP_CITY_BACKUP'"
             )
             conn.exec_driver_sql("DELETE FROM locations WHERE location_id = 'CITY'")
+
+
+def test_location_require_stock_count_roundtrip():
+    """Migration 0030: the fixture's WOLA row never set the flag, so the
+    model's own default (True) bound against the NOT NULL column; an explicit
+    False (the NORBLIN / ELEKTROWNIA shape) survives a write + load."""
+    wola = next(loc for loc in supabase_backend.load_locations() if loc.location_id == "WOLA")
+    assert wola.require_stock_count is True
+    supabase_backend._insert(
+        "locations", supabase_backend._LOCATION_COLUMNS,
+        Location(location_id="NORBLIN_IT", location_name="Norblin", require_stock_count=False),
+    )
+    try:
+        norblin = next(
+            loc for loc in supabase_backend.load_locations()
+            if loc.location_id == "NORBLIN_IT"
+        )
+        assert norblin.require_stock_count is False
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql("DELETE FROM locations WHERE location_id = 'NORBLIN_IT'")
+
+
+def test_migration_0030_is_rerunnable_and_defaults_on():
+    """0030 is applied a second time without error (ADD COLUMN IF NOT EXISTS),
+    and a row inserted WITHOUT the column (an older backend's insert) reads ON."""
+    sql = (MIGRATIONS_DIR / "0030_location_require_stock_count.sql").read_text()
+    assert "%" not in sql  # exec_driver_sql would treat it as a placeholder
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(sql)
+        conn.exec_driver_sql(
+            "INSERT INTO locations (location_id, location_name) VALUES ('OLD_IT', 'Old')"
+        )
+    try:
+        old = next(
+            loc for loc in supabase_backend.load_locations() if loc.location_id == "OLD_IT"
+        )
+        assert old.require_stock_count is True
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql("DELETE FROM locations WHERE location_id = 'OLD_IT'")
 
 
 def test_migration_0029_is_rerunnable():

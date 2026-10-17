@@ -107,6 +107,7 @@ _LOCATION_COLUMNS = [
     "company_name", "company_address", "company_nip", "email",
     "sender_email", "phone",
     "own_catalog",  # migration 0029 (krakow-katowice-rollout)
+    "require_stock_count",  # migration 0030 (captain-stock-count-warning)
 ]
 _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",
