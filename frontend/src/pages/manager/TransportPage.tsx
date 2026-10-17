@@ -1774,6 +1774,11 @@ export function TransportPage(): ReactElement {
                                       <span aria-hidden="true">✓</span>{" "}
                                       {t("manager.transport.delivery.delivered")}
                                     </span>
+                                  ) : o.status === "closed" ? (
+                                    /* Closed by the Manager without a receipt (D5). */
+                                    <span className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                                      {t("manager.closedWithoutReceipt")}
+                                    </span>
                                   ) : (
                                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">
                                       {t("manager.transport.delivery.waiting")}

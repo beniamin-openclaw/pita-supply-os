@@ -654,3 +654,29 @@ describe("TransportPage — eligible list, latest request wins", () => {
     expect(screen.getByText("Pita Bros Poznań")).toBeInTheDocument();
   });
 });
+
+describe("TransportPage — closed without receipt (D5)", () => {
+  it("a sent batch shows the closed-without-receipt chip on a member closed with no receipt", async () => {
+    vi.mocked(api.transportBatch).mockResolvedValue(
+      batchDetail("TRN-2", "Run Mory", {
+        status: "sent",
+        orders: [
+          {
+            order_id: "ORD-W",
+            location_id: "WOLA",
+            location_name: "Pita Bros Wola",
+            status: "closed",
+            supplier_id: "SUP_PAGO",
+            lines: [SOUVLAKI_LINE],
+          },
+        ],
+      } as Partial<TransportBatchDetail>),
+    );
+    renderPage();
+    await settle();
+    await openBatch("Run Mory");
+
+    expect(screen.getByText("Zamknięte bez przyjęcia")).toBeInTheDocument();
+    expect(screen.queryByText("oczekuje")).not.toBeInTheDocument();
+  });
+});

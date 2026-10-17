@@ -20,6 +20,7 @@ import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import {
   inQueueDays,
   isClaimedOverdue,
+  isClosedWithoutReceipt,
   isSentUnreceived,
   QUEUE_LANE_LIMIT,
   splitClosedLane,
@@ -377,6 +378,13 @@ export function QueueCard({
           ) : item.received_count > 0 ? (
             <span className="rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-900">
               <span aria-hidden="true">✓</span> {t("manager.queue.delivered")}
+            </span>
+          ) : isClosedWithoutReceipt(item) ? (
+            <span
+              className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700"
+              data-testid="closed-without-receipt"
+            >
+              {t("manager.closedWithoutReceipt")}
             </span>
           ) : null}
         </div>

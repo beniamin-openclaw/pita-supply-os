@@ -14,7 +14,7 @@ import { api, ApiError } from "../../apiClient";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
-import { daysSince } from "../../lib/dates";
+import { archiveAgeDays } from "./lib/queueAge";
 import type { ManagerOrderDetail, ManagerQueueItem } from "../../types";
 import { type LaneChip, ManagerFilterBar } from "./ManagerFilterBar";
 import { QueueCard, type QueueLane } from "./ManagerQueue";
@@ -34,12 +34,6 @@ interface ArchiveLane {
   key: QueueLane;
   titleKey: StringKey;
   items: ManagerQueueItem[] | null;
-}
-
-/** Archive age of a row: last receipt for closed orders, submission for
- *  cancelled ones (the queue item carries no cancelled_at). */
-function archiveAgeDays(item: ManagerQueueItem, now: Date): number | null {
-  return daysSince(item.last_received_at ?? item.captain_submitted_at, now);
 }
 
 function noop(): void {}

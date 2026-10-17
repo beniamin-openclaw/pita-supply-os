@@ -58,6 +58,7 @@ function renderPane(
   onDispatch: (orderId: string, sentMethod: string) => void = () => {},
   drafts: DraftMap = {},
   lock: { busyId?: string | null; draftingId?: string | null } = {},
+  onCloseWithoutReceipt: (orderId: string) => void = () => {},
 ): void {
   render(
     <MemoryRouter>
@@ -74,6 +75,7 @@ function renderPane(
           onClaim={() => {}}
           onRelease={() => {}}
           onCancel={() => {}}
+          onCloseWithoutReceipt={onCloseWithoutReceipt}
           onSave={() => {}}
           onDispatch={onDispatch}
           onQtyChange={() => {}}
@@ -151,3 +153,84 @@ describe("OrderDetailPane — Filber mark-ordered without e-mail (D4)", () => {
     expect(screen.queryByRole("button", BUTTON)).toBeNull();
   });
 });
+
+const CLOSE = { name: "Zamknij bez przyjęcia" };
+
+describe("OrderDetailPane — close without receipt (D5)", () => {
+  const RECEIPT = {
+    receipt_id: "RCP-1",
+    order_id: "ORD-1",
+    location_id: "WOLA",
+    supplier_id: "SUP_FILBER",
+    receipt_date: "2026-10-16",
+    line_count: 1,
+    discrepancy_count: 0,
+    lines: [],
+  } as unknown as ManagerOrderDetail["receipts"][number];
+
+  it("offers the close on a sent order with no receipt and calls the handler", () => {
+    const onClose = vi.fn();
+    renderPane(
+      makeDetail({ status: "manager_sent", editable_after_send: true }),
+      () => {},
+      {},
+      {},
+      onClose,
+    );
+    fireEvent.click(screen.getByRole("button", CLOSE));
+    expect(onClose).toHaveBeenCalledWith("ORD-1");
+  });
+
+  it("offers it on a sent Transport member too (read-only branch)", () => {
+    renderPane(
+      makeDetail({ status: "manager_sent", supplier_order_reference: "TRN-20261005-PAGO-1" }),
+    );
+    expect(screen.getByRole("button", CLOSE)).toBeEnabled();
+  });
+
+  it("is disabled while an action runs on the order", () => {
+    renderPane(makeDetail({ status: "manager_sent" }), () => {}, {}, { busyId: "ORD-1" });
+    expect(screen.getByRole("button", CLOSE)).toBeDisabled();
+  });
+
+  it("is not offered once a receipt exists", () => {
+    renderPane(makeDetail({ status: "manager_sent", receipts: [RECEIPT] }));
+    expect(screen.queryByRole("button", CLOSE)).toBeNull();
+  });
+
+  it("is not offered on a claimed order", () => {
+    renderPane(makeDetail({ status: "manager_claimed" }));
+    expect(screen.queryByRole("button", CLOSE)).toBeNull();
+  });
+
+  it("a closed order without a receipt says so, with the reason", () => {
+    renderPane(
+      makeDetail({
+        status: "closed",
+        events: [
+          {
+            event_id: "OEV-1",
+            order_id: "ORD-1",
+            event_type: "closed_without_receipt",
+            actor: "manager-default",
+            at: "2026-10-17T09:00:00Z",
+            details: "Towar przyszedł poza aplikacją",
+          },
+        ],
+      }),
+    );
+    expect(screen.queryByRole("button", CLOSE)).toBeNull();
+    expect(screen.getByTestId("closed-without-receipt")).toHaveTextContent(
+      "Zamknięte bez przyjęcia",
+    );
+    expect(screen.getByText("Powód: Towar przyszedł poza aplikacją")).toBeInTheDocument();
+    expect(screen.queryByText("Zablokowane po odbiorze")).toBeNull();
+  });
+
+  it("a closed order with a receipt keeps the received lock", () => {
+    renderPane(makeDetail({ status: "closed", receipts: [RECEIPT] }));
+    expect(screen.getByText("Zablokowane po odbiorze")).toBeInTheDocument();
+    expect(screen.queryByTestId("closed-without-receipt")).toBeNull();
+  });
+});
+

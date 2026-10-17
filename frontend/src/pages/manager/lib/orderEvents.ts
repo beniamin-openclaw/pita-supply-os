@@ -7,9 +7,14 @@ import type { OrderEvent } from "../../../types";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
+/** order_events type of a Manager close without receipt (backend
+ *  `_CLOSED_WITHOUT_RECEIPT_EVENT`, close-without-receipt D5). */
+export const CLOSED_WITHOUT_RECEIPT_EVENT = "closed_without_receipt";
+
 const EVENT_TYPE_LABEL_KEYS: Record<string, StringKey> = {
   quantities_changed: "manager.events.type.quantitiesChanged",
   line_added: "manager.events.type.lineAdded",
+  [CLOSED_WITHOUT_RECEIPT_EVENT]: "manager.events.type.closedWithoutReceipt",
 };
 
 export function orderEventTypeLabel(t: TFunc, eventType: string): string {

@@ -826,6 +826,20 @@ class ManagerCancelResponse(BaseModel):
     status: OrderStatus  # cancelled on success
 
 
+class ManagerCloseRequest(BaseModel):
+    """Payload for POST /api/manager/close/{order_id} (close-without-receipt,
+    D5): the Manager closes a sent order that will never be received. The
+    reason is required and kept as an ``order_events`` row
+    ``closed_without_receipt`` (who / when / why)."""
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ManagerCloseResponse(BaseModel):
+    """Result of close-without-receipt — manager_sent → closed."""
+    order_id: str
+    status: OrderStatus  # closed on success
+
+
 # ---------- Manager add ad-hoc product line (add-product-to-order) ----------
 
 class ManagerAddLineRequest(BaseModel):
