@@ -26,7 +26,8 @@ import { type DraftedOrder, gmailDraftsUrl } from "./lib/orderEmailDraft";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
 import { ResendPanel } from "./ResendPanel";
-import { type DraftMap, draftQty, hasDirtyDrafts } from "./lib/draftState";
+import { type DraftMap, draftQty, hasDirtyDrafts, isOrderEmpty } from "./lib/draftState";
+import { MARK_ORDERED_EMAIL_SUPPLIER_IDS } from "../../lib/supplierGroups";
 import { isOrderEditable, managerSummary, isManagerEngaged } from "./lib/managerLine";
 
 // Kept out of the component body so the impure `Date.now()` read isn't treated
@@ -149,6 +150,12 @@ export function OrderDetailPane({
   const busy = busyId === detail.order_id;
   // Disabled-but-not-spinning while a Gmail draft is being created.
   const locked = busy || draftingId === detail.order_id;
+  // D4: Filber (an e-mail supplier) can also be marked as ordered without the
+  // e-mail, "like Cola". Allowlisted, so no other e-mail order can be marked
+  // sent without reaching its supplier (lib/supplierGroups.ts).
+  const markOrderedNoEmail: boolean =
+    detail.ordering_method === "email" &&
+    MARK_ORDERED_EMAIL_SUPPLIER_IDS.includes(detail.supplier_id);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -402,6 +409,20 @@ export function OrderDetailPane({
             >
               {t("manager.action.cancel")}
             </button>
+            {markOrderedNoEmail && (
+              <button
+                type="button"
+                disabled={locked || isOrderEmpty(drafts, detail.lines)}
+                onClick={() => {
+                  if (!window.confirm(t("manager.markOrderedNoEmailConfirm"))) return;
+                  onDispatch(detail.order_id, "manual");
+                }}
+                title={t("manager.markOrderedNoEmailHint")}
+                className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+              >
+                {t("manager.markOrderedNoEmail")}
+              </button>
+            )}
           </div>
           <DispatchPanel
             key={detail.order_id}

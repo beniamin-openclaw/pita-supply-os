@@ -44,6 +44,7 @@ import type {
 import { compareProductOrder } from "../../../lib/productOrder";
 import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
 import { effectiveManagerQtyPurchase } from "./managerLine";
+import { PAGO_MORY_SUPPLIER_IDS } from "../../../lib/supplierGroups";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
@@ -1056,7 +1057,7 @@ export function buildTransportPagoPrintDoc(
 // eligible list and the history list both follow it, newest first.
 
 /** The supplier chips of the filter bar, in display order. */
-export const TRANSPORT_CHIP_SUPPLIER_IDS = ["SUP_PAGO", "SUP_MORY"] as const;
+export const TRANSPORT_CHIP_SUPPLIER_IDS = PAGO_MORY_SUPPLIER_IDS;
 
 /** Which supplier chips are on. */
 export interface TransportChips {
