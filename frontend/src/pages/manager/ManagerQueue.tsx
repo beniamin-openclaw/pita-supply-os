@@ -57,6 +57,9 @@ interface ManagerQueueProps {
   onSelect: (orderId: string) => void;
   /** Which lanes to render. Omitted = all visible (backward compatible). */
   visibleLanes?: Set<QueueLane>;
+  /** Orders whose Gmail draft tab was blocked and not opened since — amber
+   *  "Szkic niewysłany" chip (supplier-email-v21 S3). */
+  unsentDraftIds?: Set<string>;
 }
 
 export function ManagerQueue({
@@ -67,6 +70,7 @@ export function ManagerQueue({
   selectedId,
   onSelect,
   visibleLanes,
+  unsentDraftIds,
 }: ManagerQueueProps) {
   const closedSplit = splitClosedLane(closed);
   const groups: QueueGroup[] = [
@@ -110,6 +114,7 @@ export function ManagerQueue({
           group={group}
           selectedId={selectedId}
           onSelect={onSelect}
+          unsentDraftIds={unsentDraftIds}
         />
       ))}
     </div>
@@ -120,10 +125,12 @@ function QueueGroupSection({
   group,
   selectedId,
   onSelect,
+  unsentDraftIds,
 }: {
   group: QueueGroup;
   selectedId: string | null;
   onSelect: (orderId: string) => void;
+  unsentDraftIds?: Set<string>;
 }) {
   const { t } = useT();
   const [open, setOpen] = useState(group.defaultOpen);
@@ -164,6 +171,7 @@ function QueueGroupSection({
                   selected={q.order_id === selectedId}
                   onSelect={onSelect}
                   showQueueAge={group.key === "claimed"}
+                  draftNotOpened={unsentDraftIds?.has(q.order_id) ?? false}
                 />
               ))}
             </ul>
@@ -189,9 +197,17 @@ export interface QueueCardProps {
   /** Claimed lane only: render the amber "w kolejce od N dni" chip once the
    *  order has waited QUEUE_AGE_DAYS since the captain submitted it. */
   showQueueAge?: boolean;
+  /** The order's Gmail draft was created but its tab never opened. */
+  draftNotOpened?: boolean;
 }
 
-export function QueueCard({ item, selected, onSelect, showQueueAge = false }: QueueCardProps) {
+export function QueueCard({
+  item,
+  selected,
+  onSelect,
+  showQueueAge = false,
+  draftNotOpened = false,
+}: QueueCardProps) {
   const { t, tPlural, formatDateTime } = useT();
   const queueAge = showQueueAge ? inQueueDays(item) : null;
 
@@ -222,6 +238,14 @@ export function QueueCard({ item, selected, onSelect, showQueueAge = false }: Qu
               title={t("manager.queue.inQueueDaysTooltip")}
             >
               {tPlural("manager.queue", "inQueueDays", queueAge)}
+            </span>
+          )}
+          {draftNotOpened && (
+            <span
+              className="rounded border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900"
+              title={t("manager.queue.draftUnsentChipTooltip")}
+            >
+              {t("manager.queue.draftUnsentChip")}
             </span>
           )}
           {item.supplier_order_reference?.startsWith("TRN-") && (
