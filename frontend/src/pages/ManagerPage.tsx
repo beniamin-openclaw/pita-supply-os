@@ -44,6 +44,7 @@ import {
   openDraftTab,
   saveDraftedOrders,
 } from "./manager/lib/orderEmailDraft";
+import { QUEUE_LANE_LIMIT } from "./manager/lib/queueAge";
 import { buildSupplierOptions } from "./manager/lib/supplierOptions";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
@@ -145,8 +146,8 @@ export function ManagerPage() {
       // Claimed + sent at the backend's 200 clamp, not the default 50: the
       // stalled orders the D16 markers count are the OLDEST in their lane, and
       // the sent lane only drains on receipt (manager-queue-control).
-      api.managerQueue(undefined, "manager_claimed", 200),
-      api.managerQueue(undefined, "manager_sent", 200),
+      api.managerQueue(undefined, "manager_claimed", QUEUE_LANE_LIMIT),
+      api.managerQueue(undefined, "manager_sent", QUEUE_LANE_LIMIT),
       api.managerQueue(undefined, "closed"),
     ])
       .then(([sub, clm, snt, cls]) => {

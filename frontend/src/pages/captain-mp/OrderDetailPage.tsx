@@ -351,10 +351,12 @@ export function OrderDetailPage() {
                           </div>
                           <div
                             className={`text-lg font-bold tabular-nums ${
-                              zeroed ? "text-amber-700 line-through" : "text-slate-900"
+                              zeroed ? "text-amber-700" : "text-slate-900"
                             }`}
                           >
-                            {effectiveOrderedQtyPurchase(line)}{" "}
+                            <span className={zeroed ? "line-through" : ""}>
+                              {effectiveOrderedQtyPurchase(line)}
+                            </span>{" "}
                             <span className="text-xs">
                               <UnitLabel>{line.purchase_unit}</UnitLabel>
                             </span>

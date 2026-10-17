@@ -45,9 +45,13 @@ export const CLAIMED_OVERDUE_HOURS = 24;
  *  is flagged "wysłane > 3 dni bez przyjęcia" (manager-queue-control, D16). */
 export const SENT_UNRECEIVED_HOURS = 72;
 
+/** Orders loaded per claimed/sent lane (the backend's clamp). The lane is
+ *  newest-first, so past this cap the oldest (stalled) orders drop out. */
+export const QUEUE_LANE_LIMIT = 200;
+
 const MS_PER_HOUR = 3_600_000;
 
-/** Whole-instant hours since `iso` (not calendar days), or null for a missing
+/** Elapsed hours since `iso` (fractional, not calendar days), or null for a missing
  *  or unparseable timestamp. */
 function hoursSince(iso: string | null | undefined, now: Date): number | null {
   if (!iso) return null;

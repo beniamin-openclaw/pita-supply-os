@@ -103,4 +103,10 @@ describe("TransportMatrix — manager zero", () => {
     renderMatrix([order(LINES)], true, drafts);
     expect(screen.getByLabelText(/Produkt B/)).toHaveClass("line-through");
   });
+
+  it("leaves an untouched 0 plain (manager final not set)", () => {
+    renderMatrix([order([line("D", 3, 0)])], false);
+    expect(document.querySelectorAll("td[data-zeroed]")).toHaveLength(0);
+    expect(document.querySelector(".line-through")).toBeNull();
+  });
 });

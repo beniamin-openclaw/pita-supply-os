@@ -38,7 +38,11 @@ import {
   orderAddOneOptions,
   type TransportDraftMap,
 } from "../lib/transport";
-import { lineVisualStateWithQty } from "../lib/managerLine";
+import {
+  lineVisualStateWithQty,
+  MANAGER_ZERO_INPUT_CLASS,
+  MANAGER_ZERO_TEXT_CLASS,
+} from "../lib/managerLine";
 
 interface TransportMatrixProps {
   orders: TransportBatchOrder[];
@@ -198,14 +202,12 @@ export function TransportMatrix({
                             }
                           }}
                           className={`w-20 rounded border px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                            zeroed
-                              ? "border-amber-300 bg-amber-50 text-amber-700 line-through"
-                              : "border-gray-300"
+                            zeroed ? MANAGER_ZERO_INPUT_CLASS : "border-gray-300"
                           }`}
                         />
                       ) : (
                         <span
-                          className={`tabular-nums ${zeroed ? "line-through text-amber-700" : ""}`}
+                          className={`tabular-nums ${zeroed ? MANAGER_ZERO_TEXT_CLASS : ""}`}
                         >
                           {qty}
                         </span>

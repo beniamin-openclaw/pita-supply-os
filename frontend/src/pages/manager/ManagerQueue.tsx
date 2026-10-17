@@ -21,6 +21,7 @@ import {
   inQueueDays,
   isClaimedOverdue,
   isSentUnreceived,
+  QUEUE_LANE_LIMIT,
   splitClosedLane,
 } from "./lib/queueAge";
 import { DeliveryDateMarker } from "./DeliveryDateMarker";
@@ -142,6 +143,9 @@ function QueueGroupSection({
   const { t } = useT();
   const [open, setOpen] = useState(group.defaultOpen);
   const count = group.items?.length ?? 0;
+  // A claimed/sent lane at its load cap has older orders the queue never saw.
+  const capped =
+    (group.key === "claimed" || group.key === "sent") && count >= QUEUE_LANE_LIMIT;
   const archived = group.archivedCount ?? 0;
   // Red header count of stalled orders (D16) — sent starts collapsed, so this
   // is what the Manager sees without opening the lane.
@@ -175,16 +179,30 @@ function QueueGroupSection({
               )}
               data-testid={`stalled-count-${group.key}`}
             >
-              {t(
-                group.key === "claimed"
-                  ? "manager.queue.claimedOverdueCount"
-                  : "manager.queue.sentUnreceivedCount",
-                { n: stalled },
-              )}
+              <span aria-hidden="true">
+                {t(
+                  group.key === "claimed"
+                    ? "manager.queue.claimedOverdueCount"
+                    : "manager.queue.sentUnreceivedCount",
+                  { n: stalled },
+                )}
+              </span>
+              <span className="sr-only">
+                {t(
+                  group.key === "claimed"
+                    ? "manager.queue.claimedOverdueCountSr"
+                    : "manager.queue.sentUnreceivedCountSr",
+                  { n: stalled },
+                )}
+              </span>
             </span>
           )}
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums">
-            {count}
+          <span
+            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums"
+            title={capped ? t("manager.queue.laneCappedTooltip", { n: count }) : undefined}
+            data-testid={`lane-count-${group.key}`}
+          >
+            {capped ? t("manager.queue.laneCapped", { n: count }) : count}
           </span>
         </span>
       </button>

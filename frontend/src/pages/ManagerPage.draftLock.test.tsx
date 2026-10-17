@@ -375,3 +375,15 @@ describe("ManagerPage — page lock during a Gmail draft", { timeout: 15_000 }, 
     );
   });
 });
+
+// manager-queue-control: the filter reads suppliers with the manager token
+// (lessons.md, role-pinned calls), and the stalled lanes load at the clamp.
+describe("ManagerPage — queue data wiring", () => {
+  it("loads suppliers as manager and the claimed/sent lanes at 200", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ });
+    expect(api.suppliers).toHaveBeenCalledWith("manager");
+    expect(api.managerQueue).toHaveBeenCalledWith(undefined, "manager_claimed", 200);
+    expect(api.managerQueue).toHaveBeenCalledWith(undefined, "manager_sent", 200);
+  });
+});

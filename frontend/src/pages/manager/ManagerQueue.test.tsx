@@ -9,6 +9,7 @@ import {
   inQueueDays,
   isClaimedOverdue,
   isSentUnreceived,
+  QUEUE_LANE_LIMIT,
   splitClosedLane,
 } from "./lib/queueAge";
 
@@ -263,5 +264,24 @@ describe("ManagerQueue — stalled-order chips and header counts (D16)", () => {
     renderQueue({ claimed: [makeItem({ status: "manager_claimed" })] });
     expect(screen.queryByTestId("stalled-count-claimed")).toBeNull();
     expect(screen.queryByText("przejęte > 24 h")).toBeNull();
+  });
+
+  it("gives screen readers a full sentence instead of the short badge", () => {
+    renderQueue({
+      claimed: [
+        makeItem({ status: "manager_claimed", captain_submitted_at: isoDaysAgo(2) }),
+      ],
+    });
+    expect(screen.getByText("1 przejętych ponad 24 h temu")).toHaveClass("sr-only");
+    expect(screen.getByText("1 > 24 h")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("marks a lane at its load cap with a plus", () => {
+    const sent = Array.from({ length: QUEUE_LANE_LIMIT }, (_, i) =>
+      makeItem({ order_id: `S${i}`, status: "manager_sent" }),
+    );
+    renderQueue({ sent });
+    expect(screen.getByTestId("lane-count-sent")).toHaveTextContent(`${QUEUE_LANE_LIMIT}+`);
+    expect(screen.getByTestId("lane-count-claimed")).toHaveTextContent("0");
   });
 });

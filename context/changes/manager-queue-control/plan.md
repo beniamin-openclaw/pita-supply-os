@@ -128,22 +128,33 @@ Pure helpers carry the time and option logic (fixed `now`). Component tests asse
 chips/classes. No E2E harness exists; role wiring is unchanged (`api.suppliers("manager")` is
 already regression-tested in `apiClient.test.ts`).
 
+## Impl review (a9c64ac)
+
+No blockers or majors. Addressed: screen-reader text for the lane counts (sr-only phrase, short
+badge `aria-hidden`); one manager-zero class pair in `lib/managerLine.ts` used by the order table
+and the Transport matrix (the order-table input now also strikes and turns amber); a "200+" lane
+count with a tooltip when a claimed/sent lane hits `QUEUE_LANE_LIMIT`; tests for the manager-role
+suppliers call, the 200 limit and an untouched 0 in the matrix; nits (captain detail strikes only
+the number, hours comment, i18n key placement). Left as is: the poll cost of the 200-order lanes
+(grows with the real lane size, acceptable today; skip-while-hidden is a follow-up if the sent
+lane grows), and the 24 h marker flagging orders held for a later delivery day (Ben's D16 rule).
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Backend queue field
 
-- [x] 1.1 manager_sent_at on the queue item + test
+- [x] 1.1 manager_sent_at on the queue item + test — a9c64ac
 
 ### Phase 2: Frontend
 
-- [x] 2.1 Helpers (queueAge, supplierOptions) + tests
-- [x] 2.2 ManagerPage supplier filter
-- [x] 2.3 Queue chips and header counts + tests
-- [x] 2.4 Manager-zero styling, city tiles, backup text + tests
+- [x] 2.1 Helpers (queueAge, supplierOptions) + tests — a9c64ac
+- [x] 2.2 ManagerPage supplier filter — a9c64ac
+- [x] 2.3 Queue chips and header counts + tests — a9c64ac
+- [x] 2.4 Manager-zero styling, city tiles, backup text + tests — a9c64ac
 
 ### Phase 3: Verify, review, ship
 
-- [ ] 3.1 Verify + impl review addressed
+- [x] 3.1 Verify + impl review addressed
 - [ ] 3.2 PR open, CI green
