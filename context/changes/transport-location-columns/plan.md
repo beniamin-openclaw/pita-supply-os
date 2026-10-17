@@ -76,11 +76,22 @@ only the location) fixed as above; m3 (toast/aria name the order), m4 (wording),
 numbering) and m6 (missing tests) addressed. `data-mx-row` dropped (Enter now walks the
 column's inputs in document order).
 
+## Impl review (9db8e6a)
+
+No blockers. Major fixed: the add-to-all picker could offer a product that added nothing (options
+were per order, targets per location) — `buildTransportAddAllOptions` now works per location too.
+Minor/nits fixed: add-one reads the first order with a loaded catalogue; a merged cell is amber
+only when every order in it is zeroed, otherwise only the zeroed order's row; explicit return
+type; unused `data-mx-row` prop removed; a separate "Dodano X (Ken, zam. 2)" toast; tests for
+Enter in a one-order column, "+" falling through to zam. 2, per-order tint, per-location options.
+Not added: page-level tests for the confirm/toast label (TransportPage has no add/remove test
+harness; the matrix tests assert the label passed to the callbacks).
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
-- [x] 1 Reproduce (Vitest fails with 2 headers; pytest locks the backend contract)
-- [x] 2 Column grouping helper + tests
-- [x] 3 Matrix renders merged columns + tests
-- [ ] 4 Verify, impl review, PR
+- [x] 1 Reproduce (Vitest fails with 2 headers; pytest locks the backend contract) — 9db8e6a
+- [x] 2 Column grouping helper + tests — 9db8e6a
+- [x] 3 Matrix renders merged columns + tests — 9db8e6a
+- [x] 4 Verify, impl review, PR

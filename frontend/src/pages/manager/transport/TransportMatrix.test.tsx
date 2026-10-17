@@ -291,3 +291,50 @@ describe("TransportMatrix — merged column details", () => {
     expect(screen.getByTestId("cell-total-KEN-P-A")).toHaveTextContent("razem 6");
   });
 });
+
+describe("TransportMatrix — merged column, review follow-ups", () => {
+  it("Enter in a one-order column skips a row without an input", () => {
+    const W = orderAt("ORD-W", "WOLA", "Wola", [line("A", 1, 0), line("C", 1, 0)]);
+    const K = orderAt("ORD-K", "KEN", "Ken", [line("B", 1, 0)]);
+    renderMatrix([W, K], true);
+    const a = screen.getByLabelText("Produkt A — Wola");
+    const c = screen.getByLabelText("Produkt C — Wola");
+    a.focus();
+    fireEvent.keyDown(a, { key: "Enter" });
+    expect(document.activeElement).toBe(c);
+  });
+
+  it("'+' falls through to zam. 2 when zam. 1 cannot take the product", () => {
+    const K1 = orderAt("ORD-K1", "KEN", "Ken", [line("A", 1, 0)]);
+    const K2 = orderAt("ORD-K2", "KEN", "Ken", [line("A2", 1, 0, { product_id: "P-A" })]);
+    const W = orderAt("ORD-W", "WOLA", "Wola", [line("C", 1, 0)]);
+    const item = orderable("P-C", "Produkt C");
+    const onAdd = vi.fn();
+    render(
+      <LangProvider>
+        <TransportMatrix
+          orders={[K1, K2, W]}
+          editable
+          drafts={{}}
+          onQtyChange={() => {}}
+          orderableByOrderId={{ "ORD-K2": [item] }}
+          onAddProductAll={() => {}}
+          onAddProductOne={onAdd}
+          addAllBusy={false}
+          onRemoveOrder={() => {}}
+          busyOrderId={null}
+        />
+      </LangProvider>,
+    );
+    fireEvent.click(screen.getByLabelText("Dodaj Produkt C dla Ken, zam. 2"));
+    expect(onAdd).toHaveBeenCalledWith(K2, item, "Ken, zam. 2");
+  });
+
+  it("tints only the zeroed order's row when the other order is not zeroed", () => {
+    const K1 = orderAt("ORD-K1", "KEN", "Ken", [line("A", 2, 0, { manager_final_set: true })]);
+    const K2 = orderAt("ORD-K2", "KEN", "Ken", [line("A2", 3, 3, { product_id: "P-A" })]);
+    renderMatrix([K1, K2], false);
+    expect(document.querySelectorAll("td[data-zeroed]")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-zeroed-order]")).toHaveLength(1);
+  });
+});

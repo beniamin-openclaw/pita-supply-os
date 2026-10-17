@@ -1685,6 +1685,11 @@ export const STRINGS = {
     pl: "Dodano {product} do zamówienia {location} — wpisz ilość i zapisz",
     en: "Added {product} to the {location} order — enter the quantity and save",
   },
+  // The location has more than one order in the batch: {order} = "Ken, zam. 2".
+  "manager.transport.matrix.addOneOkOrder": {
+    pl: "Dodano {product} ({order}) — wpisz ilość i zapisz",
+    en: "Added {product} ({order}) — enter the quantity and save",
+  },
 
   "manager.transport.addLocation.button": { pl: "Dodaj lokalizację", en: "Add location" },
   "manager.transport.addLocation.placeholder": {

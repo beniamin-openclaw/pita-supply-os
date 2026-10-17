@@ -735,10 +735,15 @@ export function TransportPage(): ReactElement {
         )
         .then(() => {
           showToast(
-            t("manager.transport.matrix.addOneOk", {
-              product: item.product_name_pl,
-              location: label,
-            }),
+            label === order.location_name
+              ? t("manager.transport.matrix.addOneOk", {
+                  product: item.product_name_pl,
+                  location: label,
+                })
+              : t("manager.transport.matrix.addOneOkOrder", {
+                  product: item.product_name_pl,
+                  order: label,
+                }),
             true,
           );
           refreshDetail(detail.transport_id, true);

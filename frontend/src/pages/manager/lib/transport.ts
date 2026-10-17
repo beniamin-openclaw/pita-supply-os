@@ -394,12 +394,17 @@ export function buildTransportAddAllOptions(
   orderableByOrderId: Record<string, OrderableItem[]>,
 ): OrderableItem[] {
   const byProduct = new Map<string, OrderableItem>();
-  for (const order of orders) {
-    const present = new Set(order.lines.map((l) => l.product_id));
-    for (const item of orderableByOrderId[order.order_id] ?? []) {
-      if (item.configured_for_location === false) continue;
-      if (present.has(item.product_id) || byProduct.has(item.product_id)) continue;
-      byProduct.set(item.product_id, item);
+  // Per LOCATION, like transportAddAllTargets: a product another order of the
+  // location already carries is "present" there, so the picker never offers a
+  // product that would add nothing (transport-location-columns).
+  for (const column of groupTransportColumns(orders)) {
+    const present = new Set(column.orders.flatMap((o) => o.lines.map((l) => l.product_id)));
+    for (const order of column.orders) {
+      for (const item of orderableByOrderId[order.order_id] ?? []) {
+        if (item.configured_for_location === false) continue;
+        if (present.has(item.product_id) || byProduct.has(item.product_id)) continue;
+        byProduct.set(item.product_id, item);
+      }
     }
   }
   return [...byProduct.values()].sort(compareProductOrder);

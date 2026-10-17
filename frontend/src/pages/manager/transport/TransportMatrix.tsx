@@ -29,7 +29,7 @@
 // table (manager-queue-control, D10 A). A line the Manager added at 0 has a
 // captain qty of 0 and stays plain.
 
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 
 import { useT } from "../../../i18n";
@@ -90,10 +90,18 @@ export function TransportMatrix({
   const [addOneLocationId, setAddOneLocationId] = useState<string>("");
   const addOneColumn: TransportLocationColumn | undefined =
     columns.find((c) => c.location_id === addOneLocationId) ?? columns[0];
-  // A one-location add lands on the location's first order; products any of
+  // A one-location add lands on one of the location's orders; products any of
   // the location's orders already carry are left out, so a merged column
   // never gets a second line for the same product.
-  const addOneOrder: TransportBatchOrder | undefined = addOneColumn?.orders[0];
+  // The first order with a loaded catalogue, so a failed orderable call on
+  // zam. 1 does not empty the picker while "+" still works through zam. 2.
+  const addOneOrderIdx: number = addOneColumn
+    ? Math.max(
+        0,
+        addOneColumn.orders.findIndex((o) => (orderableByOrderId[o.order_id] ?? []).length > 0),
+      )
+    : 0;
+  const addOneOrder: TransportBatchOrder | undefined = addOneColumn?.orders[addOneOrderIdx];
   const addOneOptions: OrderableItem[] =
     editable && addOneColumn && addOneOrder
       ? orderAddOneOptions(addOneOrder, orderableByOrderId).filter(
@@ -111,7 +119,7 @@ export function TransportMatrix({
     col: TransportLocationColumn,
     order: TransportBatchOrder,
     orderNo: number | null,
-  ) => (
+  ): ReactElement => (
     <button
       type="button"
       disabled={busyOrderId === order.order_id}
@@ -246,17 +254,25 @@ export function TransportMatrix({
                       "cancelled";
                     return { ...e, qty, zeroed };
                   });
-                  const anyZeroed = cells.some((c) => c.zeroed);
+                  // The whole cell is amber only when every order in it is
+                  // zeroed; otherwise just the zeroed order's row is.
+                  const allZeroed = cells.every((c) => c.zeroed);
                   const total = cells.reduce((sum, c) => sum + c.qty, 0);
                   return (
                     <td
                       key={col.location_id}
-                      className={`px-3 py-2 text-right ${anyZeroed ? "bg-amber-50" : ""}`}
-                      data-zeroed={anyZeroed || undefined}
+                      className={`px-3 py-2 text-right ${allZeroed ? "bg-amber-50" : ""}`}
+                      data-zeroed={allZeroed || undefined}
                     >
                       <div className="flex flex-col items-end gap-1">
                         {cells.map((c) => (
-                          <div key={c.order.order_id} className="flex items-center justify-end gap-1">
+                          <div
+                            key={c.order.order_id}
+                            className={`flex items-center justify-end gap-1 ${
+                              c.zeroed && !allZeroed ? "rounded bg-amber-50" : ""
+                            }`}
+                            data-zeroed-order={(c.zeroed && !allZeroed) || undefined}
+                          >
                             {multi && (
                               <span className="text-[11px] text-slate-500" title={c.order.order_id}>
                                 {t("manager.transport.matrix.orderTag", { n: c.orderNo })}
@@ -365,7 +381,7 @@ export function TransportMatrix({
                       items={addOneOptions}
                       disabled={addAllBusy}
                       onSelect={(item) =>
-                        onAddProductOne(addOneOrder, item, labelFor(addOneColumn, 1))
+                        onAddProductOne(addOneOrder, item, labelFor(addOneColumn, addOneOrderIdx + 1))
                       }
                     />
                   </div>
