@@ -1,0 +1,154 @@
+sheet_row,supplier_id,position,role,product_id,src_sp,sheet_name,sheet_unit,sheet_min,sheet_max,factor,min,max,pu,upp,price,order_note,note
+3,SUP_KUCHNIE_GDA,1,P,P021,SP_KUCHNIE_KAT_P021,"Aviko 806704 Frytki proste 9,5mm Premium Super Crunch Fries 2,5kg/4 Aviko 806704",Sztuka,10,36,1,10,36,,,,,
+4,SUP_KUCHNIE_GDA,2,P,P022,SP_KUCHNIE_KAT_P022,"Frytki z batatów proste 9,5mm Sweet potato, 2,27kg/5 Aviko 809564",Sztuka,2,4,1,2,4,,,,,Selgros (poz. 24) ma 2/5 — wygrywa Kuchnie Świata 2/4 (jak Katowice)
+5,SUP_KUCHNIE_GDA,3,P,P015,SP_KUCHNIE_KAT_P015,Ser na grilla 200g/12 Reha,Sztuka,24,72,1,24,72,,,,,
+6,SUP_KUCHNIE_GDA,4,P,P020,SP_KUCHNIE_KAT_P020,Falafel standard. bób/ciecierzyca mroż. 5kg,Karton,0.5,1.5,5,2.5,7.5,,,,,arkusz karton 5 kg -> kg (x5)
+7,SUP_KUCHNIE_GDA,5,P,P038,SP_KUCHNIE_KAT_P038,Frytura oleina słonecznikowa Deep Fry 15L EFFO,Sztuka,1,2,1,1,2,,,,,
+8,SUP_KUCHNIE_GDA,6,P,P048,SP_KUCHNIE_KAT_P048,Sos Sriracha Original 730ml/12 F.Goose,Sztuka,2,4,1,2,4,,,,,
+9,SUP_KUCHNIE_GDA,7,H,,,Papryka Red Sweet czerwona grillowana 450g/12 Zanae e,Sztuka,0.5,1,,,,,,,,brak produktu (P017 Florinis to inna pozycja) — wstrzymane jak w Katowicach
+10,SUP_KUCHNIE_GDA,8,P,P013,SP_KUCHNIE_KAT_P013,"Oliwki czarne z/p Kalamata Superior (261-290), 2kg/3,1kg Olivellas",Bidon,0.5,1.5,2,1,3,,,,,arkusz bidon 2 kg -> kg (x2)
+14,SUP_SELGROS_GDA,1,P,P004,SP_SELGROS_KAT_P004,Awokado,szt,2,4,1,2,4,,,,,
+15,SUP_SELGROS_GDA,2,P,P016,SP_SELGROS_KAT_P016,Cebula czerwona (duże),kg,5,15,1,5,15,,,,,
+16,SUP_SELGROS_GDA,3,P,P002,SP_SELGROS_KAT_P002,Cytryna,kg,0.5,2,1,0.5,2,,,,,
+17,SUP_SELGROS_GDA,4,P,P005,SP_SELGROS_KAT_P005,Ogórek,kg,0.5,2,1,0.5,2,,,,,
+18,SUP_SELGROS_GDA,5,P,P003,SP_SELGROS_KAT_P003,Papryka zielona (nie czerwona),kg,0.5,2,1,0.5,2,,,,,
+19,SUP_SELGROS_GDA,6,P,P008,SP_SELGROS_KAT_P008,Sałata bolero mix 150gr (lub inny mix jak nie będzie bolero bez buraka),op,5,20,1,5,20,,,,,
+20,SUP_SELGROS_GDA,7,P,P007,SP_SELGROS_KAT_P007,Rucola 100gr,op,5,20,1,5,20,,,,,
+21,SUP_SELGROS_GDA,8,P,P009,SP_SELGROS_KAT_P009,Natka Pietruszki,kg,0.3,1,1,0.3,1,,,,,
+22,SUP_SELGROS_GDA,9,P,P006,SP_SELGROS_KAT_P006,"Pomidor (twardy, duży)",kg,12,48,1,12,48,,,,,
+23,SUP_SELGROS_GDA,10,P,P010,SP_SELGROS_KAT_P010,Czosnek obrany,kg,0.2,0.5,1,0.2,0.5,,,,,
+24,SUP_SELGROS_GDA,11,P,P018,SP_SELGROS_KAT_P018,Cebula Biała,kg,0.2,1,1,0.2,1,,,,,
+25,SUP_SELGROS_GDA,12,P,P045,SP_SELGROS_KAT_P045,Oliwa z Oliwek tania 1L,szt,2,7,1,2,7,,,,,
+26,SUP_SELGROS_GDA,13,P,P001,SP_SELGROS_KAT_P001,Masło roślinne MR 500g,szt,3,6,1,3,6,,,,,
+27,SUP_SELGROS_GDA,14,P,P046,SP_SELGROS_KAT_P046,Cieciorka puszka mała,szt,6,14,1,6,14,,,,,
+28,SUP_SELGROS_GDA,15,P,P047,SP_SELGROS_KAT_P047,Kasza Pęczak 1kg,szt,2,3,1,2,3,,,,,
+29,SUP_SELGROS_GDA,16,P,P043,SP_SELGROS_KAT_P043,MUSZTARDA Stołowa 3 kg,szt,1,2,1,1,2,,,,,
+30,SUP_SELGROS_GDA,17,P,P042,SP_SELGROS_KAT_P042,"Ketchup Fanex VII 1,1 kg",szt,2,6,1,2,6,,,,,
+31,SUP_SELGROS_GDA,18,P,P044,SP_SELGROS_KAT_P044,Fanex Majonez 4kg Sałatkowy,szt,1,2,1,1,2,,,,,
+32,SUP_SELGROS_GDA,19,P,P041,SP_SELGROS_KAT_P041,Olej Uniwersalny Rzepakowy 5 L,szt,0.5,2,1,0.5,2,,,,,
+33,SUP_SELGROS_GDA,20,P,P049,SP_SELGROS_KAT_P049,Miód 1 kg,szt,1,2,1,1,2,,,,,
+34,SUP_SELGROS_GDA,21,P,P023,SP_SELGROS_KAT_P023,"Fasolka Szparagowa Mrożona 2,5 kg",szt,0.5,1.5,2.5,1.25,3.75,,,,,"arkusz szt 2,5 kg -> kg (x2,5)"
+35,SUP_SELGROS_GDA,22,P,P040,SP_SELGROS_KAT_P040,Woda 5L,szt,3,7,1,3,7,,,,,
+36,SUP_SELGROS_GDA,23,B,P021,SP_SELGROS_KAT_P021,"Frytki Aviko Super Crunch 9,5",szt,10,36,,,,,,,,ZAPASOWY (główny: Kuchnie Świata Gdańsk); arkusz 10/36 = jak główny
+37,SUP_SELGROS_GDA,24,B,P022,SP_SELGROS_KAT_P022,"Frytki z batatów Avico 2,27 KG",szt,2,5,,,,,,,,ZAPASOWY (główny: Kuchnie Świata Gdańsk); arkusz 2/5
+38,SUP_SELGROS_GDA,25,B,P106,SP_SELGROS_KAT_P106,Domestos 5L,szt,1,3,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz 1/3 = jak główny
+39,SUP_SELGROS_GDA,26,B,P107,SP_SELGROS_KAT_P107,Ludwik 5L,szt,1,3,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz 1/3 = jak główny
+40,SUP_SELGROS_GDA,27,P,P053,SP_SELGROS_KAT_P053,Sól drobna 1kg,szt,1,3,1,1,3,,,,,
+41,SUP_SELGROS_GDA,28,P,P051,SP_SELGROS_KAT_P051,Oregano duże,szt,1,2,1,1,2,,,,,"arkusz 'szt' (duże), katalog kg 1:1 — waga opakowania do potw."
+42,SUP_SELGROS_GDA,29,P,P052,SP_SELGROS_KAT_P052,"Papryka słodka - mielona duża (nie ostra, nie wędzona)",szt,1,2,1,1,2,,,,,"arkusz 'szt' (duże), katalog kg 1:1 — waga opakowania do potw."
+43,SUP_SELGROS_GDA,30,P,P054,SP_SELGROS_KAT_P054,Liść Laurowy,op,0.5,1,1,0.5,1,,,,,
+44,SUP_SELGROS_GDA,31,P,P055,SP_SELGROS_KAT_P055,Ziele Angielskie,szt,0.5,1,1,0.5,1,,,,,
+45,SUP_SELGROS_GDA,32,P,P057,SP_SELGROS_KAT_P057,Sól saszetki 2gr,op,1,2,1,1,2,,,,,
+46,SUP_SELGROS_GDA,33,P,P058,SP_SELGROS_KAT_P058,Pieprz saszetki 2gr,op,1,2,1,1,2,,,,,
+47,SUP_SELGROS_GDA,34,P,P050,SP_SELGROS_KAT_P050,Pieprz czarny mielony duży,op,0.5,2,1,0.5,2,,,,,"arkusz 'op', katalog kg 1:1 — waga do potw."
+48,SUP_SELGROS_GDA,35,B,P118,SP_SELGROS_KAT_P118,Rękawiczki jednorazowe M Czarne,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+49,SUP_SELGROS_GDA,36,B,P117,SP_SELGROS_KAT_P117,Rękawiczki jednorazowe L Czarne,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+50,SUP_SELGROS_GDA,37,B,P119,SP_SELGROS_KAT_P119,Rękawiczki jednorazowe S Czarne,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+51,SUP_SELGROS_GDA,38,B,P116,SP_SELGROS_KAT_P116,Rękawiczki jednorazowe XL Czarne,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+52,SUP_SELGROS_GDA,39,H,,,Tacki papierowe 23cm/12cm 250szt,op,,,,,,,,,,tacki 23x12 250 szt — inny rozmiar niż P143
+53,SUP_SELGROS_GDA,40,H,,,Papier w roli duży,szt,,,,,,,,,,brak produktu (papier w roli)
+54,SUP_SELGROS_GDA,41,B,P104,SP_SELGROS_KAT_P104,Reczniki papierowe ZZ Top seler,karton,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+55,SUP_SELGROS_GDA,42,B,P125,SP_SELGROS_KAT_P125,Worki na śmieci 120L,op,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+56,SUP_SELGROS_GDA,43,B,P126,SP_SELGROS_KAT_P126,Worki na śmieci 160L,op,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+57,SUP_SELGROS_GDA,44,B,P122,SP_SELGROS_KAT_P122,Druciaki duże 5szt,op,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+58,SUP_SELGROS_GDA,45,H,,,Grill Cleaner Spray Tytan 750 ml,szt,,,,,,,,,,spray Tytan — niejednoznaczny (P111/P113/P115)
+59,SUP_SELGROS_GDA,46,H,,,Zmywaki kuchenne Jan Niezbedny,op,,,,,,,,,,zmywaki Jan Niezbędny — liczba w opak. nieznana
+60,SUP_SELGROS_GDA,47,B,P127,SP_SELGROS_KAT_P127,Zszywki 24/6 op. 1000szt,op,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+61,SUP_SELGROS_GDA,48,H,,,Słomki papierowe niebieskie 25szt,op,,,,,,,,,,słomki 25 szt — inna paczka niż P102 (250)
+62,SUP_SELGROS_GDA,49,H,,,Kawa Nescafe 500gr,szt,,,,,,,,,,brak produktu (kawa Nescafe 500 g)
+63,SUP_SELGROS_GDA,50,H,,,"Mleko 1L 3,2",szt,,,,,,,,,,brak produktu (mleko)
+64,SUP_SELGROS_GDA,51,B,P095,SP_SELGROS_KAT_P095,Folia aluminiowa duża,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+65,SUP_SELGROS_GDA,52,B,P096,SP_SELGROS_KAT_P096,Folia spożywcza duża,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+66,SUP_SELGROS_GDA,53,H,,,Sosjerka 80ml x50szt plastikowa,op,,,,,,,,,,sosjerka x50 — inna paczka niż P086 (100)
+67,SUP_SELGROS_GDA,54,H,,,Wieczko do sosjerki x50szt plastikowe,op,,,,,,,,,,wieczko x50 — inna paczka niż P087 (100)
+68,SUP_SELGROS_GDA,55,H,,,Torby papierowe na wynos duże 50szt,op,,,,,,,,,,torby na wynos 50 — inna paczka niż P093 (250)
+69,SUP_SELGROS_GDA,56,D,,,"Frytki Aviko Super Crunch 9,5",op,,,,,,,,,,"duplikat frytek (poz. 23) — jeden wiersz, jak w Katowicach"
+70,SUP_SELGROS_GDA,57,H,,,Butelka przezroczysta na sos 1L,szt,,,,,,,,,,brak produktu (butelka na sos)
+71,SUP_SELGROS_GDA,58,H,,,Torebki papierowe fałdowane 50szt,op,,,,,,,,,,torebki fałdowane 50 — inna paczka niż P094
+72,SUP_SELGROS_GDA,59,B,P088,SP_SELGROS_KAT_P088,Torebka na frytki kwadratowa,op,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+73,SUP_SELGROS_GDA,60,H,,,Zapalniczka długa,szt,,,,,,,,,,brak produktu (zapalniczka)
+74,SUP_SELGROS_GDA,61,B,P123,SP_SELGROS_KAT_P123,Ścierki z mikrofibry kolorowe 5szt,op,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+75,SUP_SELGROS_GDA,62,H,,,Końcówka szczotki do zamiatania (bez kija),szt,,,,,,,,,,końcówka szczotki — P148 to szczotka z kijem
+76,SUP_SELGROS_GDA,63,H,,,"Zapas (Vileda mop płaski Ultra, ten mniejszy)",szt,,,,,,,,,,zapas mopa Vileda (mniejszy) — niejednoznaczne: P153 to Ultra Max
+77,SUP_SELGROS_GDA,64,B,P132,SP_SELGROS_KAT_P132,Marker permanentny czarny,szt,,,,,,,,,,ZAPASOWY (główny: Blue Service Gdańsk); arkusz bez progów
+78,SUP_SELGROS_GDA,65,H,,,Marker Czarny White Board (zmywalny),szt,,,,,,,,,,marker do tablicy — brak produktu (P132 = permanentny)
+79,SUP_SELGROS_GDA,66,H,,,Miska papierowa bowl 1300ml + pokrywki 50szt,op,,,,,,,,,,miska + pokrywki w zestawie — brak produktu
+80,SUP_SELGROS_GDA,67,H,,,Kubeczki papierowe 150ml,op,,,,,,,,,,kubeczki 150 ml — inny rozmiar niż P144 (200 ml)
+81,SUP_SELGROS_GDA,68,B,P015,SP_KUCHNIE_P015,Ser Halloumi Reha,szt,,,,,,,,,,ZAPASOWY (główny: Kuchnie Świata Gdańsk); arkusz bez progów
+82,SUP_SELGROS_GDA,69,H,,,Ser Feta 200gr,szt,,,,,,,,,,Feta 200 g — brak produktu (P014 to blok 2 kg)
+86,SUP_COCACOLA_GDA,1,P,P186,SP_COCACOLA_P186,0.25 RGB SZKŁO X24 COCA-COLA,Skrzynka,1,4,24,24,96,,,,,arkusz skrzynka 24 -> szt (x24); max do pełnej skrzynki
+87,SUP_COCACOLA_GDA,2,P,P187,SP_COCACOLA_P187,0.25 RGB SZKŁO X24 COCA-COLA ZERO,Skrzynka,1,5,24,24,120,,,,,arkusz skrzynka 24 -> szt (x24); max do pełnej skrzynki
+88,SUP_COCACOLA_GDA,3,P,P067,SP_COCACOLA_P067,0.25 RGB SZKŁO X24 SPRITE,Skrzynka,0.5,1.5,24,12,48,skrzynka,24,NULL,"1 skrzynka = 24 szt (szkło 0,25)","arkusz szkło 0,25 skrzynka 24 -> szt (x24), max do pełnej skrzynki; brak produktu 'szkło' — wiersz katalogu jako skrzynka, cena do uzupełnienia"
+89,SUP_COCACOLA_GDA,4,P,P066,SP_COCACOLA_P066,0.25 RGB SZKŁO X24 FANTA ORANGE,Skrzynka,0.5,1.5,24,12,48,skrzynka,24,NULL,"1 skrzynka = 24 szt (szkło 0,25)","arkusz szkło 0,25 skrzynka 24 -> szt (x24), max do pełnej skrzynki; brak produktu 'szkło' — wiersz katalogu jako skrzynka, cena do uzupełnienia"
+90,SUP_COCACOLA_GDA,5,P,P191,SP_COCACOLA_P191,0.25 RGB SZKŁO X24 CAPPY ORANGE,Skrzynka,0.5,1.5,24,12,48,,,,,arkusz skrzynka 24 -> szt (x24); max do pełnej skrzynki
+91,SUP_COCACOLA_GDA,6,P,P190,SP_COCACOLA_P190,0.25 RGB SZKŁO X24 CAPPY APPLE,Skrzynka,0.5,1.5,24,12,48,,,,,arkusz skrzynka 24 -> szt (x24); max do pełnej skrzynki
+92,SUP_COCACOLA_GDA,7,P,P070,SP_COCACOLA_P070,0.33 NRG SZKŁO X24 WODA KROPLA BESKIDU,Zgrzewka,1.5,4,24,36,96,,,,,arkusz zgrzewka 24 -> szt (x24); max do pełnej zgrzewki
+93,SUP_COCACOLA_GDA,8,P,P071,SP_COCACOLA_P071,0.33 NRG SZKŁO X24 WODA KROPLA DELICE GAZOWANA,Zgrzewka,1,2,24,24,48,,,,,"arkusz zgrzewka 24 -> szt (x24), max do pełnej zgrzewki; 'Delice gazowana' = Kropla gazowana, do potw."
+96,SUP_WARSZAWA_GDA,1,P,P024,SP_PAGO_P024,Gyros 15 KG (Pago),Sztuka,4,15,15,60,225,,,,,arkusz szt 15 kg -> kg (x15)
+97,SUP_WARSZAWA_GDA,2,P,P027,SP_PAGO_P027,Souvlaki Kurczak karton 50 szt (Pago),Karton,3,22,5,15,110,,,,,arkusz karton 5 kg -> kg (x5)
+98,SUP_WARSZAWA_GDA,3,P,P028,SP_PAGO_P028,Souvlaki Wieprz karton 50 szt (Pago),Karton,1,4,5,5,20,,,,,arkusz karton 5 kg -> kg (x5)
+99,SUP_WARSZAWA_GDA,4,P,P026,SP_PAGO_P026,Pita KARTON (120) szt (Pago),Karton,2,8,12,24,96,,,,,arkusz karton 120 pit -> opak 10 (x12)
+100,SUP_WARSZAWA_GDA,5,P,P011,SP_BUKAT_P011,Tzatzyki pojemnik 3 kg (Bukat),Pojemnik,4,28,1,4,28,,,,,
+101,SUP_WARSZAWA_GDA,6,P,P012,SP_BUKAT_P012,Tirokafteri pojemnik 2 kg (Bukat),Pojemnik,2,4,1,2,4,,,,,
+102,SUP_WARSZAWA_GDA,7,P,P014,SP_BUKAT_P014,Feta blok 2 kg (Bukat),Pojemnik,1,2,1,1,2,,,,,
+103,SUP_WARSZAWA_GDA,8,P,P019,SP_MORY_P019,Przyprawa do souvlakow 2kg (Magazyn),Pojemnik,1,2,2,2,4,,,,,"arkusz pojemnik 2 kg -> kg (x2), do potw."
+104,SUP_WARSZAWA_GDA,9,P,P089,SP_MORY_P089,Boxy PB (Magazyn),Opakowanie,1,3,1,1,3,,,,,
+105,SUP_WARSZAWA_GDA,10,P,P092,SP_MORY_P092,Boxy bezowe bez logo (Magazyn),Opakowanie,1,3,1,1,3,,,,,"'Boxy beżowe bez logo' = P092 Tacki bez logo (operator, transport-v2)"
+106,SUP_WARSZAWA_GDA,11,P,P090,SP_MORY_P090,Papier do Pita (PB) (Magazyn),Opakowanie,1,2,1,1,2,,,,,
+107,SUP_WARSZAWA_GDA,12,P,P098,SP_MORY_P098,Papier Termiczny (Magazyn),Opakowanie,1,2,1,1,2,,,,,
+108,SUP_WARSZAWA_GDA,13,P,P091,SP_MORY_P091,Serwetki PB (Magazyn),Opakowanie,6,12,1,6,12,,,,,
+109,SUP_WARSZAWA_GDA,14,P,P183,SP_MORY_P183,Rolki do kasy 80/20 10szt (Magazyn),Opakowanie,2,12,10,20,120,,,,,arkusz opak 10 szt -> szt (x10); Mory opak 6 — do potw.
+110,SUP_WARSZAWA_GDA,15,P,P129,SP_MORY_P129,Rolki do kasy 80/80 6szt (Magazyn),Opakowanie,2,20,6,12,120,,,,,arkusz opak 6 szt -> szt (x6)
+111,SUP_WARSZAWA_GDA,16,P,P077,SP_FILBER_P077,Lemoniada Grapefruit 12szt (Filber),Karton,1,3,12,12,36,,,,,arkusz karton 12 -> szt (x12)
+112,SUP_WARSZAWA_GDA,17,P,P075,SP_FILBER_P075,Lemoniada Lemon 12szt (Filber),Karton,1,3,12,12,36,,,,,arkusz karton 12 -> szt (x12)
+113,SUP_WARSZAWA_GDA,18,P,P076,SP_FILBER_P076,Lemoniada Orange 12szt (Filber),Karton,1,3,12,12,36,,,,,arkusz karton 12 -> szt (x12)
+116,SUP_BLUESERV_GDA,1,P,P082,SP_BLUESERV_P082,Miska/pojemnik papierowy na sałatkę 1300ml PE(185) kraft 50 sztuk,,2,5,1,2,5,,,,,
+117,SUP_BLUESERV_GDA,2,P,P083,SP_BLUESERV_P083,Pokrywka do miski na sałatkę (185) 1100/1300 ml opak 100 sztuk,,2,5,1,2,5,,,,,
+118,SUP_BLUESERV_GDA,3,P,P084,SP_BLUESERV_P084,Pojemnik/pucharek PET okrągły z łączonym wieczkiem 750ml/ opak. 50 sztuk,,2,5,1,2,5,,,,,
+119,SUP_BLUESERV_GDA,4,P,P085,SP_BLUESERV_P085,Pojemnik/pucharek PET okrągły z łączonym wieczkiem 250ml/ opak. 50 sztuk,,2,5,1,2,5,,,,,
+120,SUP_BLUESERV_GDA,5,P,P086,SP_BLUESERV_P086,Pojemnik na sos/sosjerka 80 ml PP transparent opak. 100 sztuk,,10,20,1,10,20,,,,,
+121,SUP_BLUESERV_GDA,6,P,P087,SP_BLUESERV_P087,Pokrywka do pojemnika na sos PET opak. 100 sztuk,,5,12,1,5,12,,,,,
+122,SUP_BLUESERV_GDA,7,P,P088,SP_BLUESERV_P088,Torebki na frytki prostokątne 12x10 a200,,2,5,1,2,5,,,,,
+123,SUP_BLUESERV_GDA,8,P,P093,SP_BLUESERV_P093,TORBA PAP szara UCHWYT PŁASKI 320x220x250 -250 szt.,,2,4,1,2,4,,,,,
+124,SUP_BLUESERV_GDA,9,P,P094,SP_BLUESERV_P094,Torebki papierowe fałdowane 18x6x35 opakowanie 250 sztuk,,2,6,1,2,6,,,,,
+125,SUP_BLUESERV_GDA,10,P,P095,SP_BLUESERV_P095,"Folia aluminiowa 45 cm 1,5 kg",,2,7,1,2,7,,,,,
+126,SUP_BLUESERV_GDA,11,P,P096,SP_BLUESERV_P096,Folia spożywcza 45 cm/ 180m,,2,7,1,2,7,,,,,
+127,SUP_BLUESERV_GDA,12,P,P097,SP_BLUESERV_P097,Papier do pieczenie 28/50 m,,2,7,1,2,7,,,,,
+128,SUP_BLUESERV_GDA,13,P0,P099,SP_BLUESERV_P099,Łyżeczki do lodów za 1000,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+129,SUP_BLUESERV_GDA,14,P,P100,SP_BLUESERV_P100,Nóż WPC wielokrotnego użytku opak. 100 sztuk,,1,3,1,1,3,,,,,
+130,SUP_BLUESERV_GDA,15,P,P101,SP_BLUESERV_P101,Widelce WPC wielokrotnego użytku opak.100 sztuk,,1,3,1,1,3,,,,,
+131,SUP_BLUESERV_GDA,16,P0,P103,SP_BLUESERV_P103,1021 Serwetki Ellis Napkins 9000 szt.,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+132,SUP_BLUESERV_GDA,17,P,P104,SP_BLUESERV_P104,Ręcznik zz Cliver szary 4000 sztuk,,1,3,1,1,3,,,,,
+133,SUP_BLUESERV_GDA,18,P,P106,SP_BLUESERV_P106,Domestos 5L Pine,,1,3,1,1,3,,,,,
+134,SUP_BLUESERV_GDA,19,P,P107,SP_BLUESERV_P107,Płyn do naczyń Ludwik 5L,,1,3,1,1,3,,,,,
+135,SUP_BLUESERV_GDA,20,P,P108,SP_BLUESERV_P108,Mydło do rąk 5L,,0.5,1.5,1,0.5,1.5,,,,,
+136,SUP_BLUESERV_GDA,21,P,P169,SP_BLUESERV_P169,Płyn do mycia szyb Cif Window & Multisurface 750 ml,,2,8,1,2,8,,,,,
+137,SUP_BLUESERV_GDA,22,P0,P110,SP_BLUESERV_P110,Płyn Uniwersalny Tytan 5L,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+138,SUP_BLUESERV_GDA,23,P,P111,SP_BLUESERV_P111,"Feniks Professional Grill Cleaner 1L. (nie Tenzi, nie Royal) !!!",,2,10,1,2,10,,,,,
+139,SUP_BLUESERV_GDA,24,P,P112,SP_BLUESERV_P112,Feniks Professional Degreaser/odtłuszczacz 1L,,2,6,1,2,6,,,,,
+140,SUP_BLUESERV_GDA,25,P,P116,SP_BLUESERV_P116,Rękawiczki nitrylowe CZARNE !!!roz.XL,,5,10,1,5,10,,,,,
+141,SUP_BLUESERV_GDA,26,P,P117,SP_BLUESERV_P117,Rękawiczki nitrylowe CZARNE !!!roz.L,,5,20,1,5,20,,,,,
+142,SUP_BLUESERV_GDA,27,P,P118,SP_BLUESERV_P118,Rękawiczki nitrylowe CZARNE !!!roz.M,,5,20,1,5,20,,,,,
+143,SUP_BLUESERV_GDA,28,P,P119,SP_BLUESERV_P119,Rękawiczki nitrylowe CZARNE !!!roz.S,,5,10,1,5,10,,,,,
+144,SUP_BLUESERV_GDA,29,P,P121,SP_BLUESERV_P121,Zmywak kuchenny DUŻE opakowanie,,3,12,10,30,120,,,,,"arkusz 'DUŻE opakowanie' -> szt (x10, opak 10 jak Warszawa), do potw."
+145,SUP_BLUESERV_GDA,30,P,P122,SP_BLUESERV_P122,Druciaki duże okrągłe lepszej jakości,,3,12,1,3,12,,,,,
+146,SUP_BLUESERV_GDA,31,P,P123,SP_BLUESERV_P123,Ścierka z mikrofibry 30x30 cm mix kolor,,5,12,1,5,12,,,,,
+147,SUP_BLUESERV_GDA,32,P0,P124,SP_BLUESERV_P124,Worki na śmieci 60L czarne LDPE 50 szt.,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+148,SUP_BLUESERV_GDA,33,P,P125,SP_BLUESERV_P125,Worki na śmieci 120L czarne LDPE 25 szt,,3,10,1,3,10,,,,,
+149,SUP_BLUESERV_GDA,34,P0,P126,SP_BLUESERV_P126,Worki na śmieci 160L czaarne LDPE 10 szt,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+150,SUP_BLUESERV_GDA,35,P,P102,SP_BLUESERV_P102,Słomki niebieskie papierowe 8x197 a250,,1,2,1,1,2,,,,,
+151,SUP_BLUESERV_GDA,36,P0,P146,SP_BLUESERV_P146,Aroma Patyczki zapachowe,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+152,SUP_BLUESERV_GDA,37,P,P147,SP_BLUESERV_P147,Attis odświeżacz powietrza 300 ml,,0.5,2,1,0.5,2,,,,,
+153,SUP_BLUESERV_GDA,38,P,P132,SP_MORY_P132,Marker czarny Pentel,,1,4,1,1,4,,,,,
+154,SUP_BLUESERV_GDA,39,P,P127,SP_MORY_P127,Zszywki 24/6 10x1000,,3,12,1,3,12,,,,,
+155,SUP_BLUESERV_GDA,40,X,,,Papier xero a4 ryza,,0,0,,,,,,,,"arkusz 0/0, brak produktu (papier A4)"
+156,SUP_BLUESERV_GDA,41,P0,P148,SP_BLUESERV_P148,Szczotlka do zamiatania na kiju Vileda,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+157,SUP_BLUESERV_GDA,42,P,P131,SP_MORY_P131,Koperty c6 białe a25 50 pcs,,1,3,1,1,3,,,,,
+158,SUP_BLUESERV_GDA,43,P,P149,SP_BLUESERV_P149,Szufelka ze zmiotką,,1,2,1,1,2,,,,,
+159,SUP_BLUESERV_GDA,44,P,P150,SP_BLUESERV_P150,Marker podświetlacz,,1,3,1,1,3,,,,,
+160,SUP_BLUESERV_GDA,45,P0,P151,SP_BLUESERV_P151,Płyn do podłogi 5L,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+161,SUP_BLUESERV_GDA,46,P,P133,SP_MORY_P133,Długopis,,2,5,1,2,5,,,,,
+162,SUP_BLUESERV_GDA,47,X,,,Papier duży w roli,,0,0,,,,,,,,"arkusz 0/0, brak produktu (papier duży w roli)"
+163,SUP_BLUESERV_GDA,48,P0,P152,SP_BLUESERV_P152,Cleaner w sprayu do stolikow drewnianych lakierowanych,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+164,SUP_BLUESERV_GDA,49,P0,P144,SP_BLUESERV_P144,Kubek papierowy biały 200 ml opak 100 sztuk,,0,0,,0,0,,,,,arkusz 0/0 — w katalogu bez progów (do zamówienia doraźnie)
+165,SUP_BLUESERV_GDA,50,P,P143,SP_BLUESERV_P143,Tacki papierowe 14x25 100 sztuk,,3,10,1,3,10,,,,,
