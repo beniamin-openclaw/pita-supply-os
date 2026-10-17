@@ -368,3 +368,71 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
     expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
   });
 });
+
+// captain-kg-reading: read-only kg next to the order card's stock field.
+describe("ProductCard — kg reading for a piece count", () => {
+  const halloumi = (overrides: Partial<OrderableItem> = {}): OrderableItem =>
+    makeItem({
+      product_id: "P015",
+      product_name_pl: "Halloumi",
+      supplier_product_name: "Halloumi Reha 200gr",
+      purchase_unit: "szt",
+      units_per_purchase_unit: 1,
+      max_stock_qty_base: 48,
+      target_stock_qty_base: 48,
+      ...overrides,
+    });
+
+  it("x1: typing 12 shows (2,4 kg) under the unit caption, read from the supplier name", () => {
+    const { onChangeSpy } = renderCard(halloumi(), makeLine({ product_id: "P015" }));
+    const kg = screen.getByTestId("current-kg-P015");
+    expect(kg).toBeEmptyDOMElement();
+    fireEvent.change(screen.getByLabelText("Obecny stan"), { target: { value: "12" } });
+    expect(kg).toHaveTextContent("(2,4 kg)");
+    expect(document.getElementById("current-unit-P015")).toHaveTextContent("szt(2,4 kg)");
+    // Display only: the line still carries pieces.
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ current_stock_qty_base: 12 }),
+    );
+  });
+
+  it("x1: a multipack product_name_pl decides over a clean supplier name", () => {
+    renderCard(
+      halloumi({ product_name_pl: "Halloumi 200g/12" }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 12 }),
+    );
+    expect(screen.queryByTestId("current-kg-P015")).not.toBeInTheDocument();
+  });
+
+  it("x1 kg product: no kg line", () => {
+    renderCard(
+      halloumi({ product_name_pl: "Gyros 15 KG", inventory_unit: "kg", purchase_unit: "kg" }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 30 }),
+    );
+    expect(screen.queryByTestId("current-kg-P015")).not.toBeInTheDocument();
+  });
+
+  it("pack row reads product_name_pl only: a weight only in the supplier name shows nothing", () => {
+    renderCard(
+      halloumi({ case_unit: "karton", units_per_case: 12, supplier_product_name: "Halloumi 200g" }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 12 }),
+    );
+    expect(document.getElementById("current-P015-reading")).toHaveTextContent(
+      /^= 1 karton \(12 szt\)$/,
+    );
+  });
+
+  it("pack row with the weight in product_name_pl adds the kg", () => {
+    renderCard(
+      halloumi({
+        product_name_pl: "Halloumi Reha 200gr",
+        case_unit: "karton",
+        units_per_case: 12,
+      }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 12 }),
+    );
+    expect(document.getElementById("current-P015-reading")).toHaveTextContent(
+      "= 1 karton (12 szt · 2,4 kg)",
+    );
+  });
+});

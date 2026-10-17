@@ -171,6 +171,16 @@ export const STRINGS = {
   "stock.fieldAria": { pl: "{label}, {unit}", en: "{label}, {unit}" },
   "stock.reading": { pl: "= {split} ({total})", en: "= {split} ({total})" },
   "stock.readingBase": { pl: "= {total}", en: "= {total}" },
+  // Read-only kg reading for a piece count whose name carries the per-piece
+  // weight (captain-kg-reading): "12 szt (2,4 kg)". {kg} is pre-formatted;
+  // "kg" stays plain — it is a side reading, not the unit being typed. "·", not
+  // ",", in the pack reading: "2,4" already carries the Polish decimal comma.
+  "stock.kgReading": { pl: "({kg} kg)", en: "({kg} kg)" },
+  "stock.readingKg": {
+    pl: "= {split} ({total} · {kg} kg)",
+    en: "= {split} ({total} · {kg} kg)",
+  },
+  "stock.readingBaseKg": { pl: "= {total} ({kg} kg)", en: "= {total} ({kg} kg)" },
   "stock.didYouMean": {
     pl: "Czy chodziło o {packs} ({total})?",
     en: "Did you mean {packs} ({total})?",

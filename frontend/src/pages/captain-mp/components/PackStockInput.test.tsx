@@ -154,3 +154,114 @@ describe("PackStockInput", () => {
     expect(screen.getByText(innermostText("= 1 block + 5 kg (20 kg)"))).toBeInTheDocument();
   });
 });
+
+// captain-kg-reading: the stock reading adds the kg only for a piece base unit,
+// the stock copy and a known per-piece weight.
+describe("PackStockInput kg reading", () => {
+  function renderPack(props: {
+    value: number | "";
+    baseUnit: string;
+    packUnit: string;
+    upp: number;
+    gramsPerUnit: number | null;
+    copy?: "stock" | "order";
+  }) {
+    render(
+      <LangProvider>
+        <PackStockInput
+          idPrefix="kg-P1"
+          value={props.value}
+          onChange={vi.fn()}
+          unitsPerPack={props.upp}
+          packUnit={props.packUnit}
+          baseUnit={props.baseUnit}
+          label="Obecny stan"
+          copy={props.copy}
+          gramsPerUnit={props.gramsPerUnit}
+        />
+      </LangProvider>,
+    );
+    return document.getElementById("kg-P1-reading") as HTMLElement;
+  }
+
+  it("24 szt in kartons of 12 at 200 g: = 2 kartony (24 szt · 4,8 kg)", () => {
+    const reading = renderPack({
+      value: 24,
+      baseUnit: "szt",
+      packUnit: "karton",
+      upp: 12,
+      gramsPerUnit: 200,
+    });
+    expect(reading).toHaveTextContent("= 2 kartony (24 szt · 4,8 kg)");
+  });
+
+  it("a kg base unit never gets a kg part (unit check reads baseUnit, not packUnit)", () => {
+    const reading = renderPack({
+      value: 30,
+      baseUnit: "kg",
+      packUnit: "szt",
+      upp: 15,
+      gramsPerUnit: 15000,
+    });
+    expect(reading).toHaveTextContent("= 2 szt (30 kg)");
+    expect(reading.textContent).not.toMatch(/450/);
+  });
+
+  it("the bulk-pack order copy ignores gramsPerUnit", () => {
+    const reading = renderPack({
+      value: 24,
+      baseUnit: "szt",
+      packUnit: "karton",
+      upp: 12,
+      gramsPerUnit: 200,
+      copy: "order",
+    });
+    expect(reading).toHaveTextContent("= 2 kartony (24 szt)");
+  });
+
+  it("a 0 count reads = 0 szt with no kg", () => {
+    const reading = renderPack({
+      value: 0,
+      baseUnit: "szt",
+      packUnit: "karton",
+      upp: 12,
+      gramsPerUnit: 200,
+    });
+    expect(reading).toHaveTextContent(/^= 0 szt$/);
+  });
+
+  it("without a weight the reading is unchanged", () => {
+    const reading = renderPack({
+      value: 24,
+      baseUnit: "szt",
+      packUnit: "karton",
+      upp: 12,
+      gramsPerUnit: null,
+    });
+    expect(reading).toHaveTextContent(/^= 2 kartony \(24 szt\)$/);
+  });
+
+  // The reserved own line is for kg-capable rows only; every other row keeps
+  // the reading beside the fields exactly as before.
+  it.each([
+    ["no weight", { baseUnit: "szt", gramsPerUnit: null }],
+    ["kg base unit", { baseUnit: "kg", gramsPerUnit: 15000 }],
+    ["order copy", { baseUnit: "szt", gramsPerUnit: 200, copy: "order" as const }],
+  ])("layout unchanged: %s", (_label, p) => {
+    const reading = renderPack({ value: 24, packUnit: "karton", upp: 12, ...p });
+    expect(reading).toHaveClass("py-3");
+    expect(reading).not.toHaveClass("basis-full");
+  });
+
+  it("kg-capable row: the reading takes its own line, even before a count", () => {
+    const reading = renderPack({
+      value: "",
+      baseUnit: "szt",
+      packUnit: "karton",
+      upp: 12,
+      gramsPerUnit: 200,
+    });
+    expect(reading).toHaveClass("basis-full");
+    expect(reading).not.toHaveClass("py-3");
+  });
+});
