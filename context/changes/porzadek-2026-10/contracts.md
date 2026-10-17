@@ -69,7 +69,7 @@ Pliki: `frontend/src/pages/ManagerPage.tsx`, `pages/manager/**` (bez `DispatchPa
 4. **D10 (A).** Test odtwarzający dwie kolumny z tym samym nagłówkiem w Transporcie (`main.py:4737,5960-5969`).
    Jeśli błąd się potwierdzi, scalić kolumny per lokal.
 5. **WP9 / D4.** Pago + Mory zgrupowane w UI (dane bez zmian). Filber dostaje przycisk „zamówione” bez warstwy agregacji (`main.py:4674`).
-6. **WP10 / D5** (jeśli Ben potwierdzi D5). Akcja managera „zamknij bez przyjęcia” dla `manager_sent`, z powodem i śladem.
+6. **WP10 / D5** (Ben potwierdził 17.10). Akcja managera „zamknij bez przyjęcia” dla `manager_sent`, z powodem i śladem.
 
 ## Lane D — dane na prodzie (SQL, aplikuje operator)
 
