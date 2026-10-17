@@ -150,6 +150,9 @@ dzielą plików, więc mogą iść równolegle.
   N4 = przy przyjęciu dostawy jasny komunikat „wpisz, kto odebrał” zamiast martwego przycisku (03.10).
   N13 = prośba o liczbę skrzynek do oddania także dla Coca-Coli Katowice (`supplierPrompts.ts`).
   WP6 = podwójny ✓ „wysłane” odtwarzany po odświeżeniu (`CaptainMP.tsx:110`).
+  N19 = szkic spisu w przeglądarce ma stały klucz `__inventory__` (`InventoryCountPage.tsx:32`), wspólny dla wszystkich lokali.
+  Na wspólnym urządzeniu (demo, szkolenie, telefon managera) szkic z jednego lokalu wczyta się w innym.
+  Klucz ma zawierać lokal (wynik przeglądu AI w PR #63; w Gdańsku obeszli to czyszczeniem localStorage).
   WP5 = karta zapasowa nie wygląda na pustą, dodatki Selgrosa jako lista (po D10).
 - **Lane M (manager):** WP11 = wszyscy aktywni dostawcy w filtrze (D11). WP10 = „zamknij bez przyjęcia” (D5).
 - **Lane D (dane prod, tylko SQL + audyt, aplikuje operator):** gotowe od ręki:
