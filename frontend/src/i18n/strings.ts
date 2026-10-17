@@ -1440,6 +1440,11 @@ export const STRINGS = {
     pl: "Zamknięto bez przyjęcia",
     en: "Closed without receipt",
   },
+  // The close could not be recorded, so the order went back to the sent lane.
+  "manager.events.type.closeReverted": {
+    pl: "Cofnięto zamknięcie (błąd zapisu)",
+    en: "Close reverted (write failed)",
+  },
   "manager.closedWithoutReceipt": { pl: "Zamknięte bez przyjęcia", en: "Closed without receipt" },
   "manager.closedWithoutReceiptReason": { pl: "Powód: {reason}", en: "Reason: {reason}" },
   "manager.action.closeWithoutReceipt": { pl: "Zamknij bez przyjęcia", en: "Close without receipt" },

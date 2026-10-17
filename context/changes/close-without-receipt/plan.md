@@ -51,8 +51,8 @@ CHECK on `event_type`. No prod SQL.
      revert the status (`update_order(status="manager_sent", expected_status="closed")`, logged if
      that fails too) and return 503 — no close without a trace.
   9. Response `{order_id, status: "closed"}`.
-- Works on every backend through `_choose_backend()`: supabase (atomic conditional write + event
-  insert), sheets (route pre-check + worksheet append; without the `order_events` tab the close
+- Works on every backend through `_choose_backend()`: supabase (conditional status write, then a
+  separate event insert), sheets (route pre-check + worksheet append; without the `order_events` tab the close
   returns 503), seed (503).
 - Frontend:
   - `api.managerClose(orderId, reason)` and the TS request/response types.
@@ -115,10 +115,9 @@ Two majors and several minors. Each is fixed, accepted or deferred as noted:
 - **A closed stale order vanished from every list.** `splitClosedLane` hides a closed order after a
   few days, and the archive aged it by `last_received_at ?? captain_submitted_at`, so an order
   from June that was closed today showed nowhere. `archiveAgeDays` (moved to `queueAge.ts`) returns
-  null for a closed order with no receipt, so the archive always shows it. One caveat remains: the
-  backend caps the closed lane at 200 orders by `captain_submitted_at`, so a very old order closed
-  this way can sit beyond the cap. The live check therefore looks at the detail right after the
-  close rather than hunting for the card.
+  null for a closed order with no receipt, so the archive shows it whenever it is loaded. The
+  load caps remain (see Impl review): the live check therefore looks at the detail right after
+  the close rather than hunting for the card.
 - **Sheets has no atomic guard.** Sheets `update_order` ignores `expected_status`. The revert
   (`_revert_close_without_receipt`) re-reads the order first and writes `manager_sent` back only
   when it is still `closed` and still has no receipt, so a receipt that lands in between is kept.
@@ -136,6 +135,35 @@ Two majors and several minors. Each is fixed, accepted or deferred as noted:
   a follow-up (see `change.md`).
 - Copy: the Manager tab and the archive lane are now both "Zakończone", because "odebrane" is no
   longer always true.
+
+## Impl review (8acf280)
+
+No blockers or majors. Fixed:
+- The Manager detail no longer says "Zrealizowane" for an order closed without a receipt: the
+  pill reads "Zamknięte bez przyjęcia" and the footer status fallback is dropped.
+- On Supabase the status write and the event insert are two transactions. If the event commits
+  but its acknowledgement is lost, the revert reopens the order while a close event stays. After
+  every revert a best-effort `close_reverted` event ("Cofnięto zamknięcie (błąd zapisu)") is now
+  written, so the history reads truthfully.
+- The 503 text now says when a receipt closed the order meanwhile.
+- New tests: the prompt is asserted in the blank-reason test; a 404 from the write; a revert that
+  finds the order no longer closed; the compensating event, including when it fails too.
+- The hint shows once (visible), not also as a `title`.
+
+Left as follow-ups:
+- **The closed lane and the archive are capped by `captain_submitted_at`** (closed lane newest 50,
+  archive newest 200). Closing the ~70 stale orders from June clears them from the sent lane, which
+  is the point of D5, but most of them will then sit beyond both caps: they are reachable only by
+  their detail, not from a list. A backend order by close activity (newest receipt, close event,
+  `manager_sent_at`) or a "closed without receipt" archive filter is the fix. Read-only sizing for
+  the operator:
+  `SELECT count(*) FROM orders WHERE status='closed' AND captain_submitted_at > (SELECT min(captain_submitted_at) FROM orders WHERE status='manager_sent');`
+- Orders already `closed` with no receipt (if any exist on prod) start showing the chip with no
+  reason. Read-only check before deploy:
+  `SELECT count(*) FROM orders o WHERE o.status='closed' AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id=o.order_id);`
+- The backend Transport reopen 409 text still says "delivery already recorded" (the frontend copy
+  is updated). On an error the Manager detail is not refreshed, as in `handleCancel`. A close by
+  mistake can be undone only with operator SQL.
 
 ## Progress
 
@@ -155,5 +183,5 @@ Two majors and several minors. Each is fixed, accepted or deferred as noted:
 
 ### Phase 3: Verify, review, ship
 
-- [ ] 3.1 Verify + impl review addressed
+- [x] 3.1 Verify + impl review addressed — eff7db0
 - [ ] 3.2 PR open, CI green

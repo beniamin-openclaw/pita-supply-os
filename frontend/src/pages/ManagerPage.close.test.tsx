@@ -153,8 +153,9 @@ describe("ManagerPage — close without receipt", () => {
 
   it("sends nothing when the reason is left empty", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    vi.spyOn(window, "prompt").mockReturnValue("   ");
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue("   ");
     fireEvent.click(await openSentOrder());
+    expect(prompt).toHaveBeenCalledTimes(1);
     expect(api.managerClose).not.toHaveBeenCalled();
   });
 

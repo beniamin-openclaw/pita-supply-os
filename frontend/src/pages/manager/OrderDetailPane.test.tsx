@@ -225,11 +225,14 @@ describe("OrderDetailPane — close without receipt (D5)", () => {
     );
     expect(screen.getByText("Powód: Towar przyszedł poza aplikacją")).toBeInTheDocument();
     expect(screen.queryByText("Zablokowane po odbiorze")).toBeNull();
+    // The status pill must not claim a delivery ("Zrealizowane") that never came.
+    expect(screen.queryByText("Zrealizowane")).toBeNull();
   });
 
   it("a closed order with a receipt keeps the received lock", () => {
     renderPane(makeDetail({ status: "closed", receipts: [RECEIPT] }));
     expect(screen.getByText("Zablokowane po odbiorze")).toBeInTheDocument();
+    expect(screen.getAllByText("Zrealizowane").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("closed-without-receipt")).toBeNull();
   });
 });

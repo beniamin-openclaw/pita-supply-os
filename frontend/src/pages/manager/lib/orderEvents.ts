@@ -15,6 +15,7 @@ const EVENT_TYPE_LABEL_KEYS: Record<string, StringKey> = {
   quantities_changed: "manager.events.type.quantitiesChanged",
   line_added: "manager.events.type.lineAdded",
   [CLOSED_WITHOUT_RECEIPT_EVENT]: "manager.events.type.closedWithoutReceipt",
+  close_reverted: "manager.events.type.closeReverted",
 };
 
 export function orderEventTypeLabel(t: TFunc, eventType: string): string {

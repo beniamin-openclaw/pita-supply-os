@@ -348,6 +348,7 @@ describe("close-without-receipt (D5) — queue helpers and chip", () => {
     expect(orderEventTypeLabel(t, "closed_without_receipt")).toBe(
       "manager.events.type.closedWithoutReceipt",
     );
+    expect(orderEventTypeLabel(t, "close_reverted")).toBe("manager.events.type.closeReverted");
   });
 
   it("the card shows 'Zamknięte bez przyjęcia' only without a receipt", () => {

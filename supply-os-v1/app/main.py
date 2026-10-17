@@ -2530,35 +2530,43 @@ def manager_cancel(
 _CLOSED_WITHOUT_RECEIPT_EVENT = "closed_without_receipt"
 
 
-def _revert_close_without_receipt(backend, order_id: str) -> bool:
+_CLOSE_REVERTED_EVENT = "close_reverted"
+
+
+def _revert_close_without_receipt(backend, order_id: str) -> str:
     """Undo a close whose trace could not be written: back to manager_sent.
 
     Re-reads first, because the sheets backend has no atomic guard (it drops
     ``expected_status``): a captain receipt that landed meanwhile owns the
-    ``closed`` status and must not be flipped back to the sent lane. True when
-    the order is no longer closed by this action (reverted, or a receipt now
-    explains the closed status); False when the revert failed."""
+    ``closed`` status and must not be flipped back to the sent lane. Returns
+    "reverted" (back to manager_sent), "not_closed" (nothing to undo),
+    "receipt" (a receipt now explains the closed status) or "failed".
+
+    After a revert a best-effort ``close_reverted`` event is written: if the
+    close event did commit and only its acknowledgement was lost, the history
+    of the reopened order still reads truthfully."""
     try:
         backend.invalidate_cache("orders")
         backend.invalidate_cache("receipts")
         current = backend.get_order(order_id)
         if current is None or current.status != OrderStatus.CLOSED:
-            return True
+            return "not_closed"
         if _has_receipts(backend, order_id):
-            return True
+            return "receipt"
         backend.update_order(
             order_id,
             status=OrderStatus.MANAGER_SENT.value,
             expected_status=OrderStatus.CLOSED.value,
         )
-        return True
     except Exception:
         log.error(
             "Close without receipt: revert failed for %s — order is closed without a trace",
             order_id,
             exc_info=True,
         )
-        return False
+        return "failed"
+    _log_order_event(backend, order_id, _CLOSE_REVERTED_EVENT, "")
+    return "reverted"
 
 
 @app.post("/api/manager/close/{order_id}", response_model=ManagerCloseResponse)
@@ -2638,13 +2646,19 @@ def manager_close_without_receipt(
             order_id,
             exc_info=True,
         )
-        if _revert_close_without_receipt(backend, order_id):
-            detail = f"The close of {order_id} could not be recorded — the order was not closed"
-        else:
+        outcome = _revert_close_without_receipt(backend, order_id)
+        if outcome == "receipt":
+            detail = (
+                f"The close of {order_id} could not be recorded — a receipt closed the order "
+                f"meanwhile"
+            )
+        elif outcome == "failed":
             detail = (
                 f"The close of {order_id} could not be recorded and the order could not be "
                 f"reopened — check its status"
             )
+        else:
+            detail = f"The close of {order_id} could not be recorded — the order was not closed"
         raise HTTPException(status_code=503, detail=detail)
     return ManagerCloseResponse(order_id=order_id, status=OrderStatus.CLOSED)
 

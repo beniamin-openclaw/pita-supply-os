@@ -183,7 +183,8 @@ export function OrderDetailPane({
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${visual.pill}`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${visual.dot}`} aria-hidden="true" />
-            {t(visual.labelKey)}
+            {/* "Zrealizowane" would claim a delivery that never came (D5). */}
+            {t(closedWithoutReceipt ? "manager.closedWithoutReceipt" : visual.labelKey)}
           </span>
         </div>
 
@@ -460,7 +461,7 @@ export function OrderDetailPane({
             >
               {t("manager.action.openEmail")}
             </a>
-          ) : (
+          ) : closedWithoutReceipt ? null : (
             <span className="text-xs text-slate-500">{t(visual.labelKey)}</span>
           )}
           {lockedAfterReceipt && (
@@ -492,7 +493,6 @@ export function OrderDetailPane({
             type="button"
             disabled={locked}
             onClick={() => onCloseWithoutReceipt?.(detail.order_id)}
-            title={t("manager.closeWithoutReceiptHint")}
             className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
           >
             {t("manager.action.closeWithoutReceipt")}

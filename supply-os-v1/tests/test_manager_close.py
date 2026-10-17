@@ -141,6 +141,14 @@ def test_close_requires_manager_auth(mocker):
     patches["update_order"].assert_not_called()
 
 
+def test_close_404_when_the_order_vanishes_at_the_write(mocker):
+    patches = _enable_sheet(mocker, _order())
+    patches["update_order"].side_effect = errors.OrderNotFoundError("ORD-A")
+    r = _close()
+    assert r.status_code == 404
+    patches["append_order_event"].assert_not_called()
+
+
 def test_close_409_on_a_concurrent_change(mocker):
     patches = _enable_sheet(mocker, _order())
     patches["update_order"].side_effect = errors.OrderStatusConflictError("ORD-A")
@@ -154,7 +162,8 @@ def test_close_reverts_when_the_trace_cannot_be_written(mocker):
     patches = _enable_sheet(mocker, _order())
     closed = _order(status=OrderStatus.CLOSED)
     sheets.get_order.side_effect = [_order(), closed]  # route read, revert re-read
-    patches["append_order_event"].side_effect = RuntimeError("order_events tab missing")
+    # The close event fails; the compensating close_reverted event goes through.
+    patches["append_order_event"].side_effect = [RuntimeError("order_events down"), None]
     r = _close()
     assert r.status_code == 503
     assert "was not closed" in r.json()["detail"]
@@ -162,6 +171,28 @@ def test_close_reverts_when_the_trace_cannot_be_written(mocker):
     assert len(calls) == 2
     assert calls[0].kwargs["status"] == "closed"
     assert calls[1].kwargs == {"status": "manager_sent", "expected_status": "closed"}
+    events = [c.args[0] for c in patches["append_order_event"].call_args_list]
+    assert [e.event_type for e in events] == ["closed_without_receipt", "close_reverted"]
+
+
+def test_close_revert_survives_a_failed_compensating_event(mocker):
+    patches = _enable_sheet(mocker, _order())
+    sheets.get_order.side_effect = [_order(), _order(status=OrderStatus.CLOSED)]
+    patches["append_order_event"].side_effect = RuntimeError("order_events tab missing")
+    r = _close()
+    assert r.status_code == 503
+    assert "was not closed" in r.json()["detail"]
+    assert patches["update_order"].call_count == 2
+
+
+def test_close_revert_skips_an_order_no_longer_closed(mocker):
+    patches = _enable_sheet(mocker, _order())
+    sheets.get_order.side_effect = [_order(), _order()]  # re-read: back on manager_sent
+    patches["append_order_event"].side_effect = RuntimeError("down")
+    r = _close()
+    assert r.status_code == 503
+    assert "was not closed" in r.json()["detail"]
+    assert patches["update_order"].call_count == 1  # the close only, no revert write
 
 
 def test_close_revert_leaves_an_order_a_receipt_closed_meanwhile(mocker):
@@ -175,6 +206,7 @@ def test_close_revert_leaves_an_order_a_receipt_closed_meanwhile(mocker):
     patches["append_order_event"].side_effect = RuntimeError("down")
     r = _close()
     assert r.status_code == 503
+    assert "a receipt closed the order" in r.json()["detail"]
     assert patches["update_order"].call_count == 1  # the close only, no revert
 
 
