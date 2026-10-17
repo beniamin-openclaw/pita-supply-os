@@ -361,6 +361,30 @@ export function ManagerPage() {
     [blockedByDraft, confirmDiscardIfDirty, refreshAll, showToast, t],
   );
 
+  // Close a sent order with no receipt (close-without-receipt, D5): confirm,
+  // then a required reason that the backend keeps as an order event.
+  const handleCloseWithoutReceipt = useCallback(
+    async (orderId: string) => {
+      if (blockedByDraft()) return;
+      if (!confirmDiscardIfDirty()) return;
+      if (!window.confirm(t("manager.closeWithoutReceiptConfirm"))) return;
+      const reason = window.prompt(t("manager.closeWithoutReceiptPrompt"));
+      if (!reason || reason.trim() === "") return;
+      setBusyId(orderId);
+      try {
+        await api.managerClose(orderId, reason.trim());
+        showToast(t("manager.closedWithoutReceiptOk"), true);
+        refreshAll(orderId);
+      } catch (e) {
+        const detailMsg = e instanceof ApiError ? e.detail : String(e);
+        showToast(t("manager.actionError", { detail: detailMsg }), false);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [blockedByDraft, confirmDiscardIfDirty, refreshAll, showToast, t],
+  );
+
   // Save (PATCH) — full read-modify-write payload for DIRTY lines only; stays
   // manager_claimed. Empty payload is a no-op (allowed by the contract). On
   // success the detail reloads (reseeding the draft baseline → clears dirty).
@@ -717,6 +741,7 @@ export function ManagerPage() {
               onClaim={handleClaim}
               onRelease={handleRelease}
               onCancel={handleCancel}
+              onCloseWithoutReceipt={handleCloseWithoutReceipt}
               onSave={handleSave}
               onDispatch={handleDispatch}
               onQtyChange={handleQtyChange}

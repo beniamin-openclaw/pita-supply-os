@@ -467,6 +467,16 @@ export interface ManagerCancelResponse {
   status: OrderStatus; // "cancelled" on success
 }
 
+// close-without-receipt (D5): POST /api/manager/close/{order_id}.
+export interface ManagerCloseRequest {
+  reason: string;
+}
+
+export interface ManagerCloseResponse {
+  order_id: string;
+  status: OrderStatus; // "closed" on success
+}
+
 // Manager add ad-hoc product line (add-product-to-order) ----------------------
 
 export interface ManagerAddLineRequest {

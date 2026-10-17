@@ -544,7 +544,8 @@ export const STRINGS = {
   "manager.tab.submitted": { pl: "Do przejęcia", en: "To claim" },
   "manager.tab.claimed": { pl: "W realizacji", en: "In progress" },
   "manager.tab.sent": { pl: "Zamówione", en: "Ordered" },
-  "manager.tab.closed": { pl: "Zakończone (odebrane)", en: "Closed (received)" },
+  // "Zakończone": a closed order is received, or closed without receipt (D5, card chip).
+  "manager.tab.closed": { pl: "Zakończone", en: "Closed" },
   "manager.action.openEmail": { pl: "Otwórz email do dostawcy", en: "Open supplier email" },
   "manager.sentEmptyHint": {
     pl: "Brak zamówionych pozycji w tej sesji.",
@@ -1434,6 +1435,35 @@ export const STRINGS = {
   "manager.events.title": { pl: "Historia zmian", en: "Change history" },
   "manager.events.type.quantitiesChanged": { pl: "Zmieniono ilości", en: "Quantities changed" },
   "manager.events.type.lineAdded": { pl: "Dodano pozycję", en: "Line added" },
+  // close-without-receipt (D5): a sent order the Manager closed with no delivery.
+  "manager.events.type.closedWithoutReceipt": {
+    pl: "Zamknięto bez przyjęcia",
+    en: "Closed without receipt",
+  },
+  // The close could not be recorded, so the order went back to the sent lane.
+  "manager.events.type.closeReverted": {
+    pl: "Cofnięto zamknięcie (błąd zapisu)",
+    en: "Close reverted (write failed)",
+  },
+  "manager.closedWithoutReceipt": { pl: "Zamknięte bez przyjęcia", en: "Closed without receipt" },
+  "manager.closedWithoutReceiptReason": { pl: "Powód: {reason}", en: "Reason: {reason}" },
+  "manager.action.closeWithoutReceipt": { pl: "Zamknij bez przyjęcia", en: "Close without receipt" },
+  "manager.closeWithoutReceiptHint": {
+    pl: "Gdy towar nie przyjdzie albo przyszedł poza aplikacją. Kapitan nie przyjmie już dostawy w aplikacji.",
+    en: "When the goods will not come or came outside the app. The captain can no longer receive it in the app.",
+  },
+  "manager.closeWithoutReceiptConfirm": {
+    pl: "Zamknąć to zamówienie bez przyjęcia dostawy?",
+    en: "Close this order without a delivery receipt?",
+  },
+  "manager.closeWithoutReceiptPrompt": {
+    pl: "Powód zamknięcia bez przyjęcia (wymagany):",
+    en: "Reason for closing without receipt (required):",
+  },
+  "manager.closedWithoutReceiptOk": {
+    pl: "Zamknięto bez przyjęcia",
+    en: "Closed without receipt",
+  },
   // Manager Transport (to-ordering-pago) — combine several locations' orders
   // for one supplier into a single Transport ("TO") batch.
   "manager.transport.navLink": { pl: "Transport (TO)", en: "Transport" },
@@ -2115,8 +2145,8 @@ export const STRINGS = {
     en: "This transport can't be undone (a legacy batch without a header).",
   },
   "manager.transport.send.reopen.errDelivered": {
-    pl: "Nie można cofnąć — dostawa jest już przyjęta w: {locations}.",
-    en: "Can't undo — the delivery is already recorded at: {locations}.",
+    pl: "Nie można cofnąć — dostawa jest już przyjęta albo zamknięta bez przyjęcia w: {locations}.",
+    en: "Can't undo — the delivery is already recorded, or closed without receipt, at: {locations}.",
   },
   "manager.transport.send.reopen.errConflict": {
     pl: "Nie można cofnąć wysłania: {detail}",
@@ -2222,7 +2252,7 @@ export const STRINGS = {
     en: "Showing the newest {n} — older ones are not listed here",
   },
   "manager.archive.daysOptionLabel": { pl: "{n} dni", en: "{n} days" },
-  "manager.archive.lane.closed": { pl: "Odebrane", en: "Received" },
+  "manager.archive.lane.closed": { pl: "Zakończone", en: "Closed" },
   "manager.archive.lane.cancelled": { pl: "Anulowane", en: "Cancelled" },
   "manager.archive.empty": {
     pl: "Brak zamówień w wybranym okresie.",

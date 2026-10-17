@@ -902,6 +902,26 @@ def test_queue_last_received_at_null_on_submitted_lane(mocker):
     scan.assert_not_called()
 
 
+def test_queue_closed_without_receipt_keeps_manager_sent_at(mocker):
+    """close-without-receipt (D5): a closed order with no receipt has
+    received_count 0 and no last_received_at, but keeps manager_sent_at — the
+    frontend ages it out of the closed lane by that and labels it "zamknięte
+    bez przyjęcia" by received_count == 0."""
+    sent_at = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    order = _order("ORD-A", status=OrderStatus.CLOSED).model_copy(
+        update={"manager_sent_at": sent_at}
+    )
+    _enable_sheet_backend(mocker, orders=[order])
+    mocker.patch.object(sheets, "load_receipts_for_orders", return_value=[])
+
+    r = client.get("/api/manager/queue", params={"status": "closed"}, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    row = r.json()[0]
+    assert row["received_count"] == 0
+    assert row["last_received_at"] is None
+    assert datetime.fromisoformat(row["manager_sent_at"]) == sent_at
+
+
 # ---------- delivery calendar (delivery-calendar) ----------
 
 def test_queue_and_detail_expose_delivery_calendar_fields(mocker):

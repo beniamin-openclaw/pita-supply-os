@@ -20,8 +20,10 @@ export function inQueueDays(item: ManagerQueueItem, now: Date = new Date()): num
 }
 
 /** Split the closed lane: rows received within QUEUE_AGE_DAYS (or with no
- *  receipt timestamp) stay visible; the rest are only counted, and the count
- *  links to /manager/archive. */
+ *  timestamp at all) stay visible; the rest are only counted, and the count
+ *  links to /manager/archive. An order closed without a receipt (D5) has no
+ *  `last_received_at`, so it ages by `manager_sent_at`: closing a stale order
+ *  sends it straight to the archive count. */
 export function splitClosedLane(
   items: ManagerQueueItem[] | null,
   now: Date = new Date(),
@@ -30,7 +32,7 @@ export function splitClosedLane(
   const recent: ManagerQueueItem[] = [];
   let archived = 0;
   for (const q of items) {
-    const days = daysSince(q.last_received_at, now);
+    const days = daysSince(q.last_received_at ?? q.manager_sent_at, now);
     if (days === null || days <= QUEUE_AGE_DAYS) recent.push(q);
     else archived += 1;
   }
@@ -75,4 +77,22 @@ export function isSentUnreceived(item: ManagerQueueItem, now: Date = new Date())
   if (item.status !== "manager_sent" || item.received_count > 0) return false;
   const hours = hoursSince(item.manager_sent_at, now);
   return hours !== null && hours > SENT_UNRECEIVED_HOURS;
+}
+
+/** A closed order with no receipt: the Manager closed it without a delivery
+ *  (close-without-receipt, D5). Closed is otherwise reached only by a receipt
+ *  (or a Transport reopen revert of a received member), so the receipt count
+ *  tells the two apart; a late receipt clears it by itself. */
+export function isClosedWithoutReceipt(item: ManagerQueueItem): boolean {
+  return item.status === "closed" && (item.received_count ?? 0) === 0;
+}
+
+/** Archive age of a row: last receipt for closed orders, submission for
+ *  cancelled ones (the queue item carries no cancelled_at). A row closed
+ *  without a receipt (D5) is always shown (null): it has no close time on the
+ *  queue item, and the stale orders it is meant for are older than any day
+ *  window. */
+export function archiveAgeDays(item: ManagerQueueItem, now: Date = new Date()): number | null {
+  if (isClosedWithoutReceipt(item)) return null;
+  return daysSince(item.last_received_at ?? item.captain_submitted_at, now);
 }

@@ -14,7 +14,7 @@
 import { Loader2 } from "lucide-react";
 
 import { useT } from "../../i18n";
-import type { ManagerOrderDetail, OrderableItem, OrderingMethod } from "../../types";
+import type { ManagerOrderDetail, OrderEvent, OrderableItem, OrderingMethod } from "../../types";
 import { AddProductPicker } from "../../components/ui/AddProductPicker";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
@@ -29,6 +29,7 @@ import { ResendPanel } from "./ResendPanel";
 import { type DraftMap, draftQty, hasDirtyDrafts, isOrderEmpty } from "./lib/draftState";
 import { MARK_ORDERED_EMAIL_SUPPLIER_IDS } from "../../lib/supplierGroups";
 import { isOrderEditable, managerSummary, isManagerEngaged } from "./lib/managerLine";
+import { CLOSED_WITHOUT_RECEIPT_EVENT, sortOrderEvents } from "./lib/orderEvents";
 
 // Kept out of the component body so the impure `Date.now()` read isn't treated
 // as render-time work by the React Compiler. cutoff_iso lives on the queue
@@ -71,6 +72,8 @@ interface OrderDetailPaneProps {
   onRelease: (orderId: string) => void;
   /** Cancel (soft-delete) a pre-dispatch order with a required reason. */
   onCancel: (orderId: string) => void;
+  /** Close a sent order with no receipt, with a required reason (D5). */
+  onCloseWithoutReceipt?: (orderId: string) => void;
   /** Save (PATCH) the dirty draft lines without dispatching. */
   onSave: (orderId: string) => void;
   /** Dispatch with the full draft line set + the channel sent_method. */
@@ -105,6 +108,7 @@ export function OrderDetailPane({
   onClaim,
   onRelease,
   onCancel,
+  onCloseWithoutReceipt,
   onSave,
   onDispatch,
   onQtyChange,
@@ -138,7 +142,14 @@ export function OrderDetailPane({
   // Post-send edit (Phase 6): editable but already sent → save label + resend
   // panel instead of release/cancel/dispatch.
   const postSend = editable && detail.status === "manager_sent";
-  const lockedAfterReceipt = detail.status === "closed";
+  // A closed order is received, or closed by the Manager without a receipt (D5).
+  const closedWithoutReceipt = detail.status === "closed" && detail.receipts.length === 0;
+  const lockedAfterReceipt = detail.status === "closed" && !closedWithoutReceipt;
+  const closeReason = closedWithoutReceipt ? latestCloseReason(detail.events ?? []) : null;
+  // D5: a sent order that will never be received can be closed with a reason.
+  // A receipt closes the order itself, so the action is for no-receipt only.
+  const closable =
+    detail.status === "manager_sent" && detail.receipts.length === 0 && !!onCloseWithoutReceipt;
   const sentTransportMember =
     detail.status === "manager_sent" &&
     (detail.supplier_order_reference ?? "").startsWith("TRN-");
@@ -172,7 +183,8 @@ export function OrderDetailPane({
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${visual.pill}`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${visual.dot}`} aria-hidden="true" />
-            {t(visual.labelKey)}
+            {/* "Zrealizowane" would claim a delivery that never came (D5). */}
+            {t(closedWithoutReceipt ? "manager.closedWithoutReceipt" : visual.labelKey)}
           </span>
         </div>
 
@@ -449,7 +461,7 @@ export function OrderDetailPane({
             >
               {t("manager.action.openEmail")}
             </a>
-          ) : (
+          ) : closedWithoutReceipt ? null : (
             <span className="text-xs text-slate-500">{t(visual.labelKey)}</span>
           )}
           {lockedAfterReceipt && (
@@ -457,13 +469,45 @@ export function OrderDetailPane({
               {t("manager.lockedAfterReceipt")}
             </span>
           )}
+          {closedWithoutReceipt && (
+            <span
+              className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-700"
+              data-testid="closed-without-receipt"
+            >
+              {t("manager.closedWithoutReceipt")}
+            </span>
+          )}
+          {closeReason && (
+            <span className="text-xs text-slate-600">
+              {t("manager.closedWithoutReceiptReason", { reason: closeReason })}
+            </span>
+          )}
           {sentTransportMember && (
             <span className="text-xs text-slate-500">{t("manager.resend.editViaTransport")}</span>
           )}
         </div>
       )}
+      {closable && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
+          <button
+            type="button"
+            disabled={locked}
+            onClick={() => onCloseWithoutReceipt?.(detail.order_id)}
+            className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+          >
+            {t("manager.action.closeWithoutReceipt")}
+          </button>
+          <span className="text-xs text-slate-500">{t("manager.closeWithoutReceiptHint")}</span>
+        </div>
+      )}
     </div>
   );
+}
+
+/** The reason of the newest "closed_without_receipt" event, or null. */
+function latestCloseReason(events: OrderEvent[]): string | null {
+  const ev = sortOrderEvents(events).find((e) => e.event_type === CLOSED_WITHOUT_RECEIPT_EVENT);
+  return ev?.details ? ev.details : null;
 }
 
 /** "Szkic w Gmailu (biuro@…) — Otwórz szkic" on an order this session just

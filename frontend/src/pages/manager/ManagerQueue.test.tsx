@@ -5,9 +5,12 @@ import { MemoryRouter } from "react-router-dom";
 import { LangProvider } from "../../i18n";
 import type { ManagerQueueItem } from "../../types";
 import { ManagerQueue } from "./ManagerQueue";
+import { orderEventTypeLabel } from "./lib/orderEvents";
 import {
+  archiveAgeDays,
   inQueueDays,
   isClaimedOverdue,
+  isClosedWithoutReceipt,
   isSentUnreceived,
   QUEUE_LANE_LIMIT,
   splitClosedLane,
@@ -285,3 +288,85 @@ describe("ManagerQueue — stalled-order chips and header counts (D16)", () => {
     expect(screen.getByTestId("lane-count-claimed")).toHaveTextContent("0");
   });
 });
+
+describe("close-without-receipt (D5) — queue helpers and chip", () => {
+  const now = new Date("2026-10-17T12:00:00Z");
+  const closedNoReceipt = (overrides: Partial<ManagerQueueItem> = {}): ManagerQueueItem =>
+    makeItem({
+      status: "closed",
+      received_count: 0,
+      last_received_at: null,
+      manager_sent_at: "2026-06-20T10:00:00Z",
+      ...overrides,
+    });
+
+  it("tells a closed order without a receipt from a received one", () => {
+    expect(isClosedWithoutReceipt(closedNoReceipt())).toBe(true);
+    expect(
+      isClosedWithoutReceipt(
+        closedNoReceipt({ received_count: 1, last_received_at: "2026-10-16T10:00:00Z" }),
+      ),
+    ).toBe(false);
+    expect(isClosedWithoutReceipt(makeItem({ status: "manager_sent" }))).toBe(false);
+  });
+
+  it("drops the D16 marker once the order is closed", () => {
+    expect(isSentUnreceived(closedNoReceipt(), now)).toBe(false);
+    expect(
+      isSentUnreceived(
+        makeItem({ status: "manager_sent", manager_sent_at: "2026-06-20T10:00:00Z" }),
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("the closed lane ages a no-receipt row by manager_sent_at", () => {
+    const { recent, archived } = splitClosedLane(
+      [
+        closedNoReceipt({ order_id: "stale" }),
+        closedNoReceipt({ order_id: "fresh", manager_sent_at: "2026-10-16T10:00:00Z" }),
+        closedNoReceipt({ order_id: "no-stamp", manager_sent_at: null }),
+      ],
+      now,
+    );
+    expect(recent?.map((q) => q.order_id)).toEqual(["fresh", "no-stamp"]);
+    expect(archived).toBe(1);
+  });
+
+  it("the archive always shows a no-receipt row, whatever its age", () => {
+    expect(archiveAgeDays(closedNoReceipt(), now)).toBeNull();
+    expect(
+      archiveAgeDays(
+        closedNoReceipt({ received_count: 1, last_received_at: "2026-10-07T12:00:00Z" }),
+        now,
+      ),
+    ).toBe(10);
+  });
+
+  it("labels the close event", () => {
+    const t = (key: string): string => key;
+    expect(orderEventTypeLabel(t, "closed_without_receipt")).toBe(
+      "manager.events.type.closedWithoutReceipt",
+    );
+    expect(orderEventTypeLabel(t, "close_reverted")).toBe("manager.events.type.closeReverted");
+  });
+
+  it("the card shows 'Zamknięte bez przyjęcia' only without a receipt", () => {
+    renderQueue({
+      closed: [
+        closedNoReceipt({ order_id: "c1", manager_sent_at: isoDaysAgo(1) }),
+        makeItem({
+          order_id: "c2",
+          status: "closed",
+          received_count: 1,
+          last_received_at: isoDaysAgo(1),
+        }),
+      ],
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Zakończone/ }));
+    expect(screen.getAllByTestId("closed-without-receipt")).toHaveLength(1);
+    expect(screen.getByText("Zamknięte bez przyjęcia")).toBeInTheDocument();
+    expect(screen.getByText(/Dostarczono/)).toBeInTheDocument();
+  });
+});
+
