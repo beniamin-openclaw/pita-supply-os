@@ -1,20 +1,46 @@
-"""Write prod-sql.sql (inventory-card-order) from positions.json + card_order.json.
+"""Write prod-sql.sql (inventory-card-order) from positions.json + card_order.json,
+checked against a read-only snapshot of prod (prod_snapshot.json).
 
-Pipeline (re-run all three after any card change; never hand-edit
-inventory_order on prod):
-  1. extract_card_order.py.txt  -> card_order.json   (parse the 12 DRUK workbooks)
-  2. gen_positions.py.txt       -> positions.json    (template + overrides, proven)
-  3. gen_prod_sql.py.txt        -> ../prod-sql.sql   (this file)
+Pipeline (re-run all of it after any card change or before any apply; never
+hand-edit inventory_order on prod):
+  0. prod_snapshot.json  read-only SELECT of prod (products, locations,
+                         location_product_settings, supplier_products.display_order
+                         counts); see SNAPSHOT_QUERY below.
+  1. extract_card_order.py.txt -> card_order.json  (parse the 12 DRUK workbooks)
+     The file is three scripts in a row: lines 1-28 are cards.py, lines 29-55
+     are match.py, lines 56-84 are the extractor. It reads sheets/<name>.xlsx
+     (Drive export of each "<Lokal> - Inwentaryzacja" workbook), alias.json and
+     products.json (= the "products" list of prod_snapshot.json).
+  2. gen_positions.py.txt       -> positions.json  (template + overrides, proven)
+  3. gen_prod_sql.py.txt        -> ../prod-sql.sql (this file)
 
 Run from context/changes/inventory-card-order/data/:
   python3 gen_prod_sql.py.txt
+
+This script simulates step 2 of the SQL on the snapshot and writes every
+expected count (guards and audits) into the SQL. It exits instead of writing
+SQL when an override has no setting on prod (step 1c would not be empty), a
+template product is missing, or the simulated audits 3c/3d fail.
 """
+import collections
+import hashlib
 import json
 import sys
 
 STEP_FILE = "../prod-sql.sql"
+SNAPSHOT = "prod_snapshot.json"
+SNAPSHOT_QUERY = """SELECT json_build_object('taken_at', now(),
+  'products', (SELECT json_agg(row_to_json(p) ORDER BY p.product_id) FROM products p),
+  'locations', (SELECT json_agg(json_build_object('location_id', location_id, 'active', active,
+                'own_catalog', own_catalog) ORDER BY location_id) FROM locations),
+  'settings', (SELECT json_agg(row_to_json(s) ORDER BY s.location_id, s.product_id)
+               FROM location_product_settings s),
+  'supplier_products', (SELECT json_agg(json_build_object('supplier_id', supplier_id,
+                        'display_order', display_order)) FROM supplier_products));"""
+
 cards = json.load(open("card_order.json"))["locations"]
 pos = json.load(open("positions.json"))
+snap = json.load(open(SNAPSHOT))
 template = pos["template"]            # [[product_id, position], ...] in card order
 overrides = pos["overrides"]          # {location_id: {product_id: position}}
 glob = dict(template)
@@ -31,6 +57,7 @@ def card_seq(loc):
 
 
 seqs = {loc: card_seq(loc) for loc in sorted(cards)}
+on_card = {loc: set(seq) for loc, seq in seqs.items()}
 
 # Re-prove gen_positions' invariant: sorting each card by (effective, product_id)
 # reproduces it. Fail loudly rather than emit SQL that breaks a card.
@@ -41,6 +68,112 @@ for loc, seq in seqs.items():
         sys.exit(f"{loc}: a card product has no position")
     if sorted(seq, key=lambda p: (eff[p], p)) != seq:
         sys.exit(f"{loc}: template + overrides do not reproduce the card")
+
+# ---------- prod snapshot: inputs and the guards' fingerprints ----------
+products = {p["product_id"]: p for p in snap["products"]}
+settings = {(loc, pid): io for loc, pid, io in snap["settings"]}
+loc_active = {loc: active for loc, active, _own in snap["locations"]}
+cat = {pid: p["product_category"] for pid, p in products.items()}
+
+missing = [p for p, _ in template if p not in products]
+if missing:
+    sys.exit(f"template products missing on prod: {missing}")
+bad_ov = [(loc, p) for loc in sorted(overrides) for p in overrides[loc] if (loc, p) not in settings]
+if bad_ov:
+    sys.exit(f"overrides with no setting on prod (step 1c would list them): {bad_ov}")
+
+before_products = sum(1 for p in products.values() if p["inventory_order"] is not None)
+before_settings = sum(1 for io in settings.values() if io is not None)
+products_fp = hashlib.md5(",".join(
+    f"{pid}:{products[pid]['product_category']}:{'true' if products[pid]['active'] else 'false'}"
+    for pid in sorted(products)).encode("utf-8")).hexdigest()
+settings_fp = hashlib.md5(",".join(
+    f"{loc}:{pid}" for loc, pid in sorted(settings)).encode("utf-8")).hexdigest()
+
+# ---------- simulate step 2 on the snapshot ----------
+new_p = {pid: glob.get(pid) for pid in products}                 # 2a + 2b
+new_s = {k: None for k in settings}                               # 2a
+for loc, ov in overrides.items():                                 # 2c
+    for p, v in ov.items():
+        new_s[(loc, p)] = v
+section_end = {}                                                  # 2d
+for loc, seq in seqs.items():
+    for pid in seq:
+        s = new_s.get((loc, pid)) if (loc, pid) in settings else None
+        e = s if s is not None else new_p[pid]
+        key = (loc, cat[pid])
+        section_end[key] = max(section_end.get(key, e), e)
+extras = []
+for (loc, pid) in sorted(settings):
+    if loc in seqs and pid not in on_card[loc] and (loc, cat[pid]) in section_end:
+        new_s[(loc, pid)] = section_end[(loc, cat[pid])] + 1
+        extras.append((loc, pid))
+
+
+def eff_of(loc, pid):
+    s = new_s[(loc, pid)]
+    return s if s is not None else new_p[pid]
+
+
+def key_of(loc, pid):
+    e = eff_of(loc, pid)
+    return (e is None, e or 0, pid)
+
+
+# 3c: card order holds at every location.
+for loc, seq in seqs.items():
+    got = [p for p in sorted((p for p in seq if (loc, p) in settings), key=lambda p: key_of(loc, p))]
+    want = [p for p in seq if (loc, p) in settings]
+    if got != want:
+        sys.exit(f"{loc}: simulated audit 3c fails (card order broken)")
+# 3d: contiguity.
+for loc in seqs:
+    listed = sorted((pid for (l, pid) in settings if l == loc and products[pid]["active"]),
+                    key=lambda p: key_of(loc, p))
+    rn = {p: i for i, p in enumerate(listed)}
+    spans = collections.defaultdict(list)
+    for p in listed:
+        if p in on_card[loc]:
+            spans[cat[p]].append(rn[p])
+    for c, idx in spans.items():
+        lo, hi = min(idx), max(idx)
+        inside = [p for p in listed[lo:hi + 1] if p not in on_card[loc]]
+        if inside:
+            sys.exit(f"{loc}/{c}: simulated audit 3d fails: {inside}")
+unpositioned = collections.defaultdict(list)                      # 3e
+for (loc, pid) in sorted(settings):
+    if products[pid]["active"] and eff_of(loc, pid) is None:
+        unpositioned[loc].append(pid)
+n_unpositioned = sum(len(v) for v in unpositioned.values())
+
+# Step-1 previews.
+no_setting = collections.Counter(loc for loc, seq in seqs.items() for p in seq
+                                 if (loc, p) not in settings)
+extras_active = [(l, p) for l, p in extras if products[p]["active"]]
+# 1d lists every active non-card setting at a carded location; the ones whose
+# category has no section on that card keep the template position (no extra).
+off_card_active = [(l, p) for (l, p) in sorted(settings)
+                   if l in seqs and p not in on_card[l] and products[p]["active"]]
+no_section = [(l, p) for l, p in off_card_active if (l, p) not in set(extras)]
+n_template = len(template)
+n_overrides = sum(len(v) for v in overrides.values())
+n_extras = len(extras)
+override_counts = ", ".join(f"{loc} {len(v)}" for loc, v in sorted(overrides.items()) if v)
+
+# Per-location summary for the dry-run note (printed, not written to SQL).
+summary = []
+for loc in sorted(loc_active):
+    keys = [k for k in settings if k[0] == loc]
+    act = [k for k in keys if products[k[1]]["active"]]
+    carded = loc in seqs
+    card_rows = [k for k in act if carded and k[1] in on_card[loc]]
+    ov = [k for k in card_rows if new_s[k] is not None]
+    ex = [k for k in act if k in set(extras)]
+    tmpl_fb = [k for k in act if not (carded and k[1] in on_card[loc]) and k not in set(extras)
+               and new_p[k[1]] is not None]
+    summary.append((loc, loc_active[loc], len(keys), len(act), len(card_rows) - len(ov), len(ov),
+                    len(ex), len(tmpl_fb), len(unpositioned.get(loc, [])),
+                    sum(1 for k in extras if k[0] == loc and not products[k[1]]["active"])))
 
 name_by_pid = {}
 for loc in cards:
@@ -69,11 +202,11 @@ override_values = values(override_rows)
 card_values = values(
     [[sql_str(loc), str(i + 1), sql_str(p)] for loc, seq in seqs.items() for i, p in enumerate(seq)]
 )
-n_template = len(template)
-n_overrides = len(override_rows)
-override_counts = ", ".join(f"{loc} {len(v)}" for loc, v in sorted(overrides.items()) if v)
+n_card_rows = sum(len(s) for s in seqs.values())
 
 CARD_CTE = f"card(location_id, seq, product_id) AS (VALUES\n{card_values}\n)"
+TMPL_CTE = f"tmpl(product_id, pos) AS (VALUES\n{template_values}\n)"
+OV_CTE = f"ov(location_id, product_id, pos) AS (VALUES\n{override_values}\n)"
 
 # Effective position of every setting, and its rank in the location's list.
 EFF_CTE = """eff AS (
@@ -83,18 +216,55 @@ EFF_CTE = """eff AS (
     JOIN products p ON p.product_id = s.product_id
 )"""
 
+PRODUCTS_FP_SQL = ("SELECT md5(string_agg(product_id || ':' || product_category || ':' || "
+                   "active::text, ',' ORDER BY product_id COLLATE \"C\")) FROM products")
+SETTINGS_FP_SQL = ("SELECT md5(string_agg(location_id || ':' || product_id, ',' "
+                   "ORDER BY location_id COLLATE \"C\", product_id COLLATE \"C\")) "
+                   "FROM location_product_settings")
+
+unpos_txt = ", ".join(f"{loc} {len(v)} ({','.join(v)})" for loc, v in sorted(unpositioned.items()))
+no_setting_txt = ", ".join(f"{loc} {n}" for loc, n in sorted(no_setting.items()))
+extras_by_loc = collections.Counter(l for l, _ in extras)
+extras_active_by_loc = collections.Counter(l for l, _ in extras_active)
+extras_txt = ", ".join(f"{loc} {extras_active_by_loc[loc]}" for loc in sorted(extras_active_by_loc))
+extras_all_txt = ", ".join(f"{loc} {extras_by_loc[loc]}" for loc in sorted(extras_by_loc))
+no_section_txt = ", ".join(f"{l} {p}" for l, p in no_section)
+sup_txt = ", ".join(f"{s} {n}" for s, n in snap["supplier_display_order"].items())
+
 out = []
 w = out.append
 w(f"""-- inventory-card-order — prod data step: inventory-card positions
 -- Supabase project lpzhphufjwrndfogkfub.
--- GENERATED by data/gen_prod_sql.py.txt from data/positions.json and
--- data/card_order.json. Do not edit by hand; re-run the pipeline instead.
+-- GENERATED by data/gen_prod_sql.py.txt from data/positions.json,
+-- data/card_order.json and data/prod_snapshot.json (prod, read-only, taken
+-- {snap['taken_at']}). Do not edit by hand; re-run the pipeline instead.
+--
+-- Refreshed 2026-10-17 (first generated 2026-09-28, never applied). What changed:
+--   * Cards: the 12 "Inwentaryzacja" workbooks were re-downloaded from Drive on
+--     2026-10-17 (last edited 10-12.10). card_order.json is byte-identical to
+--     28.09 and positions.json is unchanged ({n_template} template products,
+--     {n_overrides} overrides). 22 products were renamed on prod since 28.09; 16 of
+--     those names no longer matched the card text, so alias.json now maps them
+--     to the product ids they resolved to on 28.09.
+--   * Prod since 28.09: new products P189-P192 (none is on a card);
+--     P139 inactive; settings +56 / -32 (FORUM and SUPERSAM own catalogs,
+--     SLONY, WESTFIELD, ELEKTROWNIA; WOLA Cappy P064/P065 -> 0,25 l glass
+--     P190/P191). Inactive locations today: KAMIENICA, KULINARNA, STARY_BROWAR
+--     (positioned anyway). Every override still matches a setting (1c empty).
+--   * Step 2 is now ONE guarded DO block: it locks the two tables, re-checks
+--     the before-state (positions all NULL, product and settings fingerprints
+--     equal to the snapshot) and asserts every row count and the card-order
+--     audits before COMMIT; any mismatch RAISEs and nothing is written.
+--   * Step 1e (new) previews the guards read-only. Expected counts below are
+--     today's prod, not 28.09's.
 --
 -- Run ONLY with the operator's explicit approval, and only AFTER:
---   1. migration 0027 is applied on prod (list_migrations shows it), and
---   2. the PR is merged and the new Railway backend + Vercel bundle are live, and
---   3. the 12 inventory workbooks were re-downloaded and the pipeline re-run
---      (the cards were still being edited before 1.10); commit any change first.
+--   1. migration 0027 is applied on prod (both inventory_order columns exist;
+--      it is not in list_migrations, it was applied outside the migration log),
+--   2. the code that reads the columns is live (app/product_order.py on main,
+--      Railway + Vercel auto-deploy), and
+--   3. the pipeline was re-run on a fresh snapshot if prod master data changed
+--      since {snap['taken_at'][:10]} (step 1e shows it: a fingerprint is false).
 -- Lessons: diff before (the diff IS the rollback), apply, audit after.
 --
 -- Positions are OWNED BY THE PIPELINE. Never hand-edit inventory_order on prod:
@@ -110,7 +280,10 @@ w(f"""-- inventory-card-order — prod data step: inventory-card positions
 --                                              + "extras": a location product its
 --                                              own card does not list goes to the
 --                                              end of its category section
---                                              (section's last card position + 1).
+--                                              (section's last card position + 1);
+--                                              {n_extras} rows on today's prod
+--                                              ({len(extras_active)} active products,
+--                                              {n_extras - len(extras_active)} settings of inactive products).
 -- Effective position = override, else template; ties by product_id
 -- (app/product_order.py). Expected overrides per location: {override_counts}.
 
@@ -123,7 +296,7 @@ UNION ALL
 SELECT 'setting', location_id, product_id, inventory_order
 FROM location_product_settings WHERE inventory_order IS NOT NULL
 ORDER BY 1, 2, 3;
--- expect on the first run: 0 rows
+-- expect: {before_products + before_settings} rows
 
 -- 1b. Card products with NO setting at their location (not on that grid;
 --     informational — the card lists something the app does not stock there).
@@ -134,6 +307,7 @@ LEFT JOIN location_product_settings s
        ON s.location_id = c.location_id AND s.product_id = c.product_id
 WHERE s.setting_id IS NULL
 ORDER BY 1, 2;
+-- expect: {sum(no_setting.values())} rows ({no_setting_txt})
 
 -- 1c. Overrides that match no setting (must be 0 rows).
 SELECT o.location_id, o.product_id
@@ -146,7 +320,8 @@ WHERE s.setting_id IS NULL;
 -- expect: 0 rows
 
 -- 1d. Extras per location: active location products their own card does not
---     list, which step 2 moves to the end of their category section.
+--     list, which step 2 moves to the end of their category section (a row whose
+--     category has no section on that card keeps its template position).
 WITH {CARD_CTE}
 SELECT s.location_id, p.product_category, s.product_id, p.product_name_pl
 FROM location_product_settings s
@@ -155,63 +330,186 @@ WHERE s.location_id IN (SELECT DISTINCT location_id FROM card)
   AND NOT EXISTS (SELECT 1 FROM card c
                   WHERE c.location_id = s.location_id AND c.product_id = s.product_id)
 ORDER BY 1, 2, 3;
+-- expect: {len(off_card_active)} rows: {len(extras_active)} extras ({extras_txt}) and
+--         {len(no_section)} without a section on their card ({no_section_txt})
 
--- ---------- 2. Apply (one transaction) ----------
+-- 1e. Guard preview: the checks step 2 makes before it writes, read-only.
+WITH {CARD_CTE},
+{TMPL_CTE},
+{OV_CTE},
+card_eff AS (
+    SELECT c.location_id, p.product_category, COALESCE(ov.pos, t.pos) AS e
+    FROM card c
+    JOIN products p ON p.product_id = c.product_id
+    LEFT JOIN tmpl t ON t.product_id = c.product_id
+    LEFT JOIN ov ON ov.location_id = c.location_id AND ov.product_id = c.product_id
+),
+section_end AS (
+    SELECT location_id, product_category, max(e) AS se FROM card_eff GROUP BY 1, 2
+)
+SELECT
+  (SELECT count(*) FROM products WHERE inventory_order IS NOT NULL) AS products_positioned,
+  (SELECT count(*) FROM location_product_settings
+   WHERE inventory_order IS NOT NULL) AS settings_positioned,
+  ({PRODUCTS_FP_SQL}) = '{products_fp}' AS products_fingerprint_ok,
+  ({SETTINGS_FP_SQL}) = '{settings_fp}' AS settings_fingerprint_ok,
+  (SELECT count(*) FROM products p JOIN tmpl t ON t.product_id = p.product_id) AS template_rows,
+  (SELECT count(*) FROM location_product_settings s
+   JOIN ov ON ov.location_id = s.location_id AND ov.product_id = s.product_id) AS override_rows,
+  (SELECT count(*) FROM location_product_settings s
+   JOIN products p ON p.product_id = s.product_id
+   JOIN section_end se ON se.location_id = s.location_id
+                      AND se.product_category = p.product_category
+   WHERE NOT EXISTS (SELECT 1 FROM card c
+                     WHERE c.location_id = s.location_id AND c.product_id = s.product_id)
+  ) AS extra_rows;
+-- expect: {before_products} | {before_settings} | true | true | {n_template} | {n_overrides} | {n_extras}
+
+-- ---------- 2. Apply (one transaction, one guarded DO block) ----------
+-- Any guard that fails RAISEs; the DO block then aborts the transaction and
+-- nothing is written (run ROLLBACK if your client leaves it open). Then re-run
+-- step 1, take a new snapshot and re-run the pipeline.
 
 BEGIN;
 
--- 2a. Clear everything first so a re-run is exact.
-UPDATE products SET inventory_order = NULL WHERE inventory_order IS NOT NULL;
-UPDATE location_product_settings SET inventory_order = NULL WHERE inventory_order IS NOT NULL;
+DO $$
+DECLARE
+    v_n  integer;
+    v_fp text;
+BEGIN
+    -- G0. No concurrent master-data write between the checks and the writes.
+    LOCK TABLE products, location_product_settings IN SHARE ROW EXCLUSIVE MODE;
 
--- 2b. Template.
-UPDATE products AS p
-SET inventory_order = t.pos
-FROM (VALUES
+    -- G1. Before-state = the snapshot this file was generated from.
+    SELECT count(*) INTO v_n FROM products WHERE inventory_order IS NOT NULL;
+    IF v_n <> {before_products} THEN
+        RAISE EXCEPTION 'G1 products.inventory_order set on % rows, expected {before_products}', v_n;
+    END IF;
+    SELECT count(*) INTO v_n FROM location_product_settings WHERE inventory_order IS NOT NULL;
+    IF v_n <> {before_settings} THEN
+        RAISE EXCEPTION 'G1 location_product_settings.inventory_order set on % rows, expected {before_settings}', v_n;
+    END IF;
+    {PRODUCTS_FP_SQL.replace(" FROM products", " INTO v_fp FROM products")};
+    IF v_fp IS DISTINCT FROM '{products_fp}' THEN
+        RAISE EXCEPTION 'G1 products (id, category, active) changed since the snapshot ({snap['taken_at'][:16]})';
+    END IF;
+    {SETTINGS_FP_SQL.replace(" FROM location_product_settings", " INTO v_fp FROM location_product_settings")};
+    IF v_fp IS DISTINCT FROM '{settings_fp}' THEN
+        RAISE EXCEPTION 'G1 location_product_settings rows added or removed since the snapshot ({snap['taken_at'][:16]})';
+    END IF;
+
+    -- Card sequence, once, for 2d and the in-transaction audits.
+    CREATE TEMP TABLE inv_card (location_id text, seq integer, product_id text) ON COMMIT DROP;
+    INSERT INTO inv_card (location_id, seq, product_id) VALUES
+{card_values};
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n <> {n_card_rows} THEN RAISE EXCEPTION 'card rows: expected {n_card_rows}, got %', v_n; END IF;
+
+    -- 2a. Clear everything first so a re-run is exact.
+    UPDATE products SET inventory_order = NULL WHERE inventory_order IS NOT NULL;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n <> {before_products} THEN RAISE EXCEPTION '2a products clear: expected {before_products}, got %', v_n; END IF;
+    UPDATE location_product_settings SET inventory_order = NULL WHERE inventory_order IS NOT NULL;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n <> {before_settings} THEN RAISE EXCEPTION '2a settings clear: expected {before_settings}, got %', v_n; END IF;
+
+    -- 2b. Template.
+    UPDATE products AS p
+    SET inventory_order = t.pos
+    FROM (VALUES
 {template_values}
-) AS t(product_id, pos)
-WHERE p.product_id = t.product_id;
--- expect: UPDATE {n_template} (fewer only if a product id is missing on prod)
+    ) AS t(product_id, pos)
+    WHERE p.product_id = t.product_id;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n <> {n_template} THEN RAISE EXCEPTION '2b template: expected {n_template}, got %', v_n; END IF;
 
--- 2c. Card overrides.
-UPDATE location_product_settings AS s
-SET inventory_order = o.pos
-FROM (VALUES
+    -- 2c. Card overrides.
+    UPDATE location_product_settings AS s
+    SET inventory_order = o.pos
+    FROM (VALUES
 {override_values}
-) AS o(location_id, product_id, pos)
-WHERE s.location_id = o.location_id AND s.product_id = o.product_id;
--- expect: UPDATE {n_overrides}
+    ) AS o(location_id, product_id, pos)
+    WHERE s.location_id = o.location_id AND s.product_id = o.product_id;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n <> {n_overrides} THEN RAISE EXCEPTION '2c overrides: expected {n_overrides}, got %', v_n; END IF;
 
--- 2d. Extras: section end + 1, computed from the card's effective positions and
---     prod's product_category (ties among extras break by product_id).
---     "+ 1" relies on a gap of at least 2 before the next section's first
---     position (template and overrides step by 10). Audit 3d is the tripwire:
---     it fails when a future override lands at section end + 1.
---     Settings of inactive products are positioned too, on purpose: they never
---     render, and a re-activated product already sits at its section end.
-WITH {CARD_CTE},
-card_eff AS (
-    SELECT c.location_id, p.product_category,
-           COALESCE(s.inventory_order, p.inventory_order) AS e
-    FROM card c
-    JOIN products p ON p.product_id = c.product_id
-    LEFT JOIN location_product_settings s
-           ON s.location_id = c.location_id AND s.product_id = c.product_id
-),
-section_end AS (
-    SELECT location_id, product_category, max(e) AS se
-    FROM card_eff GROUP BY 1, 2
-)
-UPDATE location_product_settings AS s
-SET inventory_order = se.se + 1
-FROM products p, section_end se
-WHERE p.product_id = s.product_id
-  AND se.location_id = s.location_id
-  AND se.product_category = p.product_category
-  AND NOT EXISTS (SELECT 1 FROM card c
-                  WHERE c.location_id = s.location_id AND c.product_id = s.product_id);
--- expect: UPDATE = the extras listed in 1d whose category has a section on the
---         card, plus inactive products' settings (82 on the 2026-09-28 prod copy)
+    -- 2d. Extras: section end + 1, computed from the card's effective positions and
+    --     prod's product_category (ties among extras break by product_id).
+    --     "+ 1" relies on a gap of at least 2 before the next section's first
+    --     position (template and overrides step by 10); the 3d check below is the
+    --     tripwire. Settings of inactive products are positioned too, on purpose:
+    --     they never render, and a re-activated product already sits at its
+    --     section end.
+    WITH card_eff AS (
+        SELECT c.location_id, p.product_category,
+               COALESCE(s.inventory_order, p.inventory_order) AS e
+        FROM inv_card c
+        JOIN products p ON p.product_id = c.product_id
+        LEFT JOIN location_product_settings s
+               ON s.location_id = c.location_id AND s.product_id = c.product_id
+    ),
+    section_end AS (
+        SELECT location_id, product_category, max(e) AS se
+        FROM card_eff GROUP BY 1, 2
+    )
+    UPDATE location_product_settings AS s
+    SET inventory_order = se.se + 1
+    FROM products p, section_end se
+    WHERE p.product_id = s.product_id
+      AND se.location_id = s.location_id
+      AND se.product_category = p.product_category
+      AND NOT EXISTS (SELECT 1 FROM inv_card c
+                      WHERE c.location_id = s.location_id AND c.product_id = s.product_id);
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    IF v_n <> {n_extras} THEN RAISE EXCEPTION '2d extras: expected {n_extras}, got %', v_n; END IF;
+
+    -- A1. Card order holds everywhere (audit 3c).
+    SELECT count(*) INTO v_n FROM (
+        SELECT c.seq,
+               lag(c.seq) OVER (PARTITION BY c.location_id
+                                ORDER BY COALESCE(s.inventory_order, p.inventory_order) NULLS LAST,
+                                         c.product_id) AS prev_seq
+        FROM inv_card c
+        JOIN location_product_settings s
+          ON s.location_id = c.location_id AND s.product_id = c.product_id
+        JOIN products p ON p.product_id = c.product_id
+    ) r WHERE r.prev_seq > r.seq;
+    IF v_n <> 0 THEN RAISE EXCEPTION 'A1 card-order inversions: %', v_n; END IF;
+
+    -- A2. Contiguity (audit 3d).
+    WITH {EFF_CTE.replace(chr(10), chr(10) + '    ')},
+    listed AS (
+        SELECT e.*, row_number() OVER (PARTITION BY e.location_id
+                                       ORDER BY e.e NULLS LAST, e.product_id) AS rn,
+               EXISTS (SELECT 1 FROM inv_card c
+                       WHERE c.location_id = e.location_id AND c.product_id = e.product_id) AS on_card
+        FROM eff e
+        WHERE e.active AND e.location_id IN (SELECT DISTINCT location_id FROM inv_card)
+    ),
+    sections AS (
+        SELECT location_id, product_category, min(rn) AS lo, max(rn) AS hi
+        FROM listed WHERE on_card GROUP BY 1, 2
+    )
+    SELECT count(*) INTO v_n
+    FROM listed l
+    JOIN sections sec ON sec.location_id = l.location_id AND l.rn BETWEEN sec.lo AND sec.hi
+    WHERE NOT l.on_card;
+    IF v_n <> 0 THEN RAISE EXCEPTION 'A2 contiguity breaks: %', v_n; END IF;
+
+    -- A3. Totals (audits 3a, 3e).
+    SELECT count(*) INTO v_n FROM products WHERE inventory_order IS NOT NULL;
+    IF v_n <> {n_template} THEN RAISE EXCEPTION 'A3 positioned products: expected {n_template}, got %', v_n; END IF;
+    SELECT count(*) INTO v_n FROM location_product_settings WHERE inventory_order IS NOT NULL;
+    IF v_n <> {n_overrides + n_extras} THEN
+        RAISE EXCEPTION 'A3 positioned settings: expected {n_overrides + n_extras}, got %', v_n;
+    END IF;
+    SELECT count(*) INTO v_n
+    FROM location_product_settings s JOIN products p ON p.product_id = s.product_id
+    WHERE p.active AND COALESCE(s.inventory_order, p.inventory_order) IS NULL;
+    IF v_n <> {n_unpositioned} THEN
+        RAISE EXCEPTION 'A3 unpositioned active settings: expected {n_unpositioned}, got %', v_n;
+    END IF;
+END $$;
 
 COMMIT;
 
@@ -272,21 +570,22 @@ ORDER BY 1, 2, 3;
 -- expect: 0 rows
 
 -- 3e. Unpositioned active location products per location. Every active product
---     at a carded location is either on its card or an extra (2d), so this is
---     empty unless a product's category has no section on the card and no card
---     lists it anywhere; such rows sort last.
+--     at a carded location is either on its card or an extra (2d), so only a
+--     location without a card can list rows here (its products that no card
+--     lists); such rows sort last.
 {'WITH ' + EFF_CTE}
 SELECT location_id, count(*) AS unpositioned, string_agg(product_id, ',' ORDER BY product_id) AS ids
 FROM eff WHERE active AND e IS NULL
 GROUP BY 1 ORDER BY 1;
--- expect: 0 rows (local dry run on a prod copy, 2026-09-28)
+-- expect: {len(unpositioned)} rows{(' — ' + unpos_txt) if unpos_txt else ''}
 
 -- 3f. Other suppliers' display_order untouched (this file never writes it).
 SELECT supplier_id, count(*) FILTER (WHERE display_order IS NOT NULL) AS positioned
 FROM supplier_products GROUP BY 1 HAVING count(*) FILTER (WHERE display_order IS NOT NULL) > 0
 ORDER BY 1;
--- expect: same as before this file (SUP_BUKAT 14, plus Pago/Mory if
---         prod-sql-pago-mory.sql already ran)
+-- expect: same as before this file — on {snap['taken_at'][:10]}:
+--   {sup_txt}
+--   (plus SUP_MORY 18 and SUP_PAGO 6 if prod-sql-pago-mory.sql ran in between)
 
 -- ---------- R. Rollback ----------
 -- First run: every value was NULL (step 1a returned 0 rows), so:
@@ -297,4 +596,13 @@ ORDER BY 1;
 
 open(STEP_FILE, "w").write("".join(out))
 print(f"wrote {STEP_FILE}: template {n_template}, overrides {n_overrides}, "
-      f"card rows {sum(len(s) for s in seqs.values())}")
+      f"card rows {n_card_rows}, extras {n_extras} ({len(extras_active)} active)")
+print(f"before: products {before_products}, settings {before_settings}")
+print(f"fingerprints: products {products_fp}, settings {settings_fp}")
+print(f"1b no setting: {no_setting_txt}")
+print(f"extras all: {extras_all_txt}")
+print(f"unpositioned: {unpos_txt or 'none'}")
+print("loc | active | settings | active settings | card rows on template | card overrides"
+      " | extras (active) | template fallback | unpositioned | extras (inactive products)")
+for row in summary:
+    print(" | ".join(str(x) for x in row))
