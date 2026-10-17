@@ -39,7 +39,9 @@ import { isOrderEditable } from "./manager/lib/managerLine";
 import {
   type DraftedOrder,
   gmailDraftsUrl,
+  loadDraftedOrders,
   openDraftTab,
+  saveDraftedOrders,
 } from "./manager/lib/orderEmailDraft";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
@@ -84,9 +86,33 @@ export function ManagerPage() {
   const [dispatchedLinks, setDispatchedLinks] = useState<Record<string, string>>({});
   // Orders sent this session through a verified Gmail draft -> the mailbox
   // holding the draft, its link and whether the tab opened (order-email-v2,
-  // supplier-email-v21). Session-only, like dispatchedLinks: the DispatchPanel
-  // unmounts once the order turns manager_sent.
-  const [draftedOrders, setDraftedOrders] = useState<Record<string, DraftedOrder>>({});
+  // supplier-email-v21). Mirrored to sessionStorage (impl-review S3) so a
+  // blocked tab's "not sent yet" warning survives a reload of this tab; the
+  // queue marks those orders too.
+  const [draftedOrders, setDraftedOrders] = useState<Record<string, DraftedOrder>>(
+    loadDraftedOrders,
+  );
+  useEffect(() => {
+    saveDraftedOrders(draftedOrders);
+  }, [draftedOrders]);
+  // The manager opened the draft from the amber line (a fresh click, so the
+  // browser allows it): the warning has done its job.
+  const handleDraftOpened = useCallback((orderId: string): void => {
+    setDraftedOrders((prev) =>
+      prev[orderId] && !prev[orderId].opened
+        ? { ...prev, [orderId]: { ...prev[orderId], opened: true } }
+        : prev,
+    );
+  }, []);
+  const unsentDraftIds = useMemo<Set<string>>(
+    () =>
+      new Set(
+        Object.entries(draftedOrders)
+          .filter(([, d]) => !d.opened)
+          .map(([id]) => id),
+      ),
+    [draftedOrders],
+  );
   // Order with a Gmail draft in progress (order-email-v2). While set, the page
   // refuses every other action — switching orders mid-draft used to drop the
   // dispatch silently (or build it from another order's lines).
@@ -641,6 +667,7 @@ export function ManagerPage() {
               selectedId={selectedId}
               onSelect={handleSelect}
               visibleLanes={visibleLanes}
+              unsentDraftIds={unsentDraftIds}
             />
           </div>
           <div className="min-w-0 flex-1">
@@ -653,6 +680,7 @@ export function ManagerPage() {
               cutoffIso={selectedCutoffIso}
               dispatchedEmailUrl={selectedId ? dispatchedLinks[selectedId] ?? null : null}
               drafted={selectedId ? draftedOrders[selectedId] ?? null : null}
+              onDraftOpened={handleDraftOpened}
               drafts={drafts}
               availableToAdd={availableToAdd}
               onAddLine={handleAddLine}

@@ -30,6 +30,7 @@ import {
   describeDraftError,
   getGoogleClientId,
   gmailDraftOpenUrl,
+  gmailDraftsUrl,
 } from "./lib/orderEmailDraft";
 import { splitRecipients } from "./lib/transport";
 import { useOrderEmailSigner } from "./lib/useOrderEmailSigner";
@@ -239,7 +240,11 @@ export function ResendPanel({
               rel="noopener noreferrer"
               className="underline"
             >
-              {t("manager.draft.openDraft")}
+              {t(
+                draftResult.url === gmailDraftsUrl(mailbox)
+                  ? "manager.draft.openDrafts"
+                  : "manager.draft.openDraft",
+              )}
             </a>
           )}
         </p>

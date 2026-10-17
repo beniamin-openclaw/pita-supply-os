@@ -239,6 +239,44 @@ export interface DraftedOrder {
   opened: boolean;
 }
 
+const DRAFTED_ORDERS_KEY = "supply_os_drafted_orders_v1";
+
+function isDraftedOrder(v: unknown): v is DraftedOrder {
+  if (!v || typeof v !== "object") return false;
+  const d = v as Record<string, unknown>;
+  return typeof d.mailbox === "string" && typeof d.url === "string" && typeof d.opened === "boolean";
+}
+
+/**
+ * Drafts sent from this tab, kept in sessionStorage (impl-review S3) so a
+ * reload or an order switch does not lose the "not sent yet" warning of a
+ * draft whose tab was blocked. Per tab, cleared when the tab closes; storage
+ * that throws or holds junk gives an empty map.
+ */
+export function loadDraftedOrders(): Record<string, DraftedOrder> {
+  try {
+    const raw = window.sessionStorage.getItem(DRAFTED_ORDERS_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, DraftedOrder> = {};
+    for (const [id, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (isDraftedOrder(v)) out[id] = { mailbox: v.mailbox, url: v.url, opened: v.opened };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function saveDraftedOrders(map: Record<string, DraftedOrder>): void {
+  try {
+    window.sessionStorage.setItem(DRAFTED_ORDERS_KEY, JSON.stringify(map));
+  } catch {
+    // Private mode / quota: the warning still lives in memory for this page.
+  }
+}
+
 /**
  * Try to open `url` in a new tab; true when the browser allowed it. Called
  * after several awaits, so a popup blocker usually stops it on the first send

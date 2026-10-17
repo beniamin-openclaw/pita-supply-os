@@ -84,6 +84,9 @@ interface OrderDetailPaneProps {
   onToast: (msg: string, ok: boolean) => void;
   /** A Gmail draft started/settled for this order (page lock, order-email-v2). */
   onDraftingChange?: (orderId: string, drafting: boolean) => void;
+  /** The manager clicked "Otwórz szkic" on this order (clears the amber
+   *  "not sent yet" warning, supplier-email-v21 S3). */
+  onDraftOpened?: (orderId: string) => void;
 }
 
 export function OrderDetailPane({
@@ -107,6 +110,7 @@ export function OrderDetailPane({
   onCommentChange,
   onToast,
   onDraftingChange,
+  onDraftOpened,
 }: OrderDetailPaneProps) {
   const { t, formatDateTime } = useT();
 
@@ -352,7 +356,12 @@ export function OrderDetailPane({
         <>
           {(dispatchedEmailUrl || drafted) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-              {drafted && <DraftedLine drafted={drafted} />}
+              {drafted && (
+                <DraftedLine
+                  drafted={drafted}
+                  onOpen={() => onDraftOpened?.(detail.order_id)}
+                />
+              )}
               {dispatchedEmailUrl && !drafted && (
                 <a
                   href={dispatchedEmailUrl}
@@ -409,7 +418,7 @@ export function OrderDetailPane({
       ) : (
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
           {drafted ? (
-            <DraftedLine drafted={drafted} />
+            <DraftedLine drafted={drafted} onOpen={() => onDraftOpened?.(detail.order_id)} />
           ) : dispatchedEmailUrl ? (
             <a
               href={dispatchedEmailUrl}
@@ -441,9 +450,16 @@ export function OrderDetailPane({
  *  blocked the tab (supplier-email-v21 WP3) the line turns amber and says the
  *  e-mail is NOT sent yet — the "Otwórz szkic" click is a fresh gesture, so it
  *  always opens. The folder link stays as a backup for an edited draft. */
-function DraftedLine({ drafted }: { drafted: DraftedOrder }) {
+function DraftedLine({
+  drafted,
+  onOpen,
+}: {
+  drafted: DraftedOrder;
+  onOpen?: () => void;
+}) {
   const { t } = useT();
   const { mailbox, url, opened } = drafted;
+  const isFolder = url === gmailDraftsUrl(mailbox);
   const tone = opened
     ? "border-green-400 text-green-800 hover:bg-green-50 focus-visible:ring-green-500"
     : "border-amber-400 text-amber-900 hover:bg-amber-50 focus-visible:ring-amber-500";
@@ -463,11 +479,13 @@ function DraftedLine({ drafted }: { drafted: DraftedOrder }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={onOpen}
         className={`rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 ${tone}`}
       >
-        {t("manager.draft.openDraft")}
+        {/* No message id (or OPEN_SINGLE_DRAFT off): the link is the folder. */}
+        {t(isFolder ? "manager.draft.openDrafts" : "manager.draft.openDraft")}
       </a>
-      {url !== gmailDraftsUrl(mailbox) && (
+      {!isFolder && (
         <a
           href={gmailDraftsUrl(mailbox)}
           target="_blank"

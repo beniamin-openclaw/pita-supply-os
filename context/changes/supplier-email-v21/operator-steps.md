@@ -11,7 +11,7 @@ sends each draft from Gmail.
 2. On Railway (backend service), set `SUPPLY_OS_ORDER_EMAIL_DELIVERY_DATE_ENABLED=true` and let
    it redeploy. The default in code stays `false`, so turning it back off (or deleting the
    variable) is the rollback. Until it is set, e-mails print the blank
-   `Dostawa: ____________, od godziny 11:00` line exactly as today.
+   `Dostawa: __________, od godziny 11:00` line exactly as today.
 
 ## 2. Live check on one real order (Westfield or Wola), draft only
 
@@ -36,12 +36,18 @@ today.
    draft tab directly. Note whether it did.
 5. Edit a draft in Gmail (any small change, keep it as a draft), then click **Otwórz szkic**
    on that order again. Note what opens (the draft, or just the Drafts list — both are safe).
-   If the link ever opens an empty compose window or the wrong draft, set
-   `OPEN_SINGLE_DRAFT = false` in `frontend/src/pages/manager/lib/orderEmailDraft.ts`
-   (all links fall back to the Drafts folder) and tell the dev session.
-6. One dosyłka (resend): the "Dosyłka do dostawcy" panel's draft result ("Szkic dosyłki utworzony w …") now links **Otwórz szkic** to that
-   draft; the resend still never marks anything as sent.
-7. Question for the Transport flow (not changed here): has Transport's own late tab-open
+   If the link ever opens an empty compose window or the wrong draft, tell the dev session:
+   the fix is a one-line code change (`OPEN_SINGLE_DRAFT = false` in
+   `frontend/src/pages/manager/lib/orderEmailDraft.ts`, all links then open the Drafts folder)
+   plus a normal Vercel deploy — it is not a runtime switch.
+6. One dosyłka (resend) on an already sent order: the "Dosyłka do dostawcy" panel's draft
+   result ("Szkic dosyłki utworzony w …") links **Otwórz szkic** to that draft; in it check the
+   same layout as in 3 (date line, extras rows, company block before "Pozdrawiam,"). The resend
+   never marks anything as sent.
+7. Blocked-tab warning: after a first send that showed the amber line, click another order
+   and reload the page — the first order's queue card must show the amber "Szkic niewysłany"
+   chip, and opening it must show the amber line again. Clicking **Otwórz szkic** clears both.
+8. Question for the Transport flow (not changed here): has Transport's own late tab-open
    after a send ever opened a tab for you, or is it always blocked?
 
 ## 3. WP2 note (not in this change)

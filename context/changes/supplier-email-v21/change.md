@@ -1,7 +1,7 @@
 ---
 change_id: supplier-email-v21
 title: Supplier e-mail v2.1 — company data before the sign-off, off-catalogue items as table rows, delivery date on, one "Wyślij" that opens the draft
-status: plan_reviewed
+status: impl_reviewed
 created: 2026-10-17
 updated: 2026-10-17
 archived_at: null

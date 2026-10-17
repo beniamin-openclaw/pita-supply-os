@@ -255,7 +255,7 @@ _EXTRA_ITEM_SEP = " - "
 
 
 def _extra_item_rows(extra_items: str) -> list[tuple[str, str]]:
-    """(product, qty) cells of the Captain's off-catalogue items — twin of
+    r"""(product, qty) cells of the Captain's off-catalogue items — twin of
     ``extraItemRows`` in emailBody.ts (supplier-email-v21 WP1).
 
     ``extra_items`` is free text, one item per line, written by the Captain UI

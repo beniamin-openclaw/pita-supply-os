@@ -672,6 +672,20 @@ def test_ad_hoc_items_block_omitted_when_empty():
     body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
     assert "Pozycje spoza katalogu:" not in body
     assert "(spoza katalogu)" not in body
+    assert "1.  | P027 karton | 1 karton\n\n" in body
+
+
+def test_ad_hoc_items_whitespace_only_adds_no_row():
+    line = _make_line("OL-001", "P027", "SP_PAGO_P027", captain_qty=1)
+    order = _make_order(lines=[line], extra_items="   \n  \r\n")
+    supplier = _make_supplier()
+    products = {"P027": _make_product("P027", "Souvlaki")}
+    products["SP_PAGO_P027"] = _make_sp("SP_PAGO_P027", "SUP_PAGO", "P027")
+
+    url = build_draft_url(order, supplier, [line], products, None)
+    body = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["body"][0]
+    assert "(spoza katalogu)" not in body
+    assert "1.  | P027 karton | 1 karton\n\n" in body
 
 
 def test_captain_note_block_included_when_present():
@@ -723,6 +737,7 @@ def test_ad_hoc_rows_come_before_the_captain_note():
     "raw,rows",
     [
         ("", []),
+        ("   \n  ", []),
         ("Serwetki - 5 opak", [("Serwetki", "5 opak")]),
         ("  Serwetki - 5 opak  \r\n\r\n   \r\n", [("Serwetki", "5 opak")]),
         ("Mięta - ", [("Mięta -", "")]),

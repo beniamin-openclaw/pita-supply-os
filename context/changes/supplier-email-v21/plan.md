@@ -206,3 +206,28 @@ Also update the S-02 notes / docstrings that describe the old layout.
    draft path is unavailable; stale comments fixed in `extraItems.ts`, `.env.example`, `config.py`,
    both builder docstrings; `npm ci` in the worktree before `/verify`.
 7. Dosyłka e-mails get the new layout too (same builder) — one dosyłka check in operator steps.
+
+## Progress
+
+- [x] Phase 1 — WP1 layout in both builders, 6 shared goldens (2 new), D2 checked with the date ON.
+- [x] Phase 2 — WP3 one "Wyślij" → that draft (`#drafts?compose=<message.id>`), amber line on a
+  blocked tab, secondary actions behind "Inne opcje", ResendPanel links the one draft.
+- [x] Phase 3 — `operator-steps.md`, comments, WP2 note.
+- [x] Impl-review (`reviews/impl-review.md`, APPROVE WITH FIXES) — resolutions below.
+- [ ] Operator: Railway flag + live check (`operator-steps.md`), then `/10x-archive`.
+
+## Impl-review resolutions (reviews/impl-review.md)
+
+- S1 fixed: `ManagerPage.draftLock.test.tsx` holds the dispatch pending (no `window.open` yet)
+  and rejects it (409 → no tab, no draft line, `dispatchFailed` toast).
+- S2 fixed: the "no extras" tests assert no `(spoza katalogu)` and the exact table end; the
+  whitespace-only field case is in both splitter tables and has a backend body test.
+- S3 fixed: drafted orders are mirrored to sessionStorage (`loadDraftedOrders` /
+  `saveDraftedOrders`, per tab), the queue card shows an amber "Szkic niewysłany" chip while the
+  draft tab has not opened, and clicking "Otwórz szkic" clears the line + chip.
+- N2 fixed (a folder link says "Otwórz szkice"), N5 (raw docstring), N8 (flag comments say
+  "to be set"), N9 (operator steps: 10 underscores, `OPEN_SINGLE_DRAFT` is a code change +
+  deploy, dosyłka layout/date check, reload/chip check), N10 (status + this section).
+- Not changed: N1 (exotic Unicode whitespace, not typed), N3 (the toast already says to send
+  from Gmail; the amber line carries the warning), N4 (the over-long note on the draft path —
+  follow-up), N6 (defensive branch kept for twin symmetry), N7 (test-name precision).

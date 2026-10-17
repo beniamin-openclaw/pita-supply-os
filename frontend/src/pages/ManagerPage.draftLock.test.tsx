@@ -5,7 +5,7 @@
 // blocked tab leaves an amber "not sent yet — Otwórz szkic" line.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { LangProvider } from "../i18n";
@@ -34,7 +34,7 @@ vi.mock("./manager/lib/orderEmailDraft", async (importOriginal) => {
   };
 });
 
-import { api } from "../apiClient";
+import { ApiError, api } from "../apiClient";
 import * as orderDraft from "./manager/lib/orderEmailDraft";
 import { ManagerPage } from "./ManagerPage";
 
@@ -108,12 +108,23 @@ const DETAILS: Record<string, ManagerOrderDetail> = {
   "ORD-2": detail("ORD-2", "Pita Bros Wola"),
 };
 
+// In-memory sessionStorage, fresh per test, so the drafted-orders mirror
+// (impl-review S3) can be read back across a remount like after a reload.
+let session: Map<string, string>;
+
 beforeEach(() => {
   vi.stubGlobal("localStorage", {
     getItem: () => null,
     setItem: () => undefined,
     removeItem: () => undefined,
     clear: () => undefined,
+  });
+  session = new Map<string, string>();
+  vi.stubGlobal("sessionStorage", {
+    getItem: (k: string) => session.get(k) ?? null,
+    setItem: (k: string, v: string) => void session.set(k, v),
+    removeItem: (k: string) => void session.delete(k),
+    clear: () => session.clear(),
   });
   vi.mocked(api.managerQueue).mockImplementation(async (_loc, status) =>
     status === "manager_claimed"
@@ -219,6 +230,65 @@ describe("ManagerPage — page lock during a Gmail draft", { timeout: 15_000 }, 
     await waitFor(() => expect(api.managerOrder).toHaveBeenCalledWith("ORD-2"));
   });
 
+  it("the draft tab waits for the dispatch: pending opens nothing yet", async () => {
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
+      draftId: "r-1",
+      messageId: "m-1",
+    });
+    let settle: (v: Awaited<ReturnType<typeof api.managerDispatch>>) => void = () => {};
+    vi.mocked(api.managerDispatch).mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
+    const sendButton = await screen.findByRole("button", { name: "Wyślij" });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+    await waitFor(() => expect(api.managerDispatch).toHaveBeenCalledTimes(1));
+    // Draft verified, dispatch still in flight: no tab for an unrecorded order.
+    expect(openSpy).not.toHaveBeenCalled();
+
+    await act(async () =>
+      settle({
+        order_id: "ORD-1",
+        status: "manager_sent",
+        gmail_compose_url: null,
+        supplier_email: "biuro@bukat.com",
+        total_value_estimate_pln: 0,
+      }),
+    );
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(DRAFT_URL, "_blank");
+  });
+
+  it("a rejected dispatch opens no tab and shows no draft line", async () => {
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
+      draftId: "r-1",
+      messageId: "m-1",
+    });
+    vi.mocked(api.managerDispatch).mockRejectedValue(
+      new ApiError(409, "Zamówienie już wysłane"),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
+    const sendButton = await screen.findByRole("button", { name: "Wyślij" });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+    await waitFor(() => expect(api.managerDispatch).toHaveBeenCalledTimes(1));
+    expect(
+      await screen.findByText(/Szkic jest w biuro@pitabros\.pl \(niewysłany\), ale nie udało się/),
+    ).toBeInTheDocument();
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText(/NIE jest jeszcze wysłany/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Otwórz szkic" })).toBeNull();
+  });
+
   it("a blocked tab leaves an amber 'not sent yet' line linking the draft", async () => {
     vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
       draftId: "r-1",
@@ -263,5 +333,44 @@ describe("ManagerPage — page lock during a Gmail draft", { timeout: 15_000 }, 
       DRAFT_URL,
     );
     expect(screen.queryByText(/NIE jest jeszcze wysłany/)).toBeNull();
+  });
+
+  it("a blocked draft keeps its warning on the queue and across a reload until opened", async () => {
+    vi.mocked(orderDraft.createVerifiedOrderDraft).mockResolvedValue({
+      draftId: "r-1",
+      messageId: "m-1",
+    });
+    openSpy.mockReturnValue(null);
+    sentAfterDispatch();
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
+    const sendButton = await screen.findByRole("button", { name: "Wyślij" });
+    await act(async () => {
+      fireEvent.click(sendButton);
+    });
+    await screen.findByText(/NIE jest jeszcze wysłany/);
+    const bracka = screen.getByRole("button", { name: /Pita Bros Bracka → Bukat/ });
+    expect(bracka).toHaveTextContent("Szkic niewysłany");
+    expect(screen.getByRole("button", { name: /Pita Bros Wola → Bukat/ })).not.toHaveTextContent(
+      "Szkic niewysłany",
+    );
+
+    // Reload: a fresh page in the same tab still shows the warning.
+    cleanup();
+    renderPage();
+    expect(
+      await screen.findByRole("button", { name: /Pita Bros Bracka → Bukat.*Szkic niewysłany/ }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Pita Bros Bracka → Bukat/ }));
+    await screen.findByText(/NIE jest jeszcze wysłany/);
+
+    // Opening the draft from the line clears the warning (line + chip).
+    fireEvent.click(screen.getByRole("link", { name: "Otwórz szkic" }));
+    expect(screen.queryByText(/NIE jest jeszcze wysłany/)).toBeNull();
+    expect(screen.getByRole("link", { name: "Otwórz szkic" })).toHaveAttribute("href", DRAFT_URL);
+    expect(screen.getByRole("button", { name: /Pita Bros Bracka → Bukat/ })).not.toHaveTextContent(
+      "Szkic niewysłany",
+    );
   });
 });

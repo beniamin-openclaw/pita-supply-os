@@ -26,7 +26,9 @@ import {
   describeDraftError,
   gmailDraftOpenUrl,
   gmailDraftsUrl,
+  loadDraftedOrders,
   openDraftTab,
+  saveDraftedOrders,
   SenderRewrittenError,
   WrongMailboxError,
 } from "./orderEmailDraft";
@@ -275,5 +277,48 @@ describe("gmailDraftOpenUrl / openDraftTab (supplier-email-v21 WP3)", () => {
     });
     expect(openDraftTab(folder)).toBe(false);
     open.mockRestore();
+  });
+});
+
+describe("loadDraftedOrders / saveDraftedOrders (impl-review S3)", () => {
+  function stubSession(initial: Record<string, string> = {}): Map<string, string> {
+    const m = new Map(Object.entries(initial));
+    vi.stubGlobal("sessionStorage", {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+    });
+    return m;
+  }
+
+  it("round-trips the map", () => {
+    stubSession();
+    const map = { "ORD-1": { mailbox: "biuro@pitabros.pl", url: "u", opened: false } };
+    saveDraftedOrders(map);
+    expect(loadDraftedOrders()).toStrictEqual(map);
+    vi.unstubAllGlobals();
+  });
+
+  it("drops junk and survives unreadable storage", () => {
+    stubSession({
+      supply_os_drafted_orders_v1: JSON.stringify({
+        ok: { mailbox: "m", url: "u", opened: true, extra: 1 },
+        bad: { mailbox: "m", opened: "no" },
+        nul: null,
+      }),
+    });
+    expect(loadDraftedOrders()).toStrictEqual({ ok: { mailbox: "m", url: "u", opened: true } });
+    stubSession({ supply_os_drafted_orders_v1: "{not json" });
+    expect(loadDraftedOrders()).toStrictEqual({});
+    vi.stubGlobal("sessionStorage", {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    });
+    expect(loadDraftedOrders()).toStrictEqual({});
+    expect(() => saveDraftedOrders({})).not.toThrow();
+    vi.unstubAllGlobals();
   });
 });

@@ -2195,6 +2195,11 @@ export const STRINGS = {
   },
 
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
+  "manager.queue.draftUnsentChip": { pl: "Szkic niewysłany", en: "Draft not sent" },
+  "manager.queue.draftUnsentChipTooltip": {
+    pl: "Szkic tego zamówienia jest w Gmailu, ale się nie otworzył. Otwórz zamówienie i kliknij „Otwórz szkic”.",
+    en: "This order's draft is in Gmail but did not open. Open the order and click “Open draft”.",
+  },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",
     en: "Order combined into a transport batch",

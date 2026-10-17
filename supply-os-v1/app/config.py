@@ -98,9 +98,9 @@ class Settings(BaseSettings):
     order_mailbox: str = "biuro@pitabros.pl"
     # Render requested_delivery_date in the supplier e-mail (subject + body).
     # Default OFF (a deployment without the delivery calendar would print a
-    # computed "tomorrow" guess). Production turns it on: Ben's decision D2 of
-    # 2026-10-17, the operator sets SUPPLY_OS_ORDER_EMAIL_DELIVERY_DATE_ENABLED
-    # =true on Railway after the supplier-email-v21 deploy.
+    # computed "tomorrow" guess). Production is to turn it on (Ben's decision
+    # D2 of 2026-10-17): the operator sets SUPPLY_OS_ORDER_EMAIL_DELIVERY_DATE_
+    # ENABLED=true on Railway after the supplier-email-v21 deploy.
     order_email_delivery_date_enabled: bool = False
 
 

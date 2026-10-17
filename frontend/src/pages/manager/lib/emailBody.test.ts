@@ -183,6 +183,7 @@ describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comm
 
   it.each([
     ["", []],
+    ["   \n  ", []],
     ["Serwetki - 5 opak", [["Serwetki", "5 opak"]]],
     ["  Serwetki - 5 opak  \r\n\r\n   \r\n", [["Serwetki", "5 opak"]]],
     ["Mięta - ", [["Mięta -", ""]]],
@@ -193,19 +194,25 @@ describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comm
     expect(extraItemRows(raw)).toStrictEqual(rows);
   });
 
-  it("omits the off-catalogue items block entirely when extra_items is empty", () => {
+  it("adds no off-catalogue row entirely when extra_items is empty", () => {
     const body = buildEmailBody(detail({ extra_items: "" }), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
+    // No extras row: the product table ends right after its header.
+    expect(body).toContain("Lp. | Produkt | Ilość\n\n");
   });
 
-  it("omits the off-catalogue items block when extra_items is absent (backend default)", () => {
+  it("adds no off-catalogue row when extra_items is absent (backend default)", () => {
     const body = buildEmailBody(detail(), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
+    // No extras row: the product table ends right after its header.
+    expect(body).toContain("Lp. | Produkt | Ilość\n\n");
   });
 
-  it("trims whitespace-only extra_items to nothing (block omitted)", () => {
+  it("trims whitespace-only extra_items to nothing (no row)", () => {
     const body = buildEmailBody(detail({ extra_items: "   \n  " }), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
+    // No extras row: the product table ends right after its header.
+    expect(body).toContain("Lp. | Produkt | Ilość\n\n");
   });
 
   it("renders the Komentarz: block when captain_note is present", () => {
