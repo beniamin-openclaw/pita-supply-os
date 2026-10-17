@@ -84,7 +84,7 @@ Rekomendacja w nawiasie. Każda decyzja odblokowuje konkretny pakiet pracy (WP).
 | D3 | tak: obcinać w widoku kapitana; w mailu tylko u dostawców wskazanych przez Marka |
 | D4 | tak: Pago+Mory grupowane tylko w UI, Filber dostaje przycisk „zamówione” |
 | D5 | **do potwierdzenia**: w wiadomości z 17.10 padły trzy „tak” na D2–D5 (cztery punkty) |
-| D6 | stany obowiązkowe dla wszystkich lokali poza Norblinem i Elektrownią, **do odwołania** (nie do 31.10). Na koniec opisać w podsumowaniu, co działa i co wdrożono. **Do potwierdzenia: blokada wysłania czy ostrzeżenie** |
+| D6 | stany obowiązkowe dla wszystkich lokali poza Norblinem i Elektrownią, **do odwołania** (nie do 31.10). Na koniec opisać w podsumowaniu, co działa i co wdrożono. **Ostrzeżenie, bez blokady wysyłki zamówienia** (Ben 17.10) |
 | D7 | tak: Kraków i Katowice wysyłane mailem tam, gdzie mamy adres i minimum |
 | D8 | tak: „cięte” jako osobna pozycja do liczenia (halloumi, gyros), wszystkie lokale, które kroją |
 | D9 | tak: kategoria „Materiały / inne”, w której lokal wpisuje dowolną pozycję tekstem (zgłoszenie, nie produkt z katalogu) |
@@ -242,10 +242,10 @@ dzielą plików, więc mogą iść równolegle.
 - [x] Zebranie: sesja z mini 16.10, repo, Wispr, Gmail, sesje laptopa, weryfikacja vs kod (`inputs/`)
 - [x] Etap 0 — zabezpieczenie (17.10, PR #63)
 - [ ] Etap 1 — Gdańsk
-- [ ] Etap 2 — decyzje (17.10: D1–D4, D6–D20 podjęte; otwarte: D5 potwierdzenie, D6 blokada czy ostrzeżenie)
+- [ ] Etap 2 — decyzje (17.10: D1–D4, D6–D20 podjęte; otwarte: D5 potwierdzenie)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
-- [ ] Etap 5 — fala A (17.10: karty sesji Lane C, E, D zaproponowane Benowi; Lane M po Lane C)
+- [ ] Etap 5 — fala A (17.10: sesje Lane C, E, D uruchomione; Lane M po Lane C; D6 dopisane do Lane C jako pkt 8)
 - [ ] Etap 5 — fala B
 - [ ] Etap 5 — fala C
 - [ ] Etap 6 — porządki

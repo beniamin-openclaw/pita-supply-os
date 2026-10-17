@@ -104,7 +104,7 @@ Pliki: `context/changes/<id>/prod-sql-*.sql` + audyty. Każdy plik ma BEFORE (od
 
 ## Fala B (start po potwierdzeniu)
 
-- **D6 obowiązkowe stany** (czeka: blokada czy ostrzeżenie). Flaga per lokal, Norblin i Elektrownia wyłączone, do odwołania.
+- **D6 obowiązkowe stany: ostrzeżenie, bez blokady wysyłki** (Ben 17.10). Flaga per lokal, Norblin i Elektrownia wyłączone, do odwołania.
   Pliki: submit kapitana + migracja. Lane C po pkt 7.
 - **D9 kategoria „Materiały / inne”.** Wolny tekst od lokalu jako zgłoszenie, nie produkt z katalogu. Nowa funkcja
   (backend + kapitan + manager), osobny lane po Lane C.
