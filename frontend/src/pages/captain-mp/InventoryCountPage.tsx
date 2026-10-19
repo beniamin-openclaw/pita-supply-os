@@ -2,8 +2,9 @@
 // Counts every product configured for the Captain's location in one pass →
 // confirm → POST /api/captain/inventory/submit creates a dated snapshot.
 // Mirrors CaptainMP's fetch → draft → confirm → submit → toast flow. The draft
-// uses a fixed sentinel key because inventory is location-scoped (one count per
-// location), not supplier-scoped like the order screen.
+// key is per location (Captain-token fingerprint, `lib/inventoryDraft.ts`, N19)
+// because inventory is location-scoped (one count per location), not
+// supplier-scoped like the order screen.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +18,7 @@ import { CaptainTabs } from "./components/CaptainTabs";
 import { InventoryCountGrid, type PreviousCount } from "./components/InventoryCountGrid";
 import { InventorySubmittedCard } from "./components/InventorySubmittedCard";
 import { Toast, type ToastProps } from "./components/Toast";
+import { inventoryDraftKey, removeLegacyInventoryDraft } from "./lib/inventoryDraft";
 import { groupProductsByCategory } from "./lib/inventoryGrouping";
 import { blankInventoryLine as blankLine, type InventoryLineInput } from "./lib/inventoryLines";
 import { addNameSuggestion, getNameSuggestions } from "../../lib/nameSuggestions";
@@ -26,10 +28,6 @@ import type {
   InventoryCountLineSubmit,
   InventoryLatestResponse,
 } from "../../types";
-
-// Inventory is location-wide (one count per location), so the draft uses a
-// fixed key rather than CaptainMP's per-supplier id.
-const DRAFT_KEY = "__inventory__";
 
 /** Local calendar date as YYYY-MM-DD (matches `<input type="date">`). */
 function localTodayIso(): string {
@@ -153,7 +151,12 @@ export function InventoryCountPage() {
     lineCount: number;
   } | null>(null);
 
-  const token = getToken("captain") || "";
+  // Pinned for the page lifetime: another tab switching the token must not
+  // re-key the draft while `lines` still holds the old location's counts.
+  const [token] = useState<string>(() => getToken("captain") || "");
+  // Inventory is location-wide (one count per location), so the draft key is
+  // scoped by location (token fingerprint, N19) instead of a per-supplier id.
+  const DRAFT_KEY = inventoryDraftKey(token);
   const todayIso = localTodayIso();
 
   const showToast = useCallback((message: string, type: "success" | "error") => {
@@ -185,7 +188,9 @@ export function InventoryCountPage() {
         // categoryLabel() inside InventoryCountGrid.
         setCollapsedCategories(new Set(items.map((p) => p.product_category)));
 
-        // Surface a draft banner if a recent count is in progress; don't auto-load.
+        // Drop the pre-N19 shared draft, then surface a banner if a
+        // count is in progress at THIS location; don't auto-load.
+        removeLegacyInventoryDraft();
         const draft = loadDraft<InventoryDraftState>(DRAFT_KEY);
         if (draft?.state?.lines && Object.keys(draft.state.lines).length > 0) {
           setDraftBanner({ timestamp: draft.state.timestamp });
@@ -203,7 +208,7 @@ export function InventoryCountPage() {
     return () => {
       cancelled = true;
     };
-  }, [showToast, t]);
+  }, [showToast, t, token, DRAFT_KEY]);
 
   // ---- Fetch latest snapshot for the "last count" banner (FR-022) ----------
   useEffect(() => {
@@ -240,7 +245,7 @@ export function InventoryCountPage() {
       });
     }, 500);
     return () => clearTimeout(id);
-  }, [lines, countDate]);
+  }, [lines, countDate, DRAFT_KEY]);
 
   // ---- Handlers -------------------------------------------------------------
   const handleStockChange = useCallback((productId: string, value: number | "") => {
@@ -268,12 +273,12 @@ export function InventoryCountPage() {
     if (draft?.state?.lines) setLines(draft.state.lines);
     if (draft?.state?.count_date) setCountDate(draft.state.count_date);
     setDraftBanner(null);
-  }, []);
+  }, [DRAFT_KEY]);
 
   const discardDraft = useCallback(() => {
     clearDraft(DRAFT_KEY);
     setDraftBanner(null);
-  }, []);
+  }, [DRAFT_KEY]);
 
   const handleSaveDraft = useCallback(() => {
     saveDraft<InventoryDraftState>(DRAFT_KEY, {
@@ -282,7 +287,7 @@ export function InventoryCountPage() {
       timestamp: Date.now(),
     });
     showToast(t("inventory.draftSaved"), "success");
-  }, [countDate, lines, showToast, t]);
+  }, [DRAFT_KEY, countDate, lines, showToast, t]);
 
   const handleCountDateChange = useCallback((raw: string) => {
     if (raw > localTodayIso()) {
@@ -404,7 +409,7 @@ export function InventoryCountPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [countDate, countedBy, countedLines, resetForm, showToast, t]);
+  }, [DRAFT_KEY, countDate, countedBy, countedLines, resetForm, showToast, t]);
 
   // ---- Render ---------------------------------------------------------------
   const submitDisabled =

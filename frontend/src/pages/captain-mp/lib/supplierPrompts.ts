@@ -17,6 +17,10 @@ export type SupplierNotePrompt = "crates";
 /** supplier_id → prompt variant. Absent = plain comment field. */
 export const SUPPLIER_NOTE_PROMPTS: Record<string, SupplierNotePrompt> = {
   SUP_COCACOLA: "crates",
+  // N13: Katowice orders Coca-Cola from its own supplier row (B2 rollout) and
+  // also returns empty crates. The backend has no matching list — the note is
+  // free text there.
+  SUP_COCACOLA_KAT: "crates",
 };
 
 export function supplierNotePrompt(

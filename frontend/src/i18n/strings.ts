@@ -1354,6 +1354,10 @@ export const STRINGS = {
   "delivery.delivered": { pl: "Dostarczono", en: "Delivered" },
   "delivery.variance": { pl: "Różnica: {value}", en: "Variance: {value}" },
   "delivery.receivedByLabel": { pl: "Kto odebrał", en: "Received by" },
+  "delivery.receivedByRequired": {
+    pl: "Wpisz, kto odebrał dostawę",
+    en: "Enter who received the delivery",
+  },
   "delivery.receivedByPlaceholder": { pl: "Imię i nazwisko", en: "Full name" },
   "delivery.photosLabel": { pl: "Zdjęcia WZ", en: "WZ photos" },
   "delivery.addPhoto": { pl: "Dodaj zdjęcie", en: "Add photo" },
