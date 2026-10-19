@@ -56,6 +56,21 @@ export const STRINGS = {
     pl: "Brak produktów do zamówienia dla tego dostawcy.",
     en: "No products to order from this supplier.",
   },
+  // Backup-supplier section on the order screen (captain-backup-dropdown).
+  "captain.backupSectionTitle": {
+    pl: "Pozycje zapasowe ({count})",
+    en: "Backup items ({count})",
+  },
+  "captain.backupSectionHint": {
+    pl: "Główny dostawca jest gdzie indziej — rozwiń, gdy chcesz zamówić tutaj.",
+    en: "The primary supplier is elsewhere — expand to order here.",
+  },
+  "captain.backupSectionFilled": {
+    pl: "Z ilością do zamówienia: {count}",
+    en: "With an order quantity: {count}",
+  },
+  "captain.backupSectionShow": { pl: "Pokaż", en: "Show" },
+  "captain.backupSectionHide": { pl: "Zwiń", en: "Hide" },
   "captain.stockAtTarget": {
     pl: "Stan magazynowy zgodny z targetem",
     en: "Stock is at target",

@@ -6,7 +6,7 @@
 // token); we leave `locationName` blank for now. A future `/api/whoami` endpoint
 // would let us populate it.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../../apiClient";
@@ -20,6 +20,7 @@ import { CaptainTabs } from "./components/CaptainTabs";
 import { SupplierPicker } from "./components/SupplierPicker";
 import { ContextStrip } from "./components/ContextStrip";
 import { ProductCard } from "./components/ProductCard";
+import { BackupItemsSection } from "./components/BackupItemsSection";
 import { StickyActionBar } from "./components/StickyActionBar";
 import { ConfirmSubmitDialog } from "./components/ConfirmSubmitDialog";
 import { SupplierOrderNotices } from "./components/SupplierOrderNotices";
@@ -35,6 +36,7 @@ import { DELIVERY_DATE_FORMAT, warsawTodayIso } from "../../lib/dates";
 import { CoveragePrompt, type CoverageDays } from "./components/CoveragePrompt";
 
 import { computeRowState } from "./lib/compute";
+import { splitBackupItems, type SplitItems } from "./lib/backupItems";
 import { clearStaleAutoReasons, overruleAll } from "./lib/overruleAll";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
@@ -913,6 +915,29 @@ export function CaptainMP() {
     return map;
   }, [snapshotDetails, availableSnapshots]);
 
+  // Regular cards first; backup sources go to the collapsible section.
+  const splitItems: SplitItems = useMemo(
+    () => splitBackupItems(orderableItems),
+    [orderableItems],
+  );
+  const renderProductCard = (item: OrderableItem): ReactNode => (
+    <ProductCard
+      key={item.product_id}
+      item={item}
+      line={
+        lines[item.product_id] || {
+          product_id: item.product_id,
+          supplier_product_id: item.supplier_product_id,
+          current_stock_qty_base: "",
+          captain_final_qty_purchase: "",
+        }
+      }
+      onChange={handleLineChange}
+      onReasonEdit={handleReasonEdit}
+      previousStock={newestSnapshotStock[item.product_id] ?? null}
+    />
+  );
+
   // ---- Pre-fill control: visibility + selected-snapshot naming ---------------
   const selectedSummary = useMemo(
     () => availableSnapshots.find((s) => s.count_id === selectedSnapshotId) ?? null,
@@ -1125,23 +1150,20 @@ export function CaptainMP() {
                 <div className="text-green-700 text-sm">{t("captain.stockAtTargetSub")}</div>
               </div>
             )}
-            {orderableItems.map((item) => (
-              <ProductCard
-                key={item.product_id}
-                item={item}
-                line={
-                  lines[item.product_id] || {
-                    product_id: item.product_id,
-                    supplier_product_id: item.supplier_product_id,
-                    current_stock_qty_base: "",
-                    captain_final_qty_purchase: "",
-                  }
-                }
-                onChange={handleLineChange}
-                onReasonEdit={handleReasonEdit}
-                previousStock={newestSnapshotStock[item.product_id] ?? null}
+            {(splitItems.primary.length > 0 ? splitItems.primary : splitItems.backup).map(
+              renderProductCard,
+            )}
+            {/* Backup sources (captain-backup-dropdown): collapsed section
+                below the regular cards; a tab with only backups shows them
+                plainly. Keyed by supplier so each tab starts collapsed. */}
+            {splitItems.primary.length > 0 && (
+              <BackupItemsSection
+                key={activeSupplierId ?? ""}
+                items={splitItems.backup}
+                lines={lines}
+                renderCard={renderProductCard}
               />
-            ))}
+            )}
           </>
         )}
 
