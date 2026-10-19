@@ -1,0 +1,33 @@
+{
+  "_comment": "supplier-email-v21 extras splitter edge cases, shared by both builders: CRLF endings, blank and whitespace-only lines, padded line, trailing ' -' (no separator after trim), two separators (split at the first), no separator, a line starting with ' - ' (kept whole); every catalogue line at 0, so the extras are numbered from 1 (reachable via the dosyłka panel). No company, no signer.",
+  "include_delivery_date": false,
+  "signer": null,
+  "order": {
+    "order_id": "ORD-20261020-WOL-INTE-000002",
+    "requested_delivery_date": "2026-10-21",
+    "extra_items": "  Serwetki - 5 opak  \r\n\r\n   \r\nMięta - \r\nSos - ostry - 2 l\r\nLód\n - 3 szt\n",
+    "captain_note": ""
+  },
+  "location": {
+    "location_name": "Pita Bros Wola",
+    "delivery_address": "ul. Wolska 165",
+    "city": "01-258 Warszawa",
+    "phone": null,
+    "company_name": null,
+    "company_address": null,
+    "company_nip": null
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P101",
+      "product_name_pl": "Masło MR 500g",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_P101",
+      "supplier_product_name": "Masło MR 500g",
+      "purchase_unit": "szt",
+      "display_order": 1,
+      "qty": 0
+    }
+  ]
+}

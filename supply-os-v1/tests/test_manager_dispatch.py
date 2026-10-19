@@ -704,6 +704,34 @@ def test_dispatch_phone_marks_ordered(mocker):
     assert kwargs.get("sent_method") == "phone"
 
 
+def test_dispatch_email_supplier_marked_ordered_without_email(mocker):
+    """supplier-groups (D4): Filber, an e-mail supplier, can be marked as
+    ordered with sent_method "manual" — 200, manager_sent, sent_method manual.
+    The backend keeps branching on the supplier's channel (the "@" gate still
+    applies); the frontend allowlist decides who gets the button, and it drops
+    the compose URL for a non-email send."""
+    order = _captain_submitted_order().model_copy(update={"supplier_id": "SUP_FILBER"})
+    filber = Supplier(
+        supplier_id="SUP_FILBER", supplier_name="Filber Wyspy Piwne",
+        email="orders@example.test", ordering_method=OrderingMethod.EMAIL,
+    )
+    mocks = _activate_sheet_backend(mocker, order=order, supplier=filber)
+    body = {
+        "order_id": order.order_id,
+        "manager_finals": [{"order_line_id": "OL-001", "manager_final_qty_purchase": 2}],
+        "sent_method": "manual",
+    }
+    r = client.post("/api/manager/dispatch", json=body, headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "manager_sent"
+    # The URL is still built (a string, nothing is sent); the frontend guard
+    # in ManagerPage.handleDispatch drops it for a non-email send.
+    assert r.json()["gmail_compose_url"]
+    _, kwargs = mocks["update_order"].call_args
+    assert kwargs.get("status") == OrderStatus.MANAGER_SENT.value
+    assert kwargs.get("sent_method") == "manual"
+
+
 def test_dispatch_portal_does_not_require_email(mocker):
     """A portal supplier with no email must NOT 400 (that's the v0 footgun)."""
     order = _captain_submitted_order()

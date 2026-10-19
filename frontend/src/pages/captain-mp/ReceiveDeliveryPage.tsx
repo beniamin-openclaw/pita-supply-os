@@ -4,7 +4,7 @@
 // photos upload (multipart) — if the photo step fails, the receipt survives
 // (flagged received_with_missing_wz) and the upload is retryable in place.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Loader2, PackageCheck } from "lucide-react";
 
@@ -35,6 +35,10 @@ export function ReceiveDeliveryPage() {
   const [order, setOrder] = useState<CaptainOrderDetail | null>(null);
   const [delivered, setDelivered] = useState<Record<string, number | "">>({});
   const [receivedBy, setReceivedBy] = useState("");
+  // N4: the confirm button stays clickable while the name is empty; a click
+  // then flips this flag and shows the inline error under the field.
+  const [nameTouched, setNameTouched] = useState(false);
+  const receivedByRef = useRef<HTMLInputElement>(null);
   // Name-suggestion datalist source (Phase 1a) — previously used "kto odebrał"
   // names, most-recent first. Lazy initializer: a synchronous localStorage
   // read, no need for an effect.
@@ -93,7 +97,16 @@ export function ReceiveDeliveryPage() {
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!order || !receivedBy.trim()) return;
+    if (!order) return;
+    if (!receivedBy.trim()) {
+      setNameTouched(true);
+      const el = receivedByRef.current;
+      if (el) {
+        el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+        el.focus();
+      }
+      return;
+    }
     // Recount gate: on the INITIAL submit, every line must carry a conscious
     // delivered value — never silently default a blank to the ordered qty. The
     // submit button is already disabled in this state; this is defense-in-depth.
@@ -182,7 +195,9 @@ export function ReceiveDeliveryPage() {
       return v !== "" && v !== undefined;
     });
   const submitDisabled =
-    isSubmitting || !receivedBy.trim() || (!receiptSaved && !allLinesEntered);
+    isSubmitting || (!receiptSaved && !allLinesEntered);
+  const nameMissing = !receivedBy.trim();
+  const showNameError = nameMissing && nameTouched;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-28">
@@ -243,28 +258,49 @@ export function ReceiveDeliveryPage() {
               </div>
             )}
 
-            <label className="mb-4 block">
-              <span className="text-sm font-semibold text-slate-900">
-                {t("delivery.receivedByLabel")}
-              </span>
-              <input
-                type="text"
-                value={receivedBy}
-                onChange={(e) => setReceivedBy(e.target.value)}
-                placeholder={t("delivery.receivedByPlaceholder")}
-                readOnly={receiptSaved}
-                autoComplete="name"
-                list="delivery-received-by-suggestions"
-                className={`mt-1 w-full rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  receiptSaved ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
-                }`}
-              />
-              <datalist id="delivery-received-by-suggestions">
-                {receivedBySuggestions.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-            </label>
+            {/* The error sits OUTSIDE the <label>: inside it, its text joined the
+                input's accessible name ("Kto odebrał Wpisz, kto odebrał…") and
+                was read twice together with aria-describedby. */}
+            <div className="mb-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-900">
+                  {t("delivery.receivedByLabel")}
+                </span>
+                <input
+                  ref={receivedByRef}
+                  type="text"
+                  value={receivedBy}
+                  onChange={(e) => setReceivedBy(e.target.value)}
+                  aria-invalid={showNameError}
+                  aria-describedby={showNameError ? "delivery-received-by-error" : undefined}
+                  placeholder={t("delivery.receivedByPlaceholder")}
+                  readOnly={receiptSaved}
+                  autoComplete="name"
+                  list="delivery-received-by-suggestions"
+                  className={`mt-1 scroll-mt-20 w-full rounded-lg border px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    receiptSaved
+                      ? "border-slate-200 bg-slate-100 text-slate-500"
+                      : showNameError
+                        ? "border-red-500"
+                        : "border-slate-300"
+                  }`}
+                />
+                <datalist id="delivery-received-by-suggestions">
+                  {receivedBySuggestions.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              </label>
+              {showNameError && (
+                <p
+                  id="delivery-received-by-error"
+                  role="alert"
+                  className="mt-1 text-sm font-medium text-red-700"
+                >
+                  {t("delivery.receivedByRequired")}
+                </p>
+              )}
+            </div>
 
             <div className="mb-4">
               {order.lines.map((line) => (
@@ -305,6 +341,11 @@ export function ReceiveDeliveryPage() {
       {order && (
         <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-bar z-30">
           <div className="max-w-3xl mx-auto">
+            {!receiptSaved && nameMissing && (
+              <p className="mb-2 text-center text-xs text-slate-600">
+                {t("delivery.receivedByRequired")}
+              </p>
+            )}
             <button
               type="button"
               onClick={handleSubmit}

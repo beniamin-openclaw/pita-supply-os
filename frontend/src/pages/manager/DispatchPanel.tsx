@@ -1,11 +1,15 @@
 // Channel-aware dispatch panel (Phase G3). Branches on detail.ordering_method:
-//   email  → editable subject + textarea body + "Podpis" select. Primary:
-//            "Zrób draft w Gmailu" creates a VERIFIED draft in the order
-//            mailbox with From = the location alias (lib/orderEmailDraft.ts),
-//            then dispatches (order-email-v2). Fallback: Gmail URL built IN TS
-//            from the EDITED text; 8000-char check hides "Otwórz w Gmail";
-//            clicking the link ALSO fires the dispatch state-write. Copy body /
-//            address.
+//   email  → editable subject + textarea body + "Podpis" select. Primary (the
+//            only visible button, supplier-email-v21 WP3): "Wyślij" creates a
+//            VERIFIED draft in the order mailbox with From = the location
+//            alias (lib/orderEmailDraft.ts), then dispatches (order-email-v2);
+//            the page then opens THAT draft (ManagerPage.handleDispatch). The
+//            app never sends — the manager sends the draft from Gmail. Under a
+//            collapsed "Inne opcje": the fallback Gmail URL built IN TS from
+//            the EDITED text (8000-char check hides "Otwórz w Gmail"; clicking
+//            the link ALSO fires the dispatch state-write), copy body / address.
+//            Without the draft path (no OAuth client / mailbox / sender) the
+//            fallback link is the primary action, as before.
 //   portal → no email; portal link parsed from supplier_notes (never hardcoded),
 //            copy-paste list, "Oznacz jako zamówione ✓" behind a two-step
 //            confirm ("czy na pewno złożyłeś zamówienie w portalu?") so a
@@ -50,6 +54,7 @@ import {
   createVerifiedOrderDraft,
   describeDraftError,
   getGoogleClientId,
+  gmailDraftOpenUrl,
 } from "./lib/orderEmailDraft";
 import { splitRecipients } from "./lib/transport";
 import { useOrderEmailSigner } from "./lib/useOrderEmailSigner";
@@ -60,6 +65,9 @@ export interface DispatchOpts {
   /** Set when a verified Gmail draft was created before the dispatch — the
    *  mailbox that now holds it (order-email-v2). */
   draftMailbox?: string;
+  /** That draft in the Gmail UI (gmailDraftOpenUrl) — opened by the page once
+   *  the dispatch succeeded (supplier-email-v21 WP3). */
+  draftUrl?: string;
 }
 
 /** Dispatch callback: channel, the chosen e-mail signer (email channel only)
@@ -321,7 +329,7 @@ function EmailDispatch({
     onDraftingChange?.(true);
     try {
       // First call of the handler — it opens the Google popup synchronously.
-      await createVerifiedOrderDraft({
+      const { messageId } = await createVerifiedOrderDraft({
         clientId,
         mailbox,
         from: { name: detail.location_name, email: sender },
@@ -330,8 +338,12 @@ function EmailDispatch({
         subject,
         body,
       });
-      // Only a verified draft marks the order sent (draft first, then dispatch).
-      onDispatch("email", signerEmail, { draftMailbox: mailbox });
+      // Only a verified draft marks the order sent (draft first, then dispatch);
+      // the page opens the draft only after the dispatch succeeded.
+      onDispatch("email", signerEmail, {
+        draftMailbox: mailbox,
+        draftUrl: gmailDraftOpenUrl(mailbox, messageId),
+      });
     } catch (e) {
       setDraftError(describeDraftError(e, t, { mailbox, sender }));
     } finally {
@@ -339,6 +351,65 @@ function EmailDispatch({
       onDraftingChange?.(false);
     }
   };
+
+  // Real <a> — clicking opens Gmail AND fires the dispatch state-write. We do
+  // NOT preventDefault so the browser navigates the link normally; window.open
+  // is deliberately avoided (popup blockers). While a draft is being created or
+  // a dispatch is in flight it is inert (no href), so it cannot open a stray
+  // compose window or dispatch twice.
+  const openGmailLink: ReactNode = !canOpenGmail ? null : drafting || busy ? (
+    <span
+      aria-disabled="true"
+      className="cursor-not-allowed rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-400"
+    >
+      {t("manager.openGmail")}
+    </span>
+  ) : (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => {
+        if (!busy) onDispatch("email", signerEmail);
+      }}
+      className={
+        draftAvailable
+          ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          : "rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
+      }
+    >
+      {t("manager.openGmail")}
+    </a>
+  );
+
+  const copyBodyButton: ReactNode = (
+    <button
+      type="button"
+      onClick={() => onCopy(body)}
+      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+    >
+      {t("manager.copyBody")}
+    </button>
+  );
+
+  const copyAddressButton: ReactNode = noEmail ? null : (
+    <button
+      type="button"
+      onClick={() => onCopy(to)}
+      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+    >
+      {t("manager.copyAddress")}
+    </button>
+  );
+
+  const draftErrorNote: ReactNode = draftError ? (
+    <p
+      role="alert"
+      className="rounded border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800"
+    >
+      {draftError}
+    </p>
+  ) : null;
 
   return (
     <div className="space-y-3 text-sm">
@@ -429,90 +500,61 @@ function EmailDispatch({
         />
       </div>
 
-      {tooLong && (
-        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-          {t("manager.urlTooLong")}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        {draftAvailable && (
-          <button
-            type="button"
-            disabled={!canDraft}
-            onClick={() => void handleDraft()}
-            className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-          >
-            {drafting || busy ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                {t("manager.draft.working")}
-              </span>
-            ) : (
-              t("manager.draft.create")
-            )}
-          </button>
-        )}
-        {/* Real <a> — clicking opens Gmail AND fires the dispatch state-write.
-            We do NOT preventDefault so the browser navigates the link normally;
-            window.open is deliberately avoided (popup blockers). While a draft
-            is being created or a dispatch is in flight it is inert (no href),
-            so it cannot open a stray compose window or dispatch twice. */}
-        {canOpenGmail &&
-          (drafting || busy ? (
-            <span
-              aria-disabled="true"
-              className="cursor-not-allowed rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-400"
+      {draftAvailable ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={!canDraft}
+              onClick={() => void handleDraft()}
+              className="rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
             >
-              {t("manager.openGmail")}
-            </span>
-          ) : (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => {
-                if (!busy) onDispatch("email", signerEmail);
-              }}
-              className={
-                draftAvailable
-                  ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-                  : "rounded-lg bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2"
-              }
-            >
-              {t("manager.openGmail")}
-            </a>
-          ))}
-        <button
-          type="button"
-          onClick={() => onCopy(body)}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-        >
-          {t("manager.copyBody")}
-        </button>
-        {!noEmail && (
-          <button
-            type="button"
-            onClick={() => onCopy(to)}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-          >
-            {t("manager.copyAddress")}
-          </button>
-        )}
-      </div>
-
-      {draftError && (
-        <p
-          role="alert"
-          className="rounded border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800"
-        >
-          {draftError}
-        </p>
-      )}
-      {draftAvailable && canOpenGmail && (
-        <p className="text-[11px] text-slate-500">
-          {t("manager.draft.fallbackHint", { office: detail.cc_email || "—" })}
-        </p>
+              {drafting || busy ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  {t("manager.draft.working")}
+                </span>
+              ) : (
+                t("manager.draft.send")
+              )}
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500">{t("manager.draft.sendHint", { mailbox })}</p>
+          {draftErrorNote}
+          {/* The fallbacks stay one click away but out of the way: one visible
+              button (supplier-email-v21 WP3). The draft path has no URL limit,
+              so the too-long banner is not shown here — the link just hides. */}
+          <details className="rounded border border-slate-200 px-3 py-2">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-600">
+              {t("manager.draft.moreOptions")}
+            </summary>
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {openGmailLink}
+                {copyBodyButton}
+                {copyAddressButton}
+              </div>
+              {canOpenGmail && (
+                <p className="text-[11px] text-slate-500">
+                  {t("manager.draft.fallbackHint", { office: detail.cc_email || "—" })}
+                </p>
+              )}
+            </div>
+          </details>
+        </>
+      ) : (
+        <>
+          {tooLong && (
+            <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              {t("manager.urlTooLong")}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {openGmailLink}
+            {copyBodyButton}
+            {copyAddressButton}
+          </div>
+        </>
       )}
 
       {empty && <p className="text-xs font-semibold text-amber-700">{t("manager.emptyOrder")}</p>}

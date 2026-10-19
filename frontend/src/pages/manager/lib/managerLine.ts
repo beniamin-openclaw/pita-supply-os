@@ -22,6 +22,12 @@ import { effectiveOrderedQtyPurchase } from "../../../lib/orderQty";
  */
 export const effectiveManagerQtyPurchase = effectiveOrderedQtyPurchase;
 
+/** One look for a manager zero (manager-queue-control, D10 A): the number is
+ *  amber and struck through wherever it shows (order table, Transport matrix). */
+export const MANAGER_ZERO_TEXT_CLASS = "line-through text-amber-700";
+/** The same look on an editable qty input. */
+export const MANAGER_ZERO_INPUT_CLASS = "border-amber-400 bg-amber-50 text-amber-700 line-through";
+
 /**
  * Δ vs punkt — manager override of what the point asked for, as a signed
  * fraction (multiply by 100 for %). Spec §2 / §4 formula:

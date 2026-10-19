@@ -468,6 +468,10 @@ class ManagerQueueItem(BaseModel):
     status: OrderStatus
     captain_user: Optional[str] = None
     captain_submitted_at: Optional[datetime] = None
+    # When the order was marked sent (manager-queue-control, D16): the sent lane
+    # flags an order still without a receipt more than 3 days after this. None
+    # on every lane before manager_sent and on a legacy row without the stamp.
+    manager_sent_at: Optional[datetime] = None
     ordered_by: Optional[str] = None  # free-text "who orders" (shown as "Zamówił: X")
     line_count: int
     total_value_estimate_pln: Optional[float] = None
@@ -820,6 +824,20 @@ class ManagerCancelResponse(BaseModel):
     cancelled (soft-delete; never hard-deleted)."""
     order_id: str
     status: OrderStatus  # cancelled on success
+
+
+class ManagerCloseRequest(BaseModel):
+    """Payload for POST /api/manager/close/{order_id} (close-without-receipt,
+    D5): the Manager closes a sent order that will never be received. The
+    reason is required and kept as an ``order_events`` row
+    ``closed_without_receipt`` (who / when / why)."""
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ManagerCloseResponse(BaseModel):
+    """Result of close-without-receipt — manager_sent → closed."""
+    order_id: str
+    status: OrderStatus  # closed on success
 
 
 # ---------- Manager add ad-hoc product line (add-product-to-order) ----------

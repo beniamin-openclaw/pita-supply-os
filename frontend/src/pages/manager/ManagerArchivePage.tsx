@@ -14,11 +14,12 @@ import { api, ApiError } from "../../apiClient";
 import { AppHeader } from "../../components/ui/AppHeader";
 import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
-import { daysSince } from "../../lib/dates";
+import { archiveAgeDays } from "./lib/queueAge";
 import type { ManagerOrderDetail, ManagerQueueItem } from "../../types";
 import { type LaneChip, ManagerFilterBar } from "./ManagerFilterBar";
 import { QueueCard, type QueueLane } from "./ManagerQueue";
 import { OrderDetailPane } from "./OrderDetailPane";
+import { groupSupplierOptions, supplierFilterMatches } from "../../lib/supplierGroups";
 
 const DAYS_OPTIONS: readonly number[] = [7, 14, 30, 60];
 const DEFAULT_DAYS = 30;
@@ -33,12 +34,6 @@ interface ArchiveLane {
   key: QueueLane;
   titleKey: StringKey;
   items: ManagerQueueItem[] | null;
-}
-
-/** Archive age of a row: last receipt for closed orders, submission for
- *  cancelled ones (the queue item carries no cancelled_at). */
-function archiveAgeDays(item: ManagerQueueItem, now: Date): number | null {
-  return daysSince(item.last_received_at ?? item.captain_submitted_at, now);
 }
 
 function noop(): void {}
@@ -121,10 +116,12 @@ export function ManagerArchivePage(): ReactElement {
     for (const arr of [closed, cancelled]) {
       for (const q of arr ?? []) byId.set(q.supplier_id, q.supplier_name);
     }
-    return [...byId.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [closed, cancelled]);
+    // Pago and Magazyn Mory show as one option (D4, lib/supplierGroups.ts).
+    return groupSupplierOptions(
+      [...byId.entries()].map(([id, name]) => ({ id, name })),
+      t,
+    );
+  }, [closed, cancelled, t]);
 
   const locationOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -152,7 +149,10 @@ export function ManagerArchivePage(): ReactElement {
       const age = archiveAgeDays(q, now);
       return age === null || age <= days;
     });
-    if (effectiveSupplierId) out = out.filter((q) => q.supplier_id === effectiveSupplierId);
+    if (effectiveSupplierId) {
+      const sel = effectiveSupplierId;
+      out = out.filter((q) => supplierFilterMatches(sel, q.supplier_id));
+    }
     if (effectiveLocationId) out = out.filter((q) => q.location_id === effectiveLocationId);
     return out;
   };

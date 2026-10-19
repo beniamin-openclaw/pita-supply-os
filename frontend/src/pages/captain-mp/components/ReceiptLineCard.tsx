@@ -3,6 +3,7 @@
 
 import { AlertOctagon } from "lucide-react";
 import { useT } from "../../../i18n";
+import { stripBulkSuffix } from "../../../lib/displayName";
 import type { ManagerOrderLineDetail } from "../../../types";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { roundQty } from "../../../components/ui/number";
@@ -41,7 +42,7 @@ export function ReceiptLineCard({
         {line.is_critical && (
           <AlertOctagon size={14} className="shrink-0 text-red-600" aria-hidden="true" />
         )}
-        <span className="break-words">{line.product_name_pl}</span>
+        <span className="break-words">{stripBulkSuffix(line.product_name_pl)}</span>
       </div>
       <div className="mt-2 flex items-end justify-between gap-3">
         <div className="text-sm text-slate-600">
@@ -63,13 +64,13 @@ export function ReceiptLineCard({
             className={`mt-0.5 w-28 rounded-lg border px-3 py-2 text-right text-base tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly ? "border-slate-200 bg-slate-100 text-slate-500" : "border-slate-300"
             }`}
-            aria-label={`${t("delivery.delivered")} — ${line.product_name_pl}`}
+            aria-label={`${t("delivery.delivered")} — ${stripBulkSuffix(line.product_name_pl)}`}
           />
           {!readOnly && (
             <button
               type="button"
               onClick={() => onChange(line.order_line_id, ordered)}
-              aria-label={`${t("delivery.useOrderedQty")} — ${line.product_name_pl}`}
+              aria-label={`${t("delivery.useOrderedQty")} — ${stripBulkSuffix(line.product_name_pl)}`}
               className="mt-1 text-[11px] font-semibold text-brand hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
             >
               {t("delivery.useOrderedQty")}

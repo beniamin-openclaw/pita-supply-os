@@ -144,10 +144,18 @@ export const STRINGS = {
     en: "need {base} {inventoryUnit} → {purchase} {purchaseUnit}",
   },
   "card.backupBadge": { pl: "zapasowy", en: "backup" },
-  "card.suggestionAtPrimary": {
-    pl: "Sugestia u: {names}",
-    en: "Suggestion at: {names}",
+  "card.suggestionAtPrimaryTile": { pl: "u {names}", en: "at {names}" },
+  "card.suggestionAtPrimaryAria": {
+    pl: "Sugestia u dostawcy głównego: {names}",
+    en: "Suggestion at the primary supplier: {names}",
   },
+  "card.suggestionBackupAria": {
+    pl: "Dostawca zapasowy — sugestia jest u dostawcy głównego",
+    en: "Backup supplier — the suggestion is at the primary supplier",
+  },
+  "card.backupInfoLabel": { pl: "Zapasowy", en: "Backup" },
+  "card.backupInfoPrimary": { pl: "główny: {names}", en: "primary: {names}" },
+  "card.backupInfoOrdered": { pl: "zamówione {date}", en: "ordered {date}" },
   "card.alsoFromSuppliers": { pl: "Też u: {names}", en: "Also at: {names}" },
   "card.openOrderElsewhere": {
     pl: "Już zamówione u {supplier}: {qty} {unit} · {status} · dostawa {date}",
@@ -171,6 +179,16 @@ export const STRINGS = {
   "stock.fieldAria": { pl: "{label}, {unit}", en: "{label}, {unit}" },
   "stock.reading": { pl: "= {split} ({total})", en: "= {split} ({total})" },
   "stock.readingBase": { pl: "= {total}", en: "= {total}" },
+  // Read-only kg reading for a piece count whose name carries the per-piece
+  // weight (captain-kg-reading): "12 szt (2,4 kg)". {kg} is pre-formatted;
+  // "kg" stays plain — it is a side reading, not the unit being typed. "·", not
+  // ",", in the pack reading: "2,4" already carries the Polish decimal comma.
+  "stock.kgReading": { pl: "({kg} kg)", en: "({kg} kg)" },
+  "stock.readingKg": {
+    pl: "= {split} ({total} · {kg} kg)",
+    en: "= {split} ({total} · {kg} kg)",
+  },
+  "stock.readingBaseKg": { pl: "= {total} ({kg} kg)", en: "= {total} ({kg} kg)" },
   "stock.didYouMean": {
     pl: "Czy chodziło o {packs} ({total})?",
     en: "Did you mean {packs} ({total})?",
@@ -558,7 +576,8 @@ export const STRINGS = {
   "manager.tab.submitted": { pl: "Do przejęcia", en: "To claim" },
   "manager.tab.claimed": { pl: "W realizacji", en: "In progress" },
   "manager.tab.sent": { pl: "Zamówione", en: "Ordered" },
-  "manager.tab.closed": { pl: "Zakończone (odebrane)", en: "Closed (received)" },
+  // "Zakończone": a closed order is received, or closed without receipt (D5, card chip).
+  "manager.tab.closed": { pl: "Zakończone", en: "Closed" },
   "manager.action.openEmail": { pl: "Otwórz email do dostawcy", en: "Open supplier email" },
   "manager.sentEmptyHint": {
     pl: "Brak zamówionych pozycji w tej sesji.",
@@ -693,8 +712,21 @@ export const STRINGS = {
     en: "Fallback: “Open in Gmail” opens a compose window — pick the sender there by hand; CC also includes {office}.",
   },
   "manager.draft.done": {
-    pl: "Szkic utworzony w {mailbox} — zamówienie oznaczone jako wysłane.",
-    en: "Draft created in {mailbox} — order marked as sent.",
+    pl: "Szkic utworzony w {mailbox}, zamówienie oznaczone jako wysłane — e-mail wyślij z Gmaila.",
+    en: "Draft created in {mailbox}, order marked as sent — send the e-mail from Gmail.",
+  },
+  // supplier-email-v21 WP3: one "Wyślij" = verified draft + dispatch + open
+  // THAT draft. The app still never sends; the manager sends it from Gmail.
+  "manager.draft.send": { pl: "Wyślij", en: "Send" },
+  "manager.draft.sendHint": {
+    pl: "Tworzy szkic w {mailbox} i otwiera go, jeśli przeglądarka pozwoli. Samą wiadomość wysyłasz z Gmaila.",
+    en: "Creates a draft in {mailbox} and opens it if the browser allows. You send the message itself from Gmail.",
+  },
+  "manager.draft.moreOptions": { pl: "Inne opcje", en: "More options" },
+  "manager.draft.openDraft": { pl: "Otwórz szkic", en: "Open draft" },
+  "manager.draft.notSentYet": {
+    pl: "Szkic w {mailbox} NIE jest jeszcze wysłany — otwórz go i kliknij Wyślij w Gmailu.",
+    en: "The draft in {mailbox} is NOT sent yet — open it and click Send in Gmail.",
   },
   "manager.draft.doneResend": {
     pl: "Szkic dosyłki utworzony w {mailbox}.",
@@ -1336,6 +1368,10 @@ export const STRINGS = {
   "delivery.delivered": { pl: "Dostarczono", en: "Delivered" },
   "delivery.variance": { pl: "Różnica: {value}", en: "Variance: {value}" },
   "delivery.receivedByLabel": { pl: "Kto odebrał", en: "Received by" },
+  "delivery.receivedByRequired": {
+    pl: "Wpisz, kto odebrał dostawę",
+    en: "Enter who received the delivery",
+  },
   "delivery.receivedByPlaceholder": { pl: "Imię i nazwisko", en: "Full name" },
   "delivery.photosLabel": { pl: "Zdjęcia WZ", en: "WZ photos" },
   "delivery.addPhoto": { pl: "Dodaj zdjęcie", en: "Add photo" },
@@ -1435,6 +1471,35 @@ export const STRINGS = {
   "manager.events.title": { pl: "Historia zmian", en: "Change history" },
   "manager.events.type.quantitiesChanged": { pl: "Zmieniono ilości", en: "Quantities changed" },
   "manager.events.type.lineAdded": { pl: "Dodano pozycję", en: "Line added" },
+  // close-without-receipt (D5): a sent order the Manager closed with no delivery.
+  "manager.events.type.closedWithoutReceipt": {
+    pl: "Zamknięto bez przyjęcia",
+    en: "Closed without receipt",
+  },
+  // The close could not be recorded, so the order went back to the sent lane.
+  "manager.events.type.closeReverted": {
+    pl: "Cofnięto zamknięcie (błąd zapisu)",
+    en: "Close reverted (write failed)",
+  },
+  "manager.closedWithoutReceipt": { pl: "Zamknięte bez przyjęcia", en: "Closed without receipt" },
+  "manager.closedWithoutReceiptReason": { pl: "Powód: {reason}", en: "Reason: {reason}" },
+  "manager.action.closeWithoutReceipt": { pl: "Zamknij bez przyjęcia", en: "Close without receipt" },
+  "manager.closeWithoutReceiptHint": {
+    pl: "Gdy towar nie przyjdzie albo przyszedł poza aplikacją. Kapitan nie przyjmie już dostawy w aplikacji.",
+    en: "When the goods will not come or came outside the app. The captain can no longer receive it in the app.",
+  },
+  "manager.closeWithoutReceiptConfirm": {
+    pl: "Zamknąć to zamówienie bez przyjęcia dostawy?",
+    en: "Close this order without a delivery receipt?",
+  },
+  "manager.closeWithoutReceiptPrompt": {
+    pl: "Powód zamknięcia bez przyjęcia (wymagany):",
+    en: "Reason for closing without receipt (required):",
+  },
+  "manager.closedWithoutReceiptOk": {
+    pl: "Zamknięto bez przyjęcia",
+    en: "Closed without receipt",
+  },
   // Manager Transport (to-ordering-pago) — combine several locations' orders
   // for one supplier into a single Transport ("TO") batch.
   "manager.transport.navLink": { pl: "Transport (TO)", en: "Transport" },
@@ -1446,6 +1511,18 @@ export const STRINGS = {
   "manager.transport.filter.citiesLabel": { pl: "Miasta", en: "Cities" },
   "manager.transport.filter.chip.pago": { pl: "Pago", en: "Pago" },
   "manager.transport.filter.chip.mory": { pl: "Magazyn Mory", en: "Magazyn Mory" },
+  // Manager queue/archive filter: Pago and Mory as one option (supplier-groups, D4).
+  "manager.filter.group.pagoMory": { pl: "Pago + Magazyn Mory", en: "Pago + Magazyn Mory" },
+  // Filber (D4): mark an e-mail supplier's order as ordered without the e-mail.
+  "manager.markOrderedNoEmail": { pl: "Zamówione (bez e-maila)", en: "Ordered (no e-mail)" },
+  "manager.markOrderedNoEmailHint": {
+    pl: "Gdy zamówienie poszło inną drogą (telefon, kierowca, sklep). E-mail nie zostanie wysłany.",
+    en: "When the order went another way (phone, driver, shop). No e-mail is sent.",
+  },
+  "manager.markOrderedNoEmailConfirm": {
+    pl: "Oznaczyć jako zamówione BEZ wysyłania e-maila do dostawcy?",
+    en: "Mark as ordered WITHOUT sending the e-mail to the supplier?",
+  },
   "manager.transport.filter.lastChipTitle": {
     pl: "Co najmniej jeden dostawca musi zostać włączony.",
     en: "At least one supplier has to stay on.",
@@ -1642,6 +1719,24 @@ export const STRINGS = {
     en: "Remove {location} from the transport",
   },
   "manager.transport.matrix.qtyAria": { pl: "{product} — {location}", en: "{product} — {location}" },
+  // Two orders from one location share a column (transport-location-columns).
+  "manager.transport.matrix.one.ordersAtLocation": { pl: "{n} zamówienie", en: "{n} order" },
+  "manager.transport.matrix.few.ordersAtLocation": { pl: "{n} zamówienia", en: "{n} orders" },
+  "manager.transport.matrix.many.ordersAtLocation": { pl: "{n} zamówień", en: "{n} orders" },
+  "manager.transport.matrix.orderTag": { pl: "zam. {n}", en: "order {n}" },
+  "manager.transport.matrix.locationOrder": {
+    pl: "{location}, zam. {n}",
+    en: "{location}, order {n}",
+  },
+  "manager.transport.matrix.cellTotal": { pl: "razem {qty}", en: "total {qty}" },
+  "manager.transport.matrix.removeOrderAria": {
+    pl: "Usuń zamówienie {n} lokalu {location} z transportu",
+    en: "Remove order {n} of {location} from the transport",
+  },
+  "manager.transport.matrix.qtyOrderAria": {
+    pl: "{product} — {location}, zamówienie {n}",
+    en: "{product} — {location}, order {n}",
+  },
   // v4 feedback round 2 (feature 4): ONE matrix-wide "+ Dodaj produkt" row,
   // replacing the per-location pickers.
   "manager.transport.matrix.addProductAllOk": {
@@ -1667,6 +1762,11 @@ export const STRINGS = {
   "manager.transport.matrix.addOneOk": {
     pl: "Dodano {product} do zamówienia {location} — wpisz ilość i zapisz",
     en: "Added {product} to the {location} order — enter the quantity and save",
+  },
+  // The location has more than one order in the batch: {order} = "Ken, zam. 2".
+  "manager.transport.matrix.addOneOkOrder": {
+    pl: "Dodano {product} ({order}) — wpisz ilość i zapisz",
+    en: "Added {product} ({order}) — enter the quantity and save",
   },
 
   "manager.transport.addLocation.button": { pl: "Dodaj lokalizację", en: "Add location" },
@@ -2081,8 +2181,8 @@ export const STRINGS = {
     en: "This transport can't be undone (a legacy batch without a header).",
   },
   "manager.transport.send.reopen.errDelivered": {
-    pl: "Nie można cofnąć — dostawa jest już przyjęta w: {locations}.",
-    en: "Can't undo — the delivery is already recorded at: {locations}.",
+    pl: "Nie można cofnąć — dostawa jest już przyjęta albo zamknięta bez przyjęcia w: {locations}.",
+    en: "Can't undo — the delivery is already recorded, or closed without receipt, at: {locations}.",
   },
   "manager.transport.send.reopen.errConflict": {
     pl: "Nie można cofnąć wysłania: {detail}",
@@ -2188,14 +2288,53 @@ export const STRINGS = {
     en: "Showing the newest {n} — older ones are not listed here",
   },
   "manager.archive.daysOptionLabel": { pl: "{n} dni", en: "{n} days" },
-  "manager.archive.lane.closed": { pl: "Odebrane", en: "Received" },
+  "manager.archive.lane.closed": { pl: "Zakończone", en: "Closed" },
   "manager.archive.lane.cancelled": { pl: "Anulowane", en: "Cancelled" },
   "manager.archive.empty": {
     pl: "Brak zamówień w wybranym okresie.",
     en: "No orders in the selected period.",
   },
 
+  // Stalled-order markers (manager-queue-control, D16) ---------------------
+  "manager.queue.claimedOverdue": { pl: "przejęte > 24 h", en: "claimed > 24 h" },
+  "manager.queue.claimedOverdueTooltip": {
+    pl: "Przejęte i jeszcze niewysłane, a kapitan wysłał je ponad 24 h temu. Aplikacja nie zapisuje godziny przejęcia, więc czas liczy się od wysłania przez kapitana.",
+    en: "Claimed and not sent yet, and the captain sent it more than 24 h ago. The app does not store the claim time, so the clock starts at the captain's send.",
+  },
+  "manager.queue.claimedOverdueCount": { pl: "{n} > 24 h", en: "{n} > 24 h" },
+  "manager.queue.claimedOverdueCountSr": {
+    pl: "{n} przejętych ponad 24 h temu",
+    en: "{n} claimed more than 24 h ago",
+  },
+  "manager.queue.sentUnreceived": {
+    pl: "wysłane > 3 dni bez przyjęcia",
+    en: "sent > 3 days, not received",
+  },
+  "manager.queue.sentUnreceivedTooltip": {
+    pl: "Wysłane do dostawcy ponad 3 dni temu, a lokal jeszcze nie przyjął dostawy.",
+    en: "Sent to the supplier more than 3 days ago and the location has not received it yet.",
+  },
+  "manager.queue.sentUnreceivedCount": { pl: "{n} > 3 dni", en: "{n} > 3 days" },
+  "manager.queue.sentUnreceivedCountSr": {
+    pl: "{n} wysłanych ponad 3 dni temu bez przyjęcia",
+    en: "{n} sent more than 3 days ago, not received",
+  },
+  // Lane at its load cap: older orders are not loaded, so counts are lower bounds.
+  "manager.queue.laneCapped": { pl: "{n}+", en: "{n}+" },
+  "manager.queue.laneCappedTooltip": {
+    pl: "Pokazujemy {n} najnowszych. Starsze zamówienia nie są tu wczytane, więc liczniki mogą być zaniżone.",
+    en: "Showing the newest {n}. Older orders are not loaded here, so the counts may be low.",
+  },
+
+  // Manager table, backup line's suggestion cell (manager-queue-control, D10 A).
+  "manager.backupAtPrimary": { pl: "u głównego", en: "at the primary" },
+
   "manager.queue.transportChip": { pl: "TO", en: "TO" },
+  "manager.queue.draftUnsentChip": { pl: "Szkic niewysłany", en: "Draft not sent" },
+  "manager.queue.draftUnsentChipTooltip": {
+    pl: "Szkic tego zamówienia jest w Gmailu, ale się nie otworzył. Otwórz zamówienie i kliknij „Otwórz szkic”.",
+    en: "This order's draft is in Gmail but did not open. Open the order and click “Open draft”.",
+  },
   "manager.queue.transportChipTooltip": {
     pl: "Zamówienie połączone w transport",
     en: "Order combined into a transport batch",

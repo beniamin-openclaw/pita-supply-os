@@ -36,6 +36,8 @@ import type {
   ManagerAddLineResponse,
   ManagerCancelRequest,
   ManagerCancelResponse,
+  ManagerCloseRequest,
+  ManagerCloseResponse,
   ManagerClaimResponse,
   ManagerDispatchRequest,
   ManagerDispatchResponse,
@@ -513,6 +515,13 @@ export const api = {
     apiPost<ManagerCancelResponse>(
       `/api/manager/cancel/${encodeURIComponent(order_id)}`,
       { reason } as ManagerCancelRequest,
+      "manager",
+    ),
+  // Close a sent order that will never be received, with a reason (D5).
+  managerClose: (order_id: string, reason: string) =>
+    apiPost<ManagerCloseResponse>(
+      `/api/manager/close/${encodeURIComponent(order_id)}`,
+      { reason } as ManagerCloseRequest,
       "manager",
     ),
   // Manager inventory view (S-08 / FR-018). Cross-location; [] in seed mode.

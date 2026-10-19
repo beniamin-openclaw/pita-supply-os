@@ -95,7 +95,14 @@ def test_golden_fixture(name: str):
 
 
 def test_scenarios_present():
-    assert {"bracka_bukat", "wola_intermlecz", "ken_edge_cases", "case_lines"} <= set(SCENARIOS)
+    assert {
+        "bracka_bukat",
+        "wola_intermlecz",
+        "ken_edge_cases",
+        "case_lines",
+        "bracka_extras_date",
+        "extras_edge_cases",
+    } <= set(SCENARIOS)
 
 
 def _parse_ts_pl_forms() -> dict[str, dict[str, str]]:

@@ -13,6 +13,9 @@
 
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, MinusCircle } from "lucide-react";
 import type { OrderableItem, CardState } from "../types";
+import type { OpenOrderRef } from "../../../types";
+import { formatDayMonth, warsawTodayIso } from "../../../lib/dates";
+import { stripBulkSuffix } from "../../../lib/displayName";
 import type { OrderLine } from "../types";
 import { computeRowState, computeSuggestion } from "../lib/compute";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
@@ -20,6 +23,7 @@ import { ReasonPicker } from "./ReasonPicker";
 import { useT } from "../../../i18n";
 import { baseToPacks, caseOf, isPackBased } from "../../../lib/packUnits";
 import { formatBaseQty } from "../../../lib/packStock";
+import { formatPiecesAsKg, isPieceUnit, pieceGramsFromNames } from "../../../lib/gramsHint";
 import { packUnitLabel } from "../../../i18n/packUnits";
 import { PackStockInput } from "./PackStockInput";
 import { GramsHint } from "./GramsHint";
@@ -89,6 +93,26 @@ function StateIcon({ state }: { state: CardState }) {
   }
 }
 
+// Warsaw calendar day an open order was placed: the submit moment, as the
+// backend's 7-day window reads it (`_open_orders_elsewhere`) and as the
+// Captain's own order list shows it. `order_date` is only the fallback: it is
+// the UTC day, one day early for a submit between 00:00 and 02:00 Warsaw.
+function orderedDayIso(order: OpenOrderRef): string {
+  if (order.captain_submitted_at) {
+    const submitted: Date = new Date(order.captain_submitted_at);
+    if (!Number.isNaN(submitted.getTime())) return warsawTodayIso(submitted);
+  }
+  return order.order_date || "";
+}
+
+function newestOpenOrderDate(orders: OpenOrderRef[] | undefined): string | null {
+  if (!orders || orders.length === 0) return null;
+  const newest: string = orders
+    .map((o: OpenOrderRef) => orderedDayIso(o))
+    .reduce((a: string, b: string) => (b > a ? b : a), "");
+  return newest ? formatDayMonth(newest) : null;
+}
+
 export function ProductCard({
   item,
   line,
@@ -99,6 +123,10 @@ export function ProductCard({
   const { t, tParts, lang } = useT();
   const isBackup = item.is_backup === true;
   const otherSuppliers = item.other_suppliers ?? [];
+  // Backup card (captain-backup-card-names, D10 A): the suggestion lives at the
+  // primary supplier, so the tile and one combined info line say so.
+  const primaryNames: string = (item.primary_supplier_names ?? []).join(", ");
+  const newestOrderDate: string | null = newestOpenOrderDate(item.open_orders_elsewhere);
   const { state, messageKey, messageVars, requiresReason } = computeRowState(item, line);
   const message = t(messageKey, messageVars);
   const colors = STATE_STYLES[state];
@@ -133,6 +161,20 @@ export function ProductCard({
   // Pack used by the stock field + the threshold header (inventory units).
   const stockPackSize: number = itemCase ? itemCase.size * upp : upp;
   const stockPackUnit: string = itemCase ? itemCase.unit : item.purchase_unit;
+
+  // Read-only kg reading for a piece count whose name carries the per-piece
+  // weight (captain-kg-reading). ×1 reads both names (like GramsHint); a pack
+  // row reads only product_name_pl — a case product's supplier name tends to
+  // describe the purchase pack, not one inventory unit.
+  const pieceGrams: number | null = pieceGramsFromNames(
+    packBased ? [item.product_name_pl] : [item.product_name_pl, item.supplier_product_name],
+  );
+  // The ×1 caption line only; a pack row hands pieceGrams to PackStockInput.
+  const kgCapable: boolean =
+    !packBased && pieceGrams !== null && isPieceUnit(item.inventory_unit);
+  const currentKg: string | null = kgCapable
+    ? formatPiecesAsKg(line.current_stock_qty_base, pieceGrams, item.inventory_unit, lang)
+    : null;
 
   const handleCurrentChange = (v: number | "") => {
     onChange({ ...line, current_stock_qty_base: v });
@@ -172,13 +214,13 @@ export function ProductCard({
   return (
     <div
       id={cardId}
-      className={`rounded-xl shadow-sm border border-gray-200 border-l-4 ${colors.border} ${colors.wash} overflow-hidden mb-3 transition-colors duration-150`}
+      className={`rounded-xl shadow-sm border ${isBackup ? "border-dashed border-slate-400" : "border-gray-200"} border-l-4 ${colors.border} ${colors.wash} overflow-hidden mb-3 transition-colors duration-150`}
     >
       <div className="p-4">
         {/* Title row */}
         <div className="flex justify-between items-start gap-2 mb-1">
           <h3 className="font-semibold text-slate-900 leading-tight">
-            {item.product_name_pl}
+            {stripBulkSuffix(item.product_name_pl)}
           </h3>
           {isBackup && (
             <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
@@ -247,14 +289,18 @@ export function ProductCard({
           (item.open_orders_elsewhere?.length ?? 0) > 0 ||
           (!isBackup && otherSuppliers.length > 0)) && (
           <div className="-mt-2 mb-3 space-y-1">
-            {isBackup && (item.primary_supplier_names?.length ?? 0) > 0 && (
-              <div className="text-xs text-slate-600">
-                {t("card.suggestionAtPrimary", {
-                  names: (item.primary_supplier_names ?? []).join(", "),
-                })}
+            {isBackup && (
+              <div className="text-xs text-slate-600" data-testid="backup-info">
+                {[
+                  t("card.backupInfoLabel"),
+                  primaryNames ? t("card.backupInfoPrimary", { names: primaryNames }) : null,
+                  newestOrderDate ? t("card.backupInfoOrdered", { date: newestOrderDate }) : null,
+                ]
+                  .filter((part: string | null) => part !== null)
+                  .join(" · ")}
               </div>
             )}
-            <OpenOrdersElsewhere orders={item.open_orders_elsewhere} scope="card" />
+            {!isBackup && <OpenOrdersElsewhere orders={item.open_orders_elsewhere} scope="card" />}
             {!isBackup && otherSuppliers.length > 0 && (
               <div className="text-xs text-slate-500">
                 {t("card.alsoFromSuppliers", {
@@ -318,6 +364,7 @@ export function ProductCard({
               baseUnit={item.inventory_unit}
               label={t("card.currentStock")}
               references={[previousStock, item.target_stock_qty_base]}
+              gramsPerUnit={pieceGrams}
             />
           </div>
         )}
@@ -364,6 +411,17 @@ export function ProductCard({
               className="mt-0.5 text-[11px] leading-tight text-right"
             >
               <UnitLabel>{item.inventory_unit}</UnitLabel>
+              {/* kg reading on its own reserved line: the column is ~94 px at
+                  375 px, so "szt (2,4 kg)" inline would re-wrap while typing. */}
+              {kgCapable && (
+                <div
+                  data-testid={`current-kg-${item.product_id}`}
+                  aria-live="polite"
+                  className="min-h-[1rem] text-slate-500 tabular-nums"
+                >
+                  {currentKg !== null && t("stock.kgReading", { kg: currentKg })}
+                </div>
+              )}
             </div>
           </div>
           )}
@@ -385,7 +443,11 @@ export function ProductCard({
             }}
             disabled={isBackup || line.current_stock_qty_base === ""}
             aria-label={
-              isBackup || line.current_stock_qty_base === ""
+              isBackup
+                ? primaryNames
+                  ? t("card.suggestionAtPrimaryAria", { names: primaryNames })
+                  : t("card.suggestionBackupAria")
+                : line.current_stock_qty_base === ""
                 ? t("card.suggestionMissing")
                 : t("card.acceptSuggestion", { count: suggestedPurchase, unit: item.purchase_unit })
             }
@@ -397,9 +459,17 @@ export function ProductCard({
             <div
               id={suggestId}
               aria-live="polite"
-              className="font-bold text-slate-900 tabular-nums text-lg"
+              className={`font-bold text-slate-900 tabular-nums ${
+                isBackup && primaryNames ? "text-sm text-center leading-tight break-words" : "text-lg"
+              }`}
             >
-              {isBackup || line.current_stock_qty_base === "" ? "—" : suggestedPurchase}
+              {isBackup
+                ? primaryNames
+                  ? t("card.suggestionAtPrimaryTile", { names: primaryNames })
+                  : "—"
+                : line.current_stock_qty_base === ""
+                ? "—"
+                : suggestedPurchase}
             </div>
             {!isBackup && line.current_stock_qty_base !== "" && (
               <div className="text-xs text-slate-700 mt-0.5 text-center leading-tight">
