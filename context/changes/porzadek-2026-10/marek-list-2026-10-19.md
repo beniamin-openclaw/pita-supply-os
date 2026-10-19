@@ -53,7 +53,7 @@ Zamknięte punkty są skreślone; to, co wgrane na prod, opisuje `prod-applied-2
   - przejrzeć z Markiem zamówienia „przejęte” i „wysłane, nieprzyjęte” (m.in. Katowice 13.10, Bukat KRK 14.10);
   - ustalić, kiedy Pago i Mory wracają z arkusza do Transportu.
 - B3. Prod SQL: pakiet 19.10 (Katowice szkło i Pago, Bukat KRK, Pago KRK, minima Gdańsk, Coca-Cola Gdańsk ręcznie) **wgrany 19.10**, log w `prod-applied-2026-10-19.md`.
-  Decyzja dla Ciebie: alerty o niskim stanie dla „Pago + Magazyn” w Katowicach i Krakowie oraz Coca-Coli w Katowicach są wyłączone (powód „brak progów” już nie obowiązuje). Włączyć?
+  ~~Alerty sugestii~~: włączone wszędzie 19.10 (także Pago Warszawa i Gdańsk).
   Zostaje: PET ×12 we wszystkich lokalach (U1), P052 w pełnych 1 kg, Dis-Pack minimum 700 zł i nazwy z EAN (po K1), Pepsi KRK (po R3).
 - B4. Zmiany w kodzie (osobne sesje):
   - mail: godziny dostaw per lokal (WP2, Westfield 9–10), dopisek „dostawa tylko przy pracowniku, z podpisem”, bez sufiksu „po ile pakowane” dla Intermleczu;
