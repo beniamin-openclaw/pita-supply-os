@@ -155,6 +155,53 @@ describe("PackStockInput", () => {
   });
 });
 
+describe("PackStockInput — N1 double entry on a stock count", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("describes the fields with the prompt while it shows; an external change clears it", () => {
+    const { packs, loose } = setup("", [40]);
+    fireEvent.change(packs(), { target: { value: "2" } });
+    fireEvent.change(loose(), { target: { value: "30" } });
+    expect(screen.getByText(/ta sama ilość/)).toBeInTheDocument();
+    expect(loose().getAttribute("aria-describedby")).toContain("current-P1-double");
+    fireEvent.click(screen.getByRole("button", { name: "external30" }));
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
+    expect(loose().getAttribute("aria-describedby")).not.toContain("current-P1-double");
+  });
+
+  it("'Nie' hides it for that pair only; a new pair asks again", () => {
+    const { packs, loose } = setup("", [40]);
+    fireEvent.change(packs(), { target: { value: "2" } });
+    fireEvent.change(loose(), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Nie, razem 60 kg" }));
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
+    fireEvent.change(packs(), { target: { value: "3" } });
+    fireEvent.change(loose(), { target: { value: "45" } });
+    expect(screen.getByText(/ta sama ilość/)).toBeInTheDocument();
+  });
+
+  it("English copy", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => (k === "supply_os_lang" ? "en" : null),
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+    });
+    const { packs, loose } = setup("", [40]);
+    fireEvent.change(packs(), { target: { value: "2" } });
+    fireEvent.change(loose(), { target: { value: "30" } });
+    expect(
+      screen.getByText(
+        innermostText("That is 60 kg in total. Are 30 kg and 2 blocks the same amount?"),
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "No, 60 kg in total" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Yes, only 30 kg" })).toBeInTheDocument();
+  });
+});
+
 // captain-kg-reading: the stock reading adds the kg only for a piece base unit,
 // the stock copy and a known per-piece weight.
 describe("PackStockInput kg reading", () => {

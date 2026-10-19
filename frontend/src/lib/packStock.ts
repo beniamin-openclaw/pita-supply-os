@@ -79,6 +79,54 @@ export function suggestPackCount(args: {
 }
 
 /**
+ * N1 (Browary/Intermlecz, 02.10): a Captain typed the same quantity into BOTH
+ * fields — "2 kartony" AND "24 szt" for 24 szt — and the sum ordered 48. The
+ * pair "packs > 0 and loose = packs × upp" is that signature: the combined
+ * value is exactly double what was meant. `duplicate` carries the corrected
+ * quantity (loose dropped).
+ *
+ * ORDER (`mode: "order"`): a loose of a whole pack or more next to packs is
+ * `looseOverPack` — typically the suggestion tile set N cases and the Captain
+ * then typed their own total into the loose field ("6 skrzynek + 30 kg").
+ *
+ * STOCK (`mode: "stock"`): "2 zgrzewki + 12 szt" is a real fridge count, so
+ * `looseOverPack` never fires, and `duplicate` only when the sum is above
+ * every reference (previous count, target) — the 02.10 halloumi stock of 96
+ * against a target of 72. Without references the stock prompt stays off.
+ * Pure; the UI never blocks on it.
+ */
+export type DoubleEntry =
+  | { kind: "duplicate"; fixed: number }
+  | { kind: "looseOverPack" }
+  | null;
+
+export function detectDoubleEntry(args: {
+  packs: number | "";
+  loose: number | "";
+  upp: number;
+  mode: "order" | "stock";
+  references?: Array<number | null | undefined>;
+}): DoubleEntry {
+  const { packs, loose, upp, mode, references = [] } = args;
+  if (!isPackBased(upp)) return null;
+  if (typeof packs !== "number" || !(packs > 0)) return null;
+  if (typeof loose !== "number" || !(loose > 0)) return null;
+  const isDuplicate = Math.abs(loose - packs * upp) < EPS;
+  if (mode === "stock") {
+    if (!isDuplicate) return null;
+    const refs = references.filter(
+      (r): r is number => typeof r === "number" && Number.isFinite(r) && r > 0,
+    );
+    if (refs.length === 0) return null;
+    if (packs * upp + loose <= Math.max(...refs) + EPS) return null;
+    return { kind: "duplicate", fixed: round3(packs * upp) };
+  }
+  if (isDuplicate) return { kind: "duplicate", fixed: round3(packs * upp) };
+  if (loose >= upp - EPS) return { kind: "looseOverPack" };
+  return null;
+}
+
+/**
  * D35 wording of a purchase quantity with a bulk pack, for the supplier e-mail
  * and the copy lists — twin of gmail_url._format_case_qty, Polish only:
  *   whole cases   -> "6 kartonów (24 paczki)"

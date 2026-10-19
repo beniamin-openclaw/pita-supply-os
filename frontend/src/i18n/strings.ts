@@ -213,6 +213,20 @@ export const STRINGS = {
   },
   "stock.didYouMeanYes": { pl: "Tak, popraw", en: "Yes, fix it" },
   "stock.didYouMeanNo": { pl: "Nie", en: "No" },
+  // N1: the same quantity typed into BOTH fields ("2 kartony" + "24 szt"
+  // for 24 szt) doubles it. Shared by the stock and the order input.
+  "packEntry.duplicate": {
+    pl: "Razem {total}. Czy {loose} i {packs} to ta sama ilość?",
+    en: "That is {total} in total. Are {loose} and {packs} the same amount?",
+  },
+  "packEntry.duplicateYes": { pl: "Tak, tylko {fixed}", en: "Yes, only {fixed}" },
+  "packEntry.duplicateNo": { pl: "Nie, razem {total}", en: "No, {total} in total" },
+  // Order only: N cases (often from the suggestion tile) + the Captain's own
+  // total typed into the loose field ("6 skrzynek + 30 kg").
+  "packEntry.looseOverPack": {
+    pl: "Razem {total}. Czy {loose} to już cała ilość?",
+    en: "That is {total} in total. Is {loose} the whole amount?",
+  },
 
   // Grams typed for a piece-counted product (name carries the weight).
   "gramsHint.didYouMean": {

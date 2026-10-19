@@ -429,6 +429,162 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
   });
 });
 
+// N1 — Marek 02.10: "Dubluje zamówienie, daje X2" (Browary, Intermlecz). Prod
+// ORD-20261002-BRO-INTE-b0cd66: halloumi (karton = 12 szt) stock 96, order 48
+// (manager cut to 24); frytki (karton = 4 paczki) stock 32, order 40 (cut to
+// 20). Both match the same number typed into the [kartony] AND [szt] fields.
+describe("ProductCard — N1 double entry in [cases] + [loose]", () => {
+  const halloumi = (): OrderableItem =>
+    makeItem({
+      product_id: "P015",
+      product_name_pl: "Halloumi",
+      inventory_unit: "szt",
+      purchase_unit: "szt",
+      units_per_purchase_unit: 1,
+      rounding_rule: "full_only",
+      target_stock_qty_base: 72,
+      max_stock_qty_base: 72,
+      supplier_product_id: "SP_INTERMLECZ_P015",
+      supplier_product_name: "EURIAL REHA HALLOUMI SER DO GRILLOWANIA 200g/12",
+      case_unit: "karton",
+      units_per_case: 12,
+    });
+
+  it("repro: 2 kartony + 24 szt orders 48 and the card says so; 'Tak' fixes it to 24", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    const packs = screen.getByLabelText("Zamawiasz, karton");
+    const loose = screen.getByLabelText("Zamawiasz, szt");
+    fireEvent.focus(packs);
+    fireEvent.change(packs, { target: { value: "2" } });
+    fireEvent.focus(loose);
+    fireEvent.change(loose, { target: { value: "24" } });
+    // The sum is what the two fields mean today — the bug Marek saw.
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 48 }),
+    );
+    // The prompt is visible while the loose field still has focus.
+    expect(
+      screen.getByText(innermostText("Razem 48 szt. Czy 24 szt i 2 kartony to ta sama ilość?")),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 24 szt" }));
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 24 }),
+    );
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("2");
+    expect((screen.getByLabelText("Zamawiasz, szt") as HTMLInputElement).value).toBe("0");
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
+    // Focus goes back to the loose field, not to <body>.
+    expect(document.activeElement).toBe(screen.getByLabelText("Zamawiasz, szt"));
+  });
+
+  it("one carton + 12 szt asks without gendered grammar", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "12" } });
+    expect(
+      screen.getByText(innermostText("Razem 24 szt. Czy 12 szt i 1 karton to ta sama ilość?")),
+    ).toBeInTheDocument();
+  });
+
+  it("the stock field asks when the sum is above the target (4 kartony + 48 szt = 96 > 72)", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015" }),
+    );
+    retype(screen.getByLabelText("Obecny stan, karton"), "4");
+    retype(screen.getByLabelText("Obecny stan, szt"), "48");
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ current_stock_qty_base: 96 }),
+    );
+    // On a count, keeping the sum is the main (first) button.
+    const keep = screen.getByRole("button", { name: "Nie, razem 96 szt" });
+    const fix = screen.getByRole("button", { name: "Tak, tylko 48 szt" });
+    expect(keep.compareDocumentPosition(fix) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(fix);
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ current_stock_qty_base: 48 }),
+    );
+  });
+
+  it("a stock count under the target is never questioned (2 kartony + 24 szt = 48)", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015" }),
+    );
+    retype(screen.getByLabelText("Obecny stan, karton"), "2");
+    retype(screen.getByLabelText("Obecny stan, szt"), "24");
+    expect(screen.queryByText(/ta sama ilość|cała ilość/)).not.toBeInTheDocument();
+    retype(screen.getByLabelText("Obecny stan, szt"), "30");
+    expect(screen.queryByText(/ta sama ilość|cała ilość/)).not.toBeInTheDocument();
+  });
+
+  it("'Nie' keeps the sum and hides the prompt for that pair", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 0 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
+    fireEvent.click(screen.getByRole("button", { name: "Nie, razem 48 szt" }));
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 48 }),
+    );
+  });
+
+  it("a real remainder (2 kartony + 4 szt) shows no prompt; a loose over a carton asks", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "4" } });
+    expect(screen.queryByText(/ta sama ilość|cała ilość/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "30" } });
+    expect(
+      screen.getByText(innermostText("Razem 54 szt. Czy 30 szt to już cała ilość?")),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Nie, razem 54 szt" }));
+    expect(screen.queryByText(/cała ilość/)).not.toBeInTheDocument();
+  });
+
+  it("tile path: tap the suggestion (2 kartony), then type an own total of 30 szt", () => {
+    const { onChangeSpy } = renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Zaakceptuj sugestię/ }));
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("2");
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "30" } });
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 54 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tak, tylko 30 szt" }));
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ captain_final_qty_purchase: 30 }),
+    );
+    expect((screen.getByLabelText("Zamawiasz, karton") as HTMLInputElement).value).toBe("0");
+  });
+
+  it("an external change (tapping the tile) clears an open prompt", () => {
+    renderCard(
+      halloumi(),
+      makeLine({ product_id: "P015", supplier_product_id: "SP_INTERMLECZ_P015", current_stock_qty_base: 48 }),
+    );
+    fireEvent.change(screen.getByLabelText("Zamawiasz, karton"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Zamawiasz, szt"), { target: { value: "24" } });
+    expect(screen.getByText(/ta sama ilość/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Zaakceptuj sugestię/ }));
+    expect(screen.queryByText(/ta sama ilość/)).not.toBeInTheDocument();
+  });
+});
+
 // captain-kg-reading: read-only kg next to the order card's stock field.
 describe("ProductCard — kg reading for a piece count", () => {
   const halloumi = (overrides: Partial<OrderableItem> = {}): OrderableItem =>
