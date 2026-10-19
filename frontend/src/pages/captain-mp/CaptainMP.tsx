@@ -39,6 +39,7 @@ import { clearStaleAutoReasons, overruleAll } from "./lib/overruleAll";
 import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
 import { serializeExtraItems } from "./lib/extraItems";
+import { stockCountWarning, type StockCountWarning } from "./lib/stockCountWarning";
 import type { ExtraItemRow } from "./lib/extraItems";
 import { stripBulkSuffix } from "../../lib/displayName";
 import { localSentRef, mergeSupplierOrders, sentTodayBySupplier } from "./lib/sentToday";
@@ -835,6 +836,13 @@ export function CaptainMP() {
     [orderableItems, lines],
   );
 
+  // D6 stock-count warning: no stock counted, or every count 0. Non-blocking,
+  // only at locations with require_stock_count on (rides on the items).
+  const stockWarning: StockCountWarning = useMemo(
+    () => stockCountWarning(orderableItems, lines),
+    [orderableItems, lines],
+  );
+
   const openConfirm = useCallback(() => setConfirmOpen(true), []);
   const cancelConfirm = useCallback(() => setConfirmOpen(false), []);
 
@@ -1172,6 +1180,8 @@ export function CaptainMP() {
         deviationCount={stats.deviationCount}
         reasonCount={stats.reasonCount}
         criticalMissing={criticalMissing}
+        stockWarning={stockWarning}
+        stockPrefillAvailable={showPrefillControl}
         deliveryDate={displayedDeliveryDate || undefined}
         coverageDays={activeChoice.coverage ?? null}
         sentToday={

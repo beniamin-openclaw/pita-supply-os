@@ -182,6 +182,13 @@ class Location(BaseModel):
     # location. `bool = False`, NOT Optional: NOT NULL DEFAULT false and
     # _LOCATION_COLUMNS binds it on insert. See app/supplier_catalog.py.
     own_catalog: bool = False
+    # True = the Captain's pre-submit dialog warns (never blocks) when the
+    # supplier's cards carry no stock count, or only zeros (owner decision D6,
+    # captain-stock-count-warning, migration 0030). ON everywhere except
+    # NORBLIN and ELEKTROWNIA (prod data step). `bool = True`, NOT Optional:
+    # NOT NULL DEFAULT true, bound on insert by _LOCATION_COLUMNS; an absent
+    # column (seed/sheets/pre-0030 Postgres) reads as ON.
+    require_stock_count: bool = True
 
 
 class SupplierProduct(BaseModel):

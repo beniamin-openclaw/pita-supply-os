@@ -24,6 +24,10 @@ Since migration 0029 (krakow-katowice-rollout) Postgres is the only home of
 the Sheet has no such columns, so any Sheet-only row this script inserts lands
 as a SHARED, non-backup row visible at every Warsaw location. Read the dry run
 before ``--apply``.
+
+Likewise ``locations.require_stock_count`` (migration 0030) lives only in
+Postgres: a Sheet-only location this script inserts gets the model default
+(True, the stock-count warning on), as every new location should.
 """
 import sys
 

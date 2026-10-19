@@ -427,6 +427,31 @@ export const STRINGS = {
     pl: "Czy na pewno wysłać mimo to?",
     en: "Are you sure you want to send anyway?",
   },
+  // Stock-count warning (captain-stock-count-warning, D6): non-blocking, shown
+  // only at locations with require_stock_count on. Blank = not counted.
+  "confirm.stockMissing": {
+    pl: "Nie wpisano stanów",
+    en: "No stock counts entered",
+  },
+  "confirm.stockMissingAsk": {
+    pl: "Wróć i policz albo wyślij mimo to.",
+    en: "Go back and count, or send anyway.",
+  },
+  // Same block when the location has an inventory count on screen to pull in
+  // (B59: a count done in Inwentaryzacja never reached the order screen, whose
+  // blank fields show a grey "0" placeholder). {button} = captain.prefillFillEmpties.
+  "confirm.stockMissingAskPrefill": {
+    pl: "Jest remanent w aplikacji: wróć i kliknij „{button}” albo wyślij mimo to.",
+    en: "There is an inventory count in the app: go back and tap “{button}”, or send anyway.",
+  },
+  "confirm.stockAllZero": {
+    pl: "Wszystkie wpisane stany to 0",
+    en: "Every stock count you entered is 0",
+  },
+  "confirm.stockAllZeroAsk": {
+    pl: "Sprawdź je. Wróć i popraw albo wyślij mimo to.",
+    en: "Check them. Go back and fix, or send anyway.",
+  },
   "confirm.back": { pl: "Wróć i popraw", en: "Go back and fix" },
   "confirm.send": { pl: "Tak, wyślij", en: "Yes, send" },
   "confirm.sendAnyway": { pl: "Wyślij mimo to", en: "Send anyway" },

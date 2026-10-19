@@ -11,12 +11,20 @@
 // warnings (when present) are part of aria-describedby so screen readers
 // announce them. PLN is intentionally omitted (the captain screen hides money);
 // the summary uses line / deviation / reason counts instead.
+//
+// Stock-count warning (captain-stock-count-warning, D6): `stockWarning` adds
+// one more non-blocking block when no stock was counted ("missing") or every
+// entered stock is 0 ("allZero"). Decided by `lib/stockCountWarning.ts`; the
+// parent passes "none" at locations with the flag off. With an inventory count
+// on screen (`stockPrefillAvailable`) the "missing" block points to the prefill
+// control's "Wypełnij puste" instead of asking for a recount (B59).
 
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { useT } from "../../../i18n";
 import { DELIVERY_DATE_FORMAT } from "../../../lib/dates";
 import { SENT_TIME_FORMAT } from "../lib/sentToday";
+import type { StockCountWarning } from "../lib/stockCountWarning";
 
 /** The supplier already got an order today (captain-sent-today). */
 export interface SentTodayWarning {
@@ -41,6 +49,11 @@ interface ConfirmSubmitDialogProps {
   coverageDays?: 1 | 3 | null;
   /** Non-blocking "already sent today — send another?" warning. */
   sentToday?: SentTodayWarning | null;
+  /** Stock-count warning kind (D6). "none" or absent = no block. */
+  stockWarning?: StockCountWarning;
+  /** An inventory count can fill the blank stocks (the prefill control is on
+   *  screen): the "missing" block then points to "Wypełnij puste" (B59). */
+  stockPrefillAvailable?: boolean;
 }
 
 export function ConfirmSubmitDialog({
@@ -55,6 +68,8 @@ export function ConfirmSubmitDialog({
   deliveryDate,
   coverageDays = null,
   sentToday = null,
+  stockWarning = "none",
+  stockPrefillAvailable = false,
 }: ConfirmSubmitDialogProps) {
   const { t, tPlural, formatDateTime } = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -92,11 +107,14 @@ export function ConfirmSubmitDialog({
 
   const hasCriticalWarning = criticalMissing.length > 0;
   const hasSentTodayWarning = sentToday !== null;
-  const hasWarning = hasCriticalWarning || hasSentTodayWarning;
+  const hasStockWarning = stockWarning !== "none";
+  // Any warning turns the confirm button into "Wyślij mimo to".
+  const hasWarning = hasCriticalWarning || hasSentTodayWarning || hasStockWarning;
   const describedBy = [
     "confirm-submit-summary",
     hasSentTodayWarning ? "confirm-submit-sent-today" : null,
     hasCriticalWarning ? "confirm-submit-warning" : null,
+    hasStockWarning ? "confirm-submit-stock-warning" : null,
   ]
     .filter((id): id is string => id !== null)
     .join(" ");
@@ -149,7 +167,7 @@ export function ConfirmSubmitDialog({
         aria-describedby={describedBy}
         tabIndex={-1}
         onKeyDown={onTrapKeyDown}
-        className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 outline-none"
+        className="relative w-full sm:max-w-md max-h-[90dvh] overflow-y-auto bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 outline-none"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
@@ -227,6 +245,34 @@ export function ConfirmSubmitDialog({
                 </div>
                 <div className="mt-2 text-sm text-amber-900">
                   {t("confirm.criticalAsk")}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hasStockWarning && (
+            <div
+              id="confirm-submit-stock-warning"
+              data-testid="confirm-stock-warning"
+              className="mt-4 flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3"
+            >
+              <AlertTriangle
+                size={20}
+                aria-hidden="true"
+                className="shrink-0 mt-0.5 text-amber-700"
+              />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-amber-900">
+                  {t(stockWarning === "missing" ? "confirm.stockMissing" : "confirm.stockAllZero")}
+                </div>
+                <div className="mt-1 text-sm text-amber-900">
+                  {stockWarning !== "missing"
+                    ? t("confirm.stockAllZeroAsk")
+                    : stockPrefillAvailable
+                      ? t("confirm.stockMissingAskPrefill", {
+                          button: t("captain.prefillFillEmpties"),
+                        })
+                      : t("confirm.stockMissingAsk")}
                 </div>
               </div>
             </div>
