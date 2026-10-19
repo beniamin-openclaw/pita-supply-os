@@ -1,6 +1,6 @@
 # Odpowiedzi z rozmowy Ben–Marek (19.10)
 
-Notatki na bieżąco. **Nic stąd nie jest jeszcze wykonane** (Ben: „notuj, nie wykonuj od razu”).
+Notatki na bieżąco (Ben: „notuj, nie wykonuj od razu”). **Pakiet SQL 19.10 jest wgrany na prod (19.10 ok. 15:00)**, szczegóły w `prod-applied-2026-10-19.md`; reszta niżej nie jest wykonana.
 
 Źródła:
 - czat z Benem 19.10 (odpowiedzi na punkty 1–19 i 26 listy otwartych spraw);
@@ -96,3 +96,46 @@ Punkty 20–25 i 27–29 nie zostały jeszcze omówione. Są w liście dla Marka
 
   Prod FORUM ma tylko Bukat, Dis-Pack, Kuchnie Świata i Selgros.
 - **P-5 SLONY:** progi Kuchnie, Selgros, Pago+Magazyn i BlueService są na prodzie. Pozycje zapasowe Selgrosu GDA w arkuszu nie mają progów, zgodnie z założeniem.
+
+## Druga tura odpowiedzi (19.10, po południu)
+
+Źródła: czat z Benem 19.10 oraz transkrypt spotkania Ben–Marek–Sławek (z udziałem Kamesha), wklejony przez Bena.
+Transkrypt jest automatyczny i miejscami zniekształcony. Liczby niepewne są oznaczone.
+Ben 19.10: „wykonaj, wgraj na prod potrzebne elementy (braki progów uzupełnimy potem)”.
+
+| # | Temat | Odpowiedź (źródło) | Stan |
+|---|---|---|---|
+| K3 | Katowice: szkło czy puszki | „Katowice to szkło, a Gdańsk to puszka/PET (zgodnie z arkuszem teraz)” (Ben, czat) | SQL 19.10 (A) |
+| G4 | Coca-Cola Gdańsk | Minimum nie ma. Zamawiają w grupie na WhatsAppie. Manager oznacza zamówienie jako wysłane ręcznie | notatka u dostawcy (E); ceny i progi puszek/PET dalej od Marka |
+| G3 | Kuchnie Świata, Selgros, Blue Service Gdańsk | Zamawiać do 17:00 (na prodzie już jest). Minima „przekopiować z innych punktów” | SQL (E): Kuchnie 600 zł, Blue Service 500 zł jak w Warszawie; Selgros bez minimum. Dni dostaw: brak |
+| G5 | Pago, magazyn, Filber do Gdańska | Jadą jednym transportem: potwierdzone | zamknięte |
+| G6 | Ocet i cukier w saszetkach | Usuwamy oba | na prodzie ich nie ma (SLONY ma tylko sól i pieprz w saszetkach): nic do zrobienia |
+| G7 | Produkcja własna | Progi zostają 0 | zamknięte |
+| G1 | Godziny dostaw Gdańsk | Pierwsze dwie godziny pracy lokalu; padło „od dziesiątej” | dokładne od–do do potwierdzenia (A1); w mailu wymaga zmiany kodu (WP2) |
+| R1 | Selgros Kraków | W arkuszu pusty i tak zostaje: brak progów. Pozycja zapasowa ma te same progi co u głównego dostawcy (Kraków ok. 80% z Bukatu) | zamknięte: progi są per lokal i produkt, więc zapasowy wiersz już je dzieli; wiersze Selgrosu pokrywające się z Bukatem są `is_backup` |
+| R4 | Bukat Kraków: wyprzedzenie | Bukat dostarcza pn/śr/pt, zamówienie dzień przed do 16:00. Marek potrzebuje czasu, więc kapitan zamawia **2 dni** przed dostawą | SQL (C): `lead_days` 1 → 2, termin 16:00 |
+| R2 | Bukat Kraków: tzatziki i tiro | Tzatziki: max ok. 1/3 z 72, w transkrypcie „Ok, trzyście pojemników” (czytam: 30). Tiro: 8 pojemników. Kapitan zawsze może wpisać więcej. Tzatziki z Pago: nie domyślnie, kapitan może dopisać | SQL (C): tzatziki 18/30, tiro 2/8 (min z arkusza). **Do potwierdzenia:** 30 czy 24 oraz min 18 |
+| R2b | Bukat Kraków: minimum | Zamówienie ok. 300 zł przeszło, Bukat się zgodził: „nie mam minimum w tym przypadku” | SQL (C): minimum 500 → brak |
+| — | Bukat Poznań | Codziennie oprócz weekendu, zamówienie dzień przed do 16:00 | Poznań (STARY_BROWAR) nieaktywny: do zrobienia przy starcie lokalu |
+| A1 | Godziny przyjmowania dostaw | Priorytet przed listą Mory. Westfield: ludzie od 9:00, okno dostaw 9–10 (Kamesh). Ben: zakaz dostaw bez pracownika, bez podpisu i bez sprawdzenia; zakaz brania kluczy (np. z Żabki); tę informację dopisać w mailach do dostawców. Marek ma przekazać to handlowcom | WP2 + nowy dopisek w mailu: zmiana kodu (osobna sesja). Godziny pozostałych lokali: Marek |
+| W1 | Lista magazynu Mory | Potrzebna, ale po godzinach dostaw | Marek |
+| A5 | Dopiski „po ile pakowane” w mailu | Intermlecz: tak. „Nie zrobiliśmy tego tam?” Nie: PR #65 obciął sufiks `/N` tylko w widoku kapitana (D3). Mail i PDF dalej mają pełną nazwę | zmiana kodu: obcinać sufiks w mailu do Intermleczu (osobna sesja) |
+| — | Stopka | „Przekleić stopkę z maila na samym dole w biuro” | do wyjaśnienia z Benem: którą stopkę i gdzie (podpis w Gmailu biuro@ czy stopka maila z aplikacji) |
+| 17 | Ordering PB v5 | Ben zgadza się na poprawki 1–3. Fillo (4): bez blokady, tylko żeby się nie psuło i żeby dało się je dopisać. Ben dokończy w tamtej sesji | jarvis-codex |
+
+### Pakiet SQL 19.10 (`prod-sql-2026-10-19-meeting.sql`)
+
+- A. Katowice Coca-Cola na szkło + progi z arkusza.
+- B. Katowice Pago + Magazyn + Lemoniady: progi z arkusza, nowe tzatziki/tiro/feta, feta z Kuchni Świata jako zapasowa.
+- C. Bukat Kraków: progi z arkusza (tzatziki max 30, tiro max 8), zamawianie 2 dni wcześniej, bez minimum.
+- D. Kraków: nowy dostawca „Pago + Magazyn + Lemoniady (Kraków)” (15 pozycji z arkusza, z progami).
+- E. Gdańsk: minima Kuchnie Świata i Blue Service; Coca-Cola Gdańsk zamawiana ręcznie (WhatsApp), bez minimum.
+
+Wgrane 19.10 ok. 15:00, audyt czysty. Poprawki po review przed wgraniem: „bez minimum” zapisane jako 0 (puste pole dawało domyślne 400 zł);
+rolki 57/30 w Krakowie po 10 w opakowaniu (szablon miał 6), cena 1,29 zł jak w Mory; P092 w Krakowie nazwany „Boxy bezowe bez logo”;
+Coca-Cola Gdańsk przestawiona z „portal” na zamawianie ręczne.
+
+Celowo poza pakietem:
+- progi bez wartości w arkuszu (rolki 80/20 i 80/80 w Katowicach, Selgros Kraków, Feta, Majonez i Olej w Kuchniach Świata);
+- Pepsi dla Krakowa: potrzebne nowe produkty (Toma), a pytanie R3 jest dalej otwarte;
+- godziny dostaw i dopisek w mailu: to zmiana kodu.
