@@ -14,7 +14,8 @@ Path (b): Supabase MCP `execute_sql` from the main lane. Each step below is diff
 | 08:29 | `captain-stock-count-warning/prod-sql.sql` A | column absent; 13 locations (as in the file); NORBLIN + ELEKTROWNIA present |
 | 08:29 | B + C in one transaction (`lock_timeout` 5s) | migration 0030 `locations.require_stock_count` (default true); NORBLIN, ELEKTROWNIA → false (guards as in the file) |
 | 08:29 | D | false: ELEKTROWNIA, NORBLIN; true: the other 11. `/health` ok after the change. The running code (`main` before #70) ignores the extra column (`SELECT *` into a Pydantic model without `extra=forbid`) |
+| 19.10 | `gdansk-rollout/prod-sql-4-coca-cola-cans-pet.sql` STEP 1 (Ben's OK: "Wgraj, te same butelki") | One transaction (`lock_timeout` 5s), all guards passed. AUDIT (a): 8 active SUP_COCACOLA_GDA rows, order 1–8: Coca-Cola puszka ×24, Zero puszka ×24, Sprite puszka ×24, Fanta puszka ×24, Cappy Pomarańcza PET ×12, Cappy Jabłko PET ×12, Kropla niegaz. PET 0,5 ×12, Kropla gaz. PET 0,5 ×12. (b) 0 active glass rows; P186/P187/P190/P191 `active=false`. (c) SLONY thresholds: glass 0/0/0; P064/P065/P068/P069 0/0/0 (waiting on Marek); P066/P067 12/48/48; P070 36/96/96; P071 24/48/48 szt. STEP 2 (remove glass settings) not run, it needs a separate OK |
 
 Still open:
 - #69 conflicts with `main` after #65 and #66. Lane C is merging `origin/main` into it, then into #70 and #64. Merge #69 → #70 once CI is green.
-- `gdansk-rollout/prod-sql-4-coca-cola-cans-pet.sql` (Gdańsk: cans and PET, no glass, from Ben in chat 19.10) is in review. It is not applied, and the apply needs Ben's OK.
+- Gdańsk: ask the Captain to delete any unsent Coca-Cola draft (it may still hold glass rows). Prices for Fanta, Sprite and Kropla are NULL until Marek sends them. Thresholds for cans and Cappy PET are 0/0/0 (no suggestion) until Marek sends them.
