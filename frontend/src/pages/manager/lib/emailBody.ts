@@ -142,9 +142,45 @@ export function visibleLines(
   return detail.lines.filter((ln) => effectiveQtyFor(ln) > 0).sort(compareProductOrder);
 }
 
+/** Marker on an off-catalogue row — plaintext has no colour, so the words are
+ *  the highlight. Literal (supplier copy is always Polish); twin of
+ *  gmail_url.EXTRA_ITEM_MARKER. */
+export const EXTRA_ITEM_MARKER = "(spoza katalogu)";
+const EXTRA_ITEM_SEP = " - ";
+
 /**
- * Plaintext Polish body (order-email-v2 layout, approved 2026-09-28; mirrors
- * gmail_url._build_body byte for byte).
+ * [product, qty] cells of the Captain's off-catalogue items — twin of
+ * gmail_url._extra_item_rows (supplier-email-v21 WP1).
+ *
+ * `extra_items` is free text, one item per line, written by the Captain UI as
+ * "{name} - {qty} {unit}" (captain-mp/lib/extraItems.ts). Each line is trimmed
+ * (which also drops a "\r"), blank lines are skipped, and the trimmed line
+ * splits at the FIRST " - " — the Captain parser's separator rule. A line
+ * without one (or with nothing before it) is kept whole as the product with an
+ * empty qty. Splits on "\n" only, exactly like the Python twin.
+ */
+export function extraItemRows(extraItems: string | null | undefined): Array<[string, string]> {
+  const rows: Array<[string, string]> = [];
+  for (const raw of (extraItems ?? "").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const i = line.indexOf(EXTRA_ITEM_SEP);
+    let product = i < 0 ? line : line.slice(0, i).trim();
+    let qty = i < 0 ? "" : line.slice(i + EXTRA_ITEM_SEP.length).trim();
+    if (!product) {
+      product = line;
+      qty = "";
+    }
+    rows.push([product, qty]);
+  }
+  return rows;
+}
+
+/**
+ * Plaintext Polish body (order-email-v2 layout, approved 2026-09-28, with the
+ * supplier-email-v21 changes of 12.10: off-catalogue items as numbered table
+ * rows, company data before the sign-off; mirrors gmail_url._build_body byte
+ * for byte).
  *
  * `effectiveQtyFor` returns the DRAFT effective purchase qty for a line so the
  * email matches the table. `signer` is the manager signing the e-mail; omitted
@@ -167,7 +203,8 @@ export function buildEmailBody(
   out.push("");
   out.push("Lp. | Produkt | Ilość");
 
-  visibleLines(detail, effectiveQtyFor).forEach((line, idx) => {
+  const visible = visibleLines(detail, effectiveQtyFor);
+  visible.forEach((line, idx) => {
     const qty = effectiveQtyFor(line);
     // Supplier purchase unit, else the product's inventory unit (as the twin).
     const unit = line.purchase_unit || line.inventory_unit || "";
@@ -177,15 +214,15 @@ export function buildEmailBody(
     out.push(cell.replace(/\s+$/, ""));
   });
 
+  // Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b) as rows of
+  // the same table, numbered on from the catalogue lines and marked
+  // (supplier-email-v21 WP1 — no separate section any more).
+  extraItemRows(detail.extra_items).forEach(([product, qty], i) => {
+    const row = `${visible.length + i + 1}.  | ${product} ${EXTRA_ITEM_MARKER}`;
+    out.push(qty ? `${row} | ${qty}` : row);
+  });
+
   out.push("");
-  // Ad-hoc off-catalogue items (training-feedback-0901 Phase 1b), own section,
-  // skipped when empty.
-  const extraItems = (detail.extra_items ?? "").trim();
-  if (extraItems) {
-    out.push("Pozycje spoza katalogu:");
-    out.push(extraItems);
-    out.push("");
-  }
   // Order-level Captain comment — NOT the manager send-back `notes` field.
   const captainNote = (detail.captain_note ?? "").trim();
   if (captainNote) {
@@ -194,7 +231,8 @@ export function buildEmailBody(
     out.push("");
   }
   // Delivery line: the date only while the switch is on (delivery-calendar),
-  // otherwise a blank the manager may fill in by hand; fixed 11:00 window.
+  // otherwise a blank the manager may fill in by hand; fixed 11:00 window —
+  // per-location hours are WP2, waiting for the hours from Marek.
   const day = emailDeliveryDate(detail);
   out.push(`Dostawa: ${day ? formatDeliveryDayLong(day) : BLANK_DELIVERY_DATE}, od godziny 11:00`);
   // location_name + delivery_address + city, empty parts skipped (mirrors
@@ -207,6 +245,16 @@ export function buildEmailBody(
   const phone = (detail.location_phone ?? "").trim();
   if (phone) out.push(`Telefon lokalu: ${phone}`);
   out.push("");
+  // Operating-company block (feedback r5): each location orders under its own
+  // spółka; suppliers need the invoicing entity + NIP in every order email.
+  // Before the sign-off since supplier-email-v21 ("najpierw dane firmy, a
+  // potem stopka", 12.10).
+  if (detail.company_name) {
+    out.push(detail.company_name);
+    if (detail.company_address) out.push(detail.company_address);
+    if (detail.company_nip) out.push(`NIP: ${detail.company_nip}`);
+    out.push("");
+  }
   out.push("Pozdrawiam,");
   if (signer) {
     out.push(signer.name);
@@ -218,13 +266,6 @@ export function buildEmailBody(
     if (contact.length) out.push(contact.join(" · "));
   } else {
     out.push("Pita Bros");
-  }
-  // Operating-company footer (feedback r5): each location orders under its own
-  // spółka; suppliers need the invoicing entity + NIP in every order email.
-  if (detail.company_name) {
-    out.push(detail.company_name);
-    if (detail.company_address) out.push(detail.company_address);
-    if (detail.company_nip) out.push(`NIP: ${detail.company_nip}`);
   }
   out.push(`(zamówienie #${detail.order_id})`);
 

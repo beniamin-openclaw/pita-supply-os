@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 
-import { parseGramsPerPiece, suggestPiecesFromGrams } from "./gramsHint";
+import {
+  formatPiecesAsKg,
+  isPieceUnit,
+  parseGramsPerPiece,
+  pieceGramsFromNames,
+  suggestPiecesFromGrams,
+} from "./gramsHint";
 
 describe("parseGramsPerPiece", () => {
   it.each([
@@ -67,5 +73,81 @@ describe("suggestPiecesFromGrams with the location max", () => {
   it("ignores a missing or zero max", () => {
     expect(suggestPiecesFromGrams(400, 820, "szt", 0)).toBe(0.5);
     expect(suggestPiecesFromGrams(400, 820, "szt", null)).toBe(0.5);
+  });
+});
+
+describe("isPieceUnit", () => {
+  it.each(["szt", "słoik", "opak", " SZT ", "Opak"])("piece unit: %s", (u) => {
+    expect(isPieceUnit(u)).toBe(true);
+  });
+  it.each(["kg", "l", "box", "", null, undefined])("not a piece unit: %s", (u) => {
+    expect(isPieceUnit(u as string | null | undefined)).toBe(false);
+  });
+});
+
+describe("pieceGramsFromNames", () => {
+  it.each([
+    ["Halloumi Reha 200gr", 200],
+    ["Ketchup Fanex VII 1,1 kg", 1100],
+    ["Frytki Aviko 9,5mm 2,5kg", 2500],
+    ["Masło MR 500g", 500],
+  ])("%s -> %s", (name, grams) => {
+    expect(pieceGramsFromNames([name])).toBe(grams);
+  });
+
+  it.each([
+    "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30",
+    "Papryka grillowana Helcom 4,2kg/2,5kg",
+    "Cieciorka w zalewie 400g/240g",
+    "Ser feta 12x200g",
+    "Frytki 4 x 2,5kg",
+    "Kawa 200g x 6",
+    "Kawa 200 g. x 6",
+    "Ser 12*200g",
+    "Ser 12 szt. x 200g",
+    "Miód 25g (30 szt)",
+    "30 szt. po 25g",
+    "Ser 1/2 kg",
+  ])("multipack spelling -> null: %s", (name) => {
+    expect(pieceGramsFromNames([name])).toBeNull();
+  });
+
+  it("a name without a weight falls through to the next name", () => {
+    expect(pieceGramsFromNames(["Halloumi", "Halloumi Reha 200gr"])).toBe(200);
+    expect(pieceGramsFromNames([null, undefined, "Masło 500g"])).toBe(500);
+  });
+
+  it("the first name with a weight decides, even when it is a multipack", () => {
+    expect(pieceGramsFromNames(["Halloumi 200g/12", "Halloumi 200g"])).toBeNull();
+  });
+
+  it("no weight anywhere -> null", () => {
+    expect(pieceGramsFromNames(["Pita biała", "Cola 0,33l"])).toBeNull();
+    expect(pieceGramsFromNames([])).toBeNull();
+  });
+});
+
+describe("formatPiecesAsKg", () => {
+  it("12 pieces of 200 g -> 2,4 (pl) / 2.4 (en)", () => {
+    expect(formatPiecesAsKg(12, 200, "szt", "pl")).toBe("2,4");
+    expect(formatPiecesAsKg(12, 200, "szt", "en")).toBe("2.4");
+  });
+
+  it("fractions and larger counts", () => {
+    expect(formatPiecesAsKg(0.5, 820, "szt", "pl")).toBe("0,41");
+    expect(formatPiecesAsKg(3, 110, "opak", "pl")).toBe("0,33");
+    expect(formatPiecesAsKg(48, 200, "szt", "pl")).toBe("9,6");
+    expect(formatPiecesAsKg(1, 125, "opak", "pl")).toBe("0,125");
+  });
+
+  it.each([0, -1, Number.NaN, "", null, undefined])("no reading for count %s", (qty) => {
+    expect(formatPiecesAsKg(qty as number | "" | null | undefined, 200, "szt", "pl")).toBeNull();
+  });
+
+  it("no reading without a weight or for a non-piece unit", () => {
+    expect(formatPiecesAsKg(12, null, "szt", "pl")).toBeNull();
+    expect(formatPiecesAsKg(12, 0, "szt", "pl")).toBeNull();
+    expect(formatPiecesAsKg(12, 15000, "kg", "pl")).toBeNull();
+    expect(formatPiecesAsKg(12, 200, "box", "pl")).toBeNull();
   });
 });

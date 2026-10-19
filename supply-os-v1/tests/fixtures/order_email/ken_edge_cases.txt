@@ -11,9 +11,7 @@ Lp. | Produkt | Ilość
 4.  | Pita | 22 kartony
 5.  | Kubki | 2 tacka
 6.  | Sól | 12 worków
-
-Pozycje spoza katalogu:
-Mięta 2 pęczki
+7.  | Mięta 2 pęczki (spoza katalogu)
 
 Komentarz:
 Proszę o świeże pomidory.

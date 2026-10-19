@@ -1,0 +1,376 @@
+<title>Supply OS ze spotkań</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; three collapsible groups (zadania, wyszarzanie, podwójne); each item = <details> with options as radios */
+:root{
+  --bg:#f5f7f6; --surface:#ffffff; --fg:#17201d; --muted:#5a6863; --line:#d9e1de;
+  --accent:#1f7a5c; --accent-soft:#e3f1ec;
+  --hi:#b42318; --hi-soft:#fdecea; --mid:#9a5b00; --mid-soft:#fdf3e1; --lo:#3b5bb5; --lo-soft:#e9eefb;
+  --display:"Instrument Serif", Georgia, "Times New Roman", serif;
+  --body:"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1513; --surface:#161e1b; --fg:#e4ebe8; --muted:#97a6a0; --line:#2a3632;
+  --accent:#4fc39a; --accent-soft:#163128;
+  --hi:#ff8a7a; --hi-soft:#3a1916; --mid:#f0b860; --mid-soft:#352712; --lo:#8fa8f0; --lo-soft:#1a2340;
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#161e1b; --fg:#e4ebe8; --muted:#97a6a0; --line:#2a3632;
+  --accent:#4fc39a; --accent-soft:#163128;
+  --hi:#ff8a7a; --hi-soft:#3a1916; --mid:#f0b860; --mid-soft:#352712; --lo:#8fa8f0; --lo-soft:#1a2340;
+  color-scheme:dark; }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:820px;margin:0 auto;padding-inline:16px;padding-block:32px 64px;display:flex;flex-direction:column;gap:28px}
+header{display:flex;flex-direction:column;gap:10px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(34px,6vw,48px);line-height:1.05;margin:0;text-wrap:balance}
+.lede{color:var(--muted);max-width:65ch;margin:0}
+.src{display:flex;flex-wrap:wrap;gap:8px;font-size:13px}
+.src span{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:3px 8px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;font-size:14px;font-weight:500;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button:focus-visible,summary:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#copied{font-size:13px;color:var(--accent)}
+section{display:flex;flex-direction:column;gap:10px}
+h2{font-family:var(--display);font-weight:400;font-size:28px;margin:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h2 small{font-family:var(--body);font-size:13px;color:var(--muted)}
+.intro{color:var(--muted);margin:0 0 4px;max-width:65ch}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+details[open]{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+summary{list-style:none;cursor:pointer;padding:12px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start}
+summary::-webkit-details-marker{display:none}
+.chev{width:18px;height:18px;margin-top:2px;transition:transform .15s;color:var(--muted)}
+details[open] .chev{transform:rotate(90deg)}
+@media (prefers-reduced-motion:reduce){.chev{transition:none}}
+.stitle{font-weight:600;min-width:0}
+.stitle .sub{display:block;font-weight:400;color:var(--muted);font-size:13.5px;margin-top:2px}
+.pill{font-size:11.5px;font-weight:600;letter-spacing:.03em;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.p-hi{background:var(--hi-soft);color:var(--hi)} .p-mid{background:var(--mid-soft);color:var(--mid)} .p-lo{background:var(--lo-soft);color:var(--lo)} .p-ok{background:var(--accent-soft);color:var(--accent)}
+.body{padding:0 14px 14px 42px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.body p{margin:0;max-width:65ch}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-size:14px}
+.kv dt{color:var(--muted)} .kv dd{margin:0;min-width:0}
+code,.ref{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 4px;overflow-wrap:anywhere}
+.quote{border-left:3px solid var(--line);padding-left:10px;color:var(--muted);font-size:14px}
+fieldset{border:1px dashed var(--line);border-radius:8px;margin:0;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+legend{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:0 4px}
+label.opt{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;cursor:pointer;font-size:14px}
+label.opt input{margin-top:4px;accent-color:var(--accent)}
+.rec{font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.04em;text-transform:uppercase;margin-left:6px}
+.note{font-size:13px;color:var(--muted)}
+footer{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:6px}
+@media (max-width:520px){.body{padding-left:14px}.kv{grid-template-columns:1fr}.kv dt{margin-top:6px}}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Pita Supply OS · komentarze ze spotkań · stan na 13.10.2026</div>
+  <h1>Supply OS ze spotkań</h1>
+  <p class="lede">Zadania inżynieryjne dla aplikacji wyciągnięte z ostatnich spotkań managementu oraz przegląd dwóch zachowań UI: wyszarzania pozycji i podwójnego oznaczania tego samego produktu. Przy każdym punkcie wybierz wariant, a potem skopiuj decyzje i wklej je w sesji Claude.</p>
+  <div class="src"><span>Office Day 12.10 (podsumowanie G., mail 13.10)</span><span>Daily Huddle — ustalenia 12.10</span><span>Przegląd kodu repo, gałąź main @ 7b03cf9</span></div>
+  <div class="toolbar">
+    <button type="button" id="expand">Rozwiń wszystko</button>
+    <button type="button" id="collapse">Zwiń wszystko</button>
+    <button type="button" class="primary" id="copy">Kopiuj decyzje</button>
+    <span id="copied" role="status" aria-live="polite"></span>
+  </div>
+</header>
+
+<!-- ============ A. ZADANIA ============ -->
+<section id="zadania">
+  <h2>Zadania ze spotkań <small>8 pozycji</small></h2>
+  <p class="intro">„Ze spotkania” oznacza fakt z podsumowania. „Zadanie dla aplikacji” to moje przełożenie na pracę w kodzie, do Twojej akceptacji.</p>
+
+  <details data-id="Z1">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Supply OS we wszystkich lokalach do końca października<span class="sub">Cel sieciowy, plus dwa lokale we Wrocławiu w listopadzie</span></span><span class="pill p-hi">Wysoki</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Cel bez zmian: wdrożenie we wszystkich lokalizacjach do końca października. Wrocław: PDT w Renomie, roboczo 1.11, oraz Hala Świebodzka, roboczo 15.11. Obie daty to cele operacyjne, nie potwierdzone otwarcia.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>Tabela gotowości per lokal (dostawcy, progi, tokeny, e-mail lokalu, szkolenie). Dla Wrocławia przejść <code>NEW_LOCATION_CHECKLIST.md</code>, gdy Marek dostarczy listę dostawców i sprzętu.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z1" value="A"><span>A. Tabela gotowości w repo teraz, Wrocław jako osobna zmiana po wizji lokalnej<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z1" value="B"><span>B. Od razu przygotować szkielet dwóch lokali wrocławskich (nieaktywne)</span></label>
+        <label class="opt"><input type="radio" name="Z1" value="C"><span>C. Odłożyć</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z2">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Lista błędów: konfiguracja warszawska i Pago<span class="sub">Marek porządkuje listę, oddzielając przetestowane od niezweryfikowanych</span></span><span class="pill p-hi">Wysoki</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Są jeszcze problemy do naprawy, szczególnie w konfiguracji warszawskiej i w procesach z Pago. Marek ma uporządkować listę błędów i wyjaśnić problemy z integracjami.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>Jedno miejsce na zgłoszenia ze statusem „przetestowane / do weryfikacji / naprawione”. Bez tej listy nie wiem, które błędy są otwarte. To blokuje wycenę pracy.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z2" value="A"><span>A. Lista Trello „Supply OS — błędy” prowadzona przez Marka, ja ją triażuję co tydzień<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z2" value="B"><span>B. Przycisk „Zgłoś problem” w aplikacji (zapis do bazy, widok dla managera)</span></label>
+        <label class="opt"><input type="radio" name="Z2" value="C"><span>C. Zgłoszenia mailem jak dotąd</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z3">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Szkolenie Kamesha bez prawdziwych zamówień<span class="sub">Pełny proces: inwentaryzacja, zamówienie, potem Pago i logistyka</span></span><span class="pill p-hi">Wysoki</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Kamesh ma sam przejść pełny proces inwentaryzacji i zamówień, najpierw z Tusharem, później złożoną stronę zamówień (minima, łączenie, Pago). Będzie szkolił ludzi na lokalach.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>Szkolenie Sahila z 9.10 zakładało złożenie prawdziwego zamówienia. Przy kolejnych trenerach potrzebny jest lokal szkoleniowy: zamówienia trafiają do testowego dostawcy i nigdy nie wychodzą mailem.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z3" value="A"><span>A. Lokal „SZKOLENIE” na prodzie z dostawcami bez e-maila (wysyłka zablokowana)<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z3" value="B"><span>B. Osobne środowisko demo na lokalnym Postgresie</span></label>
+        <label class="opt"><input type="radio" name="Z3" value="C"><span>C. Szkolić na prawdziwych zamówieniach jak dotąd</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z4">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Minima logistyczne, łączenie zamówień i koszt dostawy<span class="sub">Zrozumienie, nie tylko poprawne kliknięcie</span></span><span class="pill p-mid">Średni</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Przy zamówieniach ważne jest zrozumienie minimów logistycznych, łączenia zamówień i kosztów dostaw.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>Minimum per dostawca już jest (R-24). Brakuje informacji, co się dzieje poniżej minimum: koszt dostawy albo „dołóż do najbliższego dnia dostawy”. Do ustalenia, czy mamy te kwoty od dostawców.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z4" value="A"><span>A. Najpierw zebrać koszty dostaw (Marek), potem jedna linijka pod minimum<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z4" value="B"><span>B. Tylko materiał szkoleniowy, bez zmian w aplikacji</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z5">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Katowice: około 56 skrzynek Coca-Coli na stanie<span class="sub">Nadmiar zajmuje miejsce i zamraża kaucję</span></span><span class="pill p-mid">Średni</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Naliczono około 56 skrzynek. Trzeba ograniczyć nadmiarowe stany i przejrzeć stany pozostałych produktów.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>Coca-Cola w Katowicach jest zamawiana z aplikacji od 9.10 (krok B2). Sprawdzić jej progi MAX i to, czy karta ostrzega przy zamówieniu ponad MAX. Dodatkowo raport nadstanów: produkty z liczeniem powyżej MAX, per lokal.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z5" value="A"><span>A. Audyt progów napojów KAT teraz, raport nadstanów jako mała zmiana<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z5" value="B"><span>B. Tylko audyt progów</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z6">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Frytki: Selgros ok. 39,99 zł wobec dwudziestu kilku zł gdzie indziej<span class="sub">Łączy się z pozycjami zapasowymi w Katowicach</span></span><span class="pill p-mid">Średni</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Marek ma zweryfikować ceny na fakturach i porównać Selgros z Kuchniami Świata. Minima nie powinny prowadzić do regularnych zakupów po znacznie wyższych cenach.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>W Katowicach frytki mają Kuchnie Świata jako głównego dostawcę i Selgros jako zapasowego. Karta zapasowa mogłaby pokazywać cenę u głównego dostawcy i różnicę, żeby kapitan widział koszt decyzji.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z6" value="A"><span>A. Różnica ceny na karcie zapasowej (po weryfikacji cen przez Marka)<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z6" value="B"><span>B. Raport miesięczny: zakupy u zapasowych z różnicą ceny</span></label>
+        <label class="opt"><input type="radio" name="Z6" value="C"><span>C. Poza aplikacją</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z7">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Kraków: nowe min-maxy do sprawdzenia w praktyce<span class="sub">Liczenie i zdjęcia lodówek zrobione</span></span><span class="pill p-lo">Niski</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Nowe ustawienia mają pomóc w planowaniu zamówień. Ich skuteczność trzeba zweryfikować w praktyce.</dd>
+      <dt>Zadanie dla aplikacji</dt><dd>Po dwóch tygodniach zestawienie: liczenie vs MIN/MAX per produkt, ile razy był brak, ile razy nadmiar. To samo zestawienie przyda się w Z5.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z7" value="A"><span>A. Jednorazowe zestawienie SQL koło 27.10<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z7" value="B"><span>B. Stały widok „trafność progów” w panelu managera</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="Z8">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Podsumowania Daily Huddle z HappyScribe<span class="sub">Poza Supply OS, ale dotyczy tego, skąd biorą się te komentarze</span></span><span class="pill p-lo">Niski</span></summary>
+    <div class="body">
+      <dl class="kv"><dt>Ze spotkania</dt><dd>Huddle nagrywane w Google Meet i transkrybowane w HappyScribe. AI przygotowuje podsumowanie, a ludzie je weryfikują przed wysłaniem. Bez automatycznego przypisywania zadań.</dd>
+      <dt>Stan dziś</dt><dd>Silnik na Mini skanuje (ostatni skan 13.10, status ok), ale nie przetworzył jeszcze żadnego spotkania. Granola za ostatnie 30 dni jest pusta. Ta lista powstała z maili.</dd></dl>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="Z8" value="A"><span>A. Sprawdzić, czy nagrania Huddle trafiają do konta HappyScribe, które skanuje Mini<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="Z8" value="B"><span>B. Zostawić, źródłem będą maile Georgiosa</span></label>
+      </fieldset>
+    </div>
+  </details>
+</section>
+
+<!-- ============ B. WYSZARZANIE ============ -->
+<section id="wyszarzanie">
+  <h2>Pod lupą: wyszarzanie <small>5 miejsc</small></h2>
+  <p class="intro">W arkuszu Marka „szare pozycje” oznaczają towar od zapasowego dostawcy. W aplikacji szarość znaczy kilka różnych rzeczy naraz.</p>
+
+  <details data-id="W1">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Karta zapasowa wygląda jak pusta karta<span class="sub">Kapitan · ten sam szary kolor, ta sama kreska „—” w sugestii</span></span><span class="pill p-hi">Najbardziej myli</span></summary>
+    <div class="body">
+      <p>Pozycja zapasowa ma wyłączony kafel sugestii (przygaszony, „—”) i szary pasek, niezależnie od wpisanej ilości. Pusta karta, na której nic nie wpisano, wygląda tak samo. Czytnik ekranu na karcie zapasowej mówi „najpierw wpisz obecny stan”, nawet gdy stan jest wpisany. To jest błąd.</p>
+      <p class="note"><span class="ref">ProductCard.tsx:372-403</span> · <span class="ref">compute.ts:140-162</span> · <span class="ref">rollout-notes.md:86</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="W1" value="A"><span>A. Własny wygląd zapasowej (przerywana ramka) i w kaflu „u Kuchnie Świata” zamiast „—”, plus poprawny opis dla czytnika<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="W1" value="B"><span>B. Zapasowe zebrane na dole zakładki w sekcji „Zapasowe”</span></label>
+        <label class="opt"><input type="radio" name="W1" value="C"><span>C. Zapasowe ukryte, przełącznik „Pokaż zapasowe”</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="W2">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Szara zakładka dostawcy z ✓ znika po odświeżeniu<span class="sub">Kapitan · „wysłane” żyje tylko w otwartej karcie przeglądarki</span></span><span class="pill p-hi">Ryzyko dubla</span></summary>
+    <div class="body">
+      <p>Po wysłaniu zakładka dostawcy robi się szara z zielonym ✓. Ten stan nie jest zapisany: po odświeżeniu albo na innym telefonie zakładka znowu wygląda na niezamówioną. Nic nie ostrzega przed drugim zamówieniem u tego samego dostawcy tego samego dnia, a backend nie ma takiej blokady.</p>
+      <p class="note"><span class="ref">SupplierPicker.tsx:42-66</span> · <span class="ref">CaptainMP.tsx:110,749</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="W2" value="A"><span>A. Stan „wysłane dziś” liczony z bazy i ostrzeżenie przed drugim wysłaniem (bez blokady)<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="W2" value="B"><span>B. Tylko ostrzeżenie przy wysyłce</span></label>
+        <label class="opt"><input type="radio" name="W2" value="C"><span>C. Zostawić</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="W3">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Zero od managera: przekreślone w zamówieniu, zwykłe 0 w transporcie<span class="sub">Manager i Transport · dwie konwencje dla tej samej sytuacji</span></span><span class="pill p-mid">Niespójne</span></summary>
+    <div class="body">
+      <p>W tabeli zamówienia linia wyzerowana przez managera jest bursztynowa, przekreślona, z „Anulowane przez managera”. W macierzy transportu ta sama linia to zwykłe „0”, a brak pozycji to jasnoszare „–”. U kapitana w szczegółach zamówienia nie ma przekreślenia, jest 0 z dopiskiem o zmianie.</p>
+      <p class="note"><span class="ref">OrderLineTable.tsx:120-126,274-308</span> · <span class="ref">TransportMatrix.tsx:133,148</span> · <span class="ref">OrderDetailPage.tsx:273-281</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="W3" value="A"><span>A. Jedna konwencja wszędzie: zero od managera = bursztyn + przekreślenie<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="W3" value="B"><span>B. Zostawić per ekran</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="W4">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Wyłączone miasto w Transporcie jest szare i przekreślone<span class="sub">Transport · filtr wygląda jak anulowanie lokalu</span></span><span class="pill p-lo">Kosmetyka</span></summary>
+    <div class="body">
+      <p>Odfiltrowane miasto dostaje szary kolor i przekreślenie. Przekreślenie w reszcie aplikacji znaczy „anulowane”, więc filtr można odczytać jako anulowanie. Filtry torów w kolejce managera wyłączają się samym wyszarzeniem, bez przekreślenia.</p>
+      <p class="note"><span class="ref">TransportPage.tsx:1141</span> · <span class="ref">ManagerFilterBar.tsx:136</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="W4" value="A"><span>A. Usunąć przekreślenie, styl jak filtry torów<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="W4" value="B"><span>B. Zostawić</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="W5">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Linia zapasowa u managera: „—” jak „brak odchylenia”<span class="sub">Manager · kolumny Sugestia i Δ</span></span><span class="pill p-lo">Kosmetyka</span></summary>
+    <div class="body">
+      <p>Linia zapasowa ma znaczek „zapasowy”, ale w kolumnach Sugestia i Δ pokazuje szarą kreskę. Taką samą kreskę ma linia bez odchylenia. Licznik odchyleń w kolejce słusznie pomija zapasowe.</p>
+      <p class="note"><span class="ref">OrderLineTable.tsx:154-158,207-229</span> · <span class="ref">main.py:1362-1367</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="W5" value="A"><span>A. W Sugestii napis „u głównego” zamiast kreski<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="W5" value="B"><span>B. Zostawić, znaczek wystarcza</span></label>
+      </fieldset>
+    </div>
+  </details>
+</section>
+
+<!-- ============ C. PODWÓJNE ============ -->
+<section id="podwojne">
+  <h2>Pod lupą: podwójne zaznaczanie <small>4 miejsca</small></h2>
+  <p class="intro">Ten sam produkt bywa pokazany albo oznaczony dwa razy. Część to celowy projekt (główny i zapasowy dostawca), część to luki.</p>
+
+  <details data-id="D1">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Produkt w dwóch zakładkach, do trzech etykiet na karcie<span class="sub">Kapitan · Kraków i Katowice (główny + zapasowy)</span></span><span class="pill p-mid">Celowe, ale głośne</span></summary>
+    <div class="body">
+      <p>Np. frytki w Katowicach są kartą u Kuchni Świata i u Selgrosu. Stan z inwentaryzacji wpada w obie. Karta główna ma „Też u: Selgros”. Zapasowa ma znaczek „zapasowy”, „Sugestia u: Kuchnie Świata” i ewentualnie bursztynową linię „już zamówione”. Oba zamówienia pokazują tę linię o sobie nawzajem.</p>
+      <p class="note"><span class="ref">supplier_catalog.py:74-114</span> · <span class="ref">ProductCard.tsx:258-264</span> · <span class="ref">OpenOrdersElsewhere.tsx</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="D1" value="A"><span>A. Jedna zbiorcza linijka: „Zapasowy · główny: Kuchnie Świata · zamówione 12.10”<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="D1" value="B"><span>B. Zostawić etykiety, ukryć „Sugestia u”, gdy jest linia „już zamówione”</span></label>
+        <label class="opt"><input type="radio" name="D1" value="C"><span>C. Zostawić</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="D2">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Brak ochrony przed dublem w katalogu jednego dostawcy<span class="sub">Kapitan · dwa aktywne wiersze = dwie karty ze wspólnym stanem</span></span><span class="pill p-hi">Luka</span></summary>
+    <div class="body">
+      <p>Gdyby ten sam produkt miał dwa aktywne wiersze u jednego dostawcy, kapitan zobaczy dwie karty. Obie mają ten sam klucz, więc wpisanie ilości w jednej zmienia drugą. Audyt na 0 dubli zrobiono tylko dla katalogu miejskiego. Wspólny katalog nie ma ograniczenia unikalności w bazie.</p>
+      <p class="note"><span class="ref">main.py:333-339</span> · <span class="ref">CaptainMP.tsx:306-309,1062</span> · research.md:32 (krakow-katowice-rollout)</p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="D2" value="A"><span>A. SQL audytu dubli na prodzie (odczyt), potem migracja z unikalnym indeksem i dedup w loaderze<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="D2" value="B"><span>B. Tylko dedup w loaderze</span></label>
+        <label class="opt"><input type="radio" name="D2" value="C"><span>C. Tylko audyt</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="D3">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">„Już zamówione” nie widzi tego samego dostawcy<span class="sub">Kapitan i Manager · w Warszawie podpowiedź nie pojawia się wcale</span></span><span class="pill p-mid">Luka</span></summary>
+    <div class="body">
+      <p>Podpowiedź działa tylko dla produktów z kilkoma dostawcami i pomija dostawcę, u którego właśnie zamawiasz. Drugie zamówienie u tego samego dostawcy przechodzi bez słowa. Zamówienie wysłane, ale nieprzyjęte, uchodzi za otwarte jeszcze do 8 dni.</p>
+      <p class="note"><span class="ref">main.py:398-470</span> · <span class="ref">main.py:1580-1601</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="D3" value="A"><span>A. Rozwiązać razem z W2 (jedno ostrzeżenie „masz już otwarte zamówienie u tego dostawcy”)<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="D3" value="B"><span>B. Rozszerzyć obecną podpowiedź na tego samego dostawcę</span></label>
+        <label class="opt"><input type="radio" name="D3" value="C"><span>C. Zostawić</span></label>
+      </fieldset>
+    </div>
+  </details>
+
+  <details data-id="D4">
+    <summary><svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4l6 6-6 6"/></svg>
+      <span class="stitle">Transport: dwa zamówienia z jednego lokalu jako dwie kolumny<span class="sub">Manager · ryzyko niezweryfikowane</span></span><span class="pill p-lo">Do sprawdzenia</span></summary>
+    <div class="body">
+      <p>Dodawanie lokalu do transportu ma blokadę na parę lokal + dostawca. Tworzenie zbiórki z zaznaczonych zamówień odrzuca tylko powtórzone ID. Dwa zamówienia z jednego lokalu mogą więc dać dwie kolumny z tym samym nagłówkiem. Nie odtworzyłem tego, to wniosek z kodu.</p>
+      <p class="note"><span class="ref">main.py:4737</span> · <span class="ref">main.py:5960-5969</span> · <span class="ref">TransportPage.tsx:1205-1209</span></p>
+      <fieldset><legend>Wariant</legend>
+        <label class="opt"><input type="radio" name="D4" value="A"><span>A. Najpierw test, który to odtwarza. Jeśli się potwierdzi, scalić kolumny per lokal<span class="rec">rekomendacja</span></span></label>
+        <label class="opt"><input type="radio" name="D4" value="B"><span>B. Zostawić</span></label>
+      </fieldset>
+    </div>
+  </details>
+</section>
+
+<footer>
+  <div>Wybory zapisują się tylko w tej przeglądarce. Żeby je przekazać, kliknij „Kopiuj decyzje” i wklej tekst w sesji.</div>
+  <div>Pominięto tematy ze spotkań niezwiązane z aplikacją (KDS, delivery, sprzęt, sprawy personalne).</div>
+</footer>
+</div>
+
+<script>
+(function(){
+  var KEY='supplyos-ze-spotkan-v1';
+  var state={};
+  try{ state=JSON.parse(localStorage.getItem(KEY)||'{}')||{}; }catch(e){ state={}; }
+  var radios=document.querySelectorAll('input[type=radio]');
+  radios.forEach(function(r){
+    r.id='r-'+r.name+'-'+r.value;
+    if(state[r.name]===r.value) r.checked=true;
+    r.addEventListener('change',function(){
+      state[r.name]=r.value;
+      try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){}
+    });
+  });
+  var all=function(open){ document.querySelectorAll('details').forEach(function(d){ d.open=open; }); };
+  document.getElementById('expand').addEventListener('click',function(){ all(true); });
+  document.getElementById('collapse').addEventListener('click',function(){ all(false); });
+  var out=document.getElementById('copied');
+  document.getElementById('copy').addEventListener('click',function(){
+    var lines=['Supply OS ze spotkań — decyzje'];
+    document.querySelectorAll('details[data-id]').forEach(function(d){
+      var id=d.getAttribute('data-id');
+      var title=d.querySelector('.stitle').firstChild.textContent.trim();
+      var c=d.querySelector('input[name="'+id+'"]:checked');
+      var txt=c?c.parentElement.querySelector('span').firstChild.textContent.trim():'(bez decyzji)';
+      lines.push(id+' — '+title+': '+txt);
+    });
+    var text=lines.join('\n');
+    var done=function(){ out.textContent='Skopiowano. Wklej w sesji Claude.'; };
+    var fail=function(){
+      var ta=document.createElement('textarea'); ta.value=text; ta.rows=8; ta.style.width='100%';
+      out.textContent='Schowek niedostępny. Zaznacz tekst poniżej i skopiuj.';
+      out.after(ta); ta.select();
+    };
+    try{ navigator.clipboard.writeText(text).then(done,fail); }catch(e){ fail(); }
+  });
+})();
+</script>

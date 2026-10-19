@@ -11,9 +11,11 @@ import { AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react";
 import { DecimalInput } from "../../../components/ui/DecimalInput";
 import { ProductListToolbar } from "../../../components/ui/ProductListToolbar";
 import { useT } from "../../../i18n";
+import { stripBulkSuffix } from "../../../lib/displayName";
 import { categoryLabel } from "../../../i18n/categoryLabels";
 import { packUnitLabel } from "../../../i18n/packUnits";
 import { caseOf, isPackBased } from "../../../lib/packUnits";
+import { formatPiecesAsKg, isPieceUnit, pieceGramsFromNames } from "../../../lib/gramsHint";
 import {
   DEFAULT_PRODUCT_LIST_VIEW,
   filterProductRows,
@@ -196,6 +198,14 @@ export function InventoryCountGrid({
                   const checkUnit: boolean =
                     maxBase > 0 && stockNum !== null && stockNum > CHECK_UNIT_FACTOR * maxBase;
                   const previous: PreviousCount | undefined = previousByProduct?.[p.product_id];
+                  // Read-only kg reading for a piece count whose name carries the
+                  // per-piece weight (captain-kg-reading): "12 szt (2,4 kg)".
+                  const pieceGrams: number | null = pieceGramsFromNames([p.product_name_pl]);
+                  const kgCapable: boolean = pieceGrams !== null && isPieceUnit(p.inventory_unit);
+                  const kg: string | null = kgCapable
+                    ? formatPiecesAsKg(stock, pieceGrams, p.inventory_unit, lang)
+                    : null;
+                  const kgId = `stock-${p.product_id}-kg`;
                   return (
                     <li
                       key={p.product_id}
@@ -219,7 +229,7 @@ export function InventoryCountGrid({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-slate-900 break-words">
-                              {p.product_name_pl}
+                              {stripBulkSuffix(p.product_name_pl)}
                             </span>
                             {p.is_critical && (
                               <span className="shrink-0 rounded bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5">
@@ -241,6 +251,7 @@ export function InventoryCountGrid({
                             packUnit={packUnit}
                             baseUnit={p.inventory_unit}
                             references={[previous?.qty, p.target_stock_qty_base]}
+                            gramsPerUnit={pieceGrams}
                           />
                         ) : (
                           <div className="shrink-0">
@@ -252,8 +263,20 @@ export function InventoryCountGrid({
                               inputMode="decimal"
                               value={line.current_stock_qty_base}
                               onChange={(v) => onStockChange(p.product_id, v)}
+                              aria-describedby={kgCapable ? kgId : undefined}
                               className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-right text-[16px] focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
+                            {/* Line reserved on every kg-capable row so the field
+                                does not move when the first digit is typed. */}
+                            {kgCapable && (
+                              <div
+                                id={kgId}
+                                aria-live="polite"
+                                className="mt-0.5 min-h-[1rem] text-right text-[11px] leading-tight text-slate-500 tabular-nums"
+                              >
+                                {kg !== null && t("stock.kgReading", { kg })}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

@@ -3,7 +3,9 @@
 // fed by a separate managerQueue call in the parent. Week2-feedback Phase 5:
 // the two working lanes open by default, sent/closed start collapsed; a
 // claimed order waiting ≥3 days gets an age chip; closed orders received more
-// than 3 days ago leave the lane for /manager/archive. Cards are selectable; the selected
+// than 3 days ago leave the lane for /manager/archive. D16 (manager-queue-
+// control): a claimed order unsent 24 h after the captain's send and a sent
+// order with no receipt after 3 days get a red chip, counted in the header. Cards are selectable; the selected
 // card is highlighted and selection survives the 60s refresh (the parent keeps
 // selectedId in state independent of the queue data).
 
@@ -15,7 +17,14 @@ import { useT } from "../../i18n";
 import type { StringKey } from "../../i18n/strings";
 import type { ManagerQueueItem } from "../../types";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
-import { inQueueDays, splitClosedLane } from "./lib/queueAge";
+import {
+  inQueueDays,
+  isClaimedOverdue,
+  isClosedWithoutReceipt,
+  isSentUnreceived,
+  QUEUE_LANE_LIMIT,
+  splitClosedLane,
+} from "./lib/queueAge";
 import { DeliveryDateMarker } from "./DeliveryDateMarker";
 
 /** The queue lanes (one status group each). `cancelled` exists only for the
@@ -57,6 +66,9 @@ interface ManagerQueueProps {
   onSelect: (orderId: string) => void;
   /** Which lanes to render. Omitted = all visible (backward compatible). */
   visibleLanes?: Set<QueueLane>;
+  /** Orders whose Gmail draft tab was blocked and not opened since — amber
+   *  "Szkic niewysłany" chip (supplier-email-v21 S3). */
+  unsentDraftIds?: Set<string>;
 }
 
 export function ManagerQueue({
@@ -67,6 +79,7 @@ export function ManagerQueue({
   selectedId,
   onSelect,
   visibleLanes,
+  unsentDraftIds,
 }: ManagerQueueProps) {
   const closedSplit = splitClosedLane(closed);
   const groups: QueueGroup[] = [
@@ -110,6 +123,7 @@ export function ManagerQueue({
           group={group}
           selectedId={selectedId}
           onSelect={onSelect}
+          unsentDraftIds={unsentDraftIds}
         />
       ))}
     </div>
@@ -120,15 +134,28 @@ function QueueGroupSection({
   group,
   selectedId,
   onSelect,
+  unsentDraftIds,
 }: {
   group: QueueGroup;
   selectedId: string | null;
   onSelect: (orderId: string) => void;
+  unsentDraftIds?: Set<string>;
 }) {
   const { t } = useT();
   const [open, setOpen] = useState(group.defaultOpen);
   const count = group.items?.length ?? 0;
+  // A claimed/sent lane at its load cap has older orders the queue never saw.
+  const capped =
+    (group.key === "claimed" || group.key === "sent") && count >= QUEUE_LANE_LIMIT;
   const archived = group.archivedCount ?? 0;
+  // Red header count of stalled orders (D16) — sent starts collapsed, so this
+  // is what the Manager sees without opening the lane.
+  const stalled =
+    group.key === "claimed"
+      ? (group.items ?? []).filter((q) => isClaimedOverdue(q)).length
+      : group.key === "sent"
+        ? (group.items ?? []).filter((q) => isSentUnreceived(q)).length
+        : 0;
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white">
@@ -142,8 +169,42 @@ function QueueGroupSection({
           {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
           {t(group.titleKey)}
         </span>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums">
-          {count}
+        <span className="flex items-center gap-1.5">
+          {stalled > 0 && (
+            <span
+              className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800 tabular-nums"
+              title={t(
+                group.key === "claimed"
+                  ? "manager.queue.claimedOverdueTooltip"
+                  : "manager.queue.sentUnreceivedTooltip",
+              )}
+              data-testid={`stalled-count-${group.key}`}
+            >
+              <span aria-hidden="true">
+                {t(
+                  group.key === "claimed"
+                    ? "manager.queue.claimedOverdueCount"
+                    : "manager.queue.sentUnreceivedCount",
+                  { n: stalled },
+                )}
+              </span>
+              <span className="sr-only">
+                {t(
+                  group.key === "claimed"
+                    ? "manager.queue.claimedOverdueCountSr"
+                    : "manager.queue.sentUnreceivedCountSr",
+                  { n: stalled },
+                )}
+              </span>
+            </span>
+          )}
+          <span
+            className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 tabular-nums"
+            title={capped ? t("manager.queue.laneCappedTooltip", { n: count }) : undefined}
+            data-testid={`lane-count-${group.key}`}
+          >
+            {capped ? t("manager.queue.laneCapped", { n: count }) : count}
+          </span>
         </span>
       </button>
 
@@ -164,6 +225,7 @@ function QueueGroupSection({
                   selected={q.order_id === selectedId}
                   onSelect={onSelect}
                   showQueueAge={group.key === "claimed"}
+                  draftNotOpened={unsentDraftIds?.has(q.order_id) ?? false}
                 />
               ))}
             </ul>
@@ -189,11 +251,22 @@ export interface QueueCardProps {
   /** Claimed lane only: render the amber "w kolejce od N dni" chip once the
    *  order has waited QUEUE_AGE_DAYS since the captain submitted it. */
   showQueueAge?: boolean;
+  /** The order's Gmail draft was created but its tab never opened. */
+  draftNotOpened?: boolean;
 }
 
-export function QueueCard({ item, selected, onSelect, showQueueAge = false }: QueueCardProps) {
+export function QueueCard({
+  item,
+  selected,
+  onSelect,
+  showQueueAge = false,
+  draftNotOpened = false,
+}: QueueCardProps) {
   const { t, tPlural, formatDateTime } = useT();
   const queueAge = showQueueAge ? inQueueDays(item) : null;
+  // Status-checked inside the helpers, so the card needs no lane flag (D16).
+  const claimedOverdue = isClaimedOverdue(item);
+  const sentUnreceived = isSentUnreceived(item);
 
   return (
     <li>
@@ -216,12 +289,36 @@ export function QueueCard({ item, selected, onSelect, showQueueAge = false }: Qu
               {t("orders.editedBadge")}
             </span>
           )}
+          {claimedOverdue && (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800"
+              title={t("manager.queue.claimedOverdueTooltip")}
+            >
+              {t("manager.queue.claimedOverdue")}
+            </span>
+          )}
+          {sentUnreceived && (
+            <span
+              className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800"
+              title={t("manager.queue.sentUnreceivedTooltip")}
+            >
+              {t("manager.queue.sentUnreceived")}
+            </span>
+          )}
           {queueAge !== null && (
             <span
               className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900"
               title={t("manager.queue.inQueueDaysTooltip")}
             >
               {tPlural("manager.queue", "inQueueDays", queueAge)}
+            </span>
+          )}
+          {draftNotOpened && (
+            <span
+              className="rounded border border-amber-400 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900"
+              title={t("manager.queue.draftUnsentChipTooltip")}
+            >
+              {t("manager.queue.draftUnsentChip")}
             </span>
           )}
           {item.supplier_order_reference?.startsWith("TRN-") && (
@@ -281,6 +378,13 @@ export function QueueCard({ item, selected, onSelect, showQueueAge = false }: Qu
           ) : item.received_count > 0 ? (
             <span className="rounded bg-green-100 px-1.5 py-0.5 font-semibold text-green-900">
               <span aria-hidden="true">✓</span> {t("manager.queue.delivered")}
+            </span>
+          ) : isClosedWithoutReceipt(item) ? (
+            <span
+              className="rounded border border-slate-300 bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700"
+              data-testid="closed-without-receipt"
+            >
+              {t("manager.closedWithoutReceipt")}
             </span>
           ) : null}
         </div>

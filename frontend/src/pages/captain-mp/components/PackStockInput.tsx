@@ -20,6 +20,7 @@ import {
   splitPackStock,
   suggestPackCount,
 } from "../../../lib/packStock";
+import { formatPiecesAsKg, isPieceUnit } from "../../../lib/gramsHint";
 
 interface PackStockInputProps {
   idPrefix: string;
@@ -38,6 +39,10 @@ interface PackStockInputProps {
   invalid?: boolean;
   /** Extra ids for both fields' aria-describedby (e.g. the card's state pill). */
   describedBy?: string;
+  /** Grams of ONE base unit when the product name carries it (captain-kg-reading):
+   *  the stock reading then adds the kg — "= 1 karton (12 szt · 2,4 kg)". Read
+   *  only for the stock copy and a piece base unit; never changes the value. */
+  gramsPerUnit?: number | null;
 }
 
 interface Pair {
@@ -95,6 +100,7 @@ export function PackStockInput({
   copy = "stock",
   invalid = false,
   describedBy,
+  gramsPerUnit = null,
 }: PackStockInputProps) {
   const { t, tParts, lang } = useT();
   const keys =
@@ -142,6 +148,14 @@ export function PackStockInput({
   const readingId = `${idPrefix}-reading`;
   const ariaDescribedBy = describedBy ? `${readingId} ${describedBy}` : readingId;
 
+  // kg-capable row: stock copy, a per-piece weight and a piece base unit (the
+  // unit check reads baseUnit, never packUnit — a kg product never qualifies).
+  const kgCapable: boolean =
+    copy === "stock" && gramsPerUnit !== null && gramsPerUnit > 0 && isPieceUnit(baseUnit);
+  const kg: string | null = kgCapable
+    ? formatPiecesAsKg(combined, gramsPerUnit, baseUnit, lang)
+    : null;
+
   let reading: ReactNode[] | null = null;
   if (combined !== "") {
     const total = (
@@ -149,13 +163,23 @@ export function PackStockInput({
         {formatBaseQty(combined, lang)} <UnitLabel>{baseUnit}</UnitLabel>
       </>
     );
-    reading =
-      splitPackStock(combined, upp).packs >= 1
+    const withPacks: boolean = splitPackStock(combined, upp).packs >= 1;
+    if (kg !== null) {
+      reading = withPacks
+        ? tParts("stock.readingKg", {
+            split: renderSplit(combined, upp, packUnit, baseUnit, lang),
+            total,
+            kg,
+          })
+        : tParts("stock.readingBaseKg", { total, kg });
+    } else {
+      reading = withPacks
         ? tParts(keys.reading, {
             split: renderSplit(combined, upp, packUnit, baseUnit, lang),
             total,
           })
         : tParts(keys.readingBase, { total });
+    }
   }
 
   const suggested = suggestPackCount({
@@ -221,10 +245,15 @@ export function PackStockInput({
             <UnitLabel>{packUnitLabel(pair.loose || 0, baseUnit, lang)}</UnitLabel>
           </div>
         </div>
+        {/* A kg-capable row gives the reading its own reserved line: with the
+            kg part it no longer fits beside two fields at 375 px and would
+            jump lines while the Captain types. */}
         <div
           id={readingId}
           aria-live="polite"
-          className="py-3 text-[13px] leading-tight text-slate-700 tabular-nums"
+          className={`${
+            kgCapable ? "basis-full min-h-[1.25rem]" : "py-3"
+          } text-[13px] leading-tight text-slate-700 tabular-nums`}
         >
           {reading}
         </div>

@@ -187,3 +187,30 @@ describe("OrderDetailPage — backup line (krakow-katowice-rollout)", () => {
     expect(screen.getByText("+92%")).toBeInTheDocument();
   });
 });
+
+describe("OrderDetailPage — manager zero (manager-queue-control, D10 A)", () => {
+  it("shows a line the manager zeroed amber and struck through", async () => {
+    renderPage(
+      makeOrder("manager_sent", [
+        makeLine("OL-1", 4, 4, { manager_final_set: true }),
+        makeLine("OL-2", 2, 0, { manager_final_set: true }),
+      ]),
+    );
+    await screen.findByText("Produkt OL-2");
+    const zeroed = document.querySelectorAll("li[data-zeroed]");
+    expect(zeroed).toHaveLength(1);
+    expect(zeroed[0]).toHaveTextContent("Produkt OL-2");
+    expect(zeroed[0].querySelector(".line-through")).toHaveTextContent("0");
+  });
+
+  it("does not strike an untouched 0 (flag off) or a line the captain left at 0", async () => {
+    renderPage(
+      makeOrder("manager_sent", [
+        makeLine("OL-1", 3, 0), // Transport-style untouched line
+        makeLine("OL-2", 0, 0, { manager_final_set: true }),
+      ]),
+    );
+    await screen.findByText("Produkt OL-1");
+    expect(document.querySelectorAll("li[data-zeroed]")).toHaveLength(0);
+  });
+});

@@ -1135,6 +1135,30 @@ def test_cancel_contract_conditional():
         )
 
 
+def test_close_without_receipt_route_contract():
+    """close-without-receipt (D5) end to end on the real schema: the route
+    closes a sent order through the conditional UPDATE and writes the
+    ``closed_without_receipt`` event (no migration — 0001 CHECK allows closed,
+    0020 has no CHECK on event_type); a second close is refused (409)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    client = TestClient(app)
+    auth = {"Authorization": "Bearer test_manager_token"}
+    oid = _make_order(OrderStatus.MANAGER_SENT, order_id="ORD-IT-CLOSE")
+    r = client.post(f"/api/manager/close/{oid}", headers=auth, json={"reason": " Poza aplikacją "})
+    assert r.status_code == 200, r.text
+    assert supabase_backend.get_order(oid).status is OrderStatus.CLOSED
+    events = supabase_backend.load_order_events_for(oid)
+    assert [(e.event_type, e.details) for e in events] == [
+        ("closed_without_receipt", "Poza aplikacją")
+    ]
+    again = client.post(f"/api/manager/close/{oid}", headers=auth, json={"reason": "x"})
+    assert again.status_code == 409
+    assert len(supabase_backend.load_order_events_for(oid)) == 1
+
+
 def test_dispatch_contract_conditional():
     oid = _make_order(OrderStatus.MANAGER_CLAIMED)
     supabase_backend.update_order(

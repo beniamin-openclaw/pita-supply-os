@@ -13,6 +13,8 @@ import type {
   TransportEvent,
 } from "../../../types";
 import {
+  groupTransportColumns,
+  transportAddAllTargets,
   anyTransportDirty,
   buildExtraItemsSupplierBlock,
   buildTransportDriverPrintDoc,
@@ -279,6 +281,87 @@ function batchOrder(overrides: Partial<TransportBatchOrder> = {}): TransportBatc
     ...overrides,
   };
 }
+
+describe("groupTransportColumns (transport-location-columns)", () => {
+  const o = (order_id: string, location_id: string): TransportBatchOrder => ({
+    order_id,
+    location_id,
+    location_name: location_id === "KEN" ? "Ken" : "Wola",
+    status: "manager_claimed",
+    lines: [],
+  });
+
+  it("merges orders of one location into one column, first-seen order", () => {
+    const cols = groupTransportColumns([o("K1", "KEN"), o("W1", "WOLA"), o("K2", "KEN")]);
+    expect(cols.map((c) => c.location_id)).toEqual(["KEN", "WOLA"]);
+    expect(cols[0].location_name).toBe("Ken");
+    expect(cols[0].orders.map((x) => x.order_id)).toEqual(["K1", "K2"]);
+    expect(cols[1].orders.map((x) => x.order_id)).toEqual(["W1"]);
+  });
+
+  it("returns [] for no orders", () => {
+    expect(groupTransportColumns([])).toEqual([]);
+  });
+});
+
+describe("buildTransportAddAllOptions per location (transport-location-columns)", () => {
+  it("does not offer a product another order of the same location already carries", () => {
+    const item = { product_id: "P1", supplier_product_id: "SP-P1", configured_for_location: true } as OrderableItem;
+    const ord = (order_id: string, location_id: string, ids: string[]): TransportBatchOrder => ({
+      order_id,
+      location_id,
+      location_name: location_id,
+      status: "manager_claimed",
+      lines: ids.map((product_id) => ({ product_id }) as ManagerOrderLineDetail),
+    });
+    // KEN zam. 1 has P1, zam. 2 lacks it; WOLA has it → nothing to add anywhere.
+    const orders = [ord("K1", "KEN", ["P1"]), ord("K2", "KEN", []), ord("W1", "WOLA", ["P1"])];
+    expect(buildTransportAddAllOptions(orders, { K2: [item], W1: [item] })).toEqual([]);
+    // A location without it in any order → offered.
+    const orders2 = [...orders, ord("B1", "BRACKA", [])];
+    expect(buildTransportAddAllOptions(orders2, { B1: [item] }).map((i) => i.product_id)).toEqual([
+      "P1",
+    ]);
+  });
+});
+
+describe("transportAddAllTargets (transport-location-columns)", () => {
+  const item = (product_id: string): OrderableItem =>
+    ({ product_id, supplier_product_id: `SP-${product_id}`, configured_for_location: true }) as OrderableItem;
+  const ord = (order_id: string, location_id: string, productIds: string[]): TransportBatchOrder => ({
+    order_id,
+    location_id,
+    location_name: location_id,
+    status: "manager_claimed",
+    lines: productIds.map((product_id) => ({ product_id }) as ManagerOrderLineDetail),
+  });
+
+  it("adds once per location, to the first order that can take it", () => {
+    const orders = [ord("K1", "KEN", []), ord("K2", "KEN", []), ord("W1", "WOLA", [])];
+    const orderable = { K1: [item("P1")], K2: [item("P1")], W1: [item("P1")] };
+    const targets = transportAddAllTargets(orders, "P1", orderable);
+    expect(targets.map((t) => t.order.order_id)).toEqual(["K1", "W1"]);
+  });
+
+  it("skips a location where another of its orders already carries the product", () => {
+    const orders = [ord("K1", "KEN", []), ord("K2", "KEN", ["P1"]), ord("W1", "WOLA", [])];
+    const orderable = { K1: [item("P1")], W1: [item("P1")] };
+    expect(transportAddAllTargets(orders, "P1", orderable).map((t) => t.order.order_id)).toEqual([
+      "W1",
+    ]);
+  });
+
+  it("falls through to the second order when the first cannot take it, and never uses one-offs", () => {
+    const orders = [ord("K1", "KEN", []), ord("K2", "KEN", []), ord("W1", "WOLA", [])];
+    const orderable = {
+      K2: [item("P1")],
+      W1: [{ ...item("P1"), configured_for_location: false }],
+    };
+    expect(transportAddAllTargets(orders, "P1", orderable).map((t) => t.order.order_id)).toEqual([
+      "K2",
+    ]);
+  });
+});
 
 describe("buildTransportMatrix", () => {
   it("unions products across orders and maps each cell to its order's line", () => {

@@ -11,6 +11,7 @@ import { api, ApiError } from "../apiClient";
 import { clearToken } from "../auth";
 import { loadCaptainSuppliers } from "../lib/orderingSuppliers";
 import type { OrderableItem, Supplier } from "../types";
+import { stripBulkSuffix } from "../lib/displayName";
 
 export function CaptainPage() {
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null);
@@ -108,7 +109,7 @@ export function CaptainPage() {
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-medium text-slate-900">{it.product_name_pl}</span>
+                      <span className="font-medium text-slate-900">{stripBulkSuffix(it.product_name_pl)}</span>
                       {it.is_critical && (
                         <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700">
                           CRITICAL

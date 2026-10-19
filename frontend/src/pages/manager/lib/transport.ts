@@ -44,6 +44,7 @@ import type {
 import { compareProductOrder } from "../../../lib/productOrder";
 import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
 import { effectiveManagerQtyPurchase } from "./managerLine";
+import { PAGO_MORY_SUPPLIER_IDS } from "../../../lib/supplierGroups";
 
 type TFunc = (key: StringKey, vars?: Record<string, string | number>) => string;
 
@@ -322,6 +323,58 @@ export function buildTransportMatrix(orders: TransportBatchOrder[]): TransportMa
   return [...base, ...managerAdded];
 }
 
+/** One draft-matrix column: a location and its member orders in this section
+ *  (transport-location-columns). Create has no per-location dedupe, so a batch
+ *  can hold two orders from one location; they share a column but keep their
+ *  own lines, inputs and save. */
+export interface TransportLocationColumn {
+  location_id: string;
+  location_name: string;
+  orders: TransportBatchOrder[];
+}
+
+/** Columns in first-seen location order; orders inside a column keep the
+ *  batch's order (that order numbers them "zam. 1", "zam. 2"). */
+export function groupTransportColumns(orders: TransportBatchOrder[]): TransportLocationColumn[] {
+  const byLocation = new Map<string, TransportLocationColumn>();
+  for (const order of orders) {
+    let column = byLocation.get(order.location_id);
+    if (!column) {
+      column = { location_id: order.location_id, location_name: order.location_name, orders: [] };
+      byLocation.set(order.location_id, column);
+    }
+    column.orders.push(order);
+  }
+  return [...byLocation.values()];
+}
+
+/** Targets for the matrix-wide "+ Dodaj produkt": per LOCATION, the first
+ *  order that can take the product on the location's list — skipped when any
+ *  of the location's orders already carries it, so two orders from one
+ *  location never both get the line (transport-location-columns). */
+export function transportAddAllTargets(
+  orders: TransportBatchOrder[],
+  productId: string,
+  orderableByOrderId: Record<string, OrderableItem[]>,
+): { order: TransportBatchOrder; item: OrderableItem }[] {
+  const targets: { order: TransportBatchOrder; item: OrderableItem }[] = [];
+  for (const column of groupTransportColumns(orders)) {
+    if (column.orders.some((o) => o.lines.some((l) => l.product_id === productId))) continue;
+    for (const order of column.orders) {
+      // Add-to-all never uses the one-off override: only a location that
+      // normally carries the product gets it.
+      const item = (orderableByOrderId[order.order_id] ?? []).find(
+        (o) => o.product_id === productId && o.configured_for_location !== false,
+      );
+      if (item) {
+        targets.push({ order, item });
+        break;
+      }
+    }
+  }
+  return targets;
+}
+
 /** Union, across every member order, of products orderable-but-not-yet-present
  * on that order — one row per product, in the canonical supplier order
  * (lib/productOrder.ts, same as the Captain order screen), feeding
@@ -342,12 +395,17 @@ export function buildTransportAddAllOptions(
   orderableByOrderId: Record<string, OrderableItem[]>,
 ): OrderableItem[] {
   const byProduct = new Map<string, OrderableItem>();
-  for (const order of orders) {
-    const present = new Set(order.lines.map((l) => l.product_id));
-    for (const item of orderableByOrderId[order.order_id] ?? []) {
-      if (item.configured_for_location === false) continue;
-      if (present.has(item.product_id) || byProduct.has(item.product_id)) continue;
-      byProduct.set(item.product_id, item);
+  // Per LOCATION, like transportAddAllTargets: a product another order of the
+  // location already carries is "present" there, so the picker never offers a
+  // product that would add nothing (transport-location-columns).
+  for (const column of groupTransportColumns(orders)) {
+    const present = new Set(column.orders.flatMap((o) => o.lines.map((l) => l.product_id)));
+    for (const order of column.orders) {
+      for (const item of orderableByOrderId[order.order_id] ?? []) {
+        if (item.configured_for_location === false) continue;
+        if (present.has(item.product_id) || byProduct.has(item.product_id)) continue;
+        byProduct.set(item.product_id, item);
+      }
     }
   }
   return [...byProduct.values()].sort(compareProductOrder);
@@ -999,7 +1057,7 @@ export function buildTransportPagoPrintDoc(
 // eligible list and the history list both follow it, newest first.
 
 /** The supplier chips of the filter bar, in display order. */
-export const TRANSPORT_CHIP_SUPPLIER_IDS = ["SUP_PAGO", "SUP_MORY"] as const;
+export const TRANSPORT_CHIP_SUPPLIER_IDS = PAGO_MORY_SUPPLIER_IDS;
 
 /** Which supplier chips are on. */
 export interface TransportChips {
