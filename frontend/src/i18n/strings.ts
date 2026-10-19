@@ -144,10 +144,18 @@ export const STRINGS = {
     en: "need {base} {inventoryUnit} → {purchase} {purchaseUnit}",
   },
   "card.backupBadge": { pl: "zapasowy", en: "backup" },
-  "card.suggestionAtPrimary": {
-    pl: "Sugestia u: {names}",
-    en: "Suggestion at: {names}",
+  "card.suggestionAtPrimaryTile": { pl: "u {names}", en: "at {names}" },
+  "card.suggestionAtPrimaryAria": {
+    pl: "Sugestia u dostawcy głównego: {names}",
+    en: "Suggestion at the primary supplier: {names}",
   },
+  "card.suggestionBackupAria": {
+    pl: "Dostawca zapasowy — sugestia jest u dostawcy głównego",
+    en: "Backup supplier — the suggestion is at the primary supplier",
+  },
+  "card.backupInfoLabel": { pl: "Zapasowy", en: "Backup" },
+  "card.backupInfoPrimary": { pl: "główny: {names}", en: "primary: {names}" },
+  "card.backupInfoOrdered": { pl: "zamówione {date}", en: "ordered {date}" },
   "card.alsoFromSuppliers": { pl: "Też u: {names}", en: "Also at: {names}" },
   "card.openOrderElsewhere": {
     pl: "Już zamówione u {supplier}: {qty} {unit} · {status} · dostawa {date}",

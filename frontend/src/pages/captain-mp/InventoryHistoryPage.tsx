@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api, ApiError } from "../../apiClient";
 import { UnitLabel } from "./components/UnitLabel";
 import { useT } from "../../i18n";
+import { stripBulkSuffix } from "../../lib/displayName";
 import type {
   InventoryCountSummary,
   InventoryLatestResponse,
@@ -122,7 +123,7 @@ export function InventoryHistoryPage() {
       const product = productsById[ln.product_id];
       return {
         product_id: ln.product_id,
-        name: product?.product_name_pl ?? ln.product_id,
+        name: product ? stripBulkSuffix(product.product_name_pl) : ln.product_id,
         unit: product?.inventory_unit ?? "",
         is_critical: product?.is_critical ?? false,
         removed: !product,

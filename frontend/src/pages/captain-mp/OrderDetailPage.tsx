@@ -17,6 +17,7 @@ import {
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
+import { stripBulkSuffix } from "../../lib/displayName";
 import { effectiveOrderedQtyPurchase, isManagerFinalSet } from "../../lib/orderQty";
 import { roundQty } from "../../components/ui/number";
 import { caseOf } from "../../lib/packUnits";
@@ -281,7 +282,7 @@ export function OrderDetailPage() {
                             aria-hidden="true"
                           />
                         )}
-                        <span className="break-words">{line.product_name_pl}</span>
+                        <span className="break-words">{stripBulkSuffix(line.product_name_pl)}</span>
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
                         {line.is_backup === true
