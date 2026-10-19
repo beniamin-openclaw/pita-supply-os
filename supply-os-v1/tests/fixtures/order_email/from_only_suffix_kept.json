@@ -1,0 +1,38 @@
+{
+  "_comment": "supplier-email-1019: a location with only a 'from' hour (od 10:00) and a supplier with the pack-suffix switch OFF: names keep /N. Date switch off. Test data.",
+  "include_delivery_date": false,
+  "signer": null,
+  "supplier": {
+    "email_strip_pack_suffix": false
+  },
+  "order": {
+    "order_id": "ORD-20261020-SLO-KUCH-0001",
+    "requested_delivery_date": "2026-10-21",
+    "extra_items": "",
+    "captain_note": ""
+  },
+  "location": {
+    "location_name": "Pita Bros Test Gdańsk",
+    "delivery_address": "ul. Testowa 3",
+    "city": "80-001 Gdańsk",
+    "phone": null,
+    "company_name": null,
+    "company_address": null,
+    "company_nip": null,
+    "delivery_window_from": "10:00",
+    "delivery_window_to": null
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P139",
+      "product_name_pl": "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P139",
+      "supplier_product_name": "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30",
+      "purchase_unit": "karton",
+      "display_order": 1,
+      "qty": 1
+    }
+  ]
+}

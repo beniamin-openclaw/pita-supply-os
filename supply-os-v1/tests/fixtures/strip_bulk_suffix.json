@@ -1,0 +1,71 @@
+{
+  "_comment": "Shared cases for the bulk pack suffix rule: frontend/src/lib/displayName.ts stripBulkSuffix (Captain view, PR #65) and supply-os-v1/app/gmail_url.py strip_bulk_suffix (supplier e-mail, supplier-email-1019). Both test suites read this file.",
+  "strip": [
+    [
+      "EURIAL REHA HALLOUMI SER DO GRILLOWANIA 200g/12",
+      "EURIAL REHA HALLOUMI SER DO GRILLOWANIA 200g"
+    ],
+    [
+      "AVIKO FRYTKI SUPER CRUNCH 9,5mm 2,5kg/4",
+      "AVIKO FRYTKI SUPER CRUNCH 9,5mm 2,5kg"
+    ],
+    [
+      "MELVIT KASZA PĘCZAK 900g/10",
+      "MELVIT KASZA PĘCZAK 900g"
+    ],
+    [
+      "KRUSZWICA MASŁO ROŚLINNE 500g/12 kubek",
+      "KRUSZWICA MASŁO ROŚLINNE 500g kubek"
+    ],
+    [
+      "OLEJ UNIWERSALNY RZEPAKOWY 5L (4)",
+      "OLEJ UNIWERSALNY RZEPAKOWY 5L"
+    ],
+    [
+      "ROLNIK CIECIORKA W ZALEWIE 400g/240g (12) puszka",
+      "ROLNIK CIECIORKA W ZALEWIE 400g/240g puszka"
+    ],
+    [
+      "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30",
+      "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g"
+    ],
+    [
+      "KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g/6",
+      "KAWA JACOBS CRONAT GOLD ROZPUSZCZALNA 200g"
+    ],
+    [
+      "LIPTON HERBATA YELLOW LABEL 100szt./12 koperta",
+      "LIPTON HERBATA YELLOW LABEL 100szt. koperta"
+    ],
+    [
+      "Sok 1 l/6",
+      "Sok 1 l"
+    ],
+    [
+      "Ser  200g/12  szt",
+      "Ser 200g szt"
+    ],
+    [
+      "Napój 330ML/24",
+      "Napój 330ML"
+    ]
+  ],
+  "keep": [
+    "ROLNIK CIECIORKA 400g/240g",
+    "Ser 1/2 kg",
+    "Mąka 1/2",
+    "Cukier 2,5kg/1,5",
+    "Masło MR 500g",
+    "Cytryna",
+    "Kapusta 1/4 główki",
+    "Napój 330ml/24.5",
+    "Produkt (12)",
+    "Olej 5L (1)",
+    "Olej 5L/1",
+    "Zupa 400g/12g",
+    "Cukier w saszetkach 5g/200 szt",
+    "Cieciorka w zalewie 400g/240g",
+    "Ser 200g/1234",
+    ""
+  ]
+}

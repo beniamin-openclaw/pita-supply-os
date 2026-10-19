@@ -101,6 +101,7 @@ _SUPPLIER_COLUMNS = [
     "supplier_id", "supplier_name", "email", "ordering_method", "delivery_days",
     "cutoff_time", "minimum_order_value_pln", "active", "notes",
     "suggestion_alerts_enabled", "coverage_prompt_enabled",
+    "email_strip_pack_suffix",  # migration 0031 (supplier-email-1019)
 ]
 _LOCATION_COLUMNS = [
     "location_id", "location_name", "delivery_address", "city", "active", "notes",
@@ -108,6 +109,7 @@ _LOCATION_COLUMNS = [
     "sender_email", "phone",
     "own_catalog",  # migration 0029 (krakow-katowice-rollout)
     "require_stock_count",  # migration 0030 (captain-stock-count-warning)
+    "delivery_window_from", "delivery_window_to",  # migration 0031 (supplier-email-1019)
 ]
 _SUPPLIER_PRODUCT_COLUMNS = [
     "supplier_product_id", "supplier_id", "product_id", "supplier_product_name",

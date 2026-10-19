@@ -21,6 +21,7 @@ from app.models import (
     OrderLine,
     OrderStatus,
     Product,
+    Supplier,
     SupplierProduct,
 )
 
@@ -79,10 +80,16 @@ def _render(fx: dict) -> str:
             units_per_case=ln.get("units_per_case"),
         )
     signer = OrderEmailSigner(**fx["signer"]) if fx["signer"] else None
+    # Supplier switches (supplier-email-1019); absent from the older fixtures.
+    supplier = (
+        Supplier(supplier_id="SUP_X", supplier_name="X", **fx["supplier"])
+        if fx.get("supplier")
+        else None
+    )
     include = fx["include_delivery_date"]
     subject = gmail_url._build_subject(order, location, include)
     body = gmail_url._build_body(
-        order, None, lines, products_by_id, location, signer, include
+        order, supplier, lines, products_by_id, location, signer, include
     )
     return f"{subject}\n---\n{body}"
 
@@ -102,6 +109,9 @@ def test_scenarios_present():
         "case_lines",
         "bracka_extras_date",
         "extras_edge_cases",
+        "westfield_window_intermlecz",
+        "from_only_suffix_kept",
+        "to_only",
     } <= set(SCENARIOS)
 
 

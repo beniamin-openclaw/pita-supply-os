@@ -227,6 +227,12 @@ def _schema():
     location_require_stock_count = (
         MIGRATIONS_DIR / "0030_location_require_stock_count.sql"
     ).read_text()
+    # 0031 adds locations.delivery_window_from/_to + suppliers.
+    # email_strip_pack_suffix (supplier-email-1019); _LOCATION_COLUMNS and
+    # _SUPPLIER_COLUMNS reference them.
+    delivery_window_pack_suffix = (
+        MIGRATIONS_DIR / "0031_delivery_window_and_pack_suffix.sql"
+    ).read_text()
     drop = "DROP TABLE IF EXISTS " + ", ".join(_ALL_TABLES) + " CASCADE;"
     with eng.begin() as conn:
         conn.exec_driver_sql(drop)
@@ -258,6 +264,7 @@ def _schema():
         conn.exec_driver_sql(supplier_product_case)
         conn.exec_driver_sql(location_supplier_catalog)
         conn.exec_driver_sql(location_require_stock_count)
+        conn.exec_driver_sql(delivery_window_pack_suffix)
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(
@@ -1361,3 +1368,50 @@ def test_finance_documents_upsert_review_alias_roundtrip():
     assert [(a.invoice_name_norm, a.product_id) for a in aliases] == [("kaucja skrzynka", "P1")]
     assert supabase_backend.load_receipts_since(date(2026, 9, 4), "WOLA")[0].receipt_id in rec_ids
     assert supabase_backend.load_receipt_lines_for_receipts(rec_ids) == []
+
+
+def test_migration_0031_delivery_window_and_pack_suffix_roundtrip():
+    """0031 re-runs cleanly; a delivery window and the pack-suffix switch survive
+    a write + load; a row inserted WITHOUT the columns reads as unset / off;
+    the CHECK refuses a malformed hour."""
+    sql = (MIGRATIONS_DIR / "0031_delivery_window_and_pack_suffix.sql").read_text()
+    assert "%" not in sql  # exec_driver_sql would treat it as a placeholder
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(sql)
+    supabase_backend._insert(
+        "locations", supabase_backend._LOCATION_COLUMNS,
+        Location(
+            location_id="WESTFIELD_IT", location_name="Westfield",
+            delivery_window_from="9:00", delivery_window_to="10:00",
+        ),
+    )
+    supabase_backend._insert(
+        "suppliers", supabase_backend._SUPPLIER_COLUMNS,
+        Supplier(supplier_id="SUP_INTE_IT", supplier_name="Intermlecz",
+                 email_strip_pack_suffix=True),
+    )
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO locations (location_id, location_name) VALUES ('OLD31_IT', 'Old')"
+        )
+    try:
+        locs = {loc.location_id: loc for loc in supabase_backend.load_locations()}
+        assert locs["WESTFIELD_IT"].delivery_window_from == "9:00"
+        assert locs["WESTFIELD_IT"].delivery_window_to == "10:00"
+        assert locs["OLD31_IT"].delivery_window_from is None
+        assert locs["OLD31_IT"].delivery_window_to is None
+        sups = {s.supplier_id: s for s in supabase_backend.load_suppliers()}
+        assert sups["SUP_INTE_IT"].email_strip_pack_suffix is True
+        assert sups["SUP_X"].email_strip_pack_suffix is False
+        with pytest.raises(Exception):
+            with supabase_backend._get_engine().begin() as conn:
+                conn.exec_driver_sql(
+                    "UPDATE locations SET delivery_window_from = '9-10' "
+                    "WHERE location_id = 'OLD31_IT'"
+                )
+    finally:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql(
+                "DELETE FROM locations WHERE location_id IN ('WESTFIELD_IT', 'OLD31_IT')"
+            )
+            conn.exec_driver_sql("DELETE FROM suppliers WHERE supplier_id = 'SUP_INTE_IT'")

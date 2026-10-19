@@ -10,6 +10,7 @@
 import { packUnitLabel } from "../../../i18n/packUnits";
 import { formatCaseQty } from "../../../lib/packStock";
 import { caseOf, formatQtyG } from "../../../lib/packUnits";
+import { stripBulkSuffix } from "../../../lib/displayName";
 import { compareProductOrder } from "../../../lib/productOrder";
 import type {
   ManagerOrderDetail,
@@ -75,6 +76,37 @@ const PL_WEEKDAY_SHORT = ["nd", "pon", "wt", "śr", "czw", "pt", "sob"];
 
 /** Printed instead of a date while the date switch is off / no date is known. */
 export const BLANK_DELIVERY_DATE = "__________";
+
+/** Hours printed when the location has no delivery window yet — the fixed
+ *  line of every e-mail before WP2 (twin of gmail_url.DEFAULT_DELIVERY_WINDOW). */
+export const DEFAULT_DELIVERY_WINDOW = "od godziny 11:00";
+
+/** Fixed line in every supplier e-mail (owner, 19.10): deliveries only with
+ *  our staff on site, checked and signed, no keys, no drop-off. Literal
+ *  (supplier copy is always Polish); twin of gmail_url.DELIVERY_RULES_LINE. */
+export const DELIVERY_RULES_LINE =
+  "WAŻNE: dostawa tylko przy naszym pracowniku. Każdą dostawę sprawdzamy " +
+  "i podpisujemy. Bez pracownika prosimy nie zostawiać towaru i nie brać " +
+  "od nikogo kluczy do lokalu.";
+
+/**
+ * Hours part of the "Dostawa:" line from the location's delivery window
+ * (migration 0031), each end printed as stored — twin of
+ * gmail_url.delivery_window_text: both -> "w godzinach 9:00–10:00", from only
+ * -> "od godziny 10:00", to only -> "do godziny 10:00", neither -> the old
+ * fixed "od godziny 11:00".
+ */
+export function deliveryWindowText(
+  from: string | null | undefined,
+  to: string | null | undefined,
+): string {
+  const start = (from ?? "").trim();
+  const end = (to ?? "").trim();
+  if (start && end) return `w godzinach ${start}–${end}`;
+  if (start) return `od godziny ${start}`;
+  if (end) return `do godziny ${end}`;
+  return DEFAULT_DELIVERY_WINDOW;
+}
 
 /** Parse "YYYY-MM-DD" as a calendar day (UTC, no timezone shift); null if not a date. */
 function parseDay(iso: string | null | undefined): { d: Date; dd: string; mm: string; yyyy: string } | null {
@@ -209,7 +241,10 @@ export function buildEmailBody(
     // Supplier purchase unit, else the product's inventory unit (as the twin).
     const unit = line.purchase_unit || line.inventory_unit || "";
     // Supplier-facing name — the supplier can't read our internal product_name_pl.
-    const name = line.supplier_product_name || line.product_name_pl;
+    // Intermlecz's warehouse misreads the "/12" pack suffix (owner, 19.10): a
+    // supplier with the switch on gets the Captain-view name (PR #65).
+    const rawName = line.supplier_product_name || line.product_name_pl;
+    const name = detail.email_strip_pack_suffix ? stripBulkSuffix(rawName) : rawName;
     const cell = `${idx + 1}.  | ${name} | ${emailQtyText(line, qty, unit)}`;
     out.push(cell.replace(/\s+$/, ""));
   });
@@ -231,10 +266,11 @@ export function buildEmailBody(
     out.push("");
   }
   // Delivery line: the date only while the switch is on (delivery-calendar),
-  // otherwise a blank the manager may fill in by hand; fixed 11:00 window —
-  // per-location hours are WP2, waiting for the hours from Marek.
+  // otherwise a blank the manager may fill in by hand. Hours from the
+  // location (supplier-email-1019 WP2), else the old fixed 11:00.
   const day = emailDeliveryDate(detail);
-  out.push(`Dostawa: ${day ? formatDeliveryDayLong(day) : BLANK_DELIVERY_DATE}, od godziny 11:00`);
+  const hours = deliveryWindowText(detail.delivery_window_from, detail.delivery_window_to);
+  out.push(`Dostawa: ${day ? formatDeliveryDayLong(day) : BLANK_DELIVERY_DATE}, ${hours}`);
   // location_name + delivery_address + city, empty parts skipped (mirrors
   // gmail_url._format_delivery_address).
   const address = [detail.location_name, detail.delivery_address, detail.city]
@@ -244,6 +280,7 @@ export function buildEmailBody(
   if (address) out.push(`ADRES DOSTAWY: ${address}`);
   const phone = (detail.location_phone ?? "").trim();
   if (phone) out.push(`Telefon lokalu: ${phone}`);
+  out.push(DELIVERY_RULES_LINE);
   out.push("");
   // Operating-company block (feedback r5): each location orders under its own
   // spółka; suppliers need the invoicing entity + NIP in every order email.

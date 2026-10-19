@@ -1,0 +1,93 @@
+{
+  "_comment": "supplier-email-1019: Westfield delivery window 9:00-10:00 and Intermlecz with the pack-suffix switch on (names lose /N and (N); /1, ratios and plain names stay). Date switch on. Test data.",
+  "include_delivery_date": true,
+  "signer": null,
+  "supplier": {
+    "email_strip_pack_suffix": true
+  },
+  "order": {
+    "order_id": "ORD-20261020-WES-INTE-0001",
+    "requested_delivery_date": "2026-10-21",
+    "extra_items": "Miód 25g/30 - 2 karton",
+    "captain_note": ""
+  },
+  "location": {
+    "location_name": "Pita Bros Westfield",
+    "delivery_address": "ul. Testowa 1",
+    "city": "00-001 Warszawa",
+    "phone": "600 000 000",
+    "company_name": "Pita Bros Test sp. z o.o.",
+    "company_address": "ul. Testowa 2, 00-002 Warszawa",
+    "company_nip": "0000000000",
+    "delivery_window_from": "9:00",
+    "delivery_window_to": "10:00"
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P139",
+      "product_name_pl": "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P139",
+      "supplier_product_name": "AGROS ŁOWICZ MIÓD WIELOKWIATOWY 25g/30",
+      "purchase_unit": "karton",
+      "display_order": 1,
+      "qty": 2
+    },
+    {
+      "order_line_id": "OL-002",
+      "product_id": "P141",
+      "product_name_pl": "LIPTON HERBATA YELLOW LABEL 100szt./12 koperta",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P141",
+      "supplier_product_name": "LIPTON HERBATA YELLOW LABEL 100szt./12 koperta",
+      "purchase_unit": "karton",
+      "display_order": 2,
+      "qty": 1
+    },
+    {
+      "order_line_id": "OL-003",
+      "product_id": "P150",
+      "product_name_pl": "OLEJ UNIWERSALNY RZEPAKOWY 5L (4)",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P150",
+      "supplier_product_name": "OLEJ UNIWERSALNY RZEPAKOWY 5L (4)",
+      "purchase_unit": "szt",
+      "display_order": 3,
+      "qty": 4
+    },
+    {
+      "order_line_id": "OL-004",
+      "product_id": "P151",
+      "product_name_pl": "ROLNIK CIECIORKA W ZALEWIE 400g/240g (12) puszka",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P151",
+      "supplier_product_name": "ROLNIK CIECIORKA W ZALEWIE 400g/240g (12) puszka",
+      "purchase_unit": "szt",
+      "display_order": 4,
+      "qty": 12
+    },
+    {
+      "order_line_id": "OL-005",
+      "product_id": "P152",
+      "product_name_pl": "Olej 5L/1",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P152",
+      "supplier_product_name": "Olej 5L/1",
+      "purchase_unit": "szt",
+      "display_order": 5,
+      "qty": 1
+    },
+    {
+      "order_line_id": "OL-006",
+      "product_id": "P201",
+      "product_name_pl": "Masło MR 500g",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P201",
+      "supplier_product_name": "Masło MR 500g",
+      "purchase_unit": "szt",
+      "display_order": 6,
+      "qty": 6
+    }
+  ]
+}

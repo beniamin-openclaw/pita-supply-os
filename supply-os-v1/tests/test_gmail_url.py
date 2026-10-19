@@ -502,9 +502,11 @@ def test_company_footer_appended_when_present():
         Location(location_id="WOLA", location_name="Pita Bros Wola")
     )
     assert "NIP:" not in without_company
-    assert "ADRES DOSTAWY: Pita Bros Wola\n\nPozdrawiam,\nPita Bros\n(zamówienie" in (
-        without_company
-    )
+    # The delivery-rules line (supplier-email-1019) closes the delivery block.
+    assert (
+        f"ADRES DOSTAWY: Pita Bros Wola\n{gmail_url.DELIVERY_RULES_LINE}\n\n"
+        "Pozdrawiam,\nPita Bros\n(zamówienie"
+    ) in without_company
 
 
 # ---------- feedback r7: empty delivery-date line + standing office CC ----------

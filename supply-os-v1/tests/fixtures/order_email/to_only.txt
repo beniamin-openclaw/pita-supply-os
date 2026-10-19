@@ -1,0 +1,16 @@
+Zamówienie Pita Bros Test
+---
+Dzień dobry,
+
+proszę o przygotowanie zamówienia:
+
+Lp. | Produkt | Ilość
+1.  | Masło MR 500g | 2 szt
+
+Dostawa: __________, do godziny 10:00
+ADRES DOSTAWY: Pita Bros Test
+WAŻNE: dostawa tylko przy naszym pracowniku. Każdą dostawę sprawdzamy i podpisujemy. Bez pracownika prosimy nie zostawiać towaru i nie brać od nikogo kluczy do lokalu.
+
+Pozdrawiam,
+Pita Bros
+(zamówienie #ORD-20261020-TST-INTE-0002)

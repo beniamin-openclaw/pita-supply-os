@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import urllib.parse
 from datetime import date
 from typing import Optional
@@ -218,6 +219,75 @@ def _line_case(sp_entry: object) -> Optional[tuple[str, float]]:
     return case_unit, float(units_per_case)
 
 
+# ---------- supplier-email-1019 (owner decisions of 2026-10-19) ----------
+
+# Printed when the location has no delivery hours yet — the fixed line every
+# e-mail carried before WP2.
+DEFAULT_DELIVERY_WINDOW = "od godziny 11:00"
+
+# Fixed line in every supplier e-mail (owner, 19.10): deliveries only with our
+# staff on site, every delivery checked and signed, no keys, no drop-off.
+# Literal (supplier copy is always Polish); twin in emailBody.ts.
+DELIVERY_RULES_LINE = (
+    "WAŻNE: dostawa tylko przy naszym pracowniku. Każdą dostawę sprawdzamy "
+    "i podpisujemy. Bez pracownika prosimy nie zostawiać towaru i nie brać "
+    "od nikogo kluczy do lokalu."
+)
+
+
+def delivery_window_text(location: Optional[Location]) -> str:
+    """Hours part of the "Dostawa:" line, from the location's delivery window
+    (migration 0031), each end printed as stored — twin of
+    ``deliveryWindowText`` in emailBody.ts:
+
+    - from + to -> "w godzinach 9:00–10:00"
+    - from only -> "od godziny 10:00"
+    - to only   -> "do godziny 10:00"
+    - neither   -> "od godziny 11:00" (DEFAULT_DELIVERY_WINDOW)
+    """
+    start = ((location.delivery_window_from if location else None) or "").strip()
+    end = ((location.delivery_window_to if location else None) or "").strip()
+    if start and end:
+        return f"w godzinach {start}–{end}"
+    if start:
+        return f"od godziny {start}"
+    if end:
+        return f"do godziny {end}"
+    return DEFAULT_DELIVERY_WINDOW
+
+
+# Bulk pack suffix — twin of frontend/src/lib/displayName.ts stripBulkSuffix
+# (PR #65, D3). Both are pinned by tests/fixtures/strip_bulk_suffix.json.
+# [0-9] instead of \d: JS \d is ASCII-only, Python's is Unicode.
+_UNIT = r"(?:kg|dag|mg|ml|cl|cm|mm|szt\.?|g|l|m)"
+_SIZE = rf"[0-9]+(?:[.,][0-9]+)?\s?{_UNIT}"
+_SLASH_PACK = re.compile(
+    rf"({_SIZE})/([0-9]{{1,3}})"
+    rf"(?![0-9/]|[.,][0-9]|\s?{_UNIT}(?![A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]))",
+    re.IGNORECASE,
+)
+_PAREN_PACK = re.compile(rf"({_SIZE})\s*\(([0-9]{{1,3}})\)", re.IGNORECASE)
+
+
+def strip_bulk_suffix(name: str) -> str:
+    """Drop the "how many per carton" suffix from a supplier product name:
+    "MIÓD 25g/30" -> "MIÓD 25g", "OLEJ 5L (4)" -> "OLEJ 5L". A pack count of 1
+    is kept; when unsure the name is returned unchanged. Used only for
+    suppliers with ``email_strip_pack_suffix`` (Intermlecz)."""
+    if not name:
+        return name
+
+    def _keep_size(m: re.Match) -> str:
+        return m.group(1) if int(m.group(2)) >= 2 else m.group(0)
+
+    out = _SLASH_PACK.sub(_keep_size, name)
+    out = _PAREN_PACK.sub(_keep_size, out)
+    if out == name:
+        return name
+    out = re.sub(r"\s{2,}", " ", out).strip()
+    return out or name
+
+
 def _delivery_day_long(day: date) -> str:
     """"wtorek 29.09.2026"."""
     return f"{_PL_WEEKDAY_LONG[day.weekday()]} {day.strftime('%d.%m.%Y')}"
@@ -305,7 +375,7 @@ def _build_subject(
 
 def _build_body(
     order: Order,
-    supplier: Supplier,
+    supplier: Optional[Supplier],
     lines: list[OrderLine],
     products_by_id: dict[str, Product],
     location: Optional[Location],
@@ -339,6 +409,9 @@ def _build_body(
     # SupplierProduct entries (keyed by supplier_product_id) — the dispatch
     # endpoint merges them. We prefer the supplier-facing name + purchase_unit
     # from the SupplierProduct so the supplier reads names they recognise.
+    # Intermlecz's warehouse misreads the "/12" pack suffix (owner, 19.10), so
+    # a supplier with the switch on gets the Captain-view name (PR #65).
+    strip_suffix = bool(supplier is not None and supplier.email_strip_pack_suffix)
     for idx, line in enumerate(visible, start=1):
         product = products_by_id.get(line.product_id)
         sp_entry = products_by_id.get(line.supplier_product_id)
@@ -350,6 +423,8 @@ def _build_body(
             product_name = product.product_name_pl
         else:
             product_name = line.product_id
+        if strip_suffix:
+            product_name = strip_bulk_suffix(product_name)
 
         # Unit: supplier purchase_unit, else product inventory_unit.
         purchase_unit = getattr(sp_entry, "purchase_unit", None)
@@ -391,12 +466,11 @@ def _build_body(
     # NOT included in the supplier email body (DEMO_FEEDBACK #7).
 
     # Delivery line: the date only while the switch is on (delivery-calendar);
-    # otherwise a blank the manager may fill in by hand. The 11:00 window is
-    # fixed for all locations (owner request) — per-location hours are WP2,
-    # waiting for the hours from Marek (Westfield delivers until 10:00).
+    # otherwise a blank the manager may fill in by hand. Hours from the
+    # location (supplier-email-1019 WP2), else the old fixed 11:00.
     day = _email_delivery_date(order, include_delivery_date)
     day_text = _delivery_day_long(day) if day is not None else BLANK_DELIVERY_DATE
-    body_lines.append(f"Dostawa: {day_text}, od godziny 11:00")
+    body_lines.append(f"Dostawa: {day_text}, {delivery_window_text(location)}")
     address = _format_delivery_address(location)
     if address:
         # Uppercased label — the strongest emphasis available in plaintext.
@@ -404,6 +478,7 @@ def _build_body(
     phone = (location.phone or "").strip() if location is not None else ""
     if phone:
         body_lines.append(f"Telefon lokalu: {phone}")
+    body_lines.append(DELIVERY_RULES_LINE)
     body_lines.append("")
     # Operating-company block (feedback r5): each location orders under its own
     # spółka; suppliers need the invoicing entity + NIP in every order email.

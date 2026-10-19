@@ -95,6 +95,12 @@ class Supplier(BaseModel):
     # `bool = False`, NOT Optional: the column is NOT NULL DEFAULT false and
     # _SUPPLIER_COLUMNS binds it on insert.
     coverage_prompt_enabled: bool = False
+    # True = the supplier e-mail drops the "how many per carton" suffix from
+    # product names ("MIÓD 25g/30" -> "MIÓD 25g"), the Captain-view rule of
+    # PR #65 (gmail_url.strip_bulk_suffix). Intermlecz: its warehouse misreads
+    # the suffix (owner, 2026-10-19). `bool = False`, NOT Optional: NOT NULL
+    # DEFAULT false (migration 0031), bound on insert by _SUPPLIER_COLUMNS.
+    email_strip_pack_suffix: bool = False
 
 
 class CaptainSupplierOrderRef(BaseModel):
@@ -189,6 +195,12 @@ class Location(BaseModel):
     # NOT NULL DEFAULT true, bound on insert by _LOCATION_COLUMNS; an absent
     # column (seed/sheets/pre-0030 Postgres) reads as ON.
     require_stock_count: bool = True
+    # Hours the location accepts deliveries ("9:00", "10:00"), printed on the
+    # supplier e-mail's "Dostawa:" line (supplier-email-1019 WP2, migration
+    # 0031). None/None -> the fixed "od godziny 11:00"; see
+    # gmail_url.delivery_window_text for the four cases.
+    delivery_window_from: Optional[str] = None
+    delivery_window_to: Optional[str] = None
 
 
 class SupplierProduct(BaseModel):
@@ -700,6 +712,13 @@ class ManagerOrderDetail(BaseModel):
     location_phone: Optional[str] = None
     delivery_date_in_email: bool = False
     email_signers: list[OrderEmailSigner] = Field(default_factory=list)
+    # supplier-email-1019: the location's delivery hours (Location.
+    # delivery_window_from/_to, None = the fixed 11:00 line) and the supplier's
+    # pack-suffix switch (Supplier.email_strip_pack_suffix) — the client
+    # builder (emailBody.ts) needs both to stay byte-identical to gmail_url.
+    delivery_window_from: Optional[str] = None
+    delivery_window_to: Optional[str] = None
+    email_strip_pack_suffix: bool = False
     # Channel the dispatch panel must branch on (email|portal|phone|manual).
     ordering_method: OrderingMethod = OrderingMethod.EMAIL
     supplier_notes: str = ""  # fallback source for a phone number etc.

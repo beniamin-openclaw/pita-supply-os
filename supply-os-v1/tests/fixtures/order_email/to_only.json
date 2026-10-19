@@ -1,0 +1,35 @@
+{
+  "_comment": "supplier-email-1019: a location with only a 'to' hour (do 10:00). Test data.",
+  "include_delivery_date": false,
+  "signer": null,
+  "order": {
+    "order_id": "ORD-20261020-TST-INTE-0002",
+    "requested_delivery_date": null,
+    "extra_items": "",
+    "captain_note": ""
+  },
+  "location": {
+    "location_name": "Pita Bros Test",
+    "delivery_address": null,
+    "city": null,
+    "phone": null,
+    "company_name": null,
+    "company_address": null,
+    "company_nip": null,
+    "delivery_window_from": null,
+    "delivery_window_to": "10:00"
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P201",
+      "product_name_pl": "Masło MR 500g",
+      "inventory_unit": "szt",
+      "supplier_product_id": "SP_INTE_P201",
+      "supplier_product_name": "Masło MR 500g",
+      "purchase_unit": "szt",
+      "display_order": 1,
+      "qty": 2
+    }
+  ]
+}

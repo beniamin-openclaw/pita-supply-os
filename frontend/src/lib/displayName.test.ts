@@ -1,5 +1,20 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { stripBulkSuffix } from "./displayName";
+
+// Cases shared with the backend twin gmail_url.strip_bulk_suffix (supplier
+// e-mail, supplier-email-1019) — both suites read the same file.
+const SHARED = JSON.parse(
+  readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../supply-os-v1/tests/fixtures/strip_bulk_suffix.json",
+    ),
+    "utf-8",
+  ),
+) as { strip: Array<[string, string]>; keep: string[] };
 
 describe("stripBulkSuffix", () => {
   it.each([
@@ -44,5 +59,15 @@ describe("stripBulkSuffix", () => {
   it("is idempotent", () => {
     const once = stripBulkSuffix("MELVIT KASZA 900g/10");
     expect(stripBulkSuffix(once)).toBe(once);
+  });
+});
+
+describe("stripBulkSuffix — cases shared with the backend", () => {
+  it.each(SHARED.strip)("strips %s", (input: string, expected: string) => {
+    expect(stripBulkSuffix(input)).toBe(expected);
+  });
+
+  it.each(SHARED.keep)("leaves %j unchanged", (input: string) => {
+    expect(stripBulkSuffix(input)).toBe(input);
   });
 });

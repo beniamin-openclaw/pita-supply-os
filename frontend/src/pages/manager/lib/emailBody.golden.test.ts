@@ -51,7 +51,12 @@ interface Fixture {
     company_name: string | null;
     company_address: string | null;
     company_nip: string | null;
+    // supplier-email-1019 (migration 0031); absent from the older fixtures.
+    delivery_window_from?: string | null;
+    delivery_window_to?: string | null;
   };
+  // Supplier switches (supplier-email-1019); absent from the older fixtures.
+  supplier?: { email_strip_pack_suffix?: boolean } | null;
   lines: FixtureLine[];
 }
 
@@ -84,6 +89,9 @@ function toDetail(fx: Fixture): ManagerOrderDetail {
     company_nip: fx.location.company_nip ?? undefined,
     requested_delivery_date: fx.order.requested_delivery_date ?? undefined,
     delivery_date_in_email: fx.include_delivery_date,
+    delivery_window_from: fx.location.delivery_window_from ?? null,
+    delivery_window_to: fx.location.delivery_window_to ?? null,
+    email_strip_pack_suffix: fx.supplier?.email_strip_pack_suffix ?? false,
     extra_items: fx.order.extra_items,
     captain_note: fx.order.captain_note,
     lines,
@@ -108,6 +116,9 @@ describe("order e-mail golden fixtures (shared with the backend)", () => {
         "extras_edge_cases",
         "ken_edge_cases",
         "wola_intermlecz",
+        "westfield_window_intermlecz",
+        "from_only_suffix_kept",
+        "to_only",
       ]),
     );
   });

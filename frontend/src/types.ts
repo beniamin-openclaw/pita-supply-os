@@ -679,6 +679,12 @@ export interface ManagerOrderDetail {
   location_phone?: string | null;
   delivery_date_in_email?: boolean;
   email_signers?: OrderEmailSigner[];
+  // supplier-email-1019 (migration 0031): the location's delivery hours
+  // ("9:00", null = the fixed "od godziny 11:00") and the supplier's switch
+  // that drops the "/12" pack suffix from product names (Intermlecz).
+  delivery_window_from?: string | null;
+  delivery_window_to?: string | null;
+  email_strip_pack_suffix?: boolean;
   // G3: channel routing + phone/notes for the dispatch panel.
   ordering_method: OrderingMethod;
   supplier_notes: string;
