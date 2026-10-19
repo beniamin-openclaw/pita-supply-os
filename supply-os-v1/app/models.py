@@ -97,6 +97,39 @@ class Supplier(BaseModel):
     coverage_prompt_enabled: bool = False
 
 
+class CaptainSupplierOrderRef(BaseModel):
+    """One of the Captain location's own orders with a supplier, for the order
+    screen tabs (captain-sent-today). Information only — never blocks submit.
+
+    ``submitted_on`` is the Europe/Warsaw day the backend used for the decision:
+    ``captain_submitted_at`` in Warsaw, else ``order_date`` (which is the UTC
+    date, one day early between 00:00 and 02:00 Warsaw)."""
+    order_id: str
+    status: OrderStatus
+    order_date: date
+    submitted_on: date
+    captain_submitted_at: Optional[datetime] = None
+    requested_delivery_date: Optional[date] = None
+
+
+class CaptainSupplier(Supplier):
+    """``GET /api/captain/suppliers`` row: the supplier plus this location's own
+    orders with it (captain-sent-today). Response-only — never stored, so the
+    master-data ``Supplier`` (bound to ``_SUPPLIER_COLUMNS`` on insert) stays
+    unchanged.
+
+    - ``sent_today``: the newest order submitted today (Warsaw) that is not
+      cancelled (nor a draft) — the tab's ✓ and the second-order warning.
+    - ``open_order``: the newest open order (captain_submitted / manager_claimed /
+      manager_sent) submitted in the 7 days before today — today's orders are
+      reported by ``sent_today`` instead.
+
+    Both None when there is nothing to report, on a non-persistent backend
+    (seed) or when the order read fails."""
+    sent_today: Optional[CaptainSupplierOrderRef] = None
+    open_order: Optional[CaptainSupplierOrderRef] = None
+
+
 class SupplierDeliveryRule(BaseModel):
     """One delivery-calendar rule (`supplier_delivery_rules`, migration 0025).
 

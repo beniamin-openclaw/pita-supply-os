@@ -1,20 +1,29 @@
 // Pre-submit confirmation modal (Phase F5).
 // Intercepts the Captain "Wyślij" button: shows an order summary and, if any
-// CRITICAL product has nothing ordered, an inline (non-blocking) warning.
-// The captain can always go back ("Wróć i popraw") or confirm ("Tak, wyślij" /
-// "Wyślij mimo to" when the critical warning is present).
+// CRITICAL product has nothing ordered, an inline (non-blocking) warning; the
+// same for a second order to a supplier that already got one today
+// (captain-sent-today). The captain can always go back ("Wróć i popraw") or
+// confirm ("Tak, wyślij" / "Wyślij mimo to" when a warning is present).
 //
 // Accessibility: role=dialog + aria-modal, focus moves to the dialog on open and
 // is trapped inside it (Tab/Shift+Tab cycle), Escape = cancel, backdrop click =
 // cancel, body scroll is locked while open, focus is restored on close, and the
-// critical warning (when present) is part of aria-describedby so screen readers
-// announce it. PLN is intentionally omitted (the captain screen hides money);
+// warnings (when present) are part of aria-describedby so screen readers
+// announce them. PLN is intentionally omitted (the captain screen hides money);
 // the summary uses line / deviation / reason counts instead.
 
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Send, X } from "lucide-react";
 import { useT } from "../../../i18n";
 import { DELIVERY_DATE_FORMAT } from "../../../lib/dates";
+import { SENT_TIME_FORMAT } from "../lib/sentToday";
+
+/** The supplier already got an order today (captain-sent-today). */
+export interface SentTodayWarning {
+  supplierName: string;
+  /** ISO timestamp of that order; null/absent = no time shown. */
+  submittedAt?: string | null;
+}
 
 interface ConfirmSubmitDialogProps {
   open: boolean;
@@ -30,6 +39,8 @@ interface ConfirmSubmitDialogProps {
    *  Thursday coverage choice — one summary line when present. */
   deliveryDate?: string;
   coverageDays?: 1 | 3 | null;
+  /** Non-blocking "already sent today — send another?" warning. */
+  sentToday?: SentTodayWarning | null;
 }
 
 export function ConfirmSubmitDialog({
@@ -43,6 +54,7 @@ export function ConfirmSubmitDialog({
   isSubmitting = false,
   deliveryDate,
   coverageDays = null,
+  sentToday = null,
 }: ConfirmSubmitDialogProps) {
   const { t, tPlural, formatDateTime } = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -79,6 +91,15 @@ export function ConfirmSubmitDialog({
   if (!open) return null;
 
   const hasCriticalWarning = criticalMissing.length > 0;
+  const hasSentTodayWarning = sentToday !== null;
+  const hasWarning = hasCriticalWarning || hasSentTodayWarning;
+  const describedBy = [
+    "confirm-submit-summary",
+    hasSentTodayWarning ? "confirm-submit-sent-today" : null,
+    hasCriticalWarning ? "confirm-submit-warning" : null,
+  ]
+    .filter((id): id is string => id !== null)
+    .join(" ");
 
   const linesText = tPlural("sticky.summary", "lines", lineCount);
   const devsText = tPlural("sticky.summary", "deviations", deviationCount);
@@ -125,11 +146,7 @@ export function ConfirmSubmitDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-submit-title"
-        aria-describedby={
-          hasCriticalWarning
-            ? "confirm-submit-summary confirm-submit-warning"
-            : "confirm-submit-summary"
-        }
+        aria-describedby={describedBy}
         tabIndex={-1}
         onKeyDown={onTrapKeyDown}
         className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-200 outline-none"
@@ -167,6 +184,28 @@ export function ConfirmSubmitDialog({
                   value: t(coverageDays === 3 ? "coverage.value.3" : "coverage.value.1"),
                 })}`}
             </p>
+          )}
+
+          {sentToday && (
+            <div
+              id="confirm-submit-sent-today"
+              data-testid="confirm-sent-today"
+              className="mt-4 flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3"
+            >
+              <AlertTriangle
+                size={20}
+                aria-hidden="true"
+                className="shrink-0 mt-0.5 text-amber-700"
+              />
+              <div className="min-w-0 text-sm font-semibold text-amber-900 break-words">
+                {sentToday.submittedAt
+                  ? t("confirm.sentToday", {
+                      supplier: sentToday.supplierName,
+                      time: formatDateTime(sentToday.submittedAt, SENT_TIME_FORMAT),
+                    })
+                  : t("confirm.sentTodayNoTime", { supplier: sentToday.supplierName })}
+              </div>
+            </div>
           )}
 
           {hasCriticalWarning && (
@@ -209,13 +248,13 @@ export function ConfirmSubmitDialog({
             onClick={onConfirm}
             disabled={isSubmitting}
             className={`flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white rounded-lg transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
-              hasCriticalWarning
+              hasWarning
                 ? "bg-amber-700 active:bg-amber-800 focus-visible:ring-amber-500"
                 : "bg-brand active:bg-brand-active focus-visible:ring-blue-500"
             }`}
           >
             <Send size={16} aria-hidden="true" />
-            {hasCriticalWarning ? t("confirm.sendAnyway") : t("confirm.send")}
+            {hasWarning ? t("confirm.sendAnyway") : t("confirm.send")}
           </button>
         </div>
       </div>

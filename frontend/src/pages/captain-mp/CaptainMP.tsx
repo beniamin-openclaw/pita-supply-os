@@ -22,6 +22,7 @@ import { ContextStrip } from "./components/ContextStrip";
 import { ProductCard } from "./components/ProductCard";
 import { StickyActionBar } from "./components/StickyActionBar";
 import { ConfirmSubmitDialog } from "./components/ConfirmSubmitDialog";
+import { SupplierOrderNotices } from "./components/SupplierOrderNotices";
 import { PrefillControl } from "./components/PrefillControl";
 import { OverruleAllControl } from "./components/OverruleAllControl";
 import { ConfirmPrefillDialog } from "./components/ConfirmPrefillDialog";
@@ -30,7 +31,7 @@ import { Toast, type ToastProps } from "./components/Toast";
 import { ExtraItemsControl } from "./components/ExtraItemsControl";
 import { OrderCommentField } from "./components/OrderCommentField";
 import { DeliveryDateField } from "./components/DeliveryDateField";
-import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
+import { DELIVERY_DATE_FORMAT, warsawTodayIso } from "../../lib/dates";
 import { CoveragePrompt, type CoverageDays } from "./components/CoveragePrompt";
 
 import { computeRowState } from "./lib/compute";
@@ -40,9 +41,11 @@ import { getRequestedDeliveryDate } from "./lib/dates";
 import { serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
 import { stripBulkSuffix } from "../../lib/displayName";
+import { localSentRef, mergeSupplierOrders, sentTodayBySupplier } from "./lib/sentToday";
 
 import type {
-  Supplier,
+  CaptainSupplier,
+  CaptainSupplierOrderRef,
   OrderableItem,
   OrderLine,
   DraftState,
@@ -104,11 +107,16 @@ function draftHasValues(
 export function CaptainMP() {
   const { t, formatDateTime } = useT();
   const navigate = useNavigate();
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [suppliers, setSuppliers] = useState<CaptainSupplier[]>([]);
   const [activeSupplierId, setActiveSupplierId] = useState<string | null>(null);
   const [orderableItems, setOrderableItems] = useState<OrderableItem[]>([]);
   const [lines, setLines] = useState<Record<string, OrderLine>>({});
-  const [sentSuppliers, setSentSuppliers] = useState<Set<string>>(new Set());
+  // Orders this session submitted, per supplier (captain-sent-today). Layered
+  // over the server's `sent_today` so the ✓ shows at once, also on the seed
+  // backend, which stores no orders; the server copy survives a reload.
+  const [sentThisSession, setSentThisSession] = useState<
+    Record<string, CaptainSupplierOrderRef>
+  >({});
   const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(true);
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,6 +214,33 @@ export function CaptainMP() {
       cancelled = true;
     };
   }, [showToast, t]);
+
+  // ---- Sent today / open order per supplier (captain-sent-today) -------------
+  // The ✓ on a tab = an order to that supplier already went out today
+  // (Europe/Warsaw): the server's `sent_today` merged with this session's
+  // submits. Recomputed per render, so a screen left open past midnight drops
+  // yesterday's ✓ on the next interaction.
+  const todayIso = warsawTodayIso();
+  const sentToday = useMemo(
+    () => sentTodayBySupplier(suppliers, sentThisSession, todayIso),
+    [suppliers, sentThisSession, todayIso],
+  );
+  const sentSuppliers = useMemo(() => new Set<string>(Object.keys(sentToday)), [sentToday]);
+
+  // Silent re-read after a submit: picks up the server's view of the new order
+  // and any open order, without touching the tabs. Optional — on error the
+  // session map already shows the ✓. `Promise.resolve().then` also turns a
+  // synchronous throw into a rejection.
+  const refreshSupplierOrders = useCallback(() => {
+    Promise.resolve()
+      .then(() => api.captainSuppliers())
+      .then((fresh) => {
+        if (Array.isArray(fresh)) setSuppliers((prev) => mergeSupplierOrders(prev, fresh));
+      })
+      .catch(() => {
+        /* optional refresh — ignore errors */
+      });
+  }, []);
 
   // ---- Fetch available inventory snapshots once (FR-024 picker source) -------
   // Silent on error: prefill is optional and must never block ordering. Seed
@@ -710,7 +745,7 @@ export function CaptainMP() {
       proposal?.proposed_delivery_date ??
       getRequestedDeliveryDate(supplier.delivery_days);
     try {
-      await api.captainSubmit({
+      const res = await api.captainSubmit({
         supplier_id: activeSupplierId,
         requested_delivery_date: requestedDate,
         suggested_delivery_date: ruleBased ? proposal.proposed_delivery_date : undefined,
@@ -747,7 +782,12 @@ export function CaptainMP() {
         delete next[activeSupplierId];
         return next;
       });
-      setSentSuppliers((prev) => new Set(prev).add(activeSupplierId));
+      // ✓ at once from the submit response; then re-read the server's view.
+      if (res?.order_id) {
+        const ref = localSentRef(res.order_id, res.status);
+        setSentThisSession((prev) => ({ ...prev, [activeSupplierId]: ref }));
+      }
+      refreshSupplierOrders();
 
       // Move to next un-submitted supplier if any.
       const remaining = suppliers.find(
@@ -773,6 +813,7 @@ export function CaptainMP() {
     proposalFor,
     sentSuppliers,
     suppliers,
+    refreshSupplierOrders,
     showToast,
     t,
   ]);
@@ -800,6 +841,16 @@ export function CaptainMP() {
   // ---- Derived state ---------------------------------------------------------
   const activeSupplier =
     suppliers.find((s) => s.supplier_id === activeSupplierId) || null;
+
+  // captain-sent-today: the non-blocking notices and the confirm warning for
+  // the active supplier. The open order never repeats today's (server rule).
+  const activeSentToday: CaptainSupplierOrderRef | null =
+    (activeSupplierId && sentToday[activeSupplierId]) || null;
+  const activeOpenOrder: CaptainSupplierOrderRef | null = activeSupplier?.open_order ?? null;
+  const showOrder = useCallback(
+    (orderId: string) => navigate(`/captain-v2/orders/${orderId}`),
+    [navigate],
+  );
 
   // Delivery calendar: what the date field shows and what submit sends.
   const activeChoice: DeliveryChoice =
@@ -939,6 +990,14 @@ export function CaptainMP() {
       <ContextStrip supplier={activeSupplier} proposal={activeProposal} />
 
       <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
+        {activeSupplier && (
+          <SupplierOrderNotices
+            supplierName={activeSupplier.supplier_name}
+            sentToday={activeSentToday}
+            openOrder={activeOpenOrder}
+            onShowOrder={showOrder}
+          />
+        )}
         {/* Order-history link — mirrors the Remanent screen's "Historia →"
             so order history is reachable here under Zamówienia, not only
             from the hamburger. */}
@@ -1115,6 +1174,14 @@ export function CaptainMP() {
         criticalMissing={criticalMissing}
         deliveryDate={displayedDeliveryDate || undefined}
         coverageDays={activeChoice.coverage ?? null}
+        sentToday={
+          activeSupplier && activeSentToday
+            ? {
+                supplierName: activeSupplier.supplier_name,
+                submittedAt: activeSentToday.captain_submitted_at ?? null,
+              }
+            : null
+        }
         onConfirm={handleSubmit}
         onCancel={cancelConfirm}
         isSubmitting={isSubmitting}

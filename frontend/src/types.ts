@@ -50,6 +50,29 @@ export interface Supplier {
   coverage_prompt_enabled?: boolean;
 }
 
+// One of the Captain location's own orders with a supplier (captain-sent-today,
+// CaptainSupplierOrderRef in models.py). Info only — never blocks submit.
+export interface CaptainSupplierOrderRef {
+  order_id: string;
+  status: OrderStatus;
+  order_date: string;
+  /** Europe/Warsaw day ("YYYY-MM-DD") the backend counted the order on:
+   *  captain_submitted_at in Warsaw, else order_date. Always sent. */
+  submitted_on: string;
+  captain_submitted_at?: string | null;
+  requested_delivery_date?: string | null;
+}
+
+// GET /api/captain/suppliers row (CaptainSupplier in models.py): the supplier
+// plus this location's own orders with it. Pydantic `Optional[...] = None` →
+// optional here (lessons.md); absent on the global /api/suppliers fallback.
+export interface CaptainSupplier extends Supplier {
+  /** Newest non-cancelled order submitted today (Warsaw) — the tab ✓. */
+  sent_today?: CaptainSupplierOrderRef | null;
+  /** Newest open order from the 7 days before today. */
+  open_order?: CaptainSupplierOrderRef | null;
+}
+
 export interface Location {
   location_id: string;
   location_name: string;
