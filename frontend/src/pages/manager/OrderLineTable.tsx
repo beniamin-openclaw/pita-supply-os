@@ -24,6 +24,8 @@ import {
   effectiveManagerQtyPurchase,
   lineVisualState,
   lineVisualStateWithQty,
+  MANAGER_ZERO_INPUT_CLASS,
+  MANAGER_ZERO_TEXT_CLASS,
 } from "./lib/managerLine";
 import { OpenOrdersElsewhere } from "../../components/OpenOrdersElsewhere";
 import { DecimalInput } from "../../components/ui/DecimalInput";
@@ -123,7 +125,7 @@ export function OrderLineTable({
                 : visual === "changed"
                   ? "bg-blue-50"
                   : "bg-white";
-            const qtyStrike = visual === "cancelled" ? "line-through text-amber-700" : "";
+            const qtyStrike = visual === "cancelled" ? MANAGER_ZERO_TEXT_CLASS : "";
             const commentValue = editable && drafts ? draftComment(drafts, line) : line.manager_comment;
             const suggestionCaseHint = caseSplitText(line, line.suggested_qty_purchase, lang);
             // Suggestion 0 on a line WITHOUT a case keeps the "ponad cel" / "brak
@@ -205,7 +207,8 @@ export function OrderLineTable({
                   }
                 >
                   {line.is_backup === true ? (
-                    <span className="text-slate-400">—</span>
+                    // D10 A: the suggestion lives with the primary supplier.
+                    <span className="text-xs text-slate-500">{t("manager.backupAtPrimary")}</span>
                   ) : (
                     line.suggested_qty_purchase
                   )}
@@ -286,7 +289,7 @@ export function OrderLineTable({
                         onQtyChange?.(line.order_line_id, typeof v === "number" && v > 0 ? v : 0)
                       }
                       className={`w-20 rounded border border-slate-300 px-2 py-1 text-right tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                        visual === "cancelled" ? "border-amber-400 bg-amber-50" : ""
+                        visual === "cancelled" ? MANAGER_ZERO_INPUT_CLASS : ""
                       }`}
                     />
                   ) : (

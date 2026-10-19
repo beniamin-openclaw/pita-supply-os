@@ -1,0 +1,177 @@
+/* Shared print styles for the two-page A4 training sheets. */
+@page { size: A4; margin: 0; }
+
+:root {
+  --ink: #0f1b2d;
+  --ink-2: #334155;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-2: #cbd5e1;
+  --paper: #ffffff;
+  --tint: #f5f7fb;
+  --navy: #1a4480;
+  --navy-2: #2b5aa3;
+  --navy-subtle: #e3eaf3;
+  --sky: #168fd6;
+  --sky-subtle: #e7f3fb;
+  --green: #1f7a4d;
+  --green-subtle: #e7f5ee;
+  --amber: #b45309;
+  --amber-subtle: #fdf3e3;
+  --red: #c0262d;
+  --red-subtle: #fdecec;
+  --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+  --sans: system-ui, -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--paper); }
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  font-size: 8.4pt;
+  line-height: 1.38;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  font-variant-numeric: tabular-nums;
+}
+
+.page {
+  width: 210mm;
+  height: 297mm;
+  padding: 11mm 12.5mm 9mm;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4.2mm;
+  break-after: page;
+  background: var(--paper);
+}
+.page:last-child { break-after: auto; }
+
+@media screen {
+  html, body { background: #dfe3ea; }
+  .page { margin: 8mm auto; box-shadow: 0 2px 14px rgba(15, 27, 45, .18); }
+}
+
+h1, h2, h3, p { margin: 0; }
+.serif { font-family: var(--serif); }
+
+/* Header ----------------------------------------------------------------- */
+.eyebrow {
+  font-size: 7pt;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--sky);
+  font-weight: 650;
+}
+.title {
+  font-family: var(--serif);
+  font-size: 23pt;
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  margin-top: 1.2mm;
+}
+.subtitle { color: var(--ink-2); font-size: 9.2pt; margin-top: 1.4mm; }
+.rule { height: 0; border-top: 1px solid var(--line); }
+
+.section-label {
+  font-size: 6.8pt;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 1.6mm;
+}
+.h2 {
+  font-family: var(--serif);
+  font-size: 12.5pt;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--ink);
+  margin-bottom: 1.8mm;
+}
+
+/* Boxes ------------------------------------------------------------------ */
+.box {
+  border: 1px solid var(--line);
+  border-radius: 3mm;
+  padding: 3.2mm 3.6mm;
+  background: var(--paper);
+}
+.box.tint { background: var(--tint); border-color: transparent; }
+.box.navy { background: var(--navy); color: #fff; border-color: transparent; }
+.box.navy .section-label { color: #b9cbe6; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 3.6mm; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3.6mm; }
+.row { display: flex; gap: 3.6mm; }
+
+/* Phone screenshots ------------------------------------------------------- */
+.shot {
+  display: block;
+  width: 100%;
+  border-radius: 2.4mm;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 .6mm 2mm rgba(15, 27, 45, .10);
+  background: #fff;
+}
+.shot-wrap { position: relative; }
+.marker {
+  position: absolute;
+  width: 4.6mm; height: 4.6mm;
+  margin: -2.3mm 0 0 -2.3mm;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-size: 7pt;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 .6mm #fff;
+}
+
+/* Chips & small text ------------------------------------------------------ */
+.chip {
+  display: inline-flex; align-items: center; gap: 1mm;
+  border-radius: 99px;
+  padding: .5mm 2.2mm;
+  font-size: 7pt;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.chip.blue { background: #dbe8ff; color: #1e3a8a; }
+.chip.amber { background: #fdf0d5; color: #8a4b08; }
+.chip.green { background: #d9f2e4; color: #14532d; }
+.chip.grey { background: #e9edf2; color: #475569; }
+.chip.red { background: var(--red-subtle); color: var(--red); }
+.ui { font-weight: 650; color: var(--navy); white-space: nowrap; }
+.small { font-size: 7.3pt; color: var(--muted); }
+.kbd {
+  display: inline-block; padding: 0 1.4mm; border-radius: 1mm;
+  border: 1px solid var(--line-2); background: #fff;
+  font-weight: 650; font-size: 7.4pt; color: var(--ink); white-space: nowrap;
+}
+
+ul.ticks, ul.dots { list-style: none; margin: 0; padding: 0; }
+ul.ticks li, ul.dots li { position: relative; padding-left: 4.6mm; margin: .9mm 0; }
+ul.ticks li::before {
+  content: ""; position: absolute; left: 0; top: .55mm;
+  width: 2.6mm; height: 2.6mm; border: 1.1px solid var(--navy); border-radius: .7mm;
+}
+ul.dots li::before {
+  content: ""; position: absolute; left: .6mm; top: 1.45mm;
+  width: 1.4mm; height: 1.4mm; border-radius: 50%; background: var(--sky);
+}
+
+.icon { width: 4.4mm; height: 4.4mm; stroke: currentColor; fill: none; stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+.footer {
+  margin-top: auto;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 6.8pt; color: var(--muted);
+  border-top: 1px solid var(--line); padding-top: 2mm;
+}

@@ -1,0 +1,59 @@
+{
+  "_comment": "supplier-email-v21: what Ben sees on prod after D2 - date switch on, signer, company block before the sign-off, off-catalogue items as numbered table rows (two with ' - ', one without), captain note.",
+  "include_delivery_date": true,
+  "signer": {
+    "name": "Marek Złotopolski",
+    "phone": "+48 662 184 258",
+    "email": "marek@pitabros.pl"
+  },
+  "order": {
+    "order_id": "ORD-20261020-BRA-BUKA-5e21aa",
+    "requested_delivery_date": "2026-10-21",
+    "extra_items": "Serwetki - 5 opak\nLód - 2 worki\nMięta 2 pęczki",
+    "captain_note": "Proszę o dostawę przed 11."
+  },
+  "location": {
+    "location_name": "Pita Bros Bracka",
+    "delivery_address": "ul. Bracka 20",
+    "city": "00-028 Warszawa",
+    "phone": "600 722 252",
+    "company_name": "Pita Bros Centrum Sp. z o.o.",
+    "company_address": "ul. W. Laskonogiego 9, 02-496 Warszawa",
+    "company_nip": "5223314413"
+  },
+  "lines": [
+    {
+      "order_line_id": "OL-001",
+      "product_id": "P101",
+      "product_name_pl": "Cytryna",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P101",
+      "supplier_product_name": "Cytryna",
+      "purchase_unit": "kg",
+      "display_order": 1,
+      "qty": 2
+    },
+    {
+      "order_line_id": "OL-002",
+      "product_id": "P102",
+      "product_name_pl": "Pomidor",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P102",
+      "supplier_product_name": "Pomidor",
+      "purchase_unit": "kg",
+      "display_order": 2,
+      "qty": 12
+    },
+    {
+      "order_line_id": "OL-003",
+      "product_id": "P103",
+      "product_name_pl": "Tzatzyki",
+      "inventory_unit": "kg",
+      "supplier_product_id": "SP_P103",
+      "supplier_product_name": "Tzatzyki",
+      "purchase_unit": "pojemnik",
+      "display_order": 3,
+      "qty": 3
+    }
+  ]
+}

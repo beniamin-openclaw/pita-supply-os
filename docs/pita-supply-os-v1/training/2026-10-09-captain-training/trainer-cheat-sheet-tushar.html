@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trainer Cheat Sheet</title>
+<link rel="stylesheet" href="print.css">
+<style>
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; }
+  .head .logo { height: 10mm; width: auto; margin-top: .6mm; display: block; margin-left: auto; }
+  .head .for { margin-top: 2.2mm; text-align: right; }
+
+  .top { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3.6mm; }
+  .goal-line { font-family: var(--serif); font-size: 9.6pt; line-height: 1.28; margin-bottom: 2mm; }
+  ol.rules { margin: 0; padding: 0; list-style: none; counter-reset: r; display: grid;
+    grid-template-columns: 1fr 1fr; gap: 1mm 3.4mm; }
+  ol.rules li { counter-increment: r; position: relative; padding-left: 5.4mm; font-size: 7.4pt; line-height: 1.26; }
+  ol.rules li::before { content: counter(r); position: absolute; left: 0; top: .1mm;
+    width: 3.8mm; height: 3.8mm; border-radius: 50%; background: rgba(255,255,255,.16);
+    font-size: 6.6pt; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .box.navy b { color: #fff; }
+
+  /* Agenda bar */
+  .agenda { display: flex; gap: .8mm; }
+  .agenda .seg { min-width: 0; }
+  .agenda .bar { height: 5.2mm; border-radius: 1.2mm; background: var(--navy-subtle); color: var(--navy);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 1.6mm;
+    font-weight: 700; font-size: 7.4pt; }
+  .agenda .seg:nth-child(3) .bar { background: var(--navy); color: #fff; }
+  .agenda .bar span { font-weight: 600; font-size: 6.6pt; opacity: .8; }
+  .agenda .lbl { font-size: 6.9pt; color: var(--ink-2); margin-top: .9mm; line-height: 1.15;
+    white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+  /* Steps */
+  .step { display: grid; grid-template-columns: 7mm 1fr auto; gap: 3mm;
+    border-top: 1px solid var(--line); padding-top: 2.6mm; }
+  .step:first-of-type { border-top: 0; padding-top: 0; }
+  .num { width: 7mm; height: 7mm; border-radius: 50%; background: var(--navy); color: #fff;
+    font-family: var(--serif); font-size: 11pt; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; }
+  .step h3 { font-family: var(--serif); font-size: 10.5pt; font-weight: 600; line-height: 1.15;
+    display: flex; align-items: baseline; gap: 2.4mm; margin: .5mm 0 1.1mm; }
+  .step h3 .mins { font-family: var(--sans); font-size: 6.9pt; font-weight: 650; color: var(--muted);
+    letter-spacing: .06em; text-transform: uppercase; }
+  .lines { display: grid; grid-template-columns: 11mm 1fr; gap: .8mm 2mm; font-size: 7.6pt; line-height: 1.28; }
+  .tag { font-size: 6.2pt; font-weight: 750; letter-spacing: .1em; text-transform: uppercase;
+    border-radius: .9mm; padding: .5mm 0; text-align: center; height: fit-content; margin-top: .2mm; }
+  .tag.say { background: var(--navy-subtle); color: var(--navy); }
+  .tag.do { background: var(--sky-subtle); color: #0b6aa6; }
+  .tag.check { background: var(--green-subtle); color: var(--green); }
+  .say-list { margin: 0; padding: 0; list-style: none; }
+  .say-list li { position: relative; padding-left: 3mm; margin-bottom: .25mm; }
+  .say-list li::before { content: ""; position: absolute; left: .4mm; top: 1.3mm; width: 1.2mm; height: 1.2mm;
+    border-radius: 50%; background: var(--sky); }
+  .shots { display: flex; gap: 1.8mm; align-items: flex-start; }
+  .frame { width: 24mm; max-height: 31mm; overflow: hidden; border-radius: 2mm; border: 1px solid var(--line-2);
+    box-shadow: 0 .5mm 1.6mm rgba(15,27,45,.10); background: #fff; }
+  .frame img { width: 100%; height: auto; display: block; }
+  .frame.wide { width: 31mm; }
+  .frame.eq { height: 23mm; }
+  .shot-cap { font-size: 6.3pt; color: var(--muted); text-align: center; margin-top: .8mm; }
+  .card-thumb { position: relative; width: 25mm; }
+  .card-thumb img { width: 25mm; height: auto; border-radius: 2mm; border: 1px solid var(--line-2);
+    box-shadow: 0 .5mm 1.6mm rgba(15,27,45,.10); display: block; }
+  .card-thumb .marker { width: 3.6mm; height: 3.6mm; margin: -1.8mm 0 0 -1.8mm; font-size: 6pt;
+    box-shadow: 0 0 0 .45mm #fff; }
+
+  /* Page 2 bottom */
+  .bottom { display: grid; grid-template-columns: 1fr 1.12fr; gap: 3.6mm; }
+  .quiz { margin: 0; padding: 0; list-style: none; counter-reset: q; }
+  .quiz li { counter-increment: q; position: relative; padding-left: 5mm; margin-bottom: 1.3mm; font-size: 7.9pt; line-height: 1.3; }
+  .quiz li::before { content: counter(q); position: absolute; left: 0; top: 0; font-weight: 700; color: var(--navy); }
+  .quiz .a { display: block; color: var(--muted); font-size: 7.3pt; }
+  table.fix { width: 100%; border-collapse: collapse; font-size: 7.6pt; line-height: 1.28; }
+  table.fix th { text-align: left; font-size: 6.4pt; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; padding: 0 0 1.2mm; }
+  table.fix td { padding: 1.15mm 0; border-top: 1px solid var(--line); vertical-align: top; }
+  table.fix td:first-child { width: 40%; padding-right: 3mm; font-weight: 600; color: var(--ink); }
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 0 4mm; font-size: 7.8pt; }
+  .contacts { display: grid; grid-template-columns: 1fr 1fr; gap: 3.6mm; }
+  .contact { display: flex; gap: 2.6mm; align-items: flex-start; padding: 2.4mm 3.4mm; }
+  .contact .who { font-family: var(--serif); font-size: 10pt; font-weight: 600; }
+  .contact .icon { color: var(--navy); margin-top: .4mm; }
+</style>
+</head>
+<body>
+
+<!-- ============================== PAGE 1 ============================== -->
+<div class="page">
+  <header class="head">
+    <div>
+      <div class="eyebrow">Supply OS · Captain training · Wola</div>
+      <h1 class="title">Training Sahil: trainer’s cheat sheet</h1>
+      <p class="subtitle">Friday 9 October · about 45 minutes · on Sahil’s own phone, app in English</p>
+    </div>
+    <div class="for">
+      <img class="logo" src="img/pita-bros-logo.svg" alt="Pita Bros">
+      <div style="margin-top:2mm"><span class="chip blue">For Tushar</span></div>
+    </div>
+  </header>
+
+  <div class="top">
+    <div class="box navy">
+      <div class="section-label">Goal for today</div>
+      <p class="goal-line">Sahil places the day’s order alone — count, fill, explain, submit — and knows how to confirm a delivery and do a stock count.</p>
+      <div class="section-label" style="margin-top:1mm">Repeat these all session</div>
+      <ol class="rules">
+        <li><b>Count first,</b> type second.</li>
+        <li><b>Submit before the deadline</b> in the grey strip.</li>
+        <li><b>Red card:</b> check the number, then give the honest reason.</li>
+        <li><b>Blank = skip.</b> 0 = deliberately none.</li>
+        <li><b>Submit goes to the Manager,</b> not to the supplier.</li>
+        <li><b>Every delivery:</b> Confirm receipt + WZ photo.</li>
+      </ol>
+    </div>
+    <div class="box tint">
+      <div class="section-label">Before you start</div>
+      <ul class="ticks">
+        <li>Sahil has read the 2-page pre-work.</li>
+        <li>Sahil’s <b>own phone</b>, charged and online.</li>
+        <li>Wola code ready — dictate it, don’t write it down.</li>
+        <li>A <b>real order</b> to do together: Bukat or Intermlecz before <b>17:00</b> → delivered <b>Saturday</b>.</li>
+        <li>Today’s Bukat / Intermlecz not submitted yet — no duplicates.</li>
+        <li>This sheet and a pen for the sign-off on page 2.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Agenda · 45 min</div>
+    <div class="agenda">
+      <div class="seg" style="flex:3"><div class="bar">1<span>3′</span></div><div class="lbl">Log in</div></div>
+      <div class="seg" style="flex:5"><div class="bar">2<span>5′</span></div><div class="lbl">Order screen</div></div>
+      <div class="seg" style="flex:10"><div class="bar">3<span>10′</span></div><div class="lbl">Count &amp; fill the card</div></div>
+      <div class="seg" style="flex:5"><div class="bar">4<span>5′</span></div><div class="lbl">Reasons</div></div>
+      <div class="seg" style="flex:5"><div class="bar">5<span>5′</span></div><div class="lbl">Submit</div></div>
+      <div class="seg" style="flex:5"><div class="bar">6<span>5′</span></div><div class="lbl">Delivery</div></div>
+      <div class="seg" style="flex:7"><div class="bar">7<span>7′</span></div><div class="lbl">Stock count</div></div>
+      <div class="seg" style="flex:5"><div class="bar">8<span>5′</span></div><div class="lbl">Quiz</div></div>
+    </div>
+  </div>
+
+  <!-- Step 1 -->
+  <section class="step">
+    <div class="num">1</div>
+    <div>
+      <h3>Log in and switch to English <span class="mins">3 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li>It’s a web page, nothing to install. Type the Wola code, tap <span class="ui">Wejdź</span> — the phone remembers it.</li>
+          <li><span class="ui">☰</span> → <span class="ui">Language</span> → <span class="ui">English</span>. Same menu: <span class="ui">My orders</span>, <span class="ui">Inventory count</span>, <span class="ui">Log out</span>.</li>
+        </ul>
+        <span class="tag do">Do</span>
+        <span>Sahil logs in on their own phone. Optional: add the page to the home screen.</span>
+        <span class="tag check">Check</span>
+        <span>Sahil logs out and back in without help.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div><div class="frame"><img src="img/login.png" alt=""></div><div class="shot-cap">Login (Polish)</div></div>
+      <div><div class="frame"><img src="img/menu.png" alt=""></div><div class="shot-cap">☰ menu</div></div>
+    </div>
+  </section>
+
+  <!-- Step 2 -->
+  <section class="step">
+    <div class="num">2</div>
+    <div>
+      <h3>Read the order screen <span class="mins">5 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li>Top row = suppliers; swipe sideways for more.</li>
+          <li>The grey strip is your deadline: delivery day + <span class="ui">Order by … 17:00</span>.</li>
+          <li><span class="ui">Who orders</span> = your full name. <span class="ui">Delivery date</span> comes from the calendar — leave it as it is.</li>
+          <li>Thursday, Bukat and Intermlecz: pick <span class="ui">for 3 days</span> and add the extra days yourself — the suggestion doesn’t.</li>
+        </ul>
+        <span class="tag check">Check</span>
+        <span>Sahil reads out the delivery day and deadline for Bukat and Intermlecz.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div><div class="frame wide"><img src="img/order-top.png" alt=""></div><div class="shot-cap">Top of the order screen</div></div>
+    </div>
+  </section>
+
+  <!-- Step 3 -->
+  <section class="step">
+    <div class="num">3</div>
+    <div>
+      <h3>Count, then fill the card <span class="mins">10 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li>Count first, type second. <b>①&nbsp;Current stock</b> = on the shelf now; pack products have two boxes (packs + loose).</li>
+          <li><b>②&nbsp;Suggestion</b> = what’s missing to reach the target. Tap it to copy it into <b>③&nbsp;Ordering</b> (supplier’s unit: crates, cartons…).</li>
+          <li>Not ordering it? Leave Ordering <b>blank</b>. 0 means “deliberately none”.</li>
+        </ul>
+        <span class="tag do">Do</span>
+        <span>Count 4–5 real products together; Sahil types them in.</span>
+        <span class="tag check">Check</span>
+        <span>Sahil explains one card: target − stock = need → rounded to the supplier’s unit. <b>④</b> green = matches.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div class="card-thumb">
+        <img src="img/card-match.png" alt="">
+        <span class="marker" style="left:40%;top:20.6%">1</span>
+        <span class="marker" style="left:67%;top:52.7%">2</span>
+        <span class="marker" style="left:30%;top:70.4%">3</span>
+        <span class="marker" style="left:64%;top:93%">4</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step 4 -->
+  <section class="step">
+    <div class="num">4</div>
+    <div>
+      <h3>Deviations and reasons <span class="mins">5 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li>More than 25% from the suggestion → card turns <b style="color:var(--red)">red</b>. Check the number (typo? unit?); if it’s right, pick the honest reason → <b style="color:var(--amber)">orange</b>.</li>
+          <li><span class="chip red" style="padding:0 1.6mm">CRITICAL</span> items: below the suggestion always needs a reason. <span class="ui">Other reason</span> needs a comment.</li>
+          <li><span class="ui">Bulk reason</span> puts one reason on every red card — only when it fits all of them.</li>
+        </ul>
+        <span class="tag do">Do</span>
+        <span>Sahil types a big number on purpose, picks a reason, then puts the right number back.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div><div class="frame eq"><img src="img/card-red.png" alt=""></div><div class="shot-cap">Red: reason needed</div></div>
+      <div><div class="frame eq"><img src="img/card-reason.png" alt=""></div><div class="shot-cap">Orange: given</div></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>Supply OS · Captain training · Trainer’s cheat sheet</span>
+    <span>1 / 2</span>
+  </footer>
+</div>
+
+<!-- ============================== PAGE 2 ============================== -->
+<div class="page">
+
+  <!-- Step 5 -->
+  <section class="step">
+    <div class="num">5</div>
+    <div>
+      <h3>Submit and follow up <span class="mins">5 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li>The bottom bar says what’s missing. When it says <span class="ui">Ready to submit</span>, tap <span class="ui">Submit</span>.</li>
+          <li>Read the <span class="ui">Send this order?</span> box — especially “Critical items with nothing ordered”.</li>
+          <li>It goes to the <b>Manager</b>, who checks it and sends it to the supplier.</li>
+          <li>History: <span class="chip blue">With manager</span> editable · <span class="chip amber">Ordered</span> sent · <span class="chip green">Completed</span> delivered. “changed by manager (was 5)” = the Manager corrected a line.</li>
+        </ul>
+        <span class="tag do">Do</span>
+        <span>Submit the real Bukat or Intermlecz order before 17:00. Already sent today? Stop at the dialog and tap <span class="ui">Go back and fix</span>.</span>
+        <span class="tag check">Check</span>
+        <span>Sahil finds the order in History as With manager.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div><div class="frame"><img src="img/confirm.png" alt=""></div><div class="shot-cap">Send this order?</div></div>
+      <div><div class="frame"><img src="img/history.png" alt=""></div><div class="shot-cap">History</div></div>
+    </div>
+  </section>
+
+  <!-- Step 6 -->
+  <section class="step">
+    <div class="num">6</div>
+    <div>
+      <h3>Confirm a delivery <span class="mins">5 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li>Delivery arrived → History → the <b>Ordered</b> order → <span class="ui">Confirm delivery</span>.</li>
+          <li>Delivered is pre-filled with what was ordered — change only what’s different. <span class="ui">Received by</span> = your name.</li>
+          <li>Photo of the WZ. Black camera screen? Take it with the phone camera, then <span class="ui">From gallery</span>.</li>
+          <li><span class="ui">Confirm receipt</span> is final — no edits afterwards.</li>
+        </ul>
+        <span class="tag do">Do</span>
+        <span>Open an Ordered order and walk the screen. Tap Confirm receipt only if that delivery is really here.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div><div class="frame wide"><img src="img/receive.png" alt=""></div><div class="shot-cap">Confirm delivery</div></div>
+    </div>
+  </section>
+
+  <!-- Step 7 -->
+  <section class="step">
+    <div class="num">7</div>
+    <div>
+      <h3>Stock count <span class="mins">7 min</span></h3>
+      <div class="lines">
+        <span class="tag say">Say</span>
+        <ul class="say-list">
+          <li><span class="ui">☰</span> → <span class="ui">Inventory count</span>. Count date + <span class="ui">Counted by</span> (your name).</li>
+          <li>Blank = not counted · 0 = nothing on hand.</li>
+          <li>Interrupted? <span class="ui">Save draft</span>. Finished? <span class="ui">Approve</span>.</li>
+          <li>On the next order: <span class="ui">Fill stock from a count</span> → <span class="ui">Fill empty</span> copies the counted numbers into Current stock. Check them — nothing is filled automatically.</li>
+        </ul>
+        <span class="tag do">Do</span>
+        <span>Count one real category (e.g. Refrigerated) and approve it, then show Fill empty on the order screen.</span>
+      </div>
+    </div>
+    <div class="shots">
+      <div><div class="frame"><img src="img/inventory.png" alt=""></div><div class="shot-cap">Inventory count</div></div>
+      <div><div class="frame"><img src="img/fill.png" alt=""></div><div class="shot-cap">Fill from a count</div></div>
+    </div>
+  </section>
+
+  <div class="bottom">
+    <div class="box tint">
+      <div class="h2">8 · Quick quiz <span class="small" style="font-family:var(--sans)">5 min, no app</span></div>
+      <ol class="quiz">
+        <li>Where is the deadline? <span class="a">Grey strip under the suppliers: “Order by … 17:00”.</span></li>
+        <li>A card is red. What first? <span class="a">Check the number. If it’s right, pick the reason.</span></li>
+        <li>Blank or 0 in Ordering? <span class="a">Blank = not ordering. 0 = deliberately none (may ask for a reason).</span></li>
+        <li>Wrong quantity after Submit? <span class="a">Edit while With manager. Locked or Ordered → message Marek.</span></li>
+        <li>The delivery is here. Steps? <span class="a">Check it, Received by, WZ photo, Confirm receipt.</span></li>
+        <li>Thursday Bukat order? <span class="a">Order for 3 days — add the extra days yourself.</span></li>
+      </ol>
+    </div>
+    <div class="box">
+      <div class="h2">Common mistakes → fix</div>
+      <table class="fix">
+        <tr><th>Sahil sees / does</th><th>Fix</th></tr>
+        <tr><td>Submit stays grey</td><td>Read the bottom bar: no name, a red card, or no quantity.</td></tr>
+        <tr><td>“Nothing to order today”</td><td>Ignore it — it shows until quantities are typed.</td></tr>
+        <tr><td>Typed 0, meant to skip</td><td>Clear the field — blank = skip.</td></tr>
+        <tr><td>App in Polish</td><td>☰ → Language → English (per phone).</td></tr>
+        <tr><td>Draft lost name / date</td><td>Drafts keep quantities only, on this phone.</td></tr>
+        <tr><td>Black camera (WZ)</td><td>Phone camera first, then From gallery.</td></tr>
+        <tr><td>Product not in the list</td><td><span class="ui">+ add product</span>, then tell Ben.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="section-label">Sign-off — tick when Sahil did it alone</div>
+    <div class="sign">
+      <ul class="ticks">
+        <li>Logged in and set English</li>
+        <li>Read the delivery day and deadline</li>
+        <li>Filled cards from a real count</li>
+        <li>Fixed a red card with a reason</li>
+      </ul>
+      <ul class="ticks">
+        <li>Submitted and found it in History</li>
+        <li>Walked through Confirm delivery + WZ</li>
+        <li>Did a stock count + Fill empty</li>
+        <li>Answered the quiz</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="contacts">
+    <div class="box tint contact">
+      <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 11l2 2 4-4"/></svg>
+      <div><div class="who">Marek · Manager</div><div class="small">Orders, quantities, deliveries, anything already sent.</div></div>
+    </div>
+    <div class="box tint contact">
+      <svg class="icon" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18h2"/></svg>
+      <div><div class="who">Ben · the app</div><div class="small">Errors, login, a missing product. Send a screenshot + what you tapped.</div></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>Screens are from a training copy of the app — product numbers are examples.</span>
+    <span>2 / 2</span>
+  </footer>
+</div>
+
+</body>
+</html>

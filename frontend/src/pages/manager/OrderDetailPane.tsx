@@ -14,7 +14,7 @@
 import { Loader2 } from "lucide-react";
 
 import { useT } from "../../i18n";
-import type { ManagerOrderDetail, OrderableItem, OrderingMethod } from "../../types";
+import type { ManagerOrderDetail, OrderEvent, OrderableItem, OrderingMethod } from "../../types";
 import { AddProductPicker } from "../../components/ui/AddProductPicker";
 import { MinimumOrderChip } from "../../components/ui/MinimumOrderChip";
 import { statusVisual } from "../captain-mp/lib/orderStatus";
@@ -22,12 +22,14 @@ import { DeliverySection } from "./DeliverySection";
 import { DeliveryDateMarker } from "./DeliveryDateMarker";
 import { DELIVERY_DATE_FORMAT } from "../../lib/dates";
 import { DispatchPanel, type DispatchOpts } from "./DispatchPanel";
-import { gmailDraftsUrl } from "./lib/orderEmailDraft";
+import { type DraftedOrder, gmailDraftsUrl } from "./lib/orderEmailDraft";
 import { OrderHistorySection } from "./OrderHistorySection";
 import { OrderLineTable } from "./OrderLineTable";
 import { ResendPanel } from "./ResendPanel";
-import { type DraftMap, draftQty, hasDirtyDrafts } from "./lib/draftState";
+import { type DraftMap, draftQty, hasDirtyDrafts, isOrderEmpty } from "./lib/draftState";
+import { MARK_ORDERED_EMAIL_SUPPLIER_IDS } from "../../lib/supplierGroups";
 import { isOrderEditable, managerSummary, isManagerEngaged } from "./lib/managerLine";
+import { CLOSED_WITHOUT_RECEIPT_EVENT, sortOrderEvents } from "./lib/orderEvents";
 
 // Kept out of the component body so the impure `Date.now()` read isn't treated
 // as render-time work by the React Compiler. cutoff_iso lives on the queue
@@ -51,9 +53,10 @@ interface OrderDetailPaneProps {
   cutoffIso?: string | null;
   /** Compose URL from a dispatch done this session — clickable on a sent order. */
   dispatchedEmailUrl?: string | null;
-  /** Mailbox holding the verified Gmail draft created this session for this
-   *  order (order-email-v2) — shows "Szkic w Gmailu (…) — Otwórz szkice". */
-  draftedMailbox?: string | null;
+  /** The verified Gmail draft created this session for this order
+   *  (order-email-v2, supplier-email-v21) — shows "Szkic w Gmailu (…)" with
+   *  "Otwórz szkic"; amber "not sent yet" when the tab did not open. */
+  drafted?: DraftedOrder | null;
   /** Live per-line draft state (qty + comment), keyed by order_line_id. */
   drafts: DraftMap;
   /** Orderable products that can still be added to this order (claimed only). */
@@ -69,6 +72,8 @@ interface OrderDetailPaneProps {
   onRelease: (orderId: string) => void;
   /** Cancel (soft-delete) a pre-dispatch order with a required reason. */
   onCancel: (orderId: string) => void;
+  /** Close a sent order with no receipt, with a required reason (D5). */
+  onCloseWithoutReceipt?: (orderId: string) => void;
   /** Save (PATCH) the dirty draft lines without dispatching. */
   onSave: (orderId: string) => void;
   /** Dispatch with the full draft line set + the channel sent_method. */
@@ -83,6 +88,9 @@ interface OrderDetailPaneProps {
   onToast: (msg: string, ok: boolean) => void;
   /** A Gmail draft started/settled for this order (page lock, order-email-v2). */
   onDraftingChange?: (orderId: string, drafting: boolean) => void;
+  /** The manager clicked "Otwórz szkic" on this order (clears the amber
+   *  "not sent yet" warning, supplier-email-v21 S3). */
+  onDraftOpened?: (orderId: string) => void;
 }
 
 export function OrderDetailPane({
@@ -93,19 +101,21 @@ export function OrderDetailPane({
   draftingId,
   cutoffIso,
   dispatchedEmailUrl,
-  draftedMailbox,
+  drafted,
   drafts,
   availableToAdd,
   onAddLine,
   onClaim,
   onRelease,
   onCancel,
+  onCloseWithoutReceipt,
   onSave,
   onDispatch,
   onQtyChange,
   onCommentChange,
   onToast,
   onDraftingChange,
+  onDraftOpened,
 }: OrderDetailPaneProps) {
   const { t, formatDateTime } = useT();
 
@@ -132,7 +142,14 @@ export function OrderDetailPane({
   // Post-send edit (Phase 6): editable but already sent → save label + resend
   // panel instead of release/cancel/dispatch.
   const postSend = editable && detail.status === "manager_sent";
-  const lockedAfterReceipt = detail.status === "closed";
+  // A closed order is received, or closed by the Manager without a receipt (D5).
+  const closedWithoutReceipt = detail.status === "closed" && detail.receipts.length === 0;
+  const lockedAfterReceipt = detail.status === "closed" && !closedWithoutReceipt;
+  const closeReason = closedWithoutReceipt ? latestCloseReason(detail.events ?? []) : null;
+  // D5: a sent order that will never be received can be closed with a reason.
+  // A receipt closes the order itself, so the action is for no-receipt only.
+  const closable =
+    detail.status === "manager_sent" && detail.receipts.length === 0 && !!onCloseWithoutReceipt;
   const sentTransportMember =
     detail.status === "manager_sent" &&
     (detail.supplier_order_reference ?? "").startsWith("TRN-");
@@ -144,6 +161,12 @@ export function OrderDetailPane({
   const busy = busyId === detail.order_id;
   // Disabled-but-not-spinning while a Gmail draft is being created.
   const locked = busy || draftingId === detail.order_id;
+  // D4: Filber (an e-mail supplier) can also be marked as ordered without the
+  // e-mail, "like Cola". Allowlisted, so no other e-mail order can be marked
+  // sent without reaching its supplier (lib/supplierGroups.ts).
+  const markOrderedNoEmail: boolean =
+    detail.ordering_method === "email" &&
+    MARK_ORDERED_EMAIL_SUPPLIER_IDS.includes(detail.supplier_id);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -160,7 +183,8 @@ export function OrderDetailPane({
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${visual.pill}`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${visual.dot}`} aria-hidden="true" />
-            {t(visual.labelKey)}
+            {/* "Zrealizowane" would claim a delivery that never came (D5). */}
+            {t(closedWithoutReceipt ? "manager.closedWithoutReceipt" : visual.labelKey)}
           </span>
         </div>
 
@@ -349,10 +373,15 @@ export function OrderDetailPane({
            compose link (when this session just dispatched it) plus the
            "dosyłka" rebuild from the current quantities (Phase 6). */
         <>
-          {(dispatchedEmailUrl || draftedMailbox) && (
+          {(dispatchedEmailUrl || drafted) && (
             <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-              {draftedMailbox && <DraftedLine mailbox={draftedMailbox} />}
-              {dispatchedEmailUrl && !draftedMailbox && (
+              {drafted && (
+                <DraftedLine
+                  drafted={drafted}
+                  onOpen={() => onDraftOpened?.(detail.order_id)}
+                />
+              )}
+              {dispatchedEmailUrl && !drafted && (
                 <a
                   href={dispatchedEmailUrl}
                   target="_blank"
@@ -392,6 +421,20 @@ export function OrderDetailPane({
             >
               {t("manager.action.cancel")}
             </button>
+            {markOrderedNoEmail && (
+              <button
+                type="button"
+                disabled={locked || isOrderEmpty(drafts, detail.lines)}
+                onClick={() => {
+                  if (!window.confirm(t("manager.markOrderedNoEmailConfirm"))) return;
+                  onDispatch(detail.order_id, "manual");
+                }}
+                title={t("manager.markOrderedNoEmailHint")}
+                className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+              >
+                {t("manager.markOrderedNoEmail")}
+              </button>
+            )}
           </div>
           <DispatchPanel
             key={detail.order_id}
@@ -407,8 +450,8 @@ export function OrderDetailPane({
         </>
       ) : (
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
-          {draftedMailbox ? (
-            <DraftedLine mailbox={draftedMailbox} />
+          {drafted ? (
+            <DraftedLine drafted={drafted} onOpen={() => onDraftOpened?.(detail.order_id)} />
           ) : dispatchedEmailUrl ? (
             <a
               href={dispatchedEmailUrl}
@@ -418,7 +461,7 @@ export function OrderDetailPane({
             >
               {t("manager.action.openEmail")}
             </a>
-          ) : (
+          ) : closedWithoutReceipt ? null : (
             <span className="text-xs text-slate-500">{t(visual.labelKey)}</span>
           )}
           {lockedAfterReceipt && (
@@ -426,30 +469,97 @@ export function OrderDetailPane({
               {t("manager.lockedAfterReceipt")}
             </span>
           )}
+          {closedWithoutReceipt && (
+            <span
+              className="rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-700"
+              data-testid="closed-without-receipt"
+            >
+              {t("manager.closedWithoutReceipt")}
+            </span>
+          )}
+          {closeReason && (
+            <span className="text-xs text-slate-600">
+              {t("manager.closedWithoutReceiptReason", { reason: closeReason })}
+            </span>
+          )}
           {sentTransportMember && (
             <span className="text-xs text-slate-500">{t("manager.resend.editViaTransport")}</span>
           )}
+        </div>
+      )}
+      {closable && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4">
+          <button
+            type="button"
+            disabled={locked}
+            onClick={() => onCloseWithoutReceipt?.(detail.order_id)}
+            className="rounded-lg border border-slate-400 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2"
+          >
+            {t("manager.action.closeWithoutReceipt")}
+          </button>
+          <span className="text-xs text-slate-500">{t("manager.closeWithoutReceiptHint")}</span>
         </div>
       )}
     </div>
   );
 }
 
-/** "Szkic w Gmailu (biuro@…) — Otwórz szkice" on an order this session just
- *  sent through a verified Gmail draft (order-email-v2). */
-function DraftedLine({ mailbox }: { mailbox: string }) {
+/** The reason of the newest "closed_without_receipt" event, or null. */
+function latestCloseReason(events: OrderEvent[]): string | null {
+  const ev = sortOrderEvents(events).find((e) => e.event_type === CLOSED_WITHOUT_RECEIPT_EVENT);
+  return ev?.details ? ev.details : null;
+}
+
+/** "Szkic w Gmailu (biuro@…) — Otwórz szkic" on an order this session just
+ *  sent through a verified Gmail draft (order-email-v2). When the browser
+ *  blocked the tab (supplier-email-v21 WP3) the line turns amber and says the
+ *  e-mail is NOT sent yet — the "Otwórz szkic" click is a fresh gesture, so it
+ *  always opens. The folder link stays as a backup for an edited draft. */
+function DraftedLine({
+  drafted,
+  onOpen,
+}: {
+  drafted: DraftedOrder;
+  onOpen?: () => void;
+}) {
   const { t } = useT();
+  const { mailbox, url, opened } = drafted;
+  const isFolder = url === gmailDraftsUrl(mailbox);
+  const tone = opened
+    ? "border-green-400 text-green-800 hover:bg-green-50 focus-visible:ring-green-500"
+    : "border-amber-400 text-amber-900 hover:bg-amber-50 focus-visible:ring-amber-500";
   return (
-    <span className="inline-flex flex-wrap items-center gap-2 text-sm text-green-800">
-      <span className="font-semibold">{t("manager.draft.sentLine", { mailbox })}</span>
+    <span
+      role={opened ? undefined : "status"}
+      className={
+        opened
+          ? "inline-flex flex-wrap items-center gap-2 text-sm text-green-800"
+          : "inline-flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+      }
+    >
+      <span className="font-semibold">
+        {opened ? t("manager.draft.sentLine", { mailbox }) : t("manager.draft.notSentYet", { mailbox })}
+      </span>
       <a
-        href={gmailDraftsUrl(mailbox)}
+        href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-lg border border-green-400 bg-white px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
+        onClick={onOpen}
+        className={`rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 ${tone}`}
       >
-        {t("manager.draft.openDrafts")}
+        {/* No message id (or OPEN_SINGLE_DRAFT off): the link is the folder. */}
+        {t(isFolder ? "manager.draft.openDrafts" : "manager.draft.openDraft")}
       </a>
+      {!isFolder && (
+        <a
+          href={gmailDraftsUrl(mailbox)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs underline"
+        >
+          {t("manager.draft.openDrafts")}
+        </a>
+      )}
     </span>
   );
 }

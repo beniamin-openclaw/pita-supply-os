@@ -17,6 +17,7 @@ import {
 
 import { api, ApiError } from "../../apiClient";
 import { useT } from "../../i18n";
+import { stripBulkSuffix } from "../../lib/displayName";
 import { effectiveOrderedQtyPurchase, isManagerFinalSet } from "../../lib/orderQty";
 import { roundQty } from "../../components/ui/number";
 import { caseOf } from "../../lib/packUnits";
@@ -41,6 +42,16 @@ function managerChangedLine(line: ManagerOrderLineDetail): boolean {
   return (
     isManagerFinalSet(line) &&
     effectiveOrderedQtyPurchase(line) !== line.captain_final_qty_purchase
+  );
+}
+
+// The Manager zeroed a line the captain asked for: amber and struck through,
+// the same convention as the Manager screens (manager-queue-control, D10 A).
+function managerZeroedLine(line: ManagerOrderLineDetail): boolean {
+  return (
+    isManagerFinalSet(line) &&
+    effectiveOrderedQtyPurchase(line) === 0 &&
+    line.captain_final_qty_purchase > 0
   );
 }
 
@@ -252,10 +263,14 @@ export function OrderDetailPage() {
                 const variance = receiptLine
                   ? roundQty(receiptLine.variance_qty_purchase)
                   : 0;
+                const zeroed = !receiptLine && managerZeroedLine(line);
                 return (
                 <li
                   key={line.order_line_id}
-                  className="rounded-lg border border-slate-200 bg-white p-3"
+                  className={`rounded-lg border p-3 ${
+                    zeroed ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"
+                  }`}
+                  data-zeroed={zeroed || undefined}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -267,7 +282,7 @@ export function OrderDetailPage() {
                             aria-hidden="true"
                           />
                         )}
-                        <span className="break-words">{line.product_name_pl}</span>
+                        <span className="break-words">{stripBulkSuffix(line.product_name_pl)}</span>
                       </div>
                       <div className="text-xs text-slate-600 mt-1">
                         {line.is_backup === true
@@ -335,8 +350,14 @@ export function OrderDetailPage() {
                           <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                             {t("orders.detail.orderedLabel")}
                           </div>
-                          <div className="text-lg font-bold text-slate-900 tabular-nums">
-                            {effectiveOrderedQtyPurchase(line)}{" "}
+                          <div
+                            className={`text-lg font-bold tabular-nums ${
+                              zeroed ? "text-amber-700" : "text-slate-900"
+                            }`}
+                          >
+                            <span className={zeroed ? "line-through" : ""}>
+                              {effectiveOrderedQtyPurchase(line)}
+                            </span>{" "}
                             <span className="text-xs">
                               <UnitLabel>{line.purchase_unit}</UnitLabel>
                             </span>

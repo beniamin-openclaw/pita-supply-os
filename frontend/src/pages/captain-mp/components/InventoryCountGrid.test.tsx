@@ -348,3 +348,97 @@ describe("InventoryCountGrid bulk pack (feedback-1001 D22)", () => {
     expect(onStockChange).toHaveBeenLastCalledWith("P015", 36);
   });
 });
+
+// captain-kg-reading: read-only kg next to a piece count whose name carries
+// the per-piece weight. Display only — the emitted value stays in pieces.
+describe("InventoryCountGrid kg reading", () => {
+  const HALLOUMI: InventoryProduct = {
+    ...TZATZYKI,
+    product_id: "P015",
+    product_name_pl: "Halloumi Reha 200gr",
+    inventory_unit: "szt",
+    purchase_unit: "szt",
+    order_note: null,
+  };
+  const HALLOUMI_CASE: InventoryProduct = { ...HALLOUMI, case_unit: "karton", units_per_case: 12 };
+  const HELCOM: InventoryProduct = {
+    ...HALLOUMI,
+    product_id: "P017",
+    product_name_pl: "Papryka grillowana Helcom 4,2kg/2,5kg",
+    inventory_unit: "opak",
+  };
+  const GYROS: InventoryProduct = {
+    ...TZATZYKI,
+    product_id: "P024",
+    product_name_pl: "Gyros 15 KG",
+    order_note: null,
+  };
+
+  function renderItems(items: InventoryProduct[], lines: Record<string, InventoryLineInput>) {
+    const onStockChange = vi.fn();
+    render(
+      <LangProvider>
+        <InventoryCountGrid
+          groupedProducts={[{ category: "Chłodnia", items }]}
+          lines={lines}
+          collapsedCategories={new Set()}
+          onToggleCategory={vi.fn()}
+          onStockChange={onStockChange}
+          onCommentChange={vi.fn()}
+        />
+      </LangProvider>,
+    );
+    return onStockChange;
+  }
+
+  it("x1 row: 12 szt of 200 g reads (2,4 kg) and is the field's description", () => {
+    renderItems([HALLOUMI], { P015: line(12) });
+    const kg = document.getElementById("stock-P015-kg");
+    expect(kg).toHaveTextContent("(2,4 kg)");
+    expect(document.getElementById("stock-P015")).toHaveAttribute(
+      "aria-describedby",
+      "stock-P015-kg",
+    );
+  });
+
+  it("x1 row: the line is reserved but empty for a blank or 0 count", () => {
+    renderItems([HALLOUMI, { ...HALLOUMI, product_id: "P015b" }], {
+      P015: line(""),
+      P015b: line(0),
+    });
+    expect(document.getElementById("stock-P015-kg")).toBeEmptyDOMElement();
+    expect(document.getElementById("stock-P015b-kg")).toBeEmptyDOMElement();
+  });
+
+  it("typing still emits pieces, not kg", () => {
+    const onStockChange = renderItems([HALLOUMI], { P015: line("") });
+    fireEvent.change(document.getElementById("stock-P015")!, { target: { value: "12" } });
+    expect(onStockChange).toHaveBeenLastCalledWith("P015", 12);
+  });
+
+  it("no kg line for a kg product, a name without weight, or a multipack name", () => {
+    renderItems([GYROS, { ...HALLOUMI, product_name_pl: "Halloumi" }, HELCOM], {
+      P024: line(30),
+      P015: line(12),
+      P017: line(2),
+    });
+    expect(document.getElementById("stock-P024-kg")).toBeNull();
+    expect(document.getElementById("stock-P015-kg")).toBeNull();
+    expect(document.getElementById("stock-P017-kg")).toBeNull();
+    expect(screen.queryByText(/kg\)/)).not.toBeInTheDocument();
+    expect(document.getElementById("stock-P024")).not.toHaveAttribute("aria-describedby");
+    expect(document.getElementById("stock-P017")).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("pack row (karton 12): the reading adds the kg", () => {
+    renderItems([HALLOUMI_CASE], { P015: line(12) });
+    expect(document.getElementById("stock-P015-reading")).toHaveTextContent(
+      "= 1 karton (12 szt · 2,4 kg)",
+    );
+  });
+
+  it("pack row under one case: = 5 szt (1 kg)", () => {
+    renderItems([HALLOUMI_CASE], { P015: line(5) });
+    expect(document.getElementById("stock-P015-reading")).toHaveTextContent("= 5 szt (1 kg)");
+  });
+});

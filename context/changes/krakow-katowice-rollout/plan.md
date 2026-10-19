@@ -349,7 +349,7 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 1.4 Migration 0029 applied on prod by the operator and recorded; Warsaw captain screens unchanged after deploy
+- [ ] 1.4 Migration 0029 applied on prod by the operator and recorded; Warsaw captain screens unchanged after deploy — 0029 applied and recorded 2026-10-09; Warsaw screen check still open
 
 ### Phase 2: Frontend — tabs, backup cards, hint
 
@@ -361,7 +361,7 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 2.4 On prod after deploy: Warsaw captain sees the same tabs minus empty ones; FORUM/SUPERSAM captains see only their city suppliers
+- [ ] 2.4 On prod after deploy: Warsaw captain sees the same tabs minus empty ones; FORUM/SUPERSAM captains see only their city suppliers — FORUM/SUPERSAM pass 2026-10-09 (GET smoke); Warsaw still open
 
 ### Phase 3: Prod master data (operator-run SQL)
 
@@ -371,17 +371,17 @@ The hint reads `load_orders()` (full scan) once per orderable request only when 
 
 #### Manual
 
-- [ ] 3.2 Operator runs A, C, then B after deploy; audit queries return the expected counts
+- [x] 3.2 Operator runs A, C, then B after deploy; audit queries return the expected counts — prod 2026-10-09 (rollout-notes.md „Wykonanie na prod”)
 - [x] 3.3 Step B2 + rollback matrix pass on prod-snapshot copies (apply, re-run refusal, full rollback byte-identical, kill switch, B2-off, order guard)
-- [ ] 3.4 Operator runs B2 after B; audit (a)–(e) return the stated results
+- [x] 3.4 Operator runs B2 after B; audit (a)–(e) return the stated results — prod 2026-10-09
 
 ### Phase 4: Deploy, access, go-live
 
 #### Automated
 
-- [ ] 4.1 CI green on the PR
+- [x] 4.1 CI green on the PR — d8c8797 (PR #62, merged as 7b03cf9)
 
 #### Manual
 
-- [ ] 4.2 GET smoke passes for FORUM, SUPERSAM and one Warsaw token on prod
+- [ ] 4.2 GET smoke passes for FORUM, SUPERSAM and one Warsaw token on prod — FORUM 4 tabs / 104 products, SUPERSAM 5 tabs / 107 products pass 2026-10-09 (rollout-notes.md); Warsaw token still open
 - [ ] 4.3 Friday training: captains see only their suppliers; no test order dispatched

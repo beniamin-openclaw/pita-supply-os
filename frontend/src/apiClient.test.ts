@@ -247,6 +247,20 @@ describe("api transport-v2 calls — URL, method, body, manager token", () => {
     expect(res.reopened).toEqual(["O1"]);
   });
 
+  it("managerClose POSTs {reason} to the close route with the manager token", async () => {
+    stubStorage({ supply_os_manager_token: "mgr-token" });
+    const fetchMock = stubFetchJson({ order_id: "ORD/1", status: "closed" });
+
+    const res = await api.managerClose("ORD/1", "Poza aplikacją");
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toMatch(/\/api\/manager\/close\/ORD%2F1$/);
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "Poza aplikacją" });
+    expect((init.headers as Record<string, string>)["Authorization"]).toBe("Bearer mgr-token");
+    expect(res.status).toBe("closed");
+  });
+
   it("transportDraftCreated POSTs the request as-is with the manager token", async () => {
     stubStorage({ supply_os_manager_token: "mgr-token" });
     const event = {

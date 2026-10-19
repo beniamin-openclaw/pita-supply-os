@@ -11,6 +11,7 @@ import {
 describe("supplierNotePrompt", () => {
   it("maps Coca-Cola to the crates prompt and everything else to null", () => {
     expect(supplierNotePrompt("SUP_COCACOLA")).toBe("crates");
+    expect(supplierNotePrompt("SUP_COCACOLA_KAT")).toBe("crates");
     expect(supplierNotePrompt("SUP_PAGO")).toBeNull();
     expect(supplierNotePrompt(null)).toBeNull();
     expect(supplierNotePrompt(undefined)).toBeNull();

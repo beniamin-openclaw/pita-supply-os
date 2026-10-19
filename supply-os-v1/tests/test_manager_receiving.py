@@ -492,6 +492,31 @@ def test_detail_events_newest_first(mocker):
     assert r.json()["events"][1]["details"] == "Souvlaki Kurczak: 5 → 3"
 
 
+def test_detail_of_an_order_closed_without_receipt(mocker):
+    """close-without-receipt (D5): the closed detail carries no receipt, is not
+    editable, and returns the close event with its reason for the history."""
+    order_id = "ORD-CWR-1"
+    order = _order(order_id, status=OrderStatus.CLOSED).model_copy(
+        update={"lines": [_line(order_id, "OL-1")]}
+    )
+    _enable(mocker, orders=[order], get_order_return=order)
+    closed = OrderEvent(
+        event_id="OEV-C", order_id=order_id, event_type="closed_without_receipt",
+        actor="manager-default", at=datetime(2026, 10, 17, 9, 0, tzinfo=timezone.utc),
+        details="Towar przyszedł poza aplikacją",
+    )
+    mocker.patch.object(sheets, "load_order_events_for", return_value=[closed])
+    r = client.get(f"/api/manager/order/{order_id}", headers=MANAGER_AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "closed"
+    assert body["receipts"] == []
+    assert body["editable_after_send"] is False
+    assert [(e["event_type"], e["details"]) for e in body["events"]] == [
+        ("closed_without_receipt", "Towar przyszedł poza aplikacją")
+    ]
+
+
 # ---------- order-line-zero-qty: normalized manager_final_set on detail ----------
 
 def test_detail_exposes_normalized_manager_final_set(mocker):

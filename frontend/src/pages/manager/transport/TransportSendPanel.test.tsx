@@ -725,7 +725,7 @@ describe("TransportSendPanel — mark-only and undo", () => {
     renderPanel(sentDetail());
     await click(screen.getByRole("button", { name: "Cofnij wysłanie" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Nie można cofnąć — dostawa jest już przyjęta w: Pita Bros Wola.",
+      "Nie można cofnąć — dostawa jest już przyjęta albo zamknięta bez przyjęcia w: Pita Bros Wola.",
     );
   });
 

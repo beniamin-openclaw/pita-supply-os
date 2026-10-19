@@ -23,6 +23,7 @@ import type {
   ManagerQueueItem,
   OrderableItem,
   OrderingMethod,
+  Supplier,
 } from "../types";
 import { ManagerFilterBar } from "./manager/ManagerFilterBar";
 import { ManagerQueue, type QueueLane } from "./manager/ManagerQueue";
@@ -36,6 +37,16 @@ import {
   seedDrafts,
 } from "./manager/lib/draftState";
 import { isOrderEditable } from "./manager/lib/managerLine";
+import {
+  type DraftedOrder,
+  gmailDraftsUrl,
+  loadDraftedOrders,
+  openDraftTab,
+  saveDraftedOrders,
+} from "./manager/lib/orderEmailDraft";
+import { QUEUE_LANE_LIMIT } from "./manager/lib/queueAge";
+import { buildSupplierOptions } from "./manager/lib/supplierOptions";
+import { groupSupplierOptions, supplierFilterMatches } from "../lib/supplierGroups";
 
 // The queue is deliberately NOT pinned to a location: `manager_queue` treats
 // location_id as an optional filter, so omitting it returns every location. It
@@ -50,6 +61,9 @@ export function ManagerPage() {
   const [sent, setSent] = useState<ManagerQueueItem[] | null>(null);
   const [closed, setClosed] = useState<ManagerQueueItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Master-data suppliers for the filter (manager-queue-control, D11). null =
+  // not loaded or failed; the filter then falls back to the queue's suppliers.
+  const [allSuppliers, setAllSuppliers] = useState<Supplier[] | null>(null);
 
   // Queue filters (S-05) — ephemeral, client-side.
   const [filterSupplierId, setFilterSupplierId] = useState<string | null>(null);
@@ -78,9 +92,34 @@ export function ManagerPage() {
   // detail (the queue/detail endpoints don't carry the compose URL).
   const [dispatchedLinks, setDispatchedLinks] = useState<Record<string, string>>({});
   // Orders sent this session through a verified Gmail draft -> the mailbox
-  // holding the draft (order-email-v2). Session-only, like dispatchedLinks:
-  // the DispatchPanel unmounts once the order turns manager_sent.
-  const [draftedOrders, setDraftedOrders] = useState<Record<string, string>>({});
+  // holding the draft, its link and whether the tab opened (order-email-v2,
+  // supplier-email-v21). Mirrored to sessionStorage (impl-review S3) so a
+  // blocked tab's "not sent yet" warning survives a reload of this tab; the
+  // queue marks those orders too.
+  const [draftedOrders, setDraftedOrders] = useState<Record<string, DraftedOrder>>(
+    loadDraftedOrders,
+  );
+  useEffect(() => {
+    saveDraftedOrders(draftedOrders);
+  }, [draftedOrders]);
+  // The manager opened the draft from the amber line (a fresh click, so the
+  // browser allows it): the warning has done its job.
+  const handleDraftOpened = useCallback((orderId: string): void => {
+    setDraftedOrders((prev) =>
+      prev[orderId] && !prev[orderId].opened
+        ? { ...prev, [orderId]: { ...prev[orderId], opened: true } }
+        : prev,
+    );
+  }, []);
+  const unsentDraftIds = useMemo<Set<string>>(
+    () =>
+      new Set(
+        Object.entries(draftedOrders)
+          .filter(([, d]) => !d.opened)
+          .map(([id]) => id),
+      ),
+    [draftedOrders],
+  );
   // Order with a Gmail draft in progress (order-email-v2). While set, the page
   // refuses every other action — switching orders mid-draft used to drop the
   // dispatch silently (or build it from another order's lines).
@@ -105,8 +144,11 @@ export function ManagerPage() {
   const loadQueue = useCallback(() => {
     Promise.all([
       api.managerQueue(undefined, "captain_submitted"),
-      api.managerQueue(undefined, "manager_claimed"),
-      api.managerQueue(undefined, "manager_sent"),
+      // Claimed + sent at the backend's 200 clamp, not the default 50: the
+      // stalled orders the D16 markers count are the OLDEST in their lane, and
+      // the sent lane only drains on receipt (manager-queue-control).
+      api.managerQueue(undefined, "manager_claimed", QUEUE_LANE_LIMIT),
+      api.managerQueue(undefined, "manager_sent", QUEUE_LANE_LIMIT),
       api.managerQueue(undefined, "closed"),
     ])
       .then(([sub, clm, snt, cls]) => {
@@ -130,6 +172,23 @@ export function ManagerPage() {
     const interval = setInterval(loadQueue, 20_000);
     return () => clearInterval(interval);
   }, [loadQueue]);
+
+  // Suppliers change rarely — one load per visit. "manager" role: this screen
+  // holds no captain token (lessons.md). A failure only narrows the filter.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .suppliers("manager")
+      .then((list) => {
+        if (!cancelled) setAllSuppliers(list);
+      })
+      .catch(() => {
+        if (!cancelled) setAllSuppliers(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Tracks the most recently requested detail order id so async responses can
   // detect staleness (the user picked another order before this one resolved).
@@ -302,6 +361,30 @@ export function ManagerPage() {
     [blockedByDraft, confirmDiscardIfDirty, refreshAll, showToast, t],
   );
 
+  // Close a sent order with no receipt (close-without-receipt, D5): confirm,
+  // then a required reason that the backend keeps as an order event.
+  const handleCloseWithoutReceipt = useCallback(
+    async (orderId: string) => {
+      if (blockedByDraft()) return;
+      if (!confirmDiscardIfDirty()) return;
+      if (!window.confirm(t("manager.closeWithoutReceiptConfirm"))) return;
+      const reason = window.prompt(t("manager.closeWithoutReceiptPrompt"));
+      if (!reason || reason.trim() === "") return;
+      setBusyId(orderId);
+      try {
+        await api.managerClose(orderId, reason.trim());
+        showToast(t("manager.closedWithoutReceiptOk"), true);
+        refreshAll(orderId);
+      } catch (e) {
+        const detailMsg = e instanceof ApiError ? e.detail : String(e);
+        showToast(t("manager.actionError", { detail: detailMsg }), false);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [blockedByDraft, confirmDiscardIfDirty, refreshAll, showToast, t],
+  );
+
   // Save (PATCH) — full read-modify-write payload for DIRTY lines only; stays
   // manager_claimed. Empty payload is a no-op (allowed by the contract). On
   // success the detail reloads (reseeding the draft baseline → clears dirty).
@@ -368,7 +451,12 @@ export function ManagerPage() {
         if (opts?.draftMailbox) {
           showToast(t("manager.draft.done", { mailbox: opts.draftMailbox }), true);
           const mailbox = opts.draftMailbox;
-          setDraftedOrders((prev) => ({ ...prev, [orderId]: mailbox }));
+          const url = opts.draftUrl || gmailDraftsUrl(mailbox);
+          // Open THAT draft only now — the order is marked sent, so the manager
+          // never holds an open draft the app did not record (WP3). A blocked
+          // tab leaves the amber "not sent yet" line with the link.
+          const opened = openDraftTab(url);
+          setDraftedOrders((prev) => ({ ...prev, [orderId]: { mailbox, url, opened } }));
         } else {
           showToast(
             t(sentMethod === "email" ? "manager.dispatchedOk" : "manager.markedOrdered"),
@@ -376,8 +464,10 @@ export function ManagerPage() {
           );
         }
         // Keep any server-built compose URL so "Otwórz email" works on the sent
-        // detail (email channel only; null for portal/phone/manual).
-        if (resp.gmail_compose_url) {
+        // detail (email channel only; null for portal/phone/manual). A Filber
+        // "zamówione (bez e-maila)" is sent as "manual" on an e-mail supplier:
+        // the backend still builds a URL, but no e-mail went out, so no link.
+        if (resp.gmail_compose_url && sentMethod === "email") {
           setDispatchedLinks((prev) => ({ ...prev, [orderId]: resp.gmail_compose_url! }));
         }
         refreshAll(orderId);
@@ -444,20 +534,18 @@ export function ManagerPage() {
     return orderableForSelected.filter((o) => !present.has(o.product_id));
   }, [detail, orderableForSelected]);
 
-  // Queue filters (S-05): supplier options derive from the loaded queue (only
-  // suppliers that have orders → no dead options); the lanes toggle which groups
-  // render. Both ephemeral. effectiveSupplierId resolves at render so a supplier
-  // that drops out of the queue after a refresh falls back to "all" — no
-  // setState-in-effect.
-  const supplierOptions = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const arr of [submitted, claimed, sent]) {
-      for (const q of arr ?? []) byId.set(q.supplier_id, q.supplier_name);
-    }
-    return [...byId.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [submitted, claimed, sent]);
+  // Queue filters (S-05): the supplier options are every active ordering
+  // supplier plus any supplier with orders in the queue (D11 — Spec Food had no
+  // orders, so a queue-only list never showed it); the lanes toggle which
+  // groups render. Both ephemeral. effectiveSupplierId resolves at render so a
+  // supplier that drops out of the options after a refresh falls back to "all"
+  // — no setState-in-effect.
+  // Pago and Magazyn Mory show as one option (D4, lib/supplierGroups.ts).
+  const supplierOptions = useMemo(
+    () =>
+      groupSupplierOptions(buildSupplierOptions(allSuppliers, [submitted, claimed, sent, closed]), t),
+    [allSuppliers, submitted, claimed, sent, closed, t],
+  );
 
   // Location options (bracka-rollout). Derived from all FOUR lanes, unlike the
   // supplier options above: a location whose only orders are already closed
@@ -489,7 +577,10 @@ export function ManagerPage() {
   const filterQueue = (arr: ManagerQueueItem[] | null) => {
     if (arr === null) return null;
     let out = arr;
-    if (effectiveSupplierId) out = out.filter((q) => q.supplier_id === effectiveSupplierId);
+    if (effectiveSupplierId) {
+      const sel = effectiveSupplierId;
+      out = out.filter((q) => supplierFilterMatches(sel, q.supplier_id));
+    }
     if (effectiveLocationId) out = out.filter((q) => q.location_id === effectiveLocationId);
     return out;
   };
@@ -630,6 +721,7 @@ export function ManagerPage() {
               selectedId={selectedId}
               onSelect={handleSelect}
               visibleLanes={visibleLanes}
+              unsentDraftIds={unsentDraftIds}
             />
           </div>
           <div className="min-w-0 flex-1">
@@ -641,13 +733,15 @@ export function ManagerPage() {
               draftingId={draftingId}
               cutoffIso={selectedCutoffIso}
               dispatchedEmailUrl={selectedId ? dispatchedLinks[selectedId] ?? null : null}
-              draftedMailbox={selectedId ? draftedOrders[selectedId] ?? null : null}
+              drafted={selectedId ? draftedOrders[selectedId] ?? null : null}
+              onDraftOpened={handleDraftOpened}
               drafts={drafts}
               availableToAdd={availableToAdd}
               onAddLine={handleAddLine}
               onClaim={handleClaim}
               onRelease={handleRelease}
               onCancel={handleCancel}
+              onCloseWithoutReceipt={handleCloseWithoutReceipt}
               onSave={handleSave}
               onDispatch={handleDispatch}
               onQtyChange={handleQtyChange}

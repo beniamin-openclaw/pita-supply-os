@@ -22,18 +22,22 @@ EAGER_LOAD_BUDGET_BYTES = 25_000
 
 _FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)
 _CODE_SPAN = re.compile(r"`[^`\n]*`")
-# `@` at a word boundary (so `user@host` is not an import), then a path.
-_IMPORT = re.compile(r"(?<![\w@])@((?:\.{1,2}/)?[\w][\w./-]*)")
+# `@` at a word boundary (so `user@host` is not an import), then a relative,
+# absolute (`@/...`) or home (`@~/...`) path.
+_IMPORT = re.compile(r"(?<![\w@])@((?:~/|/|\.{1,2}/)?[\w][\w./-]*)")
 
 
 def _imports(md_file: Path) -> list[Path]:
-    """Files that Claude Code would import from `md_file` (code is not parsed)."""
+    """Paths that Claude Code would import from `md_file` (code is not parsed).
+
+    Includes targets that do not exist here: a `~` import may exist only on a
+    developer's machine.
+    """
     text = _CODE_SPAN.sub("", _FENCED_BLOCK.sub("", md_file.read_text(encoding="utf-8")))
     found = []
     for match in _IMPORT.finditer(text):
-        target = (md_file.parent / match.group(1).rstrip(".,;:)")).resolve()
-        if target.is_file():
-            found.append(target)
+        raw = Path(match.group(1).rstrip(".,;:)")).expanduser()
+        found.append((md_file.parent / raw).resolve())
     return found
 
 
@@ -45,12 +49,12 @@ def _eager_closure(entry: Path) -> set[Path]:
         if current in seen:
             continue
         seen.add(current)
-        stack.extend(_imports(current))
+        stack.extend(target for target in _imports(current) if target.is_file())
     return seen
 
 
 def _rel(path: Path) -> str:
-    return str(path.relative_to(REPO_ROOT))
+    return str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
 
 
 def test_agents_md_imports_only_markdown() -> None:
@@ -75,3 +79,35 @@ def test_agents_md_eager_load_within_budget() -> None:
             f"(budget {EAGER_LOAD_BUDGET_BYTES}): "
             f"{sorted(_rel(path) for path in closure)}"
         )
+
+
+def test_parser_detects_absolute_and_home_imports(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    guide = tmp_path / "AGENTS.md"
+    guide.write_text(
+        "See @/etc/hosts, @~/notes.md and @./local.md; mail a@b.pl; `@in-code.md`\n",
+        encoding="utf-8",
+    )
+    assert _imports(guide) == [
+        Path("/etc/hosts").resolve(),
+        (tmp_path / "home" / "notes.md").resolve(),
+        (tmp_path / "local.md").resolve(),
+    ]
+
+
+def test_rel_reports_paths_outside_the_repo() -> None:
+    assert _rel(Path("/elsewhere/notes.md")) == "/elsewhere/notes.md"
+
+
+def test_agents_md_imports_stay_inside_repo() -> None:
+    offenders = sorted(
+        f"{_rel(source)} -> {_rel(target)}"
+        for entry in ENTRY_POINTS
+        for source in _eager_closure(entry)
+        for target in _imports(source)
+        if not target.is_relative_to(REPO_ROOT)
+    )
+    assert not offenders, (
+        "AGENTS.md imports a file outside the repo (absolute or `~` path), "
+        f"which other machines and CI cannot see: {offenders}"
+    )

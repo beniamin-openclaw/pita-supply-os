@@ -16,6 +16,7 @@ import {
   formatEmailQty,
   joinCc,
   MAX_GMAIL_URL_LENGTH,
+  extraItemRows,
 } from "./emailBody";
 
 /** Minimal order-detail fixture — only the fields the email body reads matter. */
@@ -100,8 +101,8 @@ describe("buildEmailBody — delivery address line (email-delivery-address)", ()
   });
 });
 
-describe("company footer (feedback r5)", () => {
-  it("appends spółka + adres + NIP under Pozdrawiam when present", () => {
+describe("company block (feedback r5, supplier-email-v21)", () => {
+  it("puts spółka + adres + NIP before Pozdrawiam when present", () => {
     const body = buildEmailBody(
       detail({
         company_name: "Pita Bros sp. z o.o.",
@@ -111,14 +112,16 @@ describe("company footer (feedback r5)", () => {
       noLines,
     );
     expect(body).toContain(
-      "Pozdrawiam,\nPita Bros\nPita Bros sp. z o.o.\n" +
-        "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633",
+      "\n\nPita Bros sp. z o.o.\n" +
+        "ul. W. Laskonogiego 9, 02-496 Warszawa\nNIP: 9522100633\n" +
+        "\nPozdrawiam,\nPita Bros\n(zamówienie #",
     );
   });
 
-  it("skips the footer block entirely when company data is absent", () => {
+  it("skips the company block and its blank line when company data is absent", () => {
     const body = buildEmailBody(detail(), noLines);
     expect(body).not.toContain("NIP:");
+    expect(body).not.toContain("\n\n\n");
     expect(body).toContain("Pozdrawiam,\nPita Bros\n(zamówienie");
   });
 });
@@ -165,27 +168,51 @@ describe("feedback r7 — empty delivery-date line + standing office CC", () => 
 });
 
 describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comment", () => {
-  it("renders the off-catalogue items block when extra_items is present", () => {
+  it("renders off-catalogue items as numbered, marked table rows (supplier-email-v21)", () => {
     const body = buildEmailBody(
       detail({ extra_items: "Serwetki - 5 opak\nLód - 2 worki" }),
       noLines,
     );
-    expect(body).toContain("Pozycje spoza katalogu:\nSerwetki - 5 opak\nLód - 2 worki");
+    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).toContain(
+      "Lp. | Produkt | Ilość\n" +
+        "1.  | Serwetki (spoza katalogu) | 5 opak\n" +
+        "2.  | Lód (spoza katalogu) | 2 worki\n\n",
+    );
   });
 
-  it("omits the off-catalogue items block entirely when extra_items is empty", () => {
+  it.each([
+    ["", []],
+    ["   \n  ", []],
+    ["Serwetki - 5 opak", [["Serwetki", "5 opak"]]],
+    ["  Serwetki - 5 opak  \r\n\r\n   \r\n", [["Serwetki", "5 opak"]]],
+    ["Mięta - ", [["Mięta -", ""]]],
+    ["Sos - ostry - 2 l", [["Sos", "ostry - 2 l"]]],
+    [" - 3 szt", [["- 3 szt", ""]]],
+    ["Lód\nMięta 2 pęczki", [["Lód", ""], ["Mięta 2 pęczki", ""]]],
+  ])("extraItemRows(%j) — twin of gmail_url._extra_item_rows", (raw, rows) => {
+    expect(extraItemRows(raw)).toStrictEqual(rows);
+  });
+
+  it("adds no off-catalogue row entirely when extra_items is empty", () => {
     const body = buildEmailBody(detail({ extra_items: "" }), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
+    // No extras row: the product table ends right after its header.
+    expect(body).toContain("Lp. | Produkt | Ilość\n\n");
   });
 
-  it("omits the off-catalogue items block when extra_items is absent (backend default)", () => {
+  it("adds no off-catalogue row when extra_items is absent (backend default)", () => {
     const body = buildEmailBody(detail(), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
+    // No extras row: the product table ends right after its header.
+    expect(body).toContain("Lp. | Produkt | Ilość\n\n");
   });
 
-  it("trims whitespace-only extra_items to nothing (block omitted)", () => {
+  it("trims whitespace-only extra_items to nothing (no row)", () => {
     const body = buildEmailBody(detail({ extra_items: "   \n  " }), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
+    // No extras row: the product table ends right after its header.
+    expect(body).toContain("Lp. | Produkt | Ilość\n\n");
   });
 
   it("renders the Komentarz: block when captain_note is present", () => {
@@ -201,7 +228,7 @@ describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comm
     expect(buildEmailBody(detail(), noLines)).not.toContain("Komentarz:");
   });
 
-  it("places both blocks after the product table and before the address line, in order", () => {
+  it("puts the extras rows, then the comment, then the address line, in order", () => {
     const body = buildEmailBody(
       detail({
         extra_items: "Serwetki - 5 opak",
@@ -211,7 +238,7 @@ describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comm
       noLines,
     );
     const lines = body.split("\n");
-    const extraIdx = lines.indexOf("Pozycje spoza katalogu:");
+    const extraIdx = lines.indexOf("1.  | Serwetki (spoza katalogu) | 5 opak");
     const komentarzIdx = lines.indexOf("Komentarz:");
     const addressIdx = lines.findIndex((l) => l.startsWith("ADRES DOSTAWY:"));
     expect(extraIdx).toBeGreaterThan(-1);
@@ -221,7 +248,7 @@ describe("training-feedback-0901 Phase 1b — off-catalogue items + Captain comm
 
   it("neither block appears when both fields are absent", () => {
     const body = buildEmailBody(detail(), noLines);
-    expect(body).not.toContain("Pozycje spoza katalogu:");
+    expect(body).not.toContain("(spoza katalogu)");
     expect(body).not.toContain("Komentarz:");
   });
 });

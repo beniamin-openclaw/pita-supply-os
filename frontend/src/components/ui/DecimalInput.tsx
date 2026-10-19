@@ -30,10 +30,9 @@ interface DecimalInputProps {
   /** Keyboard passthrough (spread onto the input) — e.g. the Transport matrix
    * uses Enter to hop focus to the cell one row below. */
   onKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
-  /** DOM passthroughs for callers that locate inputs positionally (Transport
-   * matrix Enter-navigation addresses cells by column id + row index). */
+  /** DOM passthrough for callers that locate inputs positionally (Transport
+   * matrix Enter-navigation walks a location column's inputs in DOM order). */
   "data-mx-col"?: string;
-  "data-mx-row"?: number;
 }
 
 export function DecimalInput({

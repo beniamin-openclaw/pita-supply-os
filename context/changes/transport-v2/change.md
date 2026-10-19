@@ -43,3 +43,31 @@ from the app. Decisions, as given by the operator:
 
 Scope: code only, no migration. Prod data steps (two Mory orders for 06.10 still `manager_claimed`,
 stale claimed orders 21.09–01.10) are operator actions, listed in plan.md, not part of the code.
+
+## Operations log
+
+### 2026-10-05 — the two 04.10 Mory orders for 06.10 (prod Supabase) — not applied by Claude
+
+The operator asked in chat for Claude to mark ORD-20261004-BRO-MORY-8fbdd2 and
+ORD-20261004-KEN-MORY-06569d as sent, so that Browary and KEN can receive the Magazyn goods on
+06.10. The guarded UPDATE, which mirrors `POST /api/manager/dispatch` for a `manual` supplier,
+was blocked by the agent's permission layer and was NOT run. The operator marks both orders in
+the Manager UI ("Oznacz jako wysłane"), which writes the same fields.
+
+State before (SELECT at ~21:15), for checking afterwards:
+
+| order | status | sent_method | manager_user | manager_sent_at | total_value_estimate_pln | supplier_order_reference |
+|---|---|---|---|---|---|---|
+| ORD-20261004-BRO-MORY-8fbdd2 | manager_claimed | null | null | null | 262.51 | null |
+| ORD-20261004-KEN-MORY-06569d | manager_claimed | null | null | null | 68.62 | null |
+
+Lines:
+- BRO line 001 (P019) has `manager_final_set=true`, qty 1 (the Captain ordered 5).
+- The other 7 lines have `manager_final_set=false`:
+  - BRO 002–005: P089 1, P090 1, P092 2, P098 1;
+  - KEN 001–003: P089 1, P127 5, P131 60.
+- App-dispatched Mory orders (e.g. ORD-20261004-ELE-MORY-8eb1dc) end with:
+  - `sent_method='manual'`;
+  - `manager_user='manager-default'`;
+  - `manager_final_set=true` on every line;
+  - no order event.

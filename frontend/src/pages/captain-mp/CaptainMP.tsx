@@ -40,6 +40,7 @@ import { buildPayloadLines } from "./lib/buildPayloadLines";
 import { getRequestedDeliveryDate } from "./lib/dates";
 import { serializeExtraItems } from "./lib/extraItems";
 import type { ExtraItemRow } from "./lib/extraItems";
+import { stripBulkSuffix } from "../../lib/displayName";
 import { localSentRef, mergeSupplierOrders, sentTodayBySupplier } from "./lib/sentToday";
 
 import type {
@@ -830,7 +831,7 @@ export function CaptainMP() {
           const final = lines[item.product_id]?.captain_final_qty_purchase;
           return final === "" || final === undefined || Number(final) === 0;
         })
-        .map((item) => item.product_name_pl),
+        .map((item) => stripBulkSuffix(item.product_name_pl)),
     [orderableItems, lines],
   );
 

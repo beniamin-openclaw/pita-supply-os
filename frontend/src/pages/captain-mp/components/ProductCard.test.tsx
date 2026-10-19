@@ -311,22 +311,82 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
     captain_submitted_at: null,
   };
 
-  it("backup: no suggestion offered, note with primary names, badge", () => {
+  it("backup: dashed frame, tile shows the primary supplier, one info line", () => {
     const { onChangeSpy } = renderCard(
       makeItem({
         is_backup: true,
         suggestion_alerts_enabled: false,
         primary_supplier_names: ["Bukat", "Pago"],
       }),
-      makeLine({ current_stock_qty_base: 0 }),
+      makeLine({ current_stock_qty_base: 5 }),
     );
     expect(screen.getByText("zapasowy")).toBeInTheDocument();
-    expect(screen.getByText("Sugestia u: Bukat, Pago")).toBeInTheDocument();
-    const tile = screen.getByRole("button", { name: /sugestia/i });
+    expect(screen.getByTestId("backup-info").textContent).toBe("Zapasowy · główny: Bukat, Pago");
+    // The old separate line is gone.
+    expect(screen.queryByText("Sugestia u: Bukat, Pago")).toBeNull();
+    const tile = screen.getByRole("button", { name: "Sugestia u dostawcy głównego: Bukat, Pago" });
     expect(tile).toBeDisabled();
-    expect(tile.textContent).toContain("—");
+    expect(tile.textContent).toContain("u Bukat, Pago");
+    expect(tile.textContent).not.toContain("—");
+    expect(tile.getAttribute("aria-label")).not.toMatch(/najpierw wpisz/);
+    expect(document.querySelector(".rounded-xl")?.className).toContain("border-dashed");
     fireEvent.click(tile);
     expect(onChangeSpy).not.toHaveBeenCalled();
+  });
+
+  it("backup: info line carries the newest open-order date, no duplicate block", () => {
+    renderCard(
+      makeItem({
+        is_backup: true,
+        primary_supplier_names: ["Bukat"],
+        open_orders_elsewhere: [
+          ref,
+          { ...ref, order_id: "O2", order_date: "2026-10-12" },
+          { ...ref, order_id: "O3", order_date: "2026-10-03" },
+        ],
+      }),
+      makeLine(),
+    );
+    expect(screen.getByTestId("backup-info").textContent).toBe(
+      "Zapasowy · główny: Bukat · zamówione 12.10",
+    );
+    expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
+  });
+
+  it("backup: 'zamówione' is the Warsaw day of the submit, not the UTC order_date", () => {
+    renderCard(
+      makeItem({
+        is_backup: true,
+        primary_supplier_names: ["Bukat"],
+        open_orders_elsewhere: [
+          { ...ref, order_date: "2026-10-12", captain_submitted_at: "2026-10-12T22:30:00Z" },
+        ],
+      }),
+      makeLine(),
+    );
+    expect(screen.getByTestId("backup-info").textContent).toBe(
+      "Zapasowy · główny: Bukat · zamówione 13.10",
+    );
+  });
+
+  it("backup without primary names still has an honest tile label", () => {
+    renderCard(makeItem({ is_backup: true }), makeLine({ current_stock_qty_base: 1 }));
+    expect(screen.getByTestId("backup-info").textContent).toBe("Zapasowy");
+    expect(
+      screen.getByRole("button", { name: /Dostawca zapasowy/ }).getAttribute("aria-label"),
+    ).not.toMatch(/najpierw wpisz/);
+  });
+
+  it("non-backup card keeps a solid frame and the open-order block", () => {
+    renderCard(makeItem({ open_orders_elsewhere: [ref] }), makeLine());
+    expect(document.querySelector(".rounded-xl")?.className).not.toContain("border-dashed");
+    expect(screen.queryByTestId("backup-info")).toBeNull();
+    expect(screen.getByTestId("open-orders-elsewhere")).toBeInTheDocument();
+  });
+
+  it("captain view hides the /N pack suffix in the card title", () => {
+    renderCard(makeItem({ product_name_pl: "MELVIT KASZA PĘCZAK 900g/10" }), makeLine());
+    expect(screen.getByText("MELVIT KASZA PĘCZAK 900g")).toBeInTheDocument();
   });
 
   it("open order elsewhere with a delivery date", () => {
@@ -366,5 +426,73 @@ describe("ProductCard — backup + cross-supplier info (krakow-katowice-rollout)
     expect(screen.queryByText("zapasowy")).toBeNull();
     expect(screen.queryByText(/Też u/)).toBeNull();
     expect(screen.queryByTestId("open-orders-elsewhere")).toBeNull();
+  });
+});
+
+// captain-kg-reading: read-only kg next to the order card's stock field.
+describe("ProductCard — kg reading for a piece count", () => {
+  const halloumi = (overrides: Partial<OrderableItem> = {}): OrderableItem =>
+    makeItem({
+      product_id: "P015",
+      product_name_pl: "Halloumi",
+      supplier_product_name: "Halloumi Reha 200gr",
+      purchase_unit: "szt",
+      units_per_purchase_unit: 1,
+      max_stock_qty_base: 48,
+      target_stock_qty_base: 48,
+      ...overrides,
+    });
+
+  it("x1: typing 12 shows (2,4 kg) under the unit caption, read from the supplier name", () => {
+    const { onChangeSpy } = renderCard(halloumi(), makeLine({ product_id: "P015" }));
+    const kg = screen.getByTestId("current-kg-P015");
+    expect(kg).toBeEmptyDOMElement();
+    fireEvent.change(screen.getByLabelText("Obecny stan"), { target: { value: "12" } });
+    expect(kg).toHaveTextContent("(2,4 kg)");
+    expect(document.getElementById("current-unit-P015")).toHaveTextContent("szt(2,4 kg)");
+    // Display only: the line still carries pieces.
+    expect(onChangeSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ current_stock_qty_base: 12 }),
+    );
+  });
+
+  it("x1: a multipack product_name_pl decides over a clean supplier name", () => {
+    renderCard(
+      halloumi({ product_name_pl: "Halloumi 200g/12" }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 12 }),
+    );
+    expect(screen.queryByTestId("current-kg-P015")).not.toBeInTheDocument();
+  });
+
+  it("x1 kg product: no kg line", () => {
+    renderCard(
+      halloumi({ product_name_pl: "Gyros 15 KG", inventory_unit: "kg", purchase_unit: "kg" }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 30 }),
+    );
+    expect(screen.queryByTestId("current-kg-P015")).not.toBeInTheDocument();
+  });
+
+  it("pack row reads product_name_pl only: a weight only in the supplier name shows nothing", () => {
+    renderCard(
+      halloumi({ case_unit: "karton", units_per_case: 12, supplier_product_name: "Halloumi 200g" }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 12 }),
+    );
+    expect(document.getElementById("current-P015-reading")).toHaveTextContent(
+      /^= 1 karton \(12 szt\)$/,
+    );
+  });
+
+  it("pack row with the weight in product_name_pl adds the kg", () => {
+    renderCard(
+      halloumi({
+        product_name_pl: "Halloumi Reha 200gr",
+        case_unit: "karton",
+        units_per_case: 12,
+      }),
+      makeLine({ product_id: "P015", current_stock_qty_base: 12 }),
+    );
+    expect(document.getElementById("current-P015-reading")).toHaveTextContent(
+      "= 1 karton (12 szt · 2,4 kg)",
+    );
   });
 });

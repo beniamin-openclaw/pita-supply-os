@@ -73,6 +73,8 @@ from .models import (
     ManagerAddLineResponse,
     ManagerCancelRequest,
     ManagerCancelResponse,
+    ManagerCloseRequest,
+    ManagerCloseResponse,
     ManagerClaimResponse,
     ManagerDispatchRequest,
     ManagerDispatchResponse,
@@ -1501,6 +1503,7 @@ def manager_queue(
                 status=order.status,
                 captain_user=order.captain_user,
                 captain_submitted_at=order.captain_submitted_at,
+                manager_sent_at=order.manager_sent_at,
                 ordered_by=order.ordered_by,
                 line_count=len(lines),
                 total_value_estimate_pln=order.total_value_estimate_pln,
@@ -1530,8 +1533,8 @@ def manager_queue(
     # queue (an "inbox"). cutoff_iso still rides on each item as a badge but is
     # not a sort key — a supplier without a parseable cutoff must not sink a
     # fresh order to the bottom. captain_submitted_at is the proxy timestamp for
-    # every lane (the queue model doesn't carry manager_sent_at; the dashboard
-    # pulls full detail via /order/{id} when it needs the sent timestamp).
+    # every lane (manager_sent_at is null before the sent lane, so it can't be
+    # the shared key).
     items.sort(
         key=lambda it: -(it.captain_submitted_at.timestamp()
                          if it.captain_submitted_at else 0.0)
@@ -2637,6 +2640,144 @@ def manager_cancel(
         )
     _log_stale_transport_member_exit(backend, order, "cancelled from queue")
     return ManagerCancelResponse(order_id=order_id, status=OrderStatus.CANCELLED)
+
+
+# The order_events type of a Manager close without a receipt (close-without-receipt,
+# D5). The frontend labels it in pages/manager/lib/orderEvents.ts.
+_CLOSED_WITHOUT_RECEIPT_EVENT = "closed_without_receipt"
+
+
+_CLOSE_REVERTED_EVENT = "close_reverted"
+
+
+def _revert_close_without_receipt(backend, order_id: str) -> str:
+    """Undo a close whose trace could not be written: back to manager_sent.
+
+    Re-reads first, because the sheets backend has no atomic guard (it drops
+    ``expected_status``): a captain receipt that landed meanwhile owns the
+    ``closed`` status and must not be flipped back to the sent lane. Returns
+    "reverted" (back to manager_sent), "not_closed" (nothing to undo),
+    "receipt" (a receipt now explains the closed status) or "failed".
+
+    After a revert a best-effort ``close_reverted`` event is written: if the
+    close event did commit and only its acknowledgement was lost, the history
+    of the reopened order still reads truthfully."""
+    try:
+        backend.invalidate_cache("orders")
+        backend.invalidate_cache("receipts")
+        current = backend.get_order(order_id)
+        if current is None or current.status != OrderStatus.CLOSED:
+            return "not_closed"
+        if _has_receipts(backend, order_id):
+            return "receipt"
+        backend.update_order(
+            order_id,
+            status=OrderStatus.MANAGER_SENT.value,
+            expected_status=OrderStatus.CLOSED.value,
+        )
+    except Exception:
+        log.error(
+            "Close without receipt: revert failed for %s — order is closed without a trace",
+            order_id,
+            exc_info=True,
+        )
+        return "failed"
+    _log_order_event(backend, order_id, _CLOSE_REVERTED_EVENT, "")
+    return "reverted"
+
+
+@app.post("/api/manager/close/{order_id}", response_model=ManagerCloseResponse)
+def manager_close_without_receipt(
+    order_id: str,
+    req: ManagerCloseRequest,
+    _: None = Depends(require_manager),
+):
+    """Close a sent order that will never be received (Ben's D5, 17.10).
+
+    manager_sent with no receipt → closed, with a required reason kept as an
+    ``order_events`` row ``closed_without_receipt``. The close is refused (503)
+    when that trace cannot be written: the status is written first, then the
+    event; a failed event write reverts the status. A Transport member may be
+    closed too (a sent member is never in a draft batch); its TRN marker stays
+    for the history. A late receipt is still accepted by the receipt route.
+    """
+    backend = _choose_backend()
+    if not _is_persistent(backend):
+        raise HTTPException(
+            status_code=503,
+            detail="Close requires a persistent backend (SUPPLY_OS_DATA_BACKEND=sheet or supabase)",
+        )
+    reason = req.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="A reason is required to close an order")
+
+    backend.invalidate_cache("orders")
+    backend.invalidate_cache("receipts")
+    order = backend.get_order(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+    if order.status != OrderStatus.MANAGER_SENT:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Order {order_id} status is {order.status.value}, "
+                f"expected manager_sent (cannot close without receipt)"
+            ),
+        )
+    if _has_receipts(backend, order_id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Order {order_id} already has a receipt (the receipt closes it)",
+        )
+
+    try:
+        backend.update_order(
+            order_id,
+            status=OrderStatus.CLOSED.value,
+            expected_status=OrderStatus.MANAGER_SENT.value,
+        )
+    except errors.OrderStatusConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Order {order_id} was changed concurrently (expected manager_sent)",
+        )
+    except errors.OrderNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+
+    # The trace is part of the action, so this write is strict — unlike the
+    # best-effort _log_order_event used for post-send edits.
+    try:
+        backend.append_order_event(
+            OrderEvent(
+                event_id=f"OEV-{secrets.token_hex(4)}",
+                order_id=order_id,
+                event_type=_CLOSED_WITHOUT_RECEIPT_EVENT,
+                actor="manager-default",  # proxy until real Manager auth
+                at=datetime.now(timezone.utc),
+                details=reason,
+            )
+        )
+    except Exception:
+        log.error(
+            "Close without receipt: trace write failed for %s — reverting to manager_sent",
+            order_id,
+            exc_info=True,
+        )
+        outcome = _revert_close_without_receipt(backend, order_id)
+        if outcome == "receipt":
+            detail = (
+                f"The close of {order_id} could not be recorded — a receipt closed the order "
+                f"meanwhile"
+            )
+        elif outcome == "failed":
+            detail = (
+                f"The close of {order_id} could not be recorded and the order could not be "
+                f"reopened — check its status"
+            )
+        else:
+            detail = f"The close of {order_id} could not be recorded — the order was not closed"
+        raise HTTPException(status_code=503, detail=detail)
+    return ManagerCloseResponse(order_id=order_id, status=OrderStatus.CLOSED)
 
 
 @app.post("/api/manager/dispatch", response_model=ManagerDispatchResponse)
