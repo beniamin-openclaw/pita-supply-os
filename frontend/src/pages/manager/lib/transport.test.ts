@@ -1825,5 +1825,8 @@ describe("printableSupplierCode", () => {
     expect(printableSupplierCode("  ")).toBe("");
     expect(printableSupplierCode("PAGO-001")).toBe("");
     expect(printableSupplierCode("pago-12")).toBe("");
+    expect(printableSupplierCode("BUKAT-001")).toBe("");
+    expect(printableSupplierCode("MORY-009")).toBe("");
+    expect(printableSupplierCode("NOWE-01")).toBe("");
   });
 });

@@ -941,11 +941,13 @@ export interface PrintPagoProductLine {
   qty: number;
 }
 
-// Internal SKU_IDs from the legacy Import PB sheet, not the supplier's codes.
-const PLACEHOLDER_SKU = /^PAGO-\d+$/i;
+// Internal SKU_IDs from the legacy Import PB sheet (PAGO-001, BUKAT-001,
+// MORY-001, NOWE-01), not the supplier's codes. Only PAGO-00x ever reached
+// supplier_sku, but a copy of the others would be just as meaningless.
+const PLACEHOLDER_SKU = /^(PAGO|BUKAT|MORY|NOWE)-\d+$/i;
 
 /** The supplier's catalogue code for a print line: trimmed supplier_sku, or ""
- * when it is missing or one of our PAGO-00x placeholders. */
+ * when it is missing or one of our legacy placeholders. */
 export function printableSupplierCode(sku: string | null | undefined): string {
   const code = (sku ?? "").trim();
   return PLACEHOLDER_SKU.test(code) ? "" : code;

@@ -286,6 +286,27 @@ describe("buildPagoPdfDocDefinition", () => {
     expect(flattenText(pdfDoc.content)).not.toContain("PAGO-001");
   });
 
+  it("another supplier gets the Kod column once a line has a real code", () => {
+    const b = batch({
+      lines: [
+        { ...pagoLine("BK-TZ-1"), supplier_product_id: "SP_BUKAT_P011", warehouse_pickup: false },
+        {
+          ...pagoLine(null),
+          product_id: "P2",
+          product_name_pl: "Tirokafteri",
+          supplier_product_id: "SP_BUKAT_P012",
+          supplier_product_name: "Tirokafteri",
+          warehouse_pickup: false,
+        },
+      ],
+    });
+    const pdfDoc = buildPagoPdfDocDefinition(buildTransportPagoPrintDoc(b, "Bukat"), makeT(), GENERATED_AT);
+    const body = productTableOf(pdfDoc);
+    expect(body[0]).toHaveLength(5);
+    expect(flattenText(body[1][1])).toBe("BK-TZ-1");
+    expect((body[2][1] as { text: string }).text).toBe("");
+  });
+
   it("other suppliers without codes keep the 4-column table", () => {
     const pdfDoc = buildPagoPdfDocDefinition(buildTransportPagoPrintDoc(batch(), "Bukat"), makeT(), GENERATED_AT);
     const body = productTableOf(pdfDoc);
