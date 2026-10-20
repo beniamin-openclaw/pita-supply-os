@@ -929,13 +929,26 @@ export function computePagoWarehouseExclusion(fullDetail: TransportBatchDetail):
 
 export interface PrintPagoProductLine {
   productId: string;
+  // Supplier's own catalogue code (supplier_sku, e.g. Pago "GYRSW15KG"), or ""
+  // when there is none. Printed in its own "Kod" column next to the name.
+  // Our old internal placeholders (PAGO-001…) never print: on 01.10 they
+  // replaced the name and told the driver and the warehouse nothing; the real
+  // codes went back into master data on 2026-10-20.
+  code: string;
   // Product cell — the supplier-facing name (falls back to product_name_pl).
-  // The pickup document used to print supplier_sku here ("Nr katalogowy"),
-  // but on prod those are our own placeholder codes (PAGO-001…), which told
-  // the driver and the warehouse nothing (operator feedback 2026-10-01).
   name: string;
   unit: string;
   qty: number;
+}
+
+// Internal SKU_IDs from the legacy Import PB sheet, not the supplier's codes.
+const PLACEHOLDER_SKU = /^PAGO-\d+$/i;
+
+/** The supplier's catalogue code for a print line: trimmed supplier_sku, or ""
+ * when it is missing or one of our PAGO-00x placeholders. */
+export function printableSupplierCode(sku: string | null | undefined): string {
+  const code = (sku ?? "").trim();
+  return PLACEHOLDER_SKU.test(code) ? "" : code;
 }
 
 /** Fixed Pago pickup-order entity block (operator-supplied, 2026-08).
@@ -1040,6 +1053,7 @@ export function buildTransportPagoPrintDoc(
       )
       .map((line) => ({
         productId: line.product_id,
+        code: printableSupplierCode(line.supplier_sku),
         name: line.supplier_product_name || line.product_name_pl,
         unit: line.purchase_unit,
         qty: line.total_qty_purchase,

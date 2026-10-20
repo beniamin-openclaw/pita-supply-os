@@ -1957,6 +1957,7 @@ export const STRINGS = {
   "manager.transport.print.dateLabel": { pl: "Data", en: "Date" },
   "manager.transport.print.supplierLabel": { pl: "Dostawca", en: "Supplier" },
   "manager.transport.print.productCol": { pl: "Produkt", en: "Product" },
+  "manager.transport.print.codeCol": { pl: "Kod", en: "Code" },
   "manager.transport.print.qtyCol": { pl: "Ilość", en: "Qty" },
   "manager.transport.print.locationCol": { pl: "Lokalizacja", en: "Location" },
 
