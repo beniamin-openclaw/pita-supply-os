@@ -15,14 +15,8 @@ Agent nie wysyła ich sam. Najpierw ogłoszenie, potem pytania. Pytania można w
 **Rajeshwari** (odpowiedź na wiadomość z 15.10)
 > Hi Rajeshwari, about "the app did not take any input from inventory, it was all 0": which location was it, and roughly what time? I'd like to check that order. Also, what was your e-mail from 12.10 about? I want to make sure I didn't miss it.
 
-**Nataliia** (odpowiedź na wiadomość z 01.10)
-> Natalia, co to jest „Ankaja”? Jaki produkt i od kogo go bierzecie? Dodam go.
-
-**Tushar** (odpowiedź na wiadomość z 07.09)
-> Tushar, "bombila 330 ml": is it a drink in a bottle, or the vegetable item Marek removed earlier? Please send a photo of the label.
-
 **Khushi** (odpowiedź na wiadomości z 25.09 i 08.10)
-> Khushi, thanks: gyros max 3 pcs is noted. For souvlaki (chicken and pork): how many kg is one box? The system has 5 kg, you wrote 6 kg.
+> Khushi, thanks: gyros max 3 pcs is noted. Souvlaki (chicken and pork) stays at 5 kg per box, as in the system.
 
 **Mirsini** (odpowiedź na wiadomość z 04.10, Westfield Mokotów)
 > Mirsini, noted for Westfield: Fuzetea, Burn, glass bottles in crates of 24, paper rolls in cleaning products, cut gyros. We're adding them now. Burn waits until Marek confirms the supplier.

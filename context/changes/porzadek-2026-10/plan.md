@@ -13,6 +13,12 @@ Uruchamia go jedna z trzech dróg:
 (a) Ben w edytorze SQL Supabase;
 (b) agent, po dodaniu reguły zezwalającej na `execute_sql` w ustawieniach Claude Code;
 (c) sesja na mini z pominięciem uprawnień, za wyraźną zgodą Bena.
+**17.10 wybrana droga (b):** Ben dodał reguły allow (Supabase `execute_sql`, `apply_migration`, odczyty;
+Vercel tylko podgląd) na laptopie i na mini. Agent dalej wgrywa wyłącznie pliki z guardem i audytem,
+po review, w kolejności z pliku lane'u, i loguje każde wgranie (kto, jaka droga, wynik audytu).
+Reguły `execute_sql`/`apply_migration` zdejmuje Ben **do 31.10.2026** (koniec fali A; Etap 6).
+Gdańsk krok 3 poszedł jeszcze drogą (a) (Ben w edytorze), pliki Lane D z 17.10 drogą (b)
+(log: `porzadek-data-2026-10/prod-sql-applied.md`).
 
 ---
 
@@ -36,17 +42,18 @@ Te rzeczy istnieją tylko lokalnie albo na gałęziach i mogą przepaść.
 
 Na prodzie (odczyt 17.10): SLONY aktywny, 5 dostawców GDA, 130 pozycji, są już 2 zamówienia.
 Brakuje:
-- [ ] 1.1 (SQL gotowy: `gdansk-rollout/prod-sql-3-corrections.sql`; zapis zablokowany, czeka na drogę a/b/c) Korekta od Marka (16.10). Kuchnie Świata, Selgros i Blue Service: termin „dzień
+- [x] 1.1 (17.10: Ben wkleił `gdansk-rollout/prod-sql-3-corrections.sql` w edytorze Supabase; audyt agenta OK:
+      3× „(Magazyn)”, 17:00 dla KUCHNIE/SELGROS/BLUESERV, COCACOLA i WARSZAWA bez zmian) Korekta od Marka (16.10). Kuchnie Świata, Selgros i Blue Service: termin „dzień
       wcześniej do 17:00” (dziś wszystkie mają `cutoff_time` NULL). Tzatziki/tiro/feta zostają
       w „Pago + Magazyn”, a etykieta zmienia się z „(Bukat)” na „(Magazyn)”. Coca-Cola i Pago bez zmian.
 - [ ] 1.2 ~~DELETE 12 pustych pozycji~~ **wstrzymane (D15)**. Spis z natury z 16.10 (`INV-20261016-SLO-da3c42`)
       ma stany na 7 z nich: Coca-Cola 0,33 puszka 119, Cola Zero 102, Cappy jabłko 16, Cappy pomarańcza 19,
       rolki 57/30 24, Top Glass Tenzi 8, papryka Florina 3. Zera mają: ocet, cukier w saszetkach,
       Tenzi do szyb i Top Grill. Ocet spirytusowy (P037) nie był liczony.
-- [ ] 1.3 DROP tymczasowej funkcji `gdansk_rollout_step1(boolean)`: w tym samym pliku co 1.1.
+- [x] 1.3 DROP tymczasowej funkcji `gdansk_rollout_step1(boolean)`: w tym samym pliku co 1.1 (audyt 17.10: fn = 0).
 - [ ] 1.4 Ben potwierdza, że `SLONY:<kod demo SLONY>` jest w Railway i że kapitan się loguje
       (2 zamówienia sugerują, że tak). Po demo zmienić kod na trudniejszy do zgadnięcia (review F8).
-- [ ] 1.5 Audyt + odhaczenie `gdansk-rollout/plan.md`. Reszta czeka na pakiet od Marka (Etap 3).
+- [x] 1.5 Audyt (17.10) + odhaczenie `gdansk-rollout/plan.md`. Reszta czeka na pakiet od Marka (Etap 3).
 
 ## Etap 2 — Decyzje Bena (jedna sesja tutaj, ~20 min)
 
@@ -144,7 +151,7 @@ Jedna lista zamiast pięciu wątków. Marek odpowiada w arkuszu albo punkt po pu
    - dostawca Burna, bo Elektrownia, Westfield i Molotov o niego proszą, a dziś nie ma aktywnego dostawcy;
    - jednostka zakupu serwetek do podajnika i ręczników ZZ, które jedni liczą w kartonach, a inni w małych paczkach;
    - u których dostawców dopiski „po ile pakowane” w nazwach przeszkadzają (D3);
-   - waga kartonu souvlaki na KEN: prod ma 5 kg, Khushi liczy 6 kg;
+   - ~~waga kartonu souvlaki na KEN~~ rozstrzygnięte (Ben 17.10): 5 kg, tak jak na prodzie;
    - które z 24 pozycji Katowic to cola 250 ml i woda 330 ml w szkle (skrzynka 24).
 
 ## Etap 4 — Weryfikacje i porządki operatora (Ben fizycznie, prowadzę krok po kroku)
@@ -157,7 +164,7 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       (agent przygotuje SELECT, uruchomi go operator).
 - [ ] 4.3 **R-36 Transport v2:** E2E pierwszego kursu Marka i logowanie Marka na biuro@. Potem archiwizacja.
 - [ ] 4.4 **R-33 order-email-v2:** pkt 4.4/4.5 (draft Gmail na żywo, dosyłka, link awaryjny).
-- [ ] 4.5 **inventory-card-order:** zastosować `prod-sql.sql` (kolejność kart) i `prod-sql-pago-mory.sql`
+- [~] 4.5 **inventory-card-order:** `prod-sql.sql` (kolejność kart) **wgrany 17.10** po odświeżeniu i review (log `inventory-card-order/verification/prod-sql-applied-2026-10-17.md`); zostaje `prod-sql-pago-mory.sql`
       (najpierw SELECT, czy już nie poszło). Kontrole na żywo 4.6–4.8.
 - [ ] 4.6 **transport-pago-mory-combined 5.3:** potwierdzić na podstawie kursu z 05.10.
 - [ ] 4.7 **R-34 resztki:** 7 bloków DELETE (Cappy P190/P191 są dziś niewidoczne w części lokali) przy ekranie Supabase.
@@ -172,13 +179,27 @@ Kolejność: najpierw to, co blokuje pracę albo grozi błędnym zamówieniem.
       Zrzutów ekranu nie ma w archiwum (0 plików mediów dla tej rozmowy). Zobaczenie ich wymaga synchronizacji mediów, którą uruchamia operator.
 - [ ] 4.13 **Odpowiedzi na czacie** (agent pisze propozycje, Ben wysyła):
       - Rajeshwari: lokal i id zamówienia z „samymi zerami” (15.10) oraz o czym był jej mail z 12.10;
-      - Nataliia: co to „Ankaja”;
-      - Tushar: co to „bombila 330 ml”;
-      - Khushi: gyros 3 szt i waga kartonu souvlaki;
+      - ~~Nataliia: co to „Ankaja”~~ odpada (Ben 17.10): Ankaja to osoba, nie produkt;
+      - ~~Tushar: co to „bombila 330 ml”~~ odpada (Ben 17.10): wiadomość z 07.09 nieaktualna, Bombili nie używamy.
+        Na prodzie P135 „Bombilla” już nieaktywna, bez lokali i z nieaktywnym katalogiem (odczyt 17.10), więc nic do wgrania;
+      - Khushi: gyros 3 szt (karton souvlaki 5 kg zostaje, Ben 17.10);
       - Mirsini: Molotov (D19);
       - Marek: czy zmienił status zamówienia Coca-Coli (16.10);
       - Sahil: butelki w Katowicach;
       - Sebastian: Fuzetea, Kinley, Burn i kategorie.
+- [ ] 4.14 **Raport Krakowa 11.10** (seniorbrospb@, do Georgiosa; przeczytany w całości 17.10). Część Supply OS:
+      - termin Bukat 16:00 zamiast 17:00: **zrobione** 17.10 (Lane D plik 1, reguła `DR-BUKAT-KRK-ALL`), czeka na kontrolę na żywo;
+      - halloumi cięte w kg: **zrobione** 17.10 (P192, FORUM, D8). Halloumi zamawiane zostaje w szt (200 g);
+        **Ben 17.10:** obok wpisanej ilości pokazać w nawiasie, ile to kg (np. „12 szt (2,4 kg)”). Mały patch ekranu
+        kapitana, fala B (Lane C); `lib/gramsHint.ts` już czyta 200 g z nazwy;
+      - pita: spis już działa w kartonach + opakowaniach (`PackStockInput`: P026 opak = 10 szt, karton = 12 opak,
+        aplikacja sama sumuje). Luźne pity wpisuje się jako ułamek opakowania (3 szt = 0,3). Osobnej jednostki „sztuka”
+        nie dodajemy (D8, jedna jednostka na produkt, W49), bo zamówienie i sugestia liczą w opakowaniach;
+      - Thamma Lemon i Mastiha: Ben nie wie, co to (17.10). Pytanie wraca do Krakowa (co to i od kogo), nie do Marka;
+      - kolejność napojów = arkusze „Inwentaryzacja” (karty DRUK): **zrobione 17.10** dla wszystkich lokali
+        (SQL odświeżony pod prod, 12 arkuszy pobranych na nowo, review, wgrany z audytem; patrz 4.5);
+      - pkt 5 raportu był niekompletny (sama autorka tak pisze).
+      Reszta raportu (sprzęt, eventy Forum, menu Fast, zespół, premia Eryka, szkolenie Kamala) nie dotyczy Supply OS: zostaje u Georgiosa.
 
 ## Etap 5 — Kontrakty pracy (osobne sesje kodujące)
 
@@ -241,11 +262,13 @@ dzielą plików, więc mogą iść równolegle.
 
 - [x] Zebranie: sesja z mini 16.10, repo, Wispr, Gmail, sesje laptopa, weryfikacja vs kod (`inputs/`)
 - [x] Etap 0 — zabezpieczenie (17.10, PR #63)
-- [ ] Etap 1 — Gdańsk
+- [ ] Etap 1 — Gdańsk (1.1, 1.3, 1.5 zrobione 17.10; 1.2 wstrzymane D15; 1.4 czeka na Bena)
 - [x] Etap 2 — decyzje (17.10: D1–D20 podjęte)
 - [ ] Etap 3 — pakiet do Marka
 - [ ] Etap 4 — weryfikacje operatora
-- [ ] Etap 5 — fala A (17.10: sesje Lane C, E, D uruchomione; Lane M po Lane C; D6 dopisane do Lane C jako pkt 8)
+- [ ] Etap 5 — fala A (17.10: Lane C PR #64 #65 #66 #69 #70 (D6); Lane E PR #73 zmergowany 17.10 (`da672f9`), czeka na flagę Railway; Lane M PR #68 #71 #72 #75 (D5) zmergowane 17.10, main `5fe1dd2` wdrożony na Railway i Vercel;
+      Lane D PR #67 — pliki 1–4 wgrane na prod 17.10, log `porzadek-data-2026-10/prod-sql-applied.md`;
+      pominięte do Marka: rolki 57 mm Woli, rolki papieru Westfield, Burn, progi napojów KAT/Westfield/Powiśle)
 - [ ] Etap 5 — fala B
 - [ ] Etap 5 — fala C
 - [ ] Etap 6 — porządki
