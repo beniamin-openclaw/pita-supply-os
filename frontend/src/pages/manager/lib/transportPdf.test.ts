@@ -237,6 +237,82 @@ describe("buildPagoPdfDocDefinition", () => {
     expect(text).not.toContain("PAGO-001");
     expect(text).not.toContain("Nr katalogowy");
   });
+
+  const pagoLine = (sku: string | null) => ({
+    product_id: "P1",
+    product_name_pl: "Gyros 15 KG",
+    supplier_product_id: "SP_PAGO_P024",
+    supplier_product_name: "Gyros 15 KG",
+    purchase_unit: "szt",
+    total_qty_purchase: 10,
+    per_location: [],
+    supplier_sku: sku,
+    warehouse_pickup: true,
+  });
+
+  const productTableOf = (pdfDoc: { content: unknown[] }): unknown[][] => {
+    const node = pdfDoc.content.find(
+      (n): n is { table: { headerRows: number; body: unknown[][] } } =>
+        typeof n === "object" &&
+        n !== null &&
+        "table" in n &&
+        flattenText((n as { table: { body: unknown[][] } }).table.body[0]).includes("Ilość"),
+    );
+    expect(node).toBeTruthy();
+    return node!.table.body;
+  };
+
+  it("prints a Kod column with the Pago code before the product name", () => {
+    const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago", lines: [pagoLine("GYRSW15KG")] });
+    const pdfDoc = buildPagoPdfDocDefinition(buildTransportPagoPrintDoc(b, "Pago"), makeT(), GENERATED_AT);
+    const body = productTableOf(pdfDoc);
+    expect((body[0] as { text: string }[]).map((cell) => cell.text)).toEqual([
+      "Lp.",
+      "Kod",
+      "Produkt",
+      "Jm.",
+      "Ilość",
+    ]);
+    expect(flattenText(body[1][1])).toBe("GYRSW15KG");
+    expect(flattenText(body[1][2])).toBe("Gyros 15 KG");
+  });
+
+  it("keeps the Kod column on the Pago doc but leaves a placeholder cell empty", () => {
+    const b = batch({ supplier_id: "SUP_PAGO", supplier_name: "Pago", lines: [pagoLine("PAGO-001")] });
+    const pdfDoc = buildPagoPdfDocDefinition(buildTransportPagoPrintDoc(b, "Pago"), makeT(), GENERATED_AT);
+    const body = productTableOf(pdfDoc);
+    expect(body[0]).toHaveLength(5);
+    expect(flattenText(body[1][1])).toBe("");
+    expect(flattenText(pdfDoc.content)).not.toContain("PAGO-001");
+  });
+
+  it("another supplier gets the Kod column once a line has a real code", () => {
+    const b = batch({
+      lines: [
+        { ...pagoLine("BK-TZ-1"), supplier_product_id: "SP_BUKAT_P011", warehouse_pickup: false },
+        {
+          ...pagoLine(null),
+          product_id: "P2",
+          product_name_pl: "Tirokafteri",
+          supplier_product_id: "SP_BUKAT_P012",
+          supplier_product_name: "Tirokafteri",
+          warehouse_pickup: false,
+        },
+      ],
+    });
+    const pdfDoc = buildPagoPdfDocDefinition(buildTransportPagoPrintDoc(b, "Bukat"), makeT(), GENERATED_AT);
+    const body = productTableOf(pdfDoc);
+    expect(body[0]).toHaveLength(5);
+    expect(flattenText(body[1][1])).toBe("BK-TZ-1");
+    expect((body[2][1] as { text: string }).text).toBe("");
+  });
+
+  it("other suppliers without codes keep the 4-column table", () => {
+    const pdfDoc = buildPagoPdfDocDefinition(buildTransportPagoPrintDoc(batch(), "Bukat"), makeT(), GENERATED_AT);
+    const body = productTableOf(pdfDoc);
+    expect(body[0]).toHaveLength(4);
+    expect(flattenText(body[0])).not.toContain("Kod");
+  });
 });
 
 // ---- training-feedback-0901 F1: ad-hoc off-catalogue items, WITH location

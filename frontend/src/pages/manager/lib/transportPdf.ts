@@ -264,8 +264,13 @@ export function buildPagoPdfDocDefinition(
     ? { columns: [entityBox, docBox], columnGap: 10 }
     : { columns: [docBox] };
 
+  // "Kod" column: always on the Pago document (the warehouse picks by Pago's
+  // catalogue code), on another supplier's order only when a line has a code.
+  const showCode = doc.isPago || doc.products.some((p) => p.code !== "");
+
   const columnHeaders = [
     { text: t("manager.transport.print.lpCol"), style: "tableHeader" },
+    ...(showCode ? [{ text: t("manager.transport.print.codeCol"), style: "tableHeader" }] : []),
     { text: t("manager.transport.print.productCol"), style: "tableHeader" },
     { text: t("manager.transport.print.unitCol"), style: "tableHeader" },
     { text: t("manager.transport.print.qtyCol"), style: "tableHeader" },
@@ -275,6 +280,7 @@ export function buildPagoPdfDocDefinition(
     const zebra = idx % 2 === 1 ? { fillColor: ZEBRA } : {};
     return [
       { text: String(idx + 1), ...zebra },
+      ...(showCode ? [{ text: p.code, ...zebra }] : []),
       { text: p.name, ...zebra },
       { text: p.unit, ...zebra },
       { text: String(p.qty), ...zebra },
@@ -295,7 +301,11 @@ export function buildPagoPdfDocDefinition(
       ],
     ]),
     {
-      table: { headerRows: 1, widths: [20, "*", 40, 40], body: [columnHeaders, ...bodyRows] },
+      table: {
+        headerRows: 1,
+        widths: showCode ? [20, 75, "*", 40, 40] : [20, "*", 40, 40],
+        body: [columnHeaders, ...bodyRows],
+      },
       layout: TABLE_BORDER_LAYOUT,
     },
   );

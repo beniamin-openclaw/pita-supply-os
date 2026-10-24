@@ -22,6 +22,7 @@ import {
   buildTransportMatrix,
   buildLogisticsOptions,
   buildTransportPagoPrintDoc,
+  printableSupplierCode,
   collectCaptainNotes,
   collectExtraItemsByLocation,
   collectLogisticsSuggestions,
@@ -886,7 +887,7 @@ describe("buildTransportPagoPrintDoc", () => {
     expect(doc.isPago).toBe(false);
     expect(doc.entity).toBeNull();
     expect(doc.products).toEqual([
-      { productId: "P1", name: "Pomidory malinowe", unit: "kg", qty: 12 },
+      { productId: "P1", code: "", name: "Pomidory malinowe", unit: "kg", qty: 12 },
     ]);
 
     // The no-location-leak assertion (product table only — the document-data
@@ -978,6 +979,26 @@ describe("buildTransportPagoPrintDoc", () => {
     const doc = buildTransportPagoPrintDoc(b, "Pago");
     expect(doc.products[0].name).toBe("Gyros 15 KG");
     expect(JSON.stringify(doc.products)).not.toContain("PAGO-001");
+  });
+
+  it("carries the real supplier code next to the name (Pago codes, 2026-10-20)", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P1",
+          product_name_pl: "Gyros 15 KG",
+          supplier_product_id: "SP_PAGO_P024",
+          supplier_product_name: "Gyros 15 KG",
+          purchase_unit: "szt",
+          total_qty_purchase: 10,
+          per_location: [],
+          supplier_sku: " GYRSW15KG ",
+        },
+      ],
+    });
+    const doc = buildTransportPagoPrintDoc(b, "Pago");
+    expect(doc.products[0].code).toBe("GYRSW15KG");
+    expect(doc.products[0].name).toBe("Gyros 15 KG");
   });
 
   // --- warehouse_pickup filter (training-feedback-0901 Phase 4) ---
@@ -1789,5 +1810,23 @@ describe("parseTransportDraftEventDetails / latestTransportDraft", () => {
     expect(latestTransportDraft([event({ event_type: "batch_sent" })], "order")).toBeNull();
     expect(latestTransportDraft(null, "order")).toBeNull();
     expect(latestTransportDraft(undefined, "driver")).toBeNull();
+  });
+});
+
+describe("printableSupplierCode", () => {
+  it("returns the trimmed code", () => {
+    expect(printableSupplierCode(" BURG-200GR ")).toBe("BURG-200GR");
+    expect(printableSupplierCode("SUVKUR5kg")).toBe("SUVKUR5kg");
+  });
+
+  it("hides missing codes and our PAGO-00x placeholders", () => {
+    expect(printableSupplierCode(null)).toBe("");
+    expect(printableSupplierCode(undefined)).toBe("");
+    expect(printableSupplierCode("  ")).toBe("");
+    expect(printableSupplierCode("PAGO-001")).toBe("");
+    expect(printableSupplierCode("pago-12")).toBe("");
+    expect(printableSupplierCode("BUKAT-001")).toBe("");
+    expect(printableSupplierCode("MORY-009")).toBe("");
+    expect(printableSupplierCode("NOWE-01")).toBe("");
   });
 });
