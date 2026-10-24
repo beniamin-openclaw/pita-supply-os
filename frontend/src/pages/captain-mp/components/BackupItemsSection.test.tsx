@@ -122,6 +122,38 @@ describe("BackupItemsSection", () => {
     expect(toggle()).toHaveAttribute("aria-expanded", "false");
     expect(finalInput("P020")?.value).toBe("0");
     expect(finalInput("P014")).toBeNull();
+    // A typed 0 keeps the card on screen but is not counted as an order.
+    expect(toggle()).toHaveTextContent("rozwiń, gdy chcesz zamówić tutaj");
+  });
+
+  it("keeps a collapsed card on screen while its quantity is cleared and retyped", () => {
+    render(<Harness items={ITEMS} />);
+    fireEvent.click(toggle());
+    fireEvent.change(finalInput("P014") as HTMLInputElement, { target: { value: "3" } });
+    fireEvent.click(toggle());
+
+    const input = finalInput("P014") as HTMLInputElement;
+    input.focus();
+    // Captain backspaces "3" to type "5" — the card must not unmount mid-edit.
+    fireEvent.change(input, { target: { value: "" } });
+    expect(finalInput("P014")).toBe(input);
+    expect(document.activeElement).toBe(input);
+    fireEvent.change(input, { target: { value: "5" } });
+    expect(finalInput("P014")?.value).toBe("5");
+    expect(toggle()).toHaveTextContent("Z ilością do zamówienia: 1");
+  });
+
+  it("drops a cleared card from the collapsed view after the next collapse", () => {
+    render(<Harness items={ITEMS} />);
+    fireEvent.click(toggle());
+    fireEvent.change(finalInput("P014") as HTMLInputElement, { target: { value: "3" } });
+    fireEvent.click(toggle());
+    fireEvent.change(finalInput("P014") as HTMLInputElement, { target: { value: "" } });
+    expect(finalInput("P014")).not.toBeNull();
+
+    fireEvent.click(toggle()); // expand
+    fireEvent.click(toggle()); // collapse again — the blank card goes
+    expect(finalInput("P014")).toBeNull();
   });
 
   it("renders nothing without backup items", () => {

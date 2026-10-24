@@ -29,3 +29,8 @@ export function splitBackupItems(items: OrderableItem[]): SplitItems {
 export function hasOrderQty(line: OrderLine | undefined): boolean {
   return !!line && line.captain_final_qty_purchase !== "";
 }
+
+/** The header counts only real orders — a typed 0 keeps the card but is not counted. */
+export function hasPositiveOrderQty(line: OrderLine | undefined): boolean {
+  return !!line && line.captain_final_qty_purchase !== "" && line.captain_final_qty_purchase > 0;
+}

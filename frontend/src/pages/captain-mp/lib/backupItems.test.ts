@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasOrderQty, splitBackupItems } from "./backupItems";
+import { hasOrderQty, hasPositiveOrderQty, splitBackupItems } from "./backupItems";
 import type { OrderableItem, OrderLine } from "../types";
 
 function item(id: string, isBackup: boolean): OrderableItem {
@@ -59,5 +59,14 @@ describe("hasOrderQty", () => {
   it("is false for a blank or missing line", () => {
     expect(hasOrderQty(line(""))).toBe(false);
     expect(hasOrderQty(undefined)).toBe(false);
+  });
+});
+
+describe("hasPositiveOrderQty", () => {
+  it("counts only quantities above 0", () => {
+    expect(hasPositiveOrderQty(line(2))).toBe(true);
+    expect(hasPositiveOrderQty(line(0))).toBe(false);
+    expect(hasPositiveOrderQty(line(""))).toBe(false);
+    expect(hasPositiveOrderQty(undefined)).toBe(false);
   });
 });
