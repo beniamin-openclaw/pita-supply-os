@@ -2,7 +2,7 @@
 
 Źródło: odpowiedź Marka z 26.10 na maila Bena „Supply OS – czego jeszcze potrzebujemy do domknięcia lokali” (24.10). Stan prod sprawdzony 28.10 (tylko SELECT).
 
-Nic z tego nie jest jeszcze na prodzie. Każdy krok danych idzie jak dotąd:
+A1–A7 (z progami Brackiej 1/10/10) wgrane na prod 28.10, audyt w `prod-applied-2026-10-19.md`. Reszta czeka. Każdy krok danych idzie jak dotąd:
 1. diff;
 2. plik SQL ze strażnikami;
 3. review subagenta;
