@@ -2,7 +2,7 @@
 
 Źródło: odpowiedź Marka z 26.10 na maila Bena „Supply OS – czego jeszcze potrzebujemy do domknięcia lokali” (24.10). Stan prod sprawdzony 28.10 (tylko SELECT).
 
-A1–A7 (z progami Brackiej 1/10/10) i Kropla C1 (P195/P196 PET dla Norblina i Browarów, szkło 0,33 ×24 dla reszty Warszawy) wgrane na prod 28.10, audyt w `prod-applied-2026-10-19.md`. Reszta czeka. Każdy krok danych idzie jak dotąd:
+A1–A7 (z progami Brackiej 1/10/10) i Kropla C1 (P195/P196 PET dla Norblina i Browarów, szkło 0,33 ×24 dla reszty Warszawy) wgrane na prod 28.10, audyt w `prod-applied-2026-10-19.md`. 30.10 PR #80 (poprawka spisu przyjmuje produkty, które już są w spisie) na prod. Ben wysłał Markowi 30.10 podsumowanie tych zmian i propozycję dla Mory (C4). Czekamy na odpowiedzi na B1–B8 (mail z 28.10) i C4. Reszta czeka. Każdy krok danych idzie jak dotąd:
 1. diff;
 2. plik SQL ze strażnikami;
 3. review subagenta;
@@ -63,6 +63,19 @@ A1–A7 (z progami Brackiej 1/10/10) i Kropla C1 (P195/P196 PET dla Norblina i B
    - czy dodać zszywacz;
    - czy szczotka do grilla zostaje w Mory z limitem (np. 1 szt na zamówienie);
    - skąd wkłady do mopa w Warszawie (SUP_SELGROS w Warszawie jest nieaktywny).
+
+   **30.10, mail Bena do Marka.** Decyzję zostawił Markowi; ze swojej strony się zgodził. Sugestie Bena:
+   - zszywki, koperty, markery, długopisy i zszywacz kupować hurtem na Allegro i trzymać w Mory;
+   - szczotka do grilla zostaje w Mory, max 1 szt na zamówienie;
+   - wkłady do mopów kupować hurtem w Selgrosie lub na Allegro, a lokale zamawiają je z Mory.
+
+   Marek ma odpisać przy każdej pozycji:
+   - dostawca;
+   - nazwa u dostawcy;
+   - opakowanie i cena;
+   - lokale i max.
+
+   Dopiero po jego odpowiedzi idzie SQL. Zszywacz i wkład do mopa w Mory to nowe pozycje katalogu.
 
 ## D. Kolejność
 
