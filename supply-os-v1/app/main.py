@@ -3730,7 +3730,8 @@ def captain_inventory_count_edit(
       - every line's product_id must exist in master data → 400 otherwise
         (same gate as `captain_inventory_submit`).
       - every line's product must have a `location_product_setting` at this
-        location → 400 otherwise (same gate as `captain_inventory_submit`).
+        location → 400 otherwise (same gate as `captain_inventory_submit`),
+        unless the product is already on this count.
 
     `count_submitted_at` is UNCHANGED — it stays the original submit moment
     (the recency key `captain_inventory_latest` sorts on, and the timestamp
@@ -3772,6 +3773,10 @@ def captain_inventory_count_edit(
         for s in backend.load_location_product_settings()
         if s.location_id == location_id
     }
+    # A product already on this count stays accepted after its setting is gone
+    # (e.g. Kropla P070/P071 swapped for P195/P196 at NORBLIN/BROWARY): the edit
+    # page re-sends every prior line, so rejecting it would block the correction.
+    counted_pids = {ln.product_id for ln in existing.lines}
 
     new_lines: list[InventoryCountLine] = []
     for line in req.lines:
@@ -3780,7 +3785,7 @@ def captain_inventory_count_edit(
                 status_code=400,
                 detail=f"Unknown product_id '{line.product_id}'",
             )
-        if line.product_id not in settings_by_pid:
+        if line.product_id not in settings_by_pid and line.product_id not in counted_pids:
             raise HTTPException(
                 status_code=400,
                 detail=(
