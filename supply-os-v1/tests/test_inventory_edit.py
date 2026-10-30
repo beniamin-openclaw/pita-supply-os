@@ -342,9 +342,10 @@ def test_edit_unknown_product_400(mocker):
 
 
 def test_edit_no_setting_for_location_400(mocker):
-    """P027 exists in master data but has no location_product_setting at KEN."""
-    existing = _count("INV-EDIT-9", "KEN", [_line("INV-EDIT-9", "P027", 5)])
-    _activate_sheet(mocker, existing)
+    """P027 exists in master data but has no location_product_setting at KEN
+    and is not on the count being corrected."""
+    existing = _count("INV-EDIT-9", "KEN", [])
+    spies = _activate_sheet(mocker, existing)
     body = {
         "lines": [{"product_id": "P027", "current_stock_qty_base": 5}],
         "edited_by": EDITED_BY,
@@ -354,6 +355,28 @@ def test_edit_no_setting_for_location_400(mocker):
     )
     assert r.status_code == 400, r.text
     assert "no location_product_setting" in r.json()["detail"]
+    spies["append_lines"].assert_not_called()
+
+
+def test_edit_keeps_line_whose_setting_was_removed(mocker):
+    """A product already on the count stays accepted after the location's
+    setting for it is gone (Kropla P070/P071 → P195/P196 at NORBLIN/BROWARY):
+    the edit page re-sends every prior line, so a 400 would block the edit."""
+    existing = _count("INV-EDIT-9B", "KEN", [_line("INV-EDIT-9B", "P027", 5)])
+    spies = _activate_sheet(mocker, existing)
+    body = {
+        "lines": [{"product_id": "P027", "current_stock_qty_base": 4}],
+        "edited_by": EDITED_BY,
+    }
+    r = client.patch(
+        "/api/captain/inventory/count/INV-EDIT-9B", json=body, headers=KEN_AUTH
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["line_count"] == 1
+    appended = spies["append_lines"].call_args[0][0]
+    assert [(ln.product_id, ln.current_stock_qty_base) for ln in appended] == [
+        ("P027", 4)
+    ]
 
 
 def test_edit_missing_edited_by_422(mocker):
