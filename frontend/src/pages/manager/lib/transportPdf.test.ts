@@ -153,6 +153,59 @@ describe("buildDriverPdfDocDefinition", () => {
     expect(collectFillColors(pdfDoc.styles)).toContain("#1f3864");
   });
 
+  it("leaves a location cell blank when that location ordered none of the product", () => {
+    // Row 1: only Wola. Row 2: only Bracka — odd index, so it carries the zebra fill.
+    const doc = buildTransportDriverPrintDoc(
+      batch({
+        lines: [
+          {
+            product_id: "P1",
+            product_name_pl: "Pomidory",
+            supplier_product_id: "SP1",
+            supplier_product_name: "Pomidory malinowe",
+            purchase_unit: "kg",
+            total_qty_purchase: 5,
+            per_location: [
+              { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 5 },
+            ],
+          },
+          {
+            product_id: "P2",
+            product_name_pl: "Ogórki",
+            supplier_product_id: "SP2",
+            supplier_product_name: "Ogórki",
+            purchase_unit: "kg",
+            total_qty_purchase: 3,
+            per_location: [
+              { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 0 },
+              { location_id: "BRACKA", location_name: "Pita Bros Bracka", order_id: "ORD-2", qty_purchase: 3 },
+            ],
+          },
+        ],
+      }),
+      "Bukat",
+    );
+    // Columns are sorted by name: Bracka, Wola.
+    expect(doc.locations).toEqual(["Bracka", "Wola"]);
+    const pdfDoc = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);
+    const table = pdfDoc.content.find(
+      (node): node is { table: { body: { text: string; fillColor?: string }[][]; headerRows: number } } =>
+        typeof node === "object" &&
+        node !== null &&
+        "table" in node &&
+        typeof (node as { table?: { headerRows?: unknown } }).table?.headerRows === "number",
+    ) as { table: { body: { text: string; fillColor?: string }[][] } } | undefined;
+    expect(table).toBeTruthy();
+    const [, row1, row2] = table!.table.body;
+    // lp, product, unit, Bracka, Wola, Razem
+    expect(row1.slice(3).map((c) => c.text)).toEqual(["", "5", "5"]);
+    expect(row2.slice(3).map((c) => c.text)).toEqual(["3", "", "3"]);
+    expect(row2[4].fillColor).toBe("#f1f5f9"); // ZEBRA — the blank cell keeps the stripe
+    expect(row1[3].fillColor).toBeUndefined(); // even row: no stripe
+    // The data shape keeps its zeros; only the rendering blanks them.
+    expect(doc.sections[0].products[1].qtyByLocation).toEqual([3, 0]);
+  });
+
   it("footer contains the transport id and the generated-at timestamp", () => {
     const doc = buildTransportDriverPrintDoc(batch(), "Bukat");
     const pdfDoc = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);

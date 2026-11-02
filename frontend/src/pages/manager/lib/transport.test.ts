@@ -867,6 +867,28 @@ describe("buildTransportDriverPrintDoc", () => {
     // doc.locations = [Bracka, Wola] (pl-collated); Bracka's cell is 0, Wola's is 3.
     expect(doc.sections[0].products[0].qtyByLocation).toEqual([0, 3]);
   });
+
+  it("rounds a location's summed cell when it has two orders (no float tail)", () => {
+    const b = batch({
+      lines: [
+        {
+          product_id: "P1",
+          product_name_pl: "Feta",
+          supplier_product_id: "SP1",
+          supplier_product_name: "Feta",
+          purchase_unit: "kg",
+          total_qty_purchase: 0.3,
+          per_location: [
+            { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 0.1 },
+            { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-3", qty_purchase: 0.2 },
+          ],
+        },
+      ],
+    });
+    const doc = buildTransportDriverPrintDoc(b, "Bukat");
+    // doc.locations = [Bracka, Wola]; 0.1 + 0.2 would otherwise be 0.30000000000000004.
+    expect(doc.sections[0].products[0].qtyByLocation).toEqual([0, 0.3]);
+  });
 });
 
 describe("buildTransportPagoPrintDoc", () => {
