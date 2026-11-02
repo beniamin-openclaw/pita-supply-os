@@ -877,7 +877,7 @@ describe("buildTransportDriverPrintDoc", () => {
           supplier_product_id: "SP1",
           supplier_product_name: "Feta",
           purchase_unit: "kg",
-          total_qty_purchase: 0.3,
+          total_qty_purchase: 0.1 + 0.2,
           per_location: [
             { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-1", qty_purchase: 0.1 },
             { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-3", qty_purchase: 0.2 },
@@ -888,6 +888,8 @@ describe("buildTransportDriverPrintDoc", () => {
     const doc = buildTransportDriverPrintDoc(b, "Bukat");
     // doc.locations = [Bracka, Wola]; 0.1 + 0.2 would otherwise be 0.30000000000000004.
     expect(doc.sections[0].products[0].qtyByLocation).toEqual([0, 0.3]);
+    // Razem is rounded the same way, so the row visibly adds up.
+    expect(doc.sections[0].products[0].totalQty).toBe(0.3);
   });
 });
 

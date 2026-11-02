@@ -9,4 +9,4 @@ archived_at: null
 
 ## Notes
 
-Lista dla kierowcy (driver PDF): komórki lokal×produkt z ilością 0 mają być puste — pokazywać tylko wartości > 0
+Driver list (driver PDF): location × product cells with quantity 0 must be blank — show only values above zero.

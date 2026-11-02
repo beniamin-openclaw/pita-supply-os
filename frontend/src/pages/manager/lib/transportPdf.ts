@@ -171,6 +171,8 @@ export function buildDriverPdfDocDefinition(
         // A location that ordered none of this product gets an empty cell, not
         // a "0" — drivers read the zeros as something to carry
         // (driver-list-hide-zeros). qtyByLocation itself keeps its zeros.
+        // `> 0`, not `!== 0`: a negative cannot reach here — the backend skips
+        // lines with qty <= 0 before building per_location, and inputs are ge=0.
         ...p.qtyByLocation.map((qty: number) => ({ text: qty > 0 ? String(qty) : "", ...zebra })),
         { text: String(p.totalQty), style: "total", ...zebra },
       ];

@@ -27,3 +27,11 @@ driver render path prints the matrix.
 ## Round 2
 
 Re-check after fixes: frontend 1289/1289 tests, lint and build green. No new findings.
+
+## Round 3 — CI AI review (PR #81)
+
+- Razem not rounded while cells are → FIXED (`roundQty` on `totalQty`, test asserts 0.1+0.2 → 0.3).
+- `qty > 0` hides negatives → kept by design (request: "only values above zero"); negatives cannot
+  reach the frontend (backend drops qty <= 0, inputs ge=0) — documented in a code comment.
+- change.md Notes in Polish → FIXED (English).
+- verify-output test count 1288 vs 1289 → FIXED.

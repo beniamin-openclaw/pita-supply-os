@@ -845,7 +845,7 @@ export function buildTransportDriverPrintDoc(
       productId: line.product_id,
       name: line.product_name_pl,
       unit: line.purchase_unit,
-      totalQty: line.total_qty_purchase,
+      totalQty: roundQty(line.total_qty_purchase),
       qtyByLocation: locationIds.map((id) => qtyById.get(id) ?? 0),
     };
   };
