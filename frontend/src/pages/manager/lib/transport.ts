@@ -41,6 +41,7 @@ import type {
   TransportEvent,
   TransportSupplierRef,
 } from "../../../types";
+import { roundQty } from "../../../components/ui/number";
 import { compareProductOrder } from "../../../lib/productOrder";
 import { type DraftMap, dirtySavePayload, draftQty, hasDirtyDrafts } from "./draftState";
 import { effectiveManagerQtyPurchase } from "./managerLine";
@@ -836,13 +837,15 @@ export function buildTransportDriverPrintDoc(
   const toProductLine = (line: TransportBatchDetail["lines"][number]): PrintDriverProductLine => {
     const qtyById = new Map<string, number>();
     for (const pl of line.per_location) {
-      qtyById.set(pl.location_id, (qtyById.get(pl.location_id) ?? 0) + pl.qty_purchase);
+      // roundQty kills float tails (0.1 + 0.2) when one location has two orders —
+      // same as the on-screen sent matrix in TransportPage.tsx.
+      qtyById.set(pl.location_id, roundQty((qtyById.get(pl.location_id) ?? 0) + pl.qty_purchase));
     }
     return {
       productId: line.product_id,
       name: line.product_name_pl,
       unit: line.purchase_unit,
-      totalQty: line.total_qty_purchase,
+      totalQty: roundQty(line.total_qty_purchase),
       qtyByLocation: locationIds.map((id) => qtyById.get(id) ?? 0),
     };
   };

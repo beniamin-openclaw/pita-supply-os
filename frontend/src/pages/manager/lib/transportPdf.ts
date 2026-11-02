@@ -124,6 +124,7 @@ const SHARED_STYLES: Record<string, Record<string, unknown>> = {
 
 /** Build the pdfmake docDefinition for the DRIVER document — logistics header
  * + a per-product x per-location matrix with a bold Razem (total) column.
+ * Location cells show only quantities above zero; a zero cell is left blank.
  * Pure: takes the already-shaped `TransportDriverPrintDoc` (from
  * lib/transport.ts's `buildTransportDriverPrintDoc`) plus a caller-supplied
  * `generatedAt` timestamp (kept out of this function so it stays pure/
@@ -167,7 +168,12 @@ export function buildDriverPdfDocDefinition(
         { text: String(idx + 1), ...zebra },
         { text: p.name, ...zebra },
         { text: p.unit, ...zebra },
-        ...p.qtyByLocation.map((qty) => ({ text: String(qty), ...zebra })),
+        // A location that ordered none of this product gets an empty cell, not
+        // a "0" — drivers read the zeros as something to carry
+        // (driver-list-hide-zeros). qtyByLocation itself keeps its zeros.
+        // `> 0`, not `!== 0`: a negative cannot reach here — the backend skips
+        // lines with qty <= 0 before building per_location, and inputs are ge=0.
+        ...p.qtyByLocation.map((qty: number) => ({ text: qty > 0 ? String(qty) : "", ...zebra })),
         { text: String(p.totalQty), style: "total", ...zebra },
       ];
     });
