@@ -26,8 +26,12 @@ ACTIVE = {"captain_submitted", "manager_claimed", "manager_sent"}
 
 def is_transport_draft(order: dict) -> bool:
     """Transport drafts intentionally wait in manager_claimed; the TRN- marker
-    lives in supplier_order_reference (order_id stays a normal id)."""
-    ref = str(order.get("supplier_order_reference") or order.get("order_id") or "")
+    lives in supplier_order_reference. Once the transport is SENT the order
+    leaves the claimed lane and SHOULD alert normally — exclude only while
+    still claimed."""
+    if order.get("status") != "manager_claimed":
+        return False
+    ref = str(order.get("supplier_order_reference") or "")
     return ref.startswith("TRN-") or str(order.get("order_id", "")).startswith("TRN-")
 
 
@@ -55,10 +59,13 @@ def _get_queue(api_url: str, token: str) -> list[dict]:
     return out
 
 
-def _send_telegram(text: str, bot_token: str, chat_id: str, dry_run: bool) -> None:
+def _send_telegram(text: str, bot_token: str, chat_id: str, dry_run: bool) -> bool:
+    """Return True only when the message was actually delivered to Telegram.
+    dry-run and missing creds print to stdout and return False — the caller must
+    not mark such events as fired (they would never reach Ben)."""
     if dry_run or not (bot_token and chat_id):
         print(f"[watch]{' (dry)' if dry_run else ' (no-telegram)'} {text}")
-        return
+        return False
     payload = json.dumps({"chat_id": chat_id, "text": text}).encode()
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{bot_token}/sendMessage",
@@ -67,6 +74,7 @@ def _send_telegram(text: str, bot_token: str, chat_id: str, dry_run: bool) -> No
     )
     with urllib.request.urlopen(req, timeout=15) as resp:  # noqa: S310
         resp.read()
+    return True
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -96,15 +104,18 @@ def events_for(
     if status == "captain_submitted" and prev_status != "captain_submitted":
         add("submitted", f"NOWE ZAMÓWIENIE: {loc} -> {sup}, {lines} poz., dostawa {delivery or '?'}")
     if status == "manager_sent" and prev_status != "manager_sent":
-        add("sent", f"WYSŁANE: {loc} -> {sup}, dostawa {delivery or '?'}. "
-                    f"Draft dla grupy: „Zamówienie do {sup} poszło, dostawa {delivery or '?'} — "
-                    f"proszę odebrać i potwierdzić w aplikacji.”")
+        # key carries manager_sent_at so a revert + re-send fires a NEW alert
+        add(f"sent:{order.get('manager_sent_at') or '?'}",
+            f"WYSŁANE: {loc} -> {sup}, dostawa {delivery or '?'}. "
+            f"Draft dla grupy: „Zamówienie do {sup} poszło, dostawa {delivery or '?'} — "
+            f"proszę odebrać i potwierdzić w aplikacji.”")
     warsaw_now = now.astimezone(WARSAW)
     today = warsaw_now.date().isoformat()
-    # "expected today" fires only during the digest hour (Warsaw) so a frequent
-    # poll does not repeat the morning digest; the key already carries the date.
+    # "expected today" fires at/after the digest hour (Warsaw). Once-per-day key;
+    # >= instead of == so a crashed 8:xx window still sends on recovery and a
+    # same-day order submitted later still gets its notice.
     if (status in ("manager_claimed", "manager_sent") and delivery == today
-            and warsaw_now.hour == digest_hour):
+            and warsaw_now.hour >= digest_hour):
         add(f"expected:{today}", f"DOSTAWA DZIŚ: {loc} <- {sup} (status {status}). "
                               f"Draft dla grupy: „Dziś spodziewana dostawa {sup} do {loc} — "
                               f"odebrać przy pracowniku i potwierdzić.”")
@@ -164,11 +175,16 @@ def main() -> int:
         prev = orders_state.get(oid, {})
         for key, text in events_for(order, prev, now, stale_claimed_h, stale_sent_d,
                                     digest_hour):
-            if not args.baseline:
-                _send_telegram(text, bot_token, chat_id, args.dry_run)
-            if not args.dry_run:
-                # dry-run must NOT consume the event — a real run should send it
+            # Mark as fired only on real delivery or in --baseline (its whole
+            # point is to consume the pre-existing backlog silently). dry-run
+            # and no-telegram runs leave events unfired so a later configured
+            # run still sends them.
+            if args.baseline:
                 prev.setdefault("fired", []).append(key)
+            elif not args.dry_run and _send_telegram(text, bot_token, chat_id, False):
+                prev.setdefault("fired", []).append(key)
+            elif args.dry_run:
+                _send_telegram(text, bot_token, chat_id, True)
             fired_any = True
         orders_state[oid] = {"status": order.get("status"), "fired": prev.get("fired", [])}
 
