@@ -8,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from order_watch import events_for  # noqa: E402
 
 NOW = datetime(2026, 11, 3, 12, 0, tzinfo=timezone.utc)
+SUBMIT_TS = "2026-11-03T11:00:00+00:00"
+SUBMIT_KEY = f"submitted:{SUBMIT_TS}"
 
 
 def _order(**kw):
@@ -18,6 +20,7 @@ def _order(**kw):
         "status": "captain_submitted",
         "line_count": 5,
         "requested_delivery_date": "2026-11-05",
+        "captain_submitted_at": SUBMIT_TS,
         "captain_user": "tushar",
         "ordered_by": None,
     }
@@ -27,15 +30,15 @@ def _order(**kw):
 
 def test_new_submit_fires_once():
     ev = events_for(_order(), None, NOW, 24, 3)
-    assert [k for k, _ in ev] == ["submitted"]
+    assert [k for k, _ in ev] == [SUBMIT_KEY]
     assert "Wola" in ev[0][1] and "Bukat" in ev[0][1]
     # second scan with fired key -> nothing
-    prev = {"status": "captain_submitted", "fired": ["submitted"]}
+    prev = {"status": "captain_submitted", "fired": [SUBMIT_KEY]}
     assert events_for(_order(), prev, NOW, 24, 3) == []
 
 
 def test_sent_transition_fires():
-    prev = {"status": "captain_submitted", "fired": ["submitted"]}
+    prev = {"status": "captain_submitted", "fired": [SUBMIT_KEY]}
     ev = events_for(_order(status="manager_sent", manager_sent_at="2026-11-03T10:00:00+00:00"),
                     prev, NOW, 24, 3)
     keys = [k for k, _ in ev]
@@ -47,12 +50,12 @@ def test_expected_today_fires_from_digest_hour_and_once():
     morning = NOW.replace(hour=7)
     o = _order(status="manager_sent", requested_delivery_date="2026-11-03",
                manager_sent_at="2026-11-03T06:00:00+00:00")
-    ev = events_for(o, {"status": "captain_submitted", "fired": ["submitted"]}, morning, 24, 3)
+    ev = events_for(o, {"status": "captain_submitted", "fired": [SUBMIT_KEY]}, morning, 24, 3)
     keys = [k for k, _ in ev]
     assert "expected:2026-11-03" in keys
     # BEFORE the digest hour -> no digest (05:00 UTC = 06:00 Warsaw)
     early = NOW.replace(hour=5)
-    ev_early = events_for(o, {"status": "captain_submitted", "fired": ["submitted"]}, early, 24, 3)
+    ev_early = events_for(o, {"status": "captain_submitted", "fired": [SUBMIT_KEY]}, early, 24, 3)
     assert all(not k.startswith("expected:") for k, _ in ev_early)
     # same day again after the first send -> suppressed by fired key
     prev = {"status": "manager_sent", "fired": ["sent:2026-11-03T06:00:00+00:00",
@@ -64,7 +67,7 @@ def test_stale_claimed_reports_age_without_person_blame():
     old = (NOW - timedelta(hours=30)).isoformat()
     ev = events_for(_order(status="manager_claimed", captain_submitted_at=old,
                            ordered_by="marek"),
-                    {"status": "captain_submitted", "fired": ["submitted"]}, NOW, 24, 3)
+                    {"status": "captain_submitted", "fired": [SUBMIT_KEY]}, NOW, 24, 3)
     keys = [k for k, _ in ev]
     assert "stale-claimed" in keys
     text = dict(ev)["stale-claimed"]
@@ -74,7 +77,7 @@ def test_stale_claimed_reports_age_without_person_blame():
 def test_fresh_claimed_no_alert():
     recent = (NOW - timedelta(hours=5)).isoformat()
     ev = events_for(_order(status="manager_claimed", captain_submitted_at=recent),
-                    {"status": "captain_submitted", "fired": ["submitted"]}, NOW, 24, 3)
+                    {"status": "captain_submitted", "fired": [SUBMIT_KEY]}, NOW, 24, 3)
     assert "stale-claimed" not in [k for k, _ in ev]
 
 
@@ -118,5 +121,5 @@ def test_digest_fires_after_window_on_recovery():
     late = NOW.replace(hour=12)  # 13:00 Warsaw — past digest hour
     o = _order(status="manager_sent", requested_delivery_date="2026-11-03",
                manager_sent_at="2026-11-03T06:00:00+00:00")
-    ev = events_for(o, {"status": "captain_submitted", "fired": ["submitted"]}, late, 24, 3)
+    ev = events_for(o, {"status": "captain_submitted", "fired": [SUBMIT_KEY]}, late, 24, 3)
     assert "expected:2026-11-03" in [k for k, _ in ev]

@@ -91,7 +91,6 @@ def events_for(
     loc = order.get("location_name") or order.get("location_id", "?")
     sup = order.get("supplier_name") or order.get("supplier_id", "?")
     status = order.get("status")
-    prev_status = (prev or {}).get("status")
     prev_keys = set((prev or {}).get("fired", []))
     lines = order.get("line_count", "?")
     delivery = order.get("requested_delivery_date") or order.get("suggested_delivery_date")
@@ -101,10 +100,13 @@ def events_for(
         if key not in prev_keys:
             out.append((key, text))
 
-    if status == "captain_submitted" and prev_status != "captain_submitted":
-        add("submitted", f"NOWE ZAMÓWIENIE: {loc} -> {sup}, {lines} poz., dostawa {delivery or '?'}")
-    if status == "manager_sent" and prev_status != "manager_sent":
-        # key carries manager_sent_at so a revert + re-send fires a NEW alert
+    # Timestamped keys, no prev-status gate: dedupe by the key alone. A revert +
+    # re-send produces a NEW timestamp → NEW alert; an undelivered event (no
+    # telegram, dry-run) stays unfired and is re-offered on the next run.
+    if status == "captain_submitted":
+        add(f"submitted:{order.get('captain_submitted_at') or '?'}",
+            f"NOWE ZAMÓWIENIE: {loc} -> {sup}, {lines} poz., dostawa {delivery or '?'}")
+    if status == "manager_sent":
         add(f"sent:{order.get('manager_sent_at') or '?'}",
             f"WYSŁANE: {loc} -> {sup}, dostawa {delivery or '?'}. "
             f"Draft dla grupy: „Zamówienie do {sup} poszło, dostawa {delivery or '?'} — "

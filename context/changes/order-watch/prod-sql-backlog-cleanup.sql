@@ -15,15 +15,17 @@ WHERE ((status = 'manager_claimed' AND captain_submitted_at < now() - interval '
   AND COALESCE(supplier_order_reference,'') NOT LIKE 'TRN-%'
 GROUP BY status;
 
--- Podgląd konkretnych ID (odczyt) — sprawdź, że to „twój" zbiór:
+-- Podgląd konkretnych ID (odczyt) — sprawdź, że to „twój" zbiór.
+-- BEZ LIMITU: to jest zarazem ROLLBACK DUMP — zapisz CAŁY wynik do pliku,
+-- bo UPDATE ruszy wszystkie wiersze zbioru (nie tylko pierwsze 50).
 SELECT order_id, location_id, status, captain_submitted_at, manager_sent_at,
-       supplier_order_reference
+       supplier_order_reference, cancel_reason, cancelled_at, cancelled_by
 FROM orders
 WHERE ((status = 'manager_claimed' AND captain_submitted_at < now() - interval '7 days')
     OR (status = 'manager_sent' AND manager_sent_at < now() - interval '30 days'
         AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = orders.order_id)))
   AND COALESCE(supplier_order_reference,'') NOT LIKE 'TRN-%'
-ORDER BY captain_submitted_at NULLS LAST LIMIT 50;
+ORDER BY captain_submitted_at NULLS LAST;
 
 -- GUARD (manualny): jeśli liczby/ID rozjechane z diagnozą → STOP, nie odkomentowuj.
 
@@ -66,7 +68,22 @@ ORDER BY captain_submitted_at NULLS LAST LIMIT 50;
 -- SELECT event_type, count(*) FROM order_events
 --  WHERE actor = 'operator-watchdog' GROUP BY event_type;
 -- COMMIT;   -- albo ROLLBACK; jeśli AUDIT nie zgadza się z BEFORE.
--- Po COMMIT rollback = przywrócenie statusów z BEFORE dump (UPDATE per order_id).
+
+-- ROLLBACK PO COMMIT (wzorzec; używa zapisanego BEFORE dump — stąd pełny dump wyżej):
+-- BEGIN;
+--   a) przywróć statusy/pola anulowania wiersz po wierszu z dump:
+-- UPDATE orders SET status='manager_claimed', cancel_reason='<Z_DUMPU>',
+--        cancelled_at='<Z_DUMPU>', cancelled_by='<Z_DUMPU>'
+--  WHERE order_id='<ORDER_ID>' AND cancelled_by='operator-watchdog';
+--   b) wiersze 'closed' wracają na 'manager_sent' — ale NIE da się odtworzyć
+--      dokładnego stanu bez dumpu statusu (BEFORE ma status=manager_sent):
+-- UPDATE orders SET status='manager_sent' WHERE order_id='<ORDER_ID>' AND status='closed';
+--   c) usunąć dodane zdarzenia (event_id ma prefiks 'OC-<order_id>'):
+-- DELETE FROM order_events WHERE actor='operator-watchdog'
+--   AND event_type='closed_without_receipt';
+-- COMMIT;
+-- UWAGA: rollback przywraca statusy, ale nie cofa ewentualnych skutków pobocznych
+-- (np. jeśli ktoś w międzyczasie ruszył te zamówienia — AUDIT sprawdza właśnie to).
 
 -- Bezpieczniejsza alternatywa produktowa (rekomendowana): auto-'sent' dla Pago/Mory
 -- albo flagowany odbiór 'claimed' przez kapitana — osobny change po decyzji.
