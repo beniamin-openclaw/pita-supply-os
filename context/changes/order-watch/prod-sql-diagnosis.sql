@@ -30,12 +30,18 @@ WHERE o.status = 'manager_sent'
 ORDER BY o.manager_sent_at;
 
 -- 4) Bug „same zera z remanentu” (Rajeshwari 15.10): zamówienia, gdzie WSZYSTKIE linie mają qty 0
+--    (kolumny wg schematu: captain_final_qty_purchase / captain_final_qty_base)
 SELECT o.order_id, o.location_id, o.status, o.captain_submitted_at, count(l.*) AS lines_n,
-       count(*) FILTER (WHERE COALESCE(l.captain_qty, l.qty, 0) = 0) AS zero_lines
+       count(*) FILTER (WHERE COALESCE(l.captain_final_qty_purchase, l.captain_final_qty_base, 0) = 0) AS zero_lines
 FROM orders o JOIN order_lines l ON l.order_id = o.order_id
 WHERE o.captain_submitted_at > '2026-10-01'
 GROUP BY 1,2,3,4
-HAVING count(*) FILTER (WHERE COALESCE(l.captain_qty, l.qty, 0) = 0) = count(l.*)
+HAVING count(*) FILTER (WHERE COALESCE(l.captain_final_qty_purchase, l.captain_final_qty_base, 0) = 0) = count(l.*)
 ORDER BY 4 DESC;
+
+-- 5) Atrybucja: orders.manager_user (istnieje dopiero przy send — dla claimed będzie NULL;
+--    to potwierdza, że 'kto przejął' wymaga nowego pola, patrz runbook 'Znane ograniczenia')
+SELECT status, manager_user, count(*) FROM orders
+WHERE status IN ('manager_claimed','manager_sent') GROUP BY 1,2 ORDER BY 1,2;
 
 ROLLBACK;

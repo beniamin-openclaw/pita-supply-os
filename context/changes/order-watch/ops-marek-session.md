@@ -1,8 +1,9 @@
 # ops — sesja wsadowa z Markiem + komunikaty (drafty do akceptacji Bena)
 
-## 1) Komunikat do zespołu — „Zgłoś problem" (P0, dziś)
-Draft (Telegram/grupy):
-> „Uwaga — przycisk „Zgłoś problem” w aplikacji jeszcze nie istnieje. Problemy z zamówieniami/apką zgłaszajcie na Trello, lista „Supply OS – błędy”, albo do Marka na hotline. Dzięki!”
+## 1) Komunikat do zespołu — rozdzielenie kanałów (P0, dziś)
+Korekta po uwadze Bena 03.11: „Zgłoś problem" to kanał **techniczny** (sprzęt, awarie lokalowe — istnieje i działa), NIE kanał zgłoszeń do Supply OS. Błąd był w komunikacji, nie w funkcji.
+Draft (grupy):
+> „Prosto: awarie/sprzęt → „Zgłoś problem” jak zawsze. Sprawy zamówień i aplikacji Supply OS (progi, jednostki, nazwy, błędy w apce) → ten czat albo Trello, lista „Supply OS – błędy”. Dzięki!”
 
 ## 2) Jeden arkusz braków — kolejność: domknąć Gdańsk/Katowice → Wrocław
 | Lokal | Brakuje | Źródło |

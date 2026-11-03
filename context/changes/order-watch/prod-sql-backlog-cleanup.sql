@@ -1,42 +1,41 @@
--- order-watch / BACKLOG CLEANUP — NIE URUCHAMIAĆ bez decyzji Bena.
--- Konwencja porządku: BEFORE → guard → zmiana → AUDIT → rollback.
--- UWAGA (review grok-4.7): zamknięcie claimed/sent przez SQL omija ścieżkę UI
--- „Zamknij bez przyjęcia" (tam jest powód + ślad). Ten plik to opcja hurtowa
--- TYLKO dla zamówień starszych niż próg i uznanych za martwe.
--- Bezpieczniejsza alternatywa produktowa: auto-„sent" dla Pago/Mory albo
--- flagowany odbiór „claimed" przez kapitana — osobny change po decyzji.
+-- order-watch / BACKLOG CLEANUP — SZKIELET OPERATORSKI.
+-- ❗ NIE URUCHAMIAĆ hurtowo bez decyzji Bena. Kolumny zweryfikowane z migracją 0004:
+--   orders.cancel_reason, orders.cancelled_at, orders.cancelled_by
+--   + ślad zamknięcia w aplikacji: order_events.closed_without_receipt.
+-- TRN-* (drafty transportu w supplier_order_reference) — WYKLUCZONE.
+-- Procedura: 1) BEFORE, 2) porównaj z oczekiwaniami, 3) odkomentuj UPDATE krokami, 4) AUDIT, 5) COMMIT.
 
-\set claimed_stale_days 7
-\set sent_stale_days 30
-
--- BEFORE (odczyt — zapisz wynik jako dowód stanu przed)
-SELECT status, count(*) FROM orders
+-- KROK 1 — BEFORE (odczyt; zapisz wynik jako dowód stanu przed)
+SELECT status, count(*) AS n
+FROM orders
 WHERE (status = 'manager_claimed' AND captain_submitted_at < now() - interval '7 days')
    OR (status = 'manager_sent' AND manager_sent_at < now() - interval '30 days'
        AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = orders.order_id))
+  AND COALESCE(supplier_order_reference,'') NOT LIKE 'TRN-%'
 GROUP BY status;
+-- GUARD (manualny): jeśli liczby rozjechane z prod-sql-diagnosis.sql → STOP.
 
--- GUARD: jeśli liczby powyżej ≠ oczekiwania z diagnosis → STOP, nie wykonuj zmian.
--- Oczekiwano (~mail 19.10): claimed ~47 (dziś może być mniej), sent-ancient ~70.
+-- KROK 2 — ZMIANA (odkomentuj dopiero po review BEFORE)
+-- BEGIN;
+-- a) claimed > 7 dni → cancelled ze śladem kto/kiedy/dlaczego
+-- UPDATE orders SET status='cancelled',
+--        cancel_reason = COALESCE(cancel_reason,'') || 'backlog-cleanup>7d (order-watch)',
+--        cancelled_at = now(), cancelled_by = 'operator-watchdog'
+-- WHERE status='manager_claimed' AND captain_submitted_at < now() - interval '7 days'
+--   AND COALESCE(supplier_order_reference,'') NOT LIKE 'TRN-%';
+-- b) sent > 30 dni bez odbioru → closed + ślad zgodny z aplikacją (order_events.closed_without_receipt)
+-- UPDATE orders SET status='closed'
+-- WHERE status='manager_sent' AND manager_sent_at < now() - interval '30 days'
+--   AND COALESCE(supplier_order_reference,'') NOT LIKE 'TRN-%'
+--   AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = orders.order_id);
+-- INSERT INTO order_events (order_id, event_type, created_at, actor)
+--   SELECT order_id, 'closed_without_receipt', now(), 'operator-watchdog'
+--   FROM orders WHERE status='closed' AND manager_sent_at < now() - interval '30 days'
+--     AND COALESCE(supplier_order_reference,'') NOT LIKE 'TRN-%'
+--     AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = orders.order_id);
+-- KROK 3 — AUDIT (w transakcji)
+-- SELECT status, count(*) FROM orders WHERE cancel_reason LIKE '%order-watch%' GROUP BY status;
+-- COMMIT;   -- ROLLBACK; jeśli przed commit. Po commicie: restore z BEFORE dump.
 
-BEGIN;
--- Zmiana: martwe claimed → cancelled z powodem (pole/column do potwierdzenia na prod —
--- jeśli orders.cancelled_reason nie istnieje, użyj notes lub pomiń sekcję UPDATE-2)
-UPDATE orders SET status = 'cancelled',
-       cancelled_reason = COALESCE(cancelled_reason,'') || ' backlog-cleanup>7d'
-WHERE status = 'manager_claimed'
-  AND captain_submitted_at < now() - interval '7 days';
-
-UPDATE orders SET status = 'closed',
-       cancelled_reason = COALESCE(cancelled_reason,'') || ' closed-without-receipt>30d (watchdog)'
-WHERE status = 'manager_sent'
-  AND manager_sent_at < now() - interval '30 days'
-  AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = orders.order_id);
-
--- AUDIT (po zmianie, w tej samej transakcji)
-SELECT status, count(*) FROM orders
-WHERE cancelled_reason LIKE '%backlog-cleanup%' OR cancelled_reason LIKE '%closed-without-receipt>%'
-GROUP BY status;
-COMMIT;
-
--- ROLLBACK (jeśli przed COMMIT): ROLLBACK;  (po COMMIT: restore z BEFORE dump / backup Supabase)
+-- Bezpieczniejsza alternatywa produktowa (rekomendowana): auto-'sent' dla Pago/Mory
+-- albo flagowany odbiór 'claimed' przez kapitana — osobny change po decyzji.

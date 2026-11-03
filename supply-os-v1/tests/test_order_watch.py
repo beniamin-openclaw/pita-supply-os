@@ -86,3 +86,10 @@ def test_stale_sent_requires_no_receipt():
                             requested_delivery_date="2026-10-29"),
                      {"status": "manager_sent", "fired": ["sent"]}, NOW, 24, 3)
     assert "stale-sent" not in [k for k, _ in ev2]
+
+
+def test_trn_marker_detection():
+    from order_watch import is_transport_draft
+    assert is_transport_draft({"order_id": "o1", "supplier_order_reference": "TRN-2026-11-01"})
+    assert is_transport_draft({"order_id": "TRN-77"})
+    assert not is_transport_draft({"order_id": "o2", "supplier_order_reference": None})

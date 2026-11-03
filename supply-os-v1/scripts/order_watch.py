@@ -24,6 +24,13 @@ WARSAW = ZoneInfo("Europe/Warsaw")
 ACTIVE = {"captain_submitted", "manager_claimed", "manager_sent"}
 
 
+def is_transport_draft(order: dict) -> bool:
+    """Transport drafts intentionally wait in manager_claimed; the TRN- marker
+    lives in supplier_order_reference (order_id stays a normal id)."""
+    ref = str(order.get("supplier_order_reference") or order.get("order_id") or "")
+    return ref.startswith("TRN-") or str(order.get("order_id", "")).startswith("TRN-")
+
+
 def env(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
@@ -106,7 +113,7 @@ def events_for(
         # No manager_claimed_at/manager_user exists: the UI measures "claimed >24h"
         # from captain_submitted_at, so we do the same and stay neutral about
         # who is responsible (a TRN- transport draft also sits in this lane).
-        base = _parse_dt(order.get("last_edited_at") or order.get("captain_submitted_at"))
+        base = _parse_dt(order.get("captain_submitted_at") or order.get("last_edited_at"))
         if base:
             claimed_age_h = (now - base).total_seconds() / 3600
         if claimed_age_h is not None and claimed_age_h > stale_claimed_h:
@@ -152,22 +159,29 @@ def main() -> int:
         if order.get("status") not in ACTIVE:
             continue
         oid = order["order_id"]
-        if oid.startswith("TRN-"):  # transport drafts intentionally wait in claimed
+        if is_transport_draft(order):
             continue
         prev = orders_state.get(oid, {})
         for key, text in events_for(order, prev, now, stale_claimed_h, stale_sent_d,
                                     digest_hour):
             if not args.baseline:
                 _send_telegram(text, bot_token, chat_id, args.dry_run)
-            prev.setdefault("fired", []).append(key)
+            if not args.dry_run:
+                # dry-run must NOT consume the event — a real run should send it
+                prev.setdefault("fired", []).append(key)
             fired_any = True
         orders_state[oid] = {"status": order.get("status"), "fired": prev.get("fired", [])}
 
+    if args.dry_run:
+        print(f"[watch] dry-run — state file untouched ({len(orders_state)} active scanned)")
+        return 0
     state["orders"] = orders_state
     state["last_run"] = now.isoformat()
     os.makedirs(os.path.dirname(os.path.abspath(state_file)), exist_ok=True)
-    with open(state_file, "w") as fh:
+    tmp = state_file + ".tmp"
+    with open(tmp, "w") as fh:
         json.dump(state, fh, ensure_ascii=False, indent=1)
+    os.replace(tmp, state_file)
     if not fired_any:
         print(f"[watch] {now.isoformat()} — {len(orders_state)} active, no new events")
     return 0

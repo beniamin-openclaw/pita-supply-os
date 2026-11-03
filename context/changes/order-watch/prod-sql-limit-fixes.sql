@@ -4,11 +4,14 @@
 -- Uwaga: wartości ZWERYFIKOWAĆ z prod przed apply (możliwe że część już wgrana po 30.10).
 
 -- BEFORE per pozycja (odczyt)
-SELECT sp.location_id, p.name, sp.min_stock_qty_base AS min, sp.target_stock_qty_base AS target,
-       sp.max_stock_qty_base AS max, sp.package_qty, sp.unit_label
-FROM supplier_products sp JOIN products p ON p.product_id = sp.product_id
+-- Uwaga (review grok-4.7): progi per-lokal mieszkają w `location_product_settings`,
+-- globalne w `supplier_products` (min/max/target_stock_qty_base). Zanim odkomentujesz
+-- UPDATE, potwierdź na prod, która tabela trzyma wartość dla danego lokalu.
+SELECT lps.location_id, p.name,
+       lps.min_stock_qty_base AS min, lps.target_stock_qty_base AS target, lps.max_stock_qty_base AS max
+FROM location_product_settings lps JOIN products p ON p.product_id = lps.product_id
 WHERE p.name ILIKE ANY (ARRAY['%souvlaki%','%gyros%','%coca%','%cola%','%kamino%','%gąbk%','%gabk%'])
-ORDER BY sp.location_id NULLS LAST, p.name;
+ORDER BY lps.location_id NULLS LAST, p.name;
 
 BEGIN;
 -- 1) KEN souvlaki kurczak/wieprz: 6 box = 36 kg → karton 6 kg (prod ma 5 kg) [B35, captain 25.09]
