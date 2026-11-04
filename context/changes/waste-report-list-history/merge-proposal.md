@@ -1,6 +1,6 @@
 # Merge proposal: waste reporting list and histories
 
-Status: locally verified and independently approved; PR/remoteCI preparation in progress. Ben requested a reviewable merge handoff, not an application release.
+Status: committed, locally verified and independently approved. Review the associated PR’s current productCI checks before Ben’s merge decision. Ben requested a reviewable merge handoff, not an application release.
 
 ## Exact candidate and prerequisite
 
@@ -29,4 +29,4 @@ No merge/deploy/restart has been performed by this task. A healthy oldapplicatio
 
 Restore both applications to the verified pre-release main artifact `02a0930` if needed, preserving unrelated later main changes. Keep both waste tables and every recorded audit/row; no automatic DROP/DELETE or reverse migration. No historical paper report import is included. A real period, physical phones and every handwritten source cell remain unverified; six tile sets are provisional and precision beyond3decimals requires an operator decision.
 
-Exact next step: finish remoteCI and present the PR plus actual screenshots for Ben's merge decision. After an approved merge, verify running artifacts, record runtime results and complete operator acceptance before10xarchive.
+Exact next step: inspect the associated PR’s productCI results and actual screenshots, then Ben decides merge. After an approved merge, verify running artifacts, record runtime results and complete operator acceptance before10xarchive.

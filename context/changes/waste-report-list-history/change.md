@@ -17,4 +17,4 @@ Read-only production preflight: existing Railway service `pita-supply-os` select
 
 Ben subsequently explicitly approved migration0032 only. It is applied and verified; see `migration-preflight.md`. No merge, deployment or restart occurred. Continue local UI/review/CI handoff.
 
-Application candidate `d955721` is committed, locally verified and independently approved. Evidence: `verification.md`, `reviews/impl-review.md`; current merge handoff `merge-proposal.md` supersedes the parent application proposal. No application merge/deploy performed. Remote PR/CI is the remaining preparation step.
+Application candidate `d955721` is committed, locally verified and independently approved. Evidence: `verification.md`, `reviews/impl-review.md`; current merge handoff `merge-proposal.md` supersedes the parent application proposal. No application merge/deploy performed. The associated PR and its current remoteCI checks are authoritative for the final merge decision; task-owned remote evidence is retained outside Git and in the shared WORKLOG.

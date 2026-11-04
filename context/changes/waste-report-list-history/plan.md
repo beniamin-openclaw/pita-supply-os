@@ -103,8 +103,8 @@ Run actual product gates plus authenticated browser E2E against separate disposa
 #### Automated
 
 - [x] 3.1 Backend Ruff/pytest/integration and frontend build/lint/Vitest pass for the final candidate. — d955721
-- [x] 3.2 Two independent implementation reviewers approve after findings are resolved; scope and the final requirement audit are recorded.
-- [x] 3.3 A committed merge proposal identifies the exact candidate, database prerequisite, rollback and evidence without performing merge or production actions.
+- [x] 3.2 Two independent implementation reviewers approve after findings are resolved; scope and the final requirement audit are recorded. — ca046e5
+- [x] 3.3 A committed merge proposal identifies the exact candidate, database prerequisite, rollback and evidence without performing merge or production actions. — ca046e5
 
 #### Manual
 
