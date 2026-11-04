@@ -163,8 +163,8 @@ export function LangProvider({ children }: LangProviderProps) {
       const key = `${prefix}.${form}.${noun}` as StringKey;
       // Fallback: if .few doesn't exist for English (some entries skip it), try .many.
       const fallback = `${prefix}.many.${noun}` as StringKey;
-      const entry = (STRINGS as Record<string, { pl: string; en: string } | undefined>)[key] ??
-        STRINGS[fallback];
+      const strings: Record<string, { pl: string; en: string } | undefined> = STRINGS;
+      const entry = strings[key] ?? strings[fallback];
       if (!entry) {
         if (import.meta.env.MODE === "development") {
           console.warn(`[i18n] missing plural key: ${prefix}.${form}.${noun}`);

@@ -5,7 +5,7 @@
 // outlined. Active state is derived from the route, NOT stored.
 
 import { Link, useLocation } from "react-router-dom";
-import { ClipboardList, History, PackageSearch } from "lucide-react";
+import { ClipboardList, History, PackageSearch, Trash2 } from "lucide-react";
 import { useT } from "../../../i18n";
 
 const ORDERS_PATH = "/captain-v2";
@@ -27,7 +27,8 @@ export function CaptainTabs() {
     pathname.startsWith("/captain-v2/orders") ||
     pathname.startsWith("/captain-v2/inventory-history");
   const inventoryActive = pathname.startsWith("/captain-v2/inventory-count");
-  const ordersActive = !inventoryActive && !historyActive;
+  const wasteActive = pathname.startsWith("/captain-v2/waste-report");
+  const ordersActive = !inventoryActive && !historyActive && !wasteActive;
 
   const base =
     "flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
@@ -39,7 +40,7 @@ export function CaptainTabs() {
       className="bg-white border-b border-gray-200 px-4 py-2.5"
       aria-label={t("tabs.ariaLabel")}
     >
-      <div className="flex gap-2 max-w-3xl mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-3xl mx-auto">
         <Link
           to={ORDERS_PATH}
           aria-current={ordersActive ? "page" : undefined}
@@ -63,6 +64,10 @@ export function CaptainTabs() {
         >
           <PackageSearch size={16} aria-hidden="true" />
           {t("tabs.inventory")}
+        </Link>
+        <Link to="/captain-v2/waste-report" aria-current={wasteActive ? "page" : undefined}
+          className={`${base} ${wasteActive ? activeCls : inactiveCls}`}>
+          <Trash2 size={16} aria-hidden="true" />{t("waste.title")}
         </Link>
       </div>
     </nav>

@@ -6,6 +6,7 @@ import { CaptainMP } from "./pages/captain-mp/CaptainMP";
 import { InventoryCountPage } from "./pages/captain-mp/InventoryCountPage";
 import { InventoryCountEditPage } from "./pages/captain-mp/InventoryCountEditPage";
 import { InventoryHistoryPage } from "./pages/captain-mp/InventoryHistoryPage";
+import { WasteReportPage } from "./pages/captain-mp/WasteReportPage";
 import { OrdersListPage } from "./pages/captain-mp/OrdersListPage";
 import { OrderDetailPage } from "./pages/captain-mp/OrderDetailPage";
 import { OrderEditPage } from "./pages/captain-mp/OrderEditPage";
@@ -13,6 +14,7 @@ import { ReceiveDeliveryPage } from "./pages/captain-mp/ReceiveDeliveryPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { ManagerArchivePage } from "./pages/manager/ManagerArchivePage";
 import { ManagerInventoryPage } from "./pages/manager/ManagerInventoryPage";
+import { ManagerWastePage } from "./pages/manager/ManagerWastePage";
 import { ManagerSuggestionReviewPage } from "./pages/manager/ManagerSuggestionReviewPage";
 import { TransportPage } from "./pages/manager/TransportPage";
 import { ManagerFinancePage } from "./pages/manager/finance/ManagerFinancePage";
@@ -62,6 +64,10 @@ export default function App() {
                 <CaptainMP />
               </AuthGate>
             }
+          />
+          <Route
+            path="/captain-v2/waste-report"
+            element={<AuthGate role="captain"><WasteReportPage /></AuthGate>}
           />
           <Route
             path="/captain-v2/inventory-count"
@@ -126,6 +132,10 @@ export default function App() {
                 <ManagerPage />
               </AuthGate>
             }
+          />
+          <Route
+            path="/manager/waste"
+            element={<AuthGate role="manager"><ManagerWastePage /></AuthGate>}
           />
           <Route
             path="/manager/inventory"
