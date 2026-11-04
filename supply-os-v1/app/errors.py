@@ -11,6 +11,10 @@ class ConfigDriftError(Exception):
     """Raised when a worksheet's headers don't match the expected schema."""
 
 
+class WasteConflictError(Exception):
+    """The batch identifier already belongs to a different payload."""
+
+
 class OrderNotFoundError(Exception):
     """Raised when an update can't find the order_id (or receipt_id) it targets."""
 

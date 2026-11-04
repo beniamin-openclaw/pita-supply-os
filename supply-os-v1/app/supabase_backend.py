@@ -35,16 +35,21 @@ exactly, so rows round-trip to the same models as ``sheets.py``.
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
 import threading
 from datetime import date, datetime
+from uuid import uuid4
 from enum import Enum
 from typing import Optional, Type, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection
 
 from .config import DataBackend, settings
-from .errors import OrderNotFoundError, OrderStatusConflictError
+from .errors import OrderNotFoundError, OrderStatusConflictError, WasteConflictError
+from .waste_catalog import BY_ID
 from .models import (
     FinanceDocument,
     FinanceDocumentLine,
@@ -66,6 +71,10 @@ from .models import (
     SupplierProduct,
     TransportBatch,
     TransportEvent,
+    WasteCreate,
+    WasteBackendPage,
+    WasteReport,
+    WasteTotal,
 )
 
 log = logging.getLogger(__name__)
@@ -78,6 +87,115 @@ SUPPORTS_PERSISTENCE = True
 # Finance reconciliation (eBiuro mirror) lives only here — routes gate on this
 # flag (`main._supports_finance`) and 503 on the seed/sheets backends.
 SUPPORTS_FINANCE = True
+SUPPORTS_WASTE_REPORTS = True
+
+
+def _waste_report(conn: Connection, report_id: str, location_id: str | None = None) -> WasteReport | None:
+    row = conn.execute(text("SELECT * FROM waste_reports WHERE report_id = :id "
+                            "AND (:loc IS NULL OR location_id = :loc)"),
+                       {"id": str(report_id), "loc": location_id}).mappings().first()
+    if not row:
+        return None
+    lines = conn.execute(text("SELECT * FROM waste_report_lines WHERE report_id = :id "
+                              "ORDER BY ordinal"), {"id": str(report_id)}).mappings().all()
+    return WasteReport.model_validate({**dict(row), "lines": [dict(line) for line in lines]})
+
+
+def append_waste_report(location_id: str, request: WasteCreate) -> WasteReport:
+    payload = request.model_dump(mode="json")
+    for item, line in zip(payload["lines"], request.lines):
+        item["quantity"] = format(line.quantity.normalize(), "f")
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    report_id = str(uuid4())
+    with _get_engine().begin() as conn:
+        inserted = conn.execute(text("""INSERT INTO waste_reports
+            (report_id, location_id, business_date, batch_uuid, request_digest)
+            VALUES (:id, :loc, :day, :batch, :digest)
+            ON CONFLICT (location_id, batch_uuid) DO NOTHING RETURNING report_id"""),
+            {"id": report_id, "loc": location_id, "day": request.business_date,
+             "batch": str(request.batch_uuid), "digest": digest}).scalar()
+        if not inserted:
+            row = conn.execute(text("SELECT report_id, request_digest FROM waste_reports "
+                                    "WHERE location_id=:loc AND batch_uuid=:batch"),
+                               {"loc": location_id, "batch": str(request.batch_uuid)}).mappings().one()
+            if row["request_digest"] != digest:
+                raise WasteConflictError()
+            return _waste_report(conn, row["report_id"], location_id)
+        for ordinal, line in enumerate(request.lines):
+            item = BY_ID.get(line.product_id)
+            unit = item["unit"] if item else line.unit
+            params = {"line_id": str(uuid4()), "report_id": report_id, "ordinal": ordinal,
+                      "product_id": line.product_id, "description": line.description,
+                      "name_pl": item["name_pl"] if item else line.description,
+                      "name_en": item["name_en"] if item else line.description,
+                      "quantity": line.quantity / 1000 if line.unit == "g" else line.quantity,
+                      "unit": unit, "submitted_quantity": line.quantity,
+                      "submitted_unit": line.unit, "reason": line.reason,
+                      "reason_detail": line.reason_detail}
+            conn.execute(text("""INSERT INTO waste_report_lines
+                (line_id, report_id, ordinal, product_id, description, name_pl, name_en,
+                 quantity, unit, submitted_quantity, submitted_unit, reason, reason_detail)
+                VALUES (:line_id, :report_id, :ordinal, :product_id, :description, :name_pl, :name_en,
+                 :quantity, :unit, :submitted_quantity, :submitted_unit, :reason, :reason_detail)"""), params)
+        return _waste_report(conn, report_id, location_id)
+
+
+def get_waste_report(report_id: str, location_id: str | None = None) -> WasteReport | None:
+    with _get_engine().connect() as conn:
+        return _waste_report(conn, report_id, location_id)
+
+
+def get_waste_report_by_batch(location_id: str, batch_uuid: str) -> WasteReport | None:
+    with _get_engine().connect() as conn:
+        report_id = conn.execute(text("SELECT report_id FROM waste_reports WHERE location_id=:loc "
+                                      "AND batch_uuid=:batch"),
+                                 {"loc": location_id, "batch": str(batch_uuid)}).scalar()
+        return _waste_report(conn, report_id, location_id) if report_id else None
+
+
+def void_waste_report_line(report_id: str, line_id: str, location_id: str | None,
+                           reason: str, role: str) -> WasteReport | None:
+    with _get_engine().begin() as conn:
+        found = conn.execute(text("""SELECT l.line_id FROM waste_report_lines l
+            JOIN waste_reports r ON r.report_id=l.report_id
+            WHERE r.report_id=:report AND l.line_id=:line AND (:loc IS NULL OR r.location_id=:loc)
+            FOR UPDATE OF l"""), {"report": str(report_id), "line": str(line_id), "loc": location_id}).first()
+        if not found:
+            return None
+        conn.execute(text("UPDATE waste_report_lines SET voided_at=now(), void_reason=:reason, "
+                          "void_role=:role WHERE line_id=:line AND voided_at IS NULL"),
+                     {"line": str(line_id), "reason": reason, "role": role})
+        return _waste_report(conn, report_id, location_id)
+
+
+def load_waste_reports(date_from: date, date_to: date, location_id: str | None,
+                       cursor: tuple[datetime, str] | None, limit: int,
+                       include_totals: bool = True) -> WasteBackendPage:
+    params = {"start": date_from, "end": date_to, "loc": location_id, "limit": limit + 1,
+              "cursor_time": cursor[0] if cursor else None, "cursor_id": cursor[1] if cursor else None}
+    where = "r.business_date BETWEEN :start AND :end AND (:loc IS NULL OR r.location_id=:loc)"
+    with _get_engine().connect() as conn:
+        rows = conn.execute(text(f"SELECT r.* FROM waste_reports r WHERE {where} "
+            "AND (CAST(:cursor_time AS timestamptz) IS NULL OR (r.created_at, r.report_id) "
+            "< (CAST(:cursor_time AS timestamptz), CAST(:cursor_id AS uuid))) "
+            "ORDER BY r.created_at DESC, r.report_id DESC LIMIT :limit"), params).mappings().all()
+        selected = rows[:limit]
+        lines = conn.execute(text("SELECT * FROM waste_report_lines "
+                                  "WHERE report_id = ANY(CAST(:ids AS uuid[])) ORDER BY ordinal"),
+                             {"ids": [str(row["report_id"]) for row in selected]}).mappings().all()
+        grouped = {row["report_id"]: [] for row in selected}
+        for line in lines:
+            grouped[line["report_id"]].append(dict(line))
+        totals = conn.execute(text(f"""SELECT r.location_id, l.product_id, l.description,
+            MIN(l.name_pl) AS name_pl, MIN(l.name_en) AS name_en, l.unit,
+            SUM(l.quantity) AS quantity FROM waste_reports r
+            JOIN waste_report_lines l ON l.report_id=r.report_id WHERE {where} AND l.voided_at IS NULL
+            GROUP BY r.location_id, l.product_id, l.description, l.unit
+            ORDER BY r.location_id, name_pl, l.unit"""), params).mappings().all() if include_totals else []
+        return WasteBackendPage(reports=[WasteReport.model_validate({**dict(row),
+                                  "lines": grouped[row["report_id"]]}) for row in selected],
+                                totals=[WasteTotal.model_validate(row) for row in totals],
+                                more=len(rows) > limit)
 
 # Lazy singleton SQLAlchemy Engine (built on first data access, not at import —
 # so seed/sheet modes never construct a pool or import psycopg2). Reset by tests.

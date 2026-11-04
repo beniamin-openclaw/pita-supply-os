@@ -60,6 +60,7 @@ T = TypeVar("T", bound=BaseModel)
 # Capability flag (see ``main._is_persistent``): this backend persists writes, so
 # persistence-gated routes proceed instead of degrading like the seed loader.
 SUPPORTS_PERSISTENCE = True
+SUPPORTS_WASTE_REPORTS = False
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",

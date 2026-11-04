@@ -1,9 +1,143 @@
 """Pydantic models matching docs/pita-supply-os-v1/DATA_MODEL.md."""
 from datetime import date, datetime
 from enum import Enum
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from decimal import Decimal
+from uuid import UUID
+import re
+
+from .waste_catalog import BY_ID
+
+
+class WasteLineInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    product_id: str | None = None
+    description: str | None = Field(default=None, max_length=120)
+    quantity: Decimal
+    unit: Literal["kg", "g", "szt"]
+    reason: Literal["burned", "dropped", "expired", "spoiled", "other"]
+    reason_detail: str | None = Field(default=None, max_length=500)
+
+    @field_validator("quantity", mode="before")
+    @classmethod
+    def decimal_string(cls, value: Any) -> str:
+        if not isinstance(value, str) or not re.fullmatch(r"\d+(?:\.\d{1,3})?", value):
+            raise ValueError("quantity must be a decimal string with at most three decimals")
+        return value
+
+    @model_validator(mode="after")
+    def validate_line(self) -> "WasteLineInput":
+        item = BY_ID.get(self.product_id) if self.product_id else None
+        if self.product_id is not None and (not item or self.description is not None):
+            raise ValueError("invalid product or description")
+        if not self.product_id and (not self.description or not self.description.strip()):
+            raise ValueError("description required")
+        canonical_unit = item["unit"] if item else self.unit
+        if canonical_unit == "kg":
+            if self.unit not in ("kg", "g"):
+                raise ValueError("invalid unit")
+        elif self.unit != "szt" or canonical_unit != "szt":
+            raise ValueError("invalid unit")
+        if self.unit == "g" and self.quantity.as_tuple().exponent < 0:
+            raise ValueError("grams must be whole")
+        canonical = self.quantity / 1000 if self.unit == "g" else self.quantity
+        if canonical <= 0 or canonical > Decimal("999999.999"):
+            raise ValueError("quantity out of range")
+        if self.reason == "other" and (not self.reason_detail or not self.reason_detail.strip()):
+            raise ValueError("reason detail required")
+        return self
+
+
+class WasteCatalogItem(BaseModel):
+    product_id: str
+    name_pl: str
+    name_en: str
+    section: Literal["fridge", "freezer", "dry"]
+    unit: Literal["kg", "szt"]
+    display_unit: Literal["g", "szt"]
+    quick_additions: list[str]
+    calibration: Literal["supported", "provisional"]
+
+
+class WasteCatalog(BaseModel):
+    items: list[WasteCatalogItem]
+    max_quantity: str = "999999.999"
+
+
+class WasteCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    batch_uuid: UUID
+    business_date: date
+    lines: list[WasteLineInput] = Field(min_length=1, max_length=100)
+
+    @field_validator("business_date", mode="before")
+    @classmethod
+    def date_string(cls, value: Any) -> str:
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            raise ValueError("business date must be YYYY-MM-DD")
+        return value
+
+
+class WasteVoid(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reason required")
+        return value
+
+
+class WasteReportLine(BaseModel):
+    line_id: UUID
+    product_id: str | None
+    description: str | None
+    name_pl: str
+    name_en: str
+    quantity: Decimal
+    unit: Literal["kg", "szt"]
+    submitted_quantity: Decimal
+    submitted_unit: Literal["kg", "g", "szt"]
+    reason: Literal["burned", "dropped", "expired", "spoiled", "other"]
+    reason_detail: str | None
+    voided_at: datetime | None
+    void_reason: str | None
+    void_role: Literal["captain", "manager"] | None
+
+
+class WasteReport(BaseModel):
+    report_id: UUID
+    location_id: str
+    business_date: date
+    batch_uuid: UUID
+    created_at: datetime
+    lines: list[WasteReportLine]
+
+
+class WasteTotal(BaseModel):
+    location_id: str
+    product_id: str | None
+    description: str | None
+    name_pl: str
+    name_en: str
+    quantity: Decimal
+    unit: Literal["kg", "szt"]
+
+
+class WasteList(BaseModel):
+    reports: list[WasteReport]
+    totals: list[WasteTotal]
+    next_cursor: str | None
+
+
+class WasteBackendPage(BaseModel):
+    reports: list[WasteReport]
+    totals: list[WasteTotal]
+    more: bool
 
 
 # ---------- Enums ----------
