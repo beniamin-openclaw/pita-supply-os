@@ -56,6 +56,8 @@ For g display, accept integer grams and convert exactly to canonical kg with thr
 
 Technical quantity bound (F4): canonical kg/szt quantity is at most `999999.999`, backed by `NUMERIC(9,3)`; submitted quantities use `NUMERIC(12,3)` to accommodate up to `999999999` integer grams. Reject values outside these limits before Number conversion; validate scaled integers with `Number.isSafeInteger` after arithmetic. Addition overflow is an error, never clamped or rounded. Totals remain server-side Decimal/string values without the per-line ceiling. This technical limit does not calibrate tile amounts or imply a realistic loss size.
 
+Implementation clarification: use unconstrained PostgreSQL NUMERIC with explicit range and `quantity = trunc(quantity, 3)` checks for the same accepted bounds. Fixed-scale NUMERIC silently rounds before a CHECK can reject excess precision; explicit checks preserve the no-rounding requirement. Display grams additionally require an integer and exact canonical conversion. No reviewed Progress title changes.
+
 ### Draft and uncertain-save lifecycle
 
 Keep form rows, date and an opaque batch UUID in a Captain-scoped draft using the existing token-scope pattern. Pin the originating token/scope and check it immediately before every mutation, readback and draft write; abort on mismatch before making a network request, preserving the original scoped draft. Reuse the existing API client's snapshot-token protection and ignore stale responses. Test a token change in another tab immediately before Save and retry/void (F1).
@@ -257,8 +259,8 @@ The proposed next number 0032 is provisional until concurrent work is checked. N
 
 #### Automated
 
-- [x] 1.1 The private manifest and sanitized analysis reconcile 30 unique actual report identities and correctly exclude duplicates/lookalikes.
-- [x] 1.2 A reproducible summary reconciles readable observations, observed units, candidate increments and quick-value coverage without treating missing cells as zero.
+- [x] 1.1 The private manifest and sanitized analysis reconcile 30 unique actual report identities and correctly exclude duplicates/lookalikes. — b448d00
+- [x] 1.2 A reproducible summary reconciles readable observations, observed units, candidate increments and quick-value coverage without treating missing cells as zero. — b448d00
 
 #### Manual
 
