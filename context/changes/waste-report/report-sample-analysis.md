@@ -36,6 +36,30 @@ Of 617 daily cells, 527 are eligible and 90 excluded for unreadability, incompat
 
 Counts are recomputed from the handoff, not an independent verification of each handwritten cell. The reachability denominator is the Daily column per product, not all 30 reports. A non-reachable amount is not a zero or an error; it requires manual input. Values above three taps are retained in the any-tap column so the usability cost is visible. The 1/3 avocado is included as a readable fraction but unreachable by the chosen tiles; storage cannot preserve it exactly at 3 decimal places.
 
+## Quantity distribution and entry cost
+
+Ranges and common exact amounts use eligible daily cells in the display unit. Common amounts are ordered by frequency, then smaller value; counts are cell counts. Fractional pieces count non-integer szt values. Median is the minimum taps among reachable cells only; manual-only values are excluded from that median, never rounded. These aggregates describe the extracted daily totals, not individual incidents.
+
+| Product ID | Unit | Range | Common amount (count) | Fractional pieces | Median taps | Manual only |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| avocado | szt | 0.25–2 | 1 (5), 0.25 (2), 0.5 (2) | 8 | 1.0 | 1 |
+| tomato | g | 50–2500.0 | 100.0 (10), 150.00 (5), 200.0 (5) | 0 | 2.0 | 1 |
+| arugula | g | 20.00–900.0 | 100.0 (14), 300 (5), 200.0 (4) | 0 | 1 | 2 |
+| salad_mix | g | 50.00–450.00 | 100.0 (8), 150.00 (6), 200.0 (4) | 0 | 2.0 | 3 |
+| feta_block | g | 60.00–4500.0 | 60.00 (1), 4500.0 (1) | 0 | 18 | 1 |
+| halloumi_reha | szt | 1–4 | 1 (7), 2 (2), 3 (1) | 0 | 1 | 0 |
+| tirokafteri_8kg | g | 200.0–3000 | 200.0 (1), 3000 (1) | 0 | 7.0 | 0 |
+| tzatziki_5kg | g | 80–110 | 80 (1), 100.0 (1), 110 (1) | 0 | 1 | 2 |
+| falafel_1kg | g | 50–150.00 | 50 (1), 150.00 (1) | 0 | 1.5 | 0 |
+| fries_aviko_2_5kg | g | 30.00–600 | 100.0 (38), 150.00 (18), 200.0 (12) | 0 | 2 | 12 |
+| sweet_potato_fries_2_27kg | g | 40.00–1000 | 50.00 (17), 100.0 (10), 200.0 (8) | 0 | 1.0 | 9 |
+| gyros | g | 30–2000 | 300.0 (11), 200.0 (9), 100.0 (7) | 0 | 2 | 17 |
+| pita | szt | 0.5–5 | 1 (48), 2 (35), 3 (11) | 17 | 1.0 | 0 |
+| souvlaki_chicken | szt | 1–25 | 1 (21), 2 (10), 3 (2) | 0 | 1.0 | 0 |
+| souvlaki_pork | szt | 1–8 | 1 (5), 2 (2), 8 (1) | 0 | 1.0 | 0 |
+| chickpea_mix | g | 100.0–300 | 100.0 (1), 300 (1) | 0 | 1.5 | 0 |
+| barley_mix | g | 100.0–900.0 | 100.0 (1), 700 (1), 900.0 (1) | 0 | 4 | 0 |
+
 ## Verification and next step
 
 - Verified 30 files, hashes and source identity uniqueness, agreement between manifest and extraction report lists, and absence of duplicate cell keys. The primary agent additionally inspected a private contact sheet of all 30 images: the sheets contain entries and no obvious repeated document was found. This is a visual plausibility check, not a complete cell-by-cell transcription audit or proof of full source coverage.

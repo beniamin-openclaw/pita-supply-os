@@ -1,7 +1,7 @@
 ---
 change_id: waste-report
 title: Supply OS v2 digital waste report based on the existing paper form
-status: implementing
+status: impl_reviewed
 created: 2026-11-04
 updated: 2026-11-04
 archived_at: null
@@ -21,7 +21,7 @@ This starts the previously deferred WP19 from `context/changes/porzadek-2026-10/
 
 Execution lane: `codex/supply-v2-waste-report`, isolated worktree created from `origin/main` at `02a0930e09e09648a0e75dfb22f1cb1d96006144`. The original checkout remains on its existing feedback branch.
 
-Research precedes planning, plan review, implementation, implementation review, verification, deployment proposal, and archival. No application code or production state has changed. The execution checklist is `plan.md` → `## Progress`; `planned` records an authored plan, not approval of a UI option or completed report calibration.
+Initial research preceded planning, plan review, implementation, implementation review, verification and a deployment proposal. Production release and archival remain separate gates. The execution checklist is `plan.md` → `## Progress`; `planned` records an authored plan, not approval of a UI option or completed report calibration.
 
 2026-11-04 follow-up: Ben explicitly requested `/10x-plan` now, two quantity-entry options (a labelled increment or quick choices, with easy manual input), and analysis of 30 actual waste reports. He directed the source search to Telegram location chats and specified GPT-6.1 Terra at medium reasoning for image analysis. Read-only Telegram search/download is within scope; staff communication and runtime changes remain outside scope. Boxes remain deferred.
 
@@ -30,3 +30,9 @@ Later source constraint from Ben: "nie pobieraj przez zalogowany telegram zabran
 Quantity decision, 2026-11-04: Ben selected the second preview (manual input plus quick-amount tiles), with an explicit correction: every click adds, including repeated taps on the same tile. Tiles show a `+` and their actual unit; different additions can be combined. Manual editing remains available. Example amounts are provisional until the 30-report calibration. The plan and interactive preview reflect this decision; application implementation and production release remain pending.
 
 2026-11-04 execution authorization: Ben approved the four plan-review fixes and report save, then requested autonomous end-to-end 10x execution and supplied the private API analysis `SUMMARY.md` path. Review fixes are recorded in `reviews/plan-review.md` (REVISE → SOUND); `api-contract.md` fixes the shared field names. Implement and verify locally without intermediate permission prompts for routine decisions. Production migration/merge/deploy and real-period acceptance remain separate; do not mark them complete from local results.
+
+## Current delivery state
+
+Local implementation and independent implementation reviews are complete: backend `320abfb`, frontend `3cddf37`. Full checks and authenticated disposable-Postgres browser evidence are recorded in `verification.md`; final review is `reviews/impl-review.md`. The exact application release, migration fingerprint, rollback and production verification are in `release-proposal.md`. No push, production migration, merge, deploy, historical-data import, supplier order or staff message has occurred.
+
+Exact next step: Ben approves the concrete production release proposal; then apply the additive migration before promoting the reviewed application commit, verify both running artifacts and conduct an operator pilot. Manual Progress criteria remain unchecked as the post-run human acceptance checklist; local agent observations do not close production or real-period acceptance.

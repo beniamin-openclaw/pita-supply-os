@@ -64,6 +64,8 @@ Keep form rows, date and an opaque batch UUID in a Captain-scoped draft using th
 
 Distinguish definitive rejection from an uncertain result (F2). Structured validation/auth/capability failures guaranteed to happen before a transaction begins leave an editable retained draft; a corrected payload gets a fresh UUID. Network failures, timeouts, unclassified 5xx and response-decoding failures freeze the submitted payload and original UUID. Resolve through by-batch readback or retry the identical payload/key; a 404 alone cannot prove an earlier in-flight transaction will never commit and never unlocks changed-payload submission. On confirmed persistence clear only that submitted draft; later additions get a new UUID. Prevent concurrent submits. Tests cover editable 422 rejection, lost-success-response identical retry, and by-batch 404 racing an in-flight save.
 
+Implementation clarification: the feature keeps its TypeScript DTOs beside waste helpers rather than enlarging the global types file. Integer scaling is used directly instead of the generic decimal parser, so syntax, length, precision and overflow are validated before conversion. Storage snapshot checks also reject stale same-token tabs. A rejected retry cannot release a batch that was already uncertain; only a definitive first-attempt rejection permits editing with a new UUID. These are bounded implementations of the reviewed contracts, without extra modes or dependencies.
+
 ## Phase 1: Evidence calibration and selected interaction
 
 ### Changes required
@@ -271,9 +273,9 @@ The proposed next number 0032 is provisional until concurrent work is checked. N
 
 #### Automated
 
-- [ ] 2.1 Catalog and model tests cover all 17 identities, unit trust boundaries, Other/reason limits, decimal precision and invalid/empty requests.
-- [ ] 2.2 Disposable Postgres tests prove atomic header/line rollback, concurrent idempotent retry, changed-payload 409, immutable void metadata, constraints and deny-all public RLS.
-- [ ] 2.3 Unsupported adapters return 503 without writes or successful persistence claims; backend Ruff and focused pytest checks pass.
+- [x] 2.1 Catalog and model tests cover all 17 identities, unit trust boundaries, Other/reason limits, decimal precision and invalid/empty requests. — 320abfb
+- [x] 2.2 Disposable Postgres tests prove atomic header/line rollback, concurrent idempotent retry, changed-payload 409, immutable void metadata, constraints and deny-all public RLS. — 320abfb
+- [x] 2.3 Unsupported adapters return 503 without writes or successful persistence claims; backend Ruff and focused pytest checks pass. — 320abfb
 
 #### Manual
 
@@ -283,9 +285,9 @@ The proposed next number 0032 is provisional until concurrent work is checked. N
 
 #### Automated
 
-- [ ] 3.1 Auth-on tests prove missing-token rejection, cross-location 404, Manager role access, forged location rejection and correct role on voids.
-- [ ] 3.2 Route tests prove create/readback/append/retry/void behavior, valid dates, cursor handling, complete period totals/export beyond 100 records, and safe CSV text.
-- [ ] 3.3 Integration schema applies the new migration and includes both tables in destructive-test cleanup lists; tests run only against a disposable database.
+- [x] 3.1 Auth-on tests prove missing-token rejection, cross-location 404, Manager role access, forged location rejection and correct role on voids. — 320abfb
+- [x] 3.2 Route tests prove create/readback/append/retry/void behavior, valid dates, cursor handling, complete period totals/export beyond 100 records, and safe CSV text. — 320abfb
+- [x] 3.3 Integration schema applies the new migration and includes both tables in destructive-test cleanup lists; tests run only against a disposable database. — 320abfb
 
 #### Manual
 
@@ -295,10 +297,10 @@ The proposed next number 0032 is provisional until concurrent work is checked. N
 
 #### Automated
 
-- [ ] 4.1 Captain menu tests prove the fourth destination and exactly one active button on every relevant route; API tests attach only the intended role token.
-- [ ] 4.2 Quantity/form tests prove the chosen option, repeated/mixed additive tiles, manual override, decimal comma, invalid-after-valid protection, exact gram conversion, no floating-point drift, blank/zero distinction, reason validation and disabled double submit.
-- [ ] 4.3 Draft/history tests prove failed-save retention, stable retry UUID, location isolation, later additions, readback, void visibility and correct nonmixed totals.
-- [ ] 4.4 Frontend build, lint and Vitest pass with the selected control and PL/EN copy.
+- [x] 4.1 Captain menu tests prove the fourth destination and exactly one active button on every relevant route; API tests attach only the intended role token. — 3cddf37
+- [x] 4.2 Quantity/form tests prove the chosen option, repeated/mixed additive tiles, manual override, decimal comma, invalid-after-valid protection, exact gram conversion, no floating-point drift, blank/zero distinction, reason validation and disabled double submit. — 3cddf37
+- [x] 4.3 Draft/history tests prove failed-save retention, stable retry UUID, location isolation, later additions, readback, void visibility and correct nonmixed totals. — 3cddf37
+- [x] 4.4 Frontend build, lint and Vitest pass with the selected control and PL/EN copy. — 3cddf37
 
 #### Manual
 
@@ -309,9 +311,9 @@ The proposed next number 0032 is provisional until concurrent work is checked. N
 
 #### Automated
 
-- [ ] 5.1 Plan/implementation reviews have no unresolved critical issues and the final diff touches only the agreed scope.
-- [ ] 5.2 Product checks pass: backend Ruff and pytest; frontend build, lint and Vitest; disposable Postgres integration.
-- [ ] 5.3 Deployment proposal identifies exact commit, additive migration, backend/frontend verification, rollback and pending real-period acceptance without claiming production was changed.
+- [x] 5.1 Plan/implementation reviews have no unresolved critical issues and the final diff touches only the agreed scope.
+- [x] 5.2 Product checks pass: backend Ruff and pytest; frontend build, lint and Vitest; disposable Postgres integration.
+- [x] 5.3 Deployment proposal identifies exact commit, additive migration, backend/frontend verification, rollback and pending real-period acceptance without claiming production was changed.
 
 #### Manual
 

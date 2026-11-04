@@ -7,6 +7,7 @@ import sys
 from collections import Counter
 from decimal import Decimal
 from pathlib import Path
+from statistics import median
 
 
 def minimum_taps(value: Decimal, additions: list[Decimal]) -> int | None:
@@ -75,7 +76,11 @@ def main() -> None:
             else:
                 converted = Decimal(value) * (1000 if unit == "kg" else 1)
                 eligible.append((cell["report_id"], converted))
-        counts = Counter(minimum_taps(value, additions) for _, value in eligible)
+        tap_counts = [minimum_taps(value, additions) for _, value in eligible]
+        counts = Counter(tap_counts)
+        quantities = Counter(value for _, value in eligible)
+        common = sorted(quantities.items(), key=lambda pair: (-pair[1], pair[0]))[:3]
+        reachable_taps = [taps for taps in tap_counts if taps is not None]
         report_count = len({report_id for report_id, _ in eligible})
         rows.append({
             "product_id": product,
@@ -84,6 +89,12 @@ def main() -> None:
             "calibration": "supported" if report_count >= 5 else "provisional",
             "independent_reports": report_count,
             "daily_observations": len(eligible),
+            "quantity_min": str(min(quantities)) if quantities else None,
+            "quantity_max": str(max(quantities)) if quantities else None,
+            "common_amounts": [{"quantity": str(value), "count": count} for value, count in common],
+            "fractional_piece_observations": sum(value != value.to_integral_value() for _, value in eligible) if item["display_unit"] == "szt" else 0,
+            "median_reachable_taps": str(median(reachable_taps)) if reachable_taps else None,
+            "manual_only": counts[None],
             "single_tap": counts[1],
             "within_two_taps": sum(count for taps, count in counts.items() if taps is not None and taps <= 2),
             "within_three_taps": sum(count for taps, count in counts.items() if taps is not None and taps <= 3),

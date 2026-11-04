@@ -61,11 +61,11 @@ React form → typed role-aware `apiClient` → FastAPI/Pydantic → selected ba
 | 4 | Minimal Captain form and Manager view | Invalid visible input or mobile crowding |
 | 5 | Review, product checks and concrete release proposal | Treating local tests or a merge as production proof |
 
-Prerequisites: validate the supplied private 30-report package and disposable Postgres for verification. The control is selected; source calibration is now in progress. The four targeted review findings are fixed in the plan (SOUND). Ben authorized autonomous implementation and E2E; production remains separately gated.
+The supplied 30-report package has been reconciled; disposable Postgres and auth-enabled browser checks passed. The selected control is implemented and independently reviewed. The four targeted review findings are fixed in the plan (SOUND). Ben authorized autonomous implementation and E2E; production remains separately gated.
 
 ## Open risks and assumptions
 
-- Read the source-calibration file for the actual count; 30 reports are not assumed complete.
+- Source count: 30 unique records/images, 527 eligible daily cells and six provisionally calibrated products; see the analysis for exclusions and coverage limits.
 - Signed-in Telegram app/browser downloads are prohibited by Ben. This client's Office login fails with `invalid_client_metadata`; use a working existing API session and hand back the private result path.
 - Reasons, fractional-piece behavior and correction are explicit proposed defaults, not an already accepted company procedure.
 - Quick amounts do not replace weighing. A missing day is not zero loss.
@@ -76,3 +76,7 @@ Prerequisites: validate the supplied private 30-report package and disposable Po
 - Individual and batch entry both work with clear units and manual override.
 - Append/retry/correction preserve correct quantities, provenance and role boundaries.
 - Complete selected-period readback works, and a real pilot proves usability before archival.
+
+## Delivery handoff
+
+Backend `320abfb` and frontend `3cddf37` are locally verified. Full evidence is in `verification.md`, final review in `reviews/impl-review.md` and the concrete production action in `release-proposal.md`. No production release or real-period operator acceptance is claimed. Next: obtain separate approval for the migration + backend + frontend release, execute and verify the running artifacts before requesting a live pilot.
