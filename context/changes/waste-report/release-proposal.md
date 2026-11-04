@@ -1,6 +1,6 @@
 # Waste report — concrete production release proposal
 
-Status: prepared; awaiting Ben's production approval. No push, migration, main merge or deployment has been performed.
+Status: superseded application proposal. See `../waste-report-list-history/merge-proposal.md` for the current candidate. Ben subsequently approved migration0032 only; it was applied and verified. The original application proposal below is retained as historical context; no application merge/deploy has occurred.
 
 ## Reviewed artifacts
 
