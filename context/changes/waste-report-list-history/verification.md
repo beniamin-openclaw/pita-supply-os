@@ -7,7 +7,7 @@ Date: 2026-11-04. Application candidate `d955721` on `codex/supply-v2-waste-repo
 | Command | Actual final result |
 | --- | --- |
 | Backend `python3 -m ruff check .` | PASS |
-| Backend `python3 -m pytest -q` |1250 passed,45 integration deselected |
+| Backend `python3 -m pytest -q` |1258 passed,45 integration deselected, including8calibration regressions |
 | Disposable Postgres `python3 -m pytest -m integration -q` |45 passed,1250 deselected |
 | Frontend `npm run build` | PASS; existing large-chunk warnings |
 | Frontend `npm run lint` | PASS |
@@ -17,6 +17,14 @@ Date: 2026-11-04. Application candidate `d955721` on `codex/supply-v2-waste-repo
 An earlier full frontend run overlapped a deliberately added red current-preset regression:1328passed/1failed. Implementer fixed it, independent reviewers rechecked the frozen source, then the final full suite above passed. No timeout/configuration changes were introduced. The bounded two-worker command avoids the existing local contention observed in the parent change.
 
 The implementer ran68focusedtests in11files. Independent plan reviewer ran35tests in5files; independent safety reviewer ran20tests in3files. These are additional focused checks, not added to the full-suite count. Both final reviewers approved with no unresolved findings. Typed/role/API/i18n conventions and parent lifecycle invariants remain intact.
+
+## PR checks and final QA corrections
+
+PR: https://github.com/beniamin-openclaw/pita-supply-os/pull/84. The initial head `1227333` passed backend/integration CI, but both frontend jobs exposed a test synchronization defect: a rendered retry button remained disabled until the pending save finalizer completed. The test clicked on presence alone. Tests now wait for enabled controls before retry/readback and a fresh draft's first addition; no application behavior or timeout was changed. Focused14tests and ESLint pass; root reran all1330frontend tests successfully after the correction.
+
+The AI advisory review identified quantity-sized allocation in the offline calibration helper. Replaced it with GCD normalization and exact greedy arithmetic restricted to the two reviewed catalog systems `(1,2,4)` and `(1,2,5)`; future unsupported systems fail explicitly. A huge reachable value now succeeds without quantity-sized allocation. Eight regressions pass, and root recomputation exactly matches all30report/17product aggregates:617daily,527eligible,90excluded,15SUMA excluded. Root full backend1258tests and Ruff pass. Application source remains `d955721`; subsequent QA edits affect the calibration helper, tests and documentation only. The earlier integration result above is for the unchanged application; final remoteCI reruns it for the PR head.
+
+Advisory limits and finding disposition are recorded in `reviews/ci-triage.md`. Its truncated FAIL verdict is not represented as approval of the full application. Final readiness requires the current productCI checks to pass; historical failed runs remain visible.
 
 ## Authenticated browser E2E with real local Postgres
 

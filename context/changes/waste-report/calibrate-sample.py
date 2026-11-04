@@ -6,6 +6,7 @@ import json
 import sys
 from collections import Counter
 from decimal import Decimal
+from math import gcd
 from pathlib import Path
 from statistics import median
 
@@ -15,13 +16,25 @@ def minimum_taps(value: Decimal, additions: list[Decimal]) -> int | None:
     if value != value.quantize(Decimal("0.01")):
         return None
     target = int(value * 100)
-    coins = [int(value * 100) for value in additions]
-    distances = [0] + [target + 1] * target
-    for amount in range(1, target + 1):
-        for coin in coins:
-            if coin <= amount:
-                distances[amount] = min(distances[amount], distances[amount - coin] + 1)
-    return distances[target] if distances[target] <= target else None
+    if not additions or any(
+        addition <= 0 or addition != addition.quantize(Decimal("0.01"))
+        for addition in additions
+    ):
+        raise ValueError("Additions must be positive whole hundredths")
+    coins = [int(addition * 100) for addition in additions]
+    divisor = gcd(*coins)
+    normalized = tuple(sorted({coin // divisor for coin in coins}))
+    # Greedy is exact for these reviewed catalog systems; reject new systems for review.
+    if normalized not in ((1, 2, 4), (1, 2, 5)):
+        raise ValueError(f"Unreviewed addition system: {normalized}")
+    if target % divisor:
+        return None
+    remaining = target // divisor
+    taps = 0
+    for coin in reversed(normalized):
+        count, remaining = divmod(remaining, coin)
+        taps += count
+    return taps
 
 
 def main() -> None:

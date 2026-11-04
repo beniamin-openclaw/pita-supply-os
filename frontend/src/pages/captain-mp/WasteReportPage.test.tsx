@@ -13,6 +13,7 @@ const saved = (body: string) => { const p = JSON.parse(body); return { report_id
 function mount() { return render(<LangProvider><MemoryRouter><WasteReportPage /></MemoryRouter></LangProvider>); }
 async function fill() {
   await screen.findByRole("group", {name:"Pomidor"});
+  await waitFor(() => expect(screen.getByRole("button", { name: "+100 g" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "+100 g" }));
   fireEvent.change(screen.getByLabelText(/^Powód/), { target: { value: "dropped" } });
 }
@@ -28,7 +29,7 @@ describe("waste save lifecycle", () => {
       return json(list);
     }));
     mount(); await fill(); fireEvent.click(screen.getByRole("button", {name: "Zapisz straty"}));
-    expect(await screen.findByRole("button", {name: "Sprawdź zapis"})).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", {name: "Sprawdź zapis"})).toBeEnabled());
     fireEvent.click(screen.getByRole("button", {name: "Sprawdź zapis"}));
     await waitFor(() => expect(screen.getByRole("button", {name: "Ponów ten sam zapis"})).toBeEnabled());
     expect(screen.getByLabelText("Ilość (g) — Pomidor")).toBeDisabled();
@@ -62,7 +63,8 @@ describe("waste save lifecycle", () => {
       return json(list);
     }));
     mount(); await fill(); fireEvent.click(screen.getByRole("button", {name:"Zapisz straty"}));
-    fireEvent.click(await screen.findByRole("button", {name:"Ponów ten sam zapis"}));
+    await waitFor(() => expect(screen.getByRole("button", {name:"Ponów ten sam zapis"})).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", {name:"Ponów ten sam zapis"}));
     await waitFor(() => expect(posts).toHaveLength(2));
     await waitFor(() => expect(screen.getByRole("button", {name:"Ponów ten sam zapis"})).toBeEnabled());
     expect(screen.getByLabelText("Ilość (g) — Pomidor")).toBeDisabled();

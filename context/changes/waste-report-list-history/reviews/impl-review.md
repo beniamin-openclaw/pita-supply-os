@@ -22,6 +22,8 @@
 
 Two separate final reviewers inspected the delta from `d05a3f3` and relevant whole-branch contracts. Plan reviewer independently ran35tests/5files; safety reviewer20tests/3files. Both returned APPROVED after fixes; root ran the complete product suites and authenticated real-Postgres browser flows in `../verification.md`. No reviewer substituted code inspection for deployed-artifact evidence.
 
+After initial PR CI, a separate narrow re-review APPROVED the offline calibration resource fix and enabled-button test synchronization. The reviewer independently checked4002oracle targets across both supported normalized systems, all17catalog schemes and exact private aggregate equality, then ran8calibration and14frontend tests. No application source, assertions or timeouts were weakened. See `ci-triage.md` and the private `final-ci-fix-review.md`; final productCI remains required.
+
 ## Findings and decisions
 
 ### F1 — First input lost keyboard focus
