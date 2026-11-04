@@ -311,9 +311,9 @@ The proposed next number 0032 is provisional until concurrent work is checked. N
 
 #### Automated
 
-- [x] 5.1 Plan/implementation reviews have no unresolved critical issues and the final diff touches only the agreed scope.
-- [x] 5.2 Product checks pass: backend Ruff and pytest; frontend build, lint and Vitest; disposable Postgres integration.
-- [x] 5.3 Deployment proposal identifies exact commit, additive migration, backend/frontend verification, rollback and pending real-period acceptance without claiming production was changed.
+- [x] 5.1 Plan/implementation reviews have no unresolved critical issues and the final diff touches only the agreed scope. — 35fea08
+- [x] 5.2 Product checks pass: backend Ruff and pytest; frontend build, lint and Vitest; disposable Postgres integration. — 35fea08
+- [x] 5.3 Deployment proposal identifies exact commit, additive migration, backend/frontend verification, rollback and pending real-period acceptance without claiming production was changed. — 35fea08
 
 #### Manual
 
