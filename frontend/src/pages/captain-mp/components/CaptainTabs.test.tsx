@@ -16,7 +16,7 @@ function renderAt(path: string) {
 }
 
 describe("CaptainTabs", () => {
-  it.each(["/captain-v2", "/captain-v2/orders", "/captain-v2/inventory-count", "/captain-v2/waste-report"])("has one active tab at %s", (path) => {
+  it.each(["/captain-v2", "/captain-v2/orders", "/captain-v2/inventory-count", "/captain-v2/waste-report", "/captain-v2/waste-history"])("has one active tab at %s", (path) => {
     renderAt(path);
     expect(screen.getAllByRole("link", { current: "page" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Raport strat" })).toHaveAttribute("href", "/captain-v2/waste-report");

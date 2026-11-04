@@ -633,7 +633,7 @@ export function ManagerPage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <h1 className="text-base font-semibold">PITA BROS — Manager Dispatch</h1>
           <div className="flex items-center gap-3">
-            <Link to="/manager/waste" className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">{t("waste.title")}</Link>
+            <Link to="/manager/waste" className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70">{t("waste.reports")}</Link>
             <Link
               to="/manager/inventory"
               className="rounded border border-blue-300 px-2 py-1 text-xs hover:bg-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"

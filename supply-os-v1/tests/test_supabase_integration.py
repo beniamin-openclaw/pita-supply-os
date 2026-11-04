@@ -212,6 +212,13 @@ def test_waste_routes_auth_scoped_void_and_csv(monkeypatch):
     rows = list(csv.DictReader(io.StringIO(export.text)))
     assert len(rows) == 102
     assert {row["report_id"] for row in rows} == expected
+    captain_export = client.get("/api/captain/waste/export?location_id=KEN", headers=captain)
+    captain_rows = list(csv.DictReader(io.StringIO(captain_export.text)))
+    assert captain_export.status_code == 200
+    assert {row["report_id"] for row in captain_rows} == expected
+    assert {row["location_id"] for row in captain_rows} == {"WOLA"}
+    other_export = client.get("/api/captain/waste/export?location_id=WOLA", headers=other)
+    assert list(csv.DictReader(io.StringIO(other_export.text))) == []
     original_load = supabase_backend.load_waste_reports
     calls = []
 

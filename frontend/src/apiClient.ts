@@ -321,7 +321,7 @@ export function apiPatch<T>(path: string, body: unknown, role: Role): Promise<T>
  * (e.g. a plain-text 503 from a misconfigured proxy). Same Bearer + 401
  * handling as request().
  */
-export async function apiGetBlob(path: string, role: Role, expectedToken?: string | null): Promise<Blob> {
+export async function apiGetBlob(path: string, role: Role, expectedToken?: string | null, signal?: AbortSignal): Promise<Blob> {
   const tokenAtRequest = getToken(role);
   if (expectedToken !== undefined && tokenAtRequest !== expectedToken) throw new WasteRequestError("scope", 0, "scope");
   const headers: Record<string, string> = {};
@@ -329,7 +329,7 @@ export async function apiGetBlob(path: string, role: Role, expectedToken?: strin
 
   let resp: Response;
   try {
-    resp = await fetch(`${BASE_URL}${path}`, { method: "GET", headers });
+    resp = await fetch(`${BASE_URL}${path}`, { method: "GET", headers, ...(signal ? {signal} : {}) });
   } catch (err) {
     throw new ApiError(0, (err as Error).message || "Network error");
   }

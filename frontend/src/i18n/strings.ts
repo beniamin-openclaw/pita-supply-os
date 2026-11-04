@@ -9,6 +9,22 @@ export interface StringEntry {
 }
 
 export const STRINGS = {
+  "waste.clear": { pl: "Wyczyść", en: "Clear" },
+  "waste.historyLink": { pl: "Historia raportów", en: "Report history" },
+  "waste.entryHint": { pl: "Dodaj ilości przy wybranych produktach. Puste pozycje pominiemy.", en: "Enter amounts next to any products. Blank items are omitted." },
+  "waste.draftHint": { pl: "Szkic zachowuje się automatycznie. Zapisz, aby zatwierdzić.", en: "Your draft is retained automatically. Save to confirm." },
+  "waste.selected": { pl: "Wybrane pozycje: {count}", en: "Selected items: {count}" },
+  "waste.loading": { pl: "Ładowanie…", en: "Loading…" },
+  "waste.period": { pl: "Okres raportu", en: "Report period" },
+  "waste.period.today": { pl: "Dzisiaj", en: "Today" },
+  "waste.period.week": { pl: "Ostatnie 7 dni", en: "Last 7 days" },
+  "waste.period.month": { pl: "Ten miesiąc", en: "This month" },
+  "waste.exporting": { pl: "Pobieranie…", en: "Downloading…" },
+  "waste.reports": { pl: "Raporty strat", en: "Waste reports" },
+  "waste.modules": { pl: "Raporty operacyjne", en: "Operational reports" },
+  "waste.role.manager": { pl: "Manager", en: "Manager" },
+  "waste.role.captain": { pl: "Kapitan", en: "Captain" },
+  "waste.cancel": { pl: "Anuluj", en: "Cancel" },
   "waste.title": { pl: "Raport strat", en: "Waste report" },
   "waste.date": { pl: "Data", en: "Date" },
   "waste.from": { pl: "Od", en: "From" },

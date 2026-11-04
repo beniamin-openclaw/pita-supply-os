@@ -166,3 +166,27 @@ def test_waste_auth_scope_and_feature_errors(monkeypatch):
                              headers={"Authorization": "Bearer test_wola_token"})
     assert unavailable.status_code == 503
     assert unavailable.json()["detail"]["write_outcome"] == "rejected"
+
+
+def test_captain_waste_export_forces_token_location_and_rejects_other_role(monkeypatch):
+    from app.models import WasteBackendPage
+
+    scopes = []
+
+    class Backend:
+        SUPPORTS_WASTE_REPORTS = True
+
+        def load_waste_reports(self, start, end, location, cursor, limit, include_totals):
+            scopes.append((location, include_totals))
+            return WasteBackendPage(reports=[], totals=[], more=False)
+
+    monkeypatch.setattr(main, "_choose_backend", lambda: Backend())
+    client = TestClient(main.app)
+    path = "/api/captain/waste/export?location_id=KEN"
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers={"Authorization": "Bearer test_manager_token"}).status_code == 401
+    response = client.get(path, headers={"Authorization": "Bearer test_wola_token"})
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert scopes == [("WOLA", False)]
+    assert response.text.startswith("report_id,location_id,business_date")

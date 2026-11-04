@@ -25,7 +25,8 @@ export function CaptainTabs() {
   // else under captain-v2).
   const historyActive =
     pathname.startsWith("/captain-v2/orders") ||
-    pathname.startsWith("/captain-v2/inventory-history");
+    pathname.startsWith("/captain-v2/inventory-history") ||
+    pathname.startsWith("/captain-v2/waste-history");
   const inventoryActive = pathname.startsWith("/captain-v2/inventory-count");
   const wasteActive = pathname.startsWith("/captain-v2/waste-report");
   const ordersActive = !inventoryActive && !historyActive && !wasteActive;

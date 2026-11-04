@@ -7354,6 +7354,18 @@ def manager_waste_export(date_from: str | None = None, date_to: str | None = Non
     backend = _waste_backend()
     _waste_location(backend, location_id)
     start, end = _waste_dates(date_from, date_to)
+    return _waste_export(backend, start, end, location_id)
+
+
+@app.get("/api/captain/waste/export")
+def captain_waste_export(date_from: str | None = None, date_to: str | None = None,
+                         location_id: str = Depends(require_captain)) -> Response:
+    backend = _waste_backend()
+    start, end = _waste_dates(date_from, date_to)
+    return _waste_export(backend, start, end, location_id)
+
+
+def _waste_export(backend: Any, start: date, end: date, location_id: str | None) -> Response:
     output = TemporaryFile(mode="w+", encoding="utf-8", newline="")
     writer = csv.writer(output)
     fields = ["report_id", "location_id", "business_date", "batch_uuid", "created_at", "line_id",

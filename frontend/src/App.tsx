@@ -6,6 +6,7 @@ import { CaptainMP } from "./pages/captain-mp/CaptainMP";
 import { InventoryCountPage } from "./pages/captain-mp/InventoryCountPage";
 import { InventoryCountEditPage } from "./pages/captain-mp/InventoryCountEditPage";
 import { InventoryHistoryPage } from "./pages/captain-mp/InventoryHistoryPage";
+import { WasteHistoryPage } from "./pages/captain-mp/WasteHistoryPage";
 import { WasteReportPage } from "./pages/captain-mp/WasteReportPage";
 import { OrdersListPage } from "./pages/captain-mp/OrdersListPage";
 import { OrderDetailPage } from "./pages/captain-mp/OrderDetailPage";
@@ -65,6 +66,7 @@ export default function App() {
               </AuthGate>
             }
           />
+          <Route path="/captain-v2/waste-history" element={<AuthGate role="captain"><WasteHistoryPage /></AuthGate>} />
           <Route
             path="/captain-v2/waste-report"
             element={<AuthGate role="captain"><WasteReportPage /></AuthGate>}
