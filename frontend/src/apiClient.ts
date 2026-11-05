@@ -97,6 +97,48 @@ export class ApiError extends Error {
   }
 }
 
+export class WasteRequestError extends Error {
+  kind: "scope" | "rejected" | "unknown";
+  status: number;
+  code: string;
+  constructor(kind: "scope" | "rejected" | "unknown", status: number, code: string) {
+    super(code);
+    this.kind = kind; this.status = status; this.code = code;
+  }
+}
+
+/** Pin the caller's scope through the actual fetch, including uncertain JSON decoding. */
+export async function wasteRequest<T>(path: string, role: Role, token: string | null, body?: unknown): Promise<T> {
+  if (getToken(role) !== token) throw new WasteRequestError("scope", 0, "scope");
+  let response: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch {
+    clearTimeout(timeout);
+    throw new WasteRequestError("unknown", 0, "network");
+  }
+  if (response.status === 401 && getToken(role) === token) fireAuthInvalid(role);
+  let payload: unknown;
+  try { payload = await response.json(); } catch {
+    throw new WasteRequestError("unknown", response.status, "decode");
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!response.ok) {
+    const detail = (payload as { detail?: { code?: string; write_outcome?: string } })?.detail;
+    const rejected = response.status === 422 || response.status === 401 || response.status === 403 || detail?.write_outcome === "rejected";
+    throw new WasteRequestError(rejected ? "rejected" : "unknown", response.status, detail?.code || "validation");
+  }
+  return payload as T;
+}
+
 // Event signal that the auth modal should re-open. Used by router-level UI.
 export const AUTH_INVALID_EVENT = "supply_os_auth_invalid";
 
@@ -279,14 +321,15 @@ export function apiPatch<T>(path: string, body: unknown, role: Role): Promise<T>
  * (e.g. a plain-text 503 from a misconfigured proxy). Same Bearer + 401
  * handling as request().
  */
-export async function apiGetBlob(path: string, role: Role): Promise<Blob> {
+export async function apiGetBlob(path: string, role: Role, expectedToken?: string | null, signal?: AbortSignal): Promise<Blob> {
   const tokenAtRequest = getToken(role);
+  if (expectedToken !== undefined && tokenAtRequest !== expectedToken) throw new WasteRequestError("scope", 0, "scope");
   const headers: Record<string, string> = {};
   if (tokenAtRequest) headers["Authorization"] = `Bearer ${tokenAtRequest}`;
 
   let resp: Response;
   try {
-    resp = await fetch(`${BASE_URL}${path}`, { method: "GET", headers });
+    resp = await fetch(`${BASE_URL}${path}`, { method: "GET", headers, ...(signal ? {signal} : {}) });
   } catch (err) {
     throw new ApiError(0, (err as Error).message || "Network error");
   }

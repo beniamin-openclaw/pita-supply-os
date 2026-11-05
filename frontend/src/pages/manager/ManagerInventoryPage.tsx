@@ -1,3 +1,4 @@
+import { OperationalReportsSegment } from "./OperationalReportsSegment";
 // Manager inventory view (S-08 / FR-018). Read-only browse of submitted
 // inventory snapshots across locations, with a product-enriched detail. Lives on
 // its own route (/manager/inventory) so it doesn't touch the order workspace.
@@ -166,7 +167,7 @@ export function ManagerInventoryPage() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
+        <main className="flex-1 p-4 max-w-3xl mx-auto w-full"><OperationalReportsSegment/>
           {detailLoading && (
             <div className="text-sm text-slate-500">{t("manager.inventory.loading")}</div>
           )}
@@ -415,7 +416,7 @@ export function ManagerInventoryPage() {
         </div>
       </header>
 
-      <main className="flex-1 p-4 max-w-3xl mx-auto w-full">
+      <main className="flex-1 p-4 max-w-3xl mx-auto w-full"><OperationalReportsSegment/>
         {locationOptions.length > 1 && (
           <div className="mb-4">
             <label htmlFor="mgr-inv-loc" className="sr-only">

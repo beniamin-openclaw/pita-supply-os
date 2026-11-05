@@ -23,7 +23,7 @@ export function HistorySegment() {
   const inactiveCls = "bg-white text-slate-600 border-gray-300 hover:bg-gray-50";
 
   return (
-    <nav aria-label={t("history.segment.ariaLabel")} className="flex gap-2 mb-4">
+    <nav aria-label={t("history.segment.ariaLabel")} className="flex flex-wrap gap-2 mb-4">
       <Link
         to={ORDERS_PATH}
         aria-current={ordersActive ? "page" : undefined}
@@ -37,6 +37,9 @@ export function HistorySegment() {
         className={`${base} ${inventoryActive ? activeCls : inactiveCls}`}
       >
         {t("history.segment.inventory")}
+      </Link>
+      <Link to="/captain-v2/waste-history" aria-current={pathname.startsWith("/captain-v2/waste-history") ? "page" : undefined} className={`${base} ${pathname.startsWith("/captain-v2/waste-history") ? activeCls : inactiveCls}`}>
+        {t("waste.reports")}
       </Link>
     </nav>
   );

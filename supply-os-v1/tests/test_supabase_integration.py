@@ -16,9 +16,13 @@ to the 12 product tables — point ``SUPPLY_OS_DATABASE_URL`` at a throwaway DB 
 from __future__ import annotations
 
 import os
+import csv
+import io
 import threading
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -43,14 +47,200 @@ from app.models import (
     Supplier,
     SupplierDeliveryRule,
     SupplierProduct,
+    WasteCreate,
 )
 
 pytestmark = pytest.mark.integration
+
+
+def _waste_request(batch=None):
+    return WasteCreate.model_validate({"batch_uuid": str(batch or uuid4()), "business_date": "2026-11-04",
+        "lines": [{"product_id": "tomato", "quantity": "100", "unit": "g", "reason": "dropped"}]})
+
+
+def test_waste_atomic_retry_concurrency_void_and_period_totals():
+    request = _waste_request()
+    barrier = threading.Barrier(2)
+    results = []
+
+    def save():
+        barrier.wait()
+        results.append(supabase_backend.append_waste_report("WOLA", request))
+
+    threads = [threading.Thread(target=save) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(results) == 2 and results[0].report_id == results[1].report_id
+    changed = request.model_copy(update={"business_date": date(2026, 11, 3)})
+    with pytest.raises(errors.WasteConflictError):
+        supabase_backend.append_waste_report("WOLA", changed)
+    equivalent = _waste_request()
+    equivalent.lines[0].quantity = Decimal("0.1")
+    equivalent.lines[0].unit = "kg"
+    first = supabase_backend.append_waste_report("WOLA", equivalent)
+    equivalent.lines[0].quantity = Decimal("0.100")
+    assert supabase_backend.append_waste_report("WOLA", equivalent).report_id == first.report_id
+    report = results[0]
+    voided = supabase_backend.void_waste_report_line(report.report_id, report.lines[0].line_id,
+                                                      "WOLA", "first", "captain")
+    repeated = supabase_backend.void_waste_report_line(report.report_id, report.lines[0].line_id,
+                                                        "WOLA", "second", "manager")
+    assert repeated.lines[0].void_reason == "first"
+    assert repeated.lines[0].voided_at == voided.lines[0].voided_at
+    assert repeated.lines[0].quantity == report.lines[0].quantity
+    for _ in range(101):
+        supabase_backend.append_waste_report("WOLA", _waste_request())
+    from sqlalchemy import event
+    queries = []
+
+    def count_query(conn, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+
+    engine = supabase_backend._get_engine()
+    event.listen(engine, "before_cursor_execute", count_query)
+    try:
+        page = supabase_backend.load_waste_reports(date(2026, 11, 4), date(2026, 11, 4),
+                                                   "WOLA", None, 100)
+    finally:
+        event.remove(engine, "before_cursor_execute", count_query)
+    assert len(queries) == 3
+    assert len(page.reports) == 100 and page.more
+    assert page.totals[0].quantity == Decimal("10.200")
+
+
+def test_waste_transaction_rolls_back_and_rls_is_enabled():
+    request = _waste_request()
+    bad_line = request.lines[0].model_copy(update={"quantity": Decimal("-1")})
+    bad_request = request.model_copy(update={"lines": [request.lines[0], bad_line]})
+    with pytest.raises(IntegrityError):
+        supabase_backend.append_waste_report("WOLA", bad_request)
+    with supabase_backend._get_engine().connect() as conn:
+        from sqlalchemy import text
+        assert conn.execute(text("SELECT count(*) FROM waste_reports WHERE batch_uuid=:batch"),
+                            {"batch": str(request.batch_uuid)}).scalar() == 0
+        flags = conn.execute(text("SELECT relrowsecurity FROM pg_class WHERE relname IN "
+                                  "('waste_reports','waste_report_lines')")).scalars().all()
+        assert flags == [True, True]
+        assert conn.execute(text("SELECT count(*) FROM pg_policies WHERE tablename IN "
+                                 "('waste_reports','waste_report_lines')")).scalar() == 0
+    valid = supabase_backend.append_waste_report("WOLA", _waste_request())
+    with pytest.raises(IntegrityError), supabase_backend._get_engine().begin() as conn:
+        conn.execute(text("""INSERT INTO waste_report_lines
+            (line_id, report_id, ordinal, product_id, name_pl, name_en, quantity, unit,
+             submitted_quantity, submitted_unit, reason)
+            VALUES (:line, :report, 1, 'tomato', 'Tomato', 'Tomato', 0.0001, 'kg',
+                    0.0001, 'kg', 'dropped')"""),
+            {"line": str(uuid4()), "report": str(valid.report_id)})
+
+
+def test_waste_rls_denies_nonowner_with_select_grants():
+    from sqlalchemy import text
+
+    supabase_backend.append_waste_report("WOLA", _waste_request())
+    role = "waste_rls_test_" + uuid4().hex
+    with supabase_backend._get_engine().connect() as conn:
+        transaction = conn.begin()
+        try:
+            assert conn.execute(text("SELECT count(*) FROM waste_reports")).scalar() > 0
+            assert conn.execute(text("SELECT count(*) FROM waste_report_lines")).scalar() > 0
+            conn.exec_driver_sql(f'CREATE ROLE "{role}" NOLOGIN')
+            conn.exec_driver_sql(f'GRANT USAGE ON SCHEMA public TO "{role}"')
+            conn.exec_driver_sql(f'GRANT SELECT ON waste_reports, waste_report_lines TO "{role}"')
+            conn.exec_driver_sql(f'SET LOCAL ROLE "{role}"')
+            assert conn.execute(text("SELECT count(*) FROM waste_reports")).scalar() == 0
+            assert conn.execute(text("SELECT count(*) FROM waste_report_lines")).scalar() == 0
+        finally:
+            transaction.rollback()
+    with supabase_backend._get_engine().connect() as conn:
+        assert conn.execute(text("SELECT count(*) FROM pg_roles WHERE rolname=:role"),
+                            {"role": role}).scalar() == 0
+
+
+def test_waste_routes_auth_scoped_void_and_csv(monkeypatch):
+    from fastapi.testclient import TestClient
+    from sqlalchemy import event
+    from app import main
+
+    client = TestClient(main.app)
+    captain = {"Authorization": "Bearer test_wola_token"}
+    other = {"Authorization": "Bearer test_ken_token"}
+    manager = {"Authorization": "Bearer test_manager_token"}
+    body = {"batch_uuid": str(uuid4()), "business_date": date.today().isoformat(),
+            "lines": [{"product_id": None, "description": "=danger", "quantity": "0.5",
+                       "unit": "szt", "reason": "other", "reason_detail": "+danger"}]}
+    created = client.post("/api/captain/waste/reports", json=body, headers=captain)
+    assert created.status_code == 200, created.text
+    report = created.json()
+    assert client.post("/api/captain/waste/reports", json=body, headers=captain).json() == report
+    batch = f"/api/captain/waste/reports/by-batch/{body['batch_uuid']}"
+    assert client.get(batch, headers=captain).json() == report
+    assert client.get(batch, headers=other).status_code == 404
+    changed = {**body, "lines": [{**body["lines"][0], "quantity": "1"}]}
+    assert client.post("/api/captain/waste/reports", json=changed, headers=captain).status_code == 409
+    expected = {report["report_id"]}
+    for _ in range(101):
+        request = _waste_request().model_copy(update={"business_date": date.today()})
+        expected.add(str(supabase_backend.append_waste_report("WOLA", request).report_id))
+    path = f"/api/captain/waste/reports/{report['report_id']}"
+    assert client.get(path, headers=other).status_code == 404
+    void_path = path + f"/lines/{report['lines'][0]['line_id']}/void"
+    assert client.post(void_path, json={"reason": "wrong"}, headers=other).status_code == 404
+    queries = []
+    files = []
+    original_temporary_file = main.TemporaryFile
+
+    def capture_file(*args, **kwargs):
+        file = original_temporary_file(*args, **kwargs)
+        files.append(file)
+        return file
+
+    def capture_query(conn, cursor, statement, parameters, context, executemany):
+        queries.append(statement)
+
+    monkeypatch.setattr(main, "TemporaryFile", capture_file)
+    engine = supabase_backend._get_engine()
+    event.listen(engine, "before_cursor_execute", capture_query)
+    try:
+        export = client.get("/api/manager/waste/export", headers=manager)
+    finally:
+        event.remove(engine, "before_cursor_execute", capture_query)
+    assert export.status_code == 200 and "'=danger" in export.text and "'+danger" in export.text
+    assert files[-1].closed
+    assert not any("SUM(" in query.upper() for query in queries)
+    rows = list(csv.DictReader(io.StringIO(export.text)))
+    assert len(rows) == 102
+    assert {row["report_id"] for row in rows} == expected
+    captain_export = client.get("/api/captain/waste/export?location_id=KEN", headers=captain)
+    captain_rows = list(csv.DictReader(io.StringIO(captain_export.text)))
+    assert captain_export.status_code == 200
+    assert {row["report_id"] for row in captain_rows} == expected
+    assert {row["location_id"] for row in captain_rows} == {"WOLA"}
+    other_export = client.get("/api/captain/waste/export?location_id=WOLA", headers=other)
+    assert list(csv.DictReader(io.StringIO(other_export.text))) == []
+    original_load = supabase_backend.load_waste_reports
+    calls = []
+
+    def failing_second_page(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("storage failed")
+        return original_load(*args, **kwargs)
+
+    monkeypatch.setattr(supabase_backend, "load_waste_reports", failing_second_page)
+    failed = client.get("/api/manager/waste/export", headers=manager)
+    assert failed.status_code == 503 and failed.json()["detail"]["write_outcome"] == "unknown"
+    assert files[-1].closed
+    manager_path = void_path.replace("/captain/", "/manager/")
+    voided = client.post(manager_path, json={"reason": "wrong"}, headers=manager)
+    assert voided.json()["lines"][0]["void_role"] == "manager"
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 # FK-safe drop/truncate order (children before parents).
 _ALL_TABLES = [
+    "waste_report_lines", "waste_reports",
     "finance_line_aliases", "finance_receipt_reviews", "finance_document_lines",
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
@@ -61,6 +251,7 @@ _ALL_TABLES = [
     "products", "_meta",
 ]
 _TXN_TABLES = [
+    "waste_report_lines", "waste_reports",
     "finance_line_aliases", "finance_receipt_reviews", "finance_document_lines",
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
@@ -265,6 +456,7 @@ def _schema():
         conn.exec_driver_sql(location_supplier_catalog)
         conn.exec_driver_sql(location_require_stock_count)
         conn.exec_driver_sql(delivery_window_pack_suffix)
+        conn.exec_driver_sql((MIGRATIONS_DIR / "0032_waste_reports.sql").read_text())
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

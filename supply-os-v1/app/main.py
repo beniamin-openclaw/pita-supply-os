@@ -1,13 +1,20 @@
 """FastAPI app — Captain Submit + Manager Dispatch backend."""
 import logging
+import base64
+import binascii
+import csv
+import json
 import secrets
+from tempfile import TemporaryFile
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Callable, Optional
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import (
@@ -22,6 +29,8 @@ from . import (
     supabase_storage,
 )
 from .auth import require_any_auth, require_captain, require_manager
+from .models import WasteCatalog, WasteCreate, WasteList, WasteReport, WasteVoid
+from .waste_catalog import ITEMS as WASTE_CATALOG
 from .order_qty import effective_ordered_qty, is_manager_final_set
 from .supplier_catalog import (
     effective_supplier_products,
@@ -7175,6 +7184,214 @@ def manager_transport_draft_config(
         # From settings, so it survives a degraded `_meta` read.
         order_mailbox=settings.order_mailbox or "",
     )
+
+
+# ---------- Waste reports ----------
+
+def _waste_error(status: int, code: str, outcome: str = "rejected") -> HTTPException:
+    return HTTPException(status_code=status, detail={"code": code, "write_outcome": outcome})
+
+
+def _waste_backend() -> Any:
+    backend = _choose_backend()
+    if not getattr(backend, "SUPPORTS_WASTE_REPORTS", False):
+        raise _waste_error(503, "waste_unavailable")
+    return backend
+
+
+def _waste_call(fn: Callable, *args: Any) -> Any:
+    try:
+        return fn(*args)
+    except errors.WasteConflictError:
+        raise _waste_error(409, "waste_conflict") from None
+    except Exception:
+        log.exception("waste storage operation failed")
+        raise _waste_error(503, "waste_storage_error", "unknown") from None
+
+
+def _waste_dates(date_from: str | None, date_to: str | None) -> tuple[date, date]:
+    today = datetime.now(ZoneInfo("Europe/Warsaw")).date()
+    try:
+        start = date.fromisoformat(date_from) if date_from else today
+        end = date.fromisoformat(date_to) if date_to else today
+        if (date_from and start.isoformat() != date_from) or (date_to and end.isoformat() != date_to):
+            raise ValueError()
+        if start > end or end > today or (end - start).days >= 366:
+            raise ValueError()
+    except ValueError:
+        raise _waste_error(422, "waste_invalid_date") from None
+    return start, end
+
+
+def _waste_cursor(value: str | None) -> tuple[datetime, str] | None:
+    if value is None:
+        return None
+    try:
+        raw = base64.b64decode(value.encode(), altchars=b"-_", validate=True)
+        parsed = json.loads(raw)
+        if (not isinstance(parsed, list) or len(parsed) != 2 or
+                not all(isinstance(part, str) for part in parsed)):
+            raise ValueError()
+        stamp = datetime.fromisoformat(parsed[0])
+        if stamp.tzinfo is None:
+            raise ValueError()
+        return stamp, str(UUID(parsed[1]))
+    except (ValueError, TypeError, UnicodeError, binascii.Error):
+        raise _waste_error(422, "waste_invalid_cursor") from None
+
+
+def _waste_list(backend: Any, start: date, end: date, location_id: str | None,
+                cursor: str | None, limit: int, include_totals: bool = True) -> WasteList:
+    page = _waste_call(backend.load_waste_reports, start, end, location_id,
+                       _waste_cursor(cursor), limit, include_totals)
+    next_cursor = None
+    if page.more:
+        last = page.reports[-1]
+        raw = json.dumps([last.created_at.isoformat(), str(last.report_id)]).encode()
+        next_cursor = base64.urlsafe_b64encode(raw).decode()
+    return WasteList(reports=page.reports, totals=page.totals, next_cursor=next_cursor)
+
+
+def _waste_location(backend: Any, location_id: str | None) -> None:
+    if location_id is not None and not any(loc.location_id == location_id for loc in
+                                           _waste_call(backend.load_locations)):
+        raise _waste_error(404, "waste_not_found")
+
+
+def _waste_required(report: WasteReport | None) -> WasteReport:
+    if report is None:
+        raise _waste_error(404, "waste_not_found")
+    return report
+
+
+@app.get("/api/captain/waste/catalog", response_model=WasteCatalog)
+def captain_waste_catalog(_: str = Depends(require_captain)) -> WasteCatalog:
+    _waste_backend()
+    return WasteCatalog(items=WASTE_CATALOG)
+
+
+@app.post("/api/captain/waste/reports", response_model=WasteReport)
+def captain_waste_create(request: WasteCreate, location_id: str = Depends(require_captain)) -> WasteReport:
+    backend = _waste_backend()
+    if request.business_date > datetime.now(ZoneInfo("Europe/Warsaw")).date():
+        raise _waste_error(422, "waste_invalid_date")
+    return _waste_call(backend.append_waste_report, location_id, request)
+
+
+@app.get("/api/captain/waste/reports", response_model=WasteList)
+def captain_waste_list(date_from: str | None = None, date_to: str | None = None,
+                       cursor: str | None = None, limit: int = 50,
+                       location_id: str = Depends(require_captain)) -> WasteList:
+    backend = _waste_backend()
+    if not 1 <= limit <= 100:
+        raise _waste_error(422, "waste_invalid_cursor")
+    start, end = _waste_dates(date_from, date_to)
+    return _waste_list(backend, start, end, location_id, cursor, limit)
+
+
+@app.get("/api/captain/waste/reports/by-batch/{batch_uuid}", response_model=WasteReport)
+def captain_waste_batch(batch_uuid: UUID, location_id: str = Depends(require_captain)) -> WasteReport:
+    backend = _waste_backend()
+    return _waste_required(_waste_call(backend.get_waste_report_by_batch, location_id, str(batch_uuid)))
+
+
+@app.get("/api/captain/waste/reports/{report_id}", response_model=WasteReport)
+def captain_waste_detail(report_id: UUID, location_id: str = Depends(require_captain)) -> WasteReport:
+    backend = _waste_backend()
+    return _waste_required(_waste_call(backend.get_waste_report, str(report_id), location_id))
+
+
+@app.post("/api/captain/waste/reports/{report_id}/lines/{line_id}/void", response_model=WasteReport)
+def captain_waste_void(report_id: UUID, line_id: UUID, request: WasteVoid,
+                       location_id: str = Depends(require_captain)) -> WasteReport:
+    backend = _waste_backend()
+    return _waste_required(_waste_call(backend.void_waste_report_line, str(report_id), str(line_id),
+                                       location_id, request.reason, "captain"))
+
+
+@app.get("/api/manager/waste/reports", response_model=WasteList)
+def manager_waste_list(date_from: str | None = None, date_to: str | None = None,
+                       cursor: str | None = None, limit: int = 50, location_id: str | None = None,
+                       _: None = Depends(require_manager)) -> WasteList:
+    backend = _waste_backend()
+    _waste_location(backend, location_id)
+    if not 1 <= limit <= 100:
+        raise _waste_error(422, "waste_invalid_cursor")
+    start, end = _waste_dates(date_from, date_to)
+    return _waste_list(backend, start, end, location_id, cursor, limit)
+
+
+@app.get("/api/manager/waste/reports/{report_id}", response_model=WasteReport)
+def manager_waste_detail(report_id: UUID, _: None = Depends(require_manager)) -> WasteReport:
+    backend = _waste_backend()
+    return _waste_required(_waste_call(backend.get_waste_report, str(report_id), None))
+
+
+@app.post("/api/manager/waste/reports/{report_id}/lines/{line_id}/void", response_model=WasteReport)
+def manager_waste_void(report_id: UUID, line_id: UUID, request: WasteVoid,
+                       _: None = Depends(require_manager)) -> WasteReport:
+    backend = _waste_backend()
+    return _waste_required(_waste_call(backend.void_waste_report_line, str(report_id), str(line_id),
+                                       None, request.reason, "manager"))
+
+
+class _WasteExportResponse(StreamingResponse):
+    def __init__(self, file: Any) -> None:
+        self.file = file
+        super().__init__(iter(lambda: file.read(65536), ""), media_type="text/csv",
+                         headers={"Content-Disposition": 'attachment; filename="waste-report.csv"'})
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self.file.close()
+
+
+@app.get("/api/manager/waste/export")
+def manager_waste_export(date_from: str | None = None, date_to: str | None = None,
+                         location_id: str | None = None, _: None = Depends(require_manager)) -> Response:
+    backend = _waste_backend()
+    _waste_location(backend, location_id)
+    start, end = _waste_dates(date_from, date_to)
+    return _waste_export(backend, start, end, location_id)
+
+
+@app.get("/api/captain/waste/export")
+def captain_waste_export(date_from: str | None = None, date_to: str | None = None,
+                         location_id: str = Depends(require_captain)) -> Response:
+    backend = _waste_backend()
+    start, end = _waste_dates(date_from, date_to)
+    return _waste_export(backend, start, end, location_id)
+
+
+def _waste_export(backend: Any, start: date, end: date, location_id: str | None) -> Response:
+    output = TemporaryFile(mode="w+", encoding="utf-8", newline="")
+    writer = csv.writer(output)
+    fields = ["report_id", "location_id", "business_date", "batch_uuid", "created_at", "line_id",
+              "product_id", "description", "name_pl", "name_en", "quantity", "unit",
+              "submitted_quantity", "submitted_unit", "reason", "reason_detail", "voided_at",
+              "void_reason", "void_role"]
+    try:
+        writer.writerow(fields)
+        cursor = None
+        while True:
+            page = _waste_list(backend, start, end, location_id, cursor, 100, False)
+            for report in page.reports:
+                for line in report.lines:
+                    values = {**report.model_dump(mode="json", exclude={"lines"}), **line.model_dump(mode="json")}
+                    cells = [str(values.get(field) or "") for field in fields]
+                    writer.writerow(["'" + cell if cell.startswith(("\t", "\r", "\n")) or
+                                     cell.lstrip().startswith(("=", "+", "-", "@"))
+                                     else cell for cell in cells])
+            cursor = page.next_cursor
+            if cursor is None:
+                break
+        output.seek(0)
+        return _WasteExportResponse(output)
+    except BaseException:
+        output.close()
+        raise
 
 
 # ---------- Finance: invoice (eBiuro) vs delivery check (finance-invoice-reconciliation MVP) ----------

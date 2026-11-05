@@ -46,3 +46,9 @@ describe("HistorySegment", () => {
     expect(screen.getByText("Zamówienia").closest("a")).toHaveAttribute("aria-current", "page");
   });
 });
+
+it("exposes waste reports within History and owns its dedicated route", () => {
+  renderAt("/captain-v2/waste-history");
+  expect(screen.getByRole("link",{name:"Raporty strat"})).toHaveAttribute("href","/captain-v2/waste-history");
+  expect(screen.getAllByRole("link",{current:"page"})).toHaveLength(1);
+});
