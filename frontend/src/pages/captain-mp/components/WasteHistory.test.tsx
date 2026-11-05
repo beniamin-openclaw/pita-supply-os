@@ -66,3 +66,14 @@ it("reloads an already selected preset instead of clearing the view indefinitely
   await waitFor(()=>expect(fetcher).toHaveBeenCalledTimes(2));
   expect(await screen.findByText("Pomidor — 0.1 kg")).toBeInTheDocument();
 });
+
+it("shows attribution and exact master units while leaving legacy reporters unknown",async()=>{
+  vi.stubGlobal("fetch",vi.fn(async()=>json({...empty,reports:[
+    {report_id:"new",business_date:"2026-11-05",reported_by:"Ala",lines:[{line_id:"l1",source_product_id:"P1",name_pl:"Pojemnik",name_en:"Container",quantity:"0.125",unit:"pojemnik",reason:"dropped"}]},
+    {report_id:"old",business_date:"2026-11-04",reported_by:null,lines:[]}
+  ]})));
+  mount();
+  expect(await screen.findByText("Zgłosił(a): Ala")).toBeInTheDocument();
+  expect(screen.getByText("0.125 pojemnik")).toBeInTheDocument();
+  expect(screen.getByText("Nie podano imienia — starszy raport")).toBeInTheDocument();
+});

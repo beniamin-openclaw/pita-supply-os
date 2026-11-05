@@ -60,8 +60,8 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 ### Phase 1: Persisted attribution and master-product contract
 
 #### Automated
-- [x] 1.1 Backend validates new attribution and master identity/unit before committing writes, preserves legacy exact retry and returns stable rejection/conflict outcomes.
-- [x] 1.2 Disposable Postgres proves migration compatibility, snapshots, mixed units, totals/CSV, atomic rollback and scoped attribution/history without altering existing rows.
+- [x] 1.1 Backend validates new attribution and master identity/unit before committing writes, preserves legacy exact retry and returns stable rejection/conflict outcomes. — 769a2f7
+- [x] 1.2 Disposable Postgres proves migration compatibility, snapshots, mixed units, totals/CSV, atomic rollback and scoped attribution/history without altering existing rows. — 769a2f7
 
 #### Manual
 - [ ] 1.3 Ben reviews the concrete migration, candidate and rollback before any new production promotion.
@@ -69,9 +69,9 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 ### Phase 2: Familiar name entry and searchable product additions
 
 #### Automated
-- [ ] 2.1 Missing/blank names block save with accessible focus; confirmed names persist to payload/history/CSV and suggestions, with legacy read fallback.
-- [ ] 2.2 + Product searches the complete master list, preserves exact unit and immutable identity on add/remove/reload and supports repeated additions/manual input without changing curated cards or Other.
-- [ ] 2.3 Scope/late-response/frozen-body guards remain intact, including legacy uncertain drafts and name/source mismatch detection.
+- [x] 2.1 Missing/blank names block save with accessible focus; confirmed names persist to payload/history/CSV and suggestions, with legacy read fallback.
+- [x] 2.2 + Product searches the complete master list, preserves exact unit and immutable identity on add/remove/reload and supports repeated additions/manual input without changing curated cards or Other.
+- [x] 2.3 Scope/late-response/frozen-body guards remain intact, including legacy uncertain drafts and name/source mismatch detection.
 
 #### Manual
 - [ ] 2.4 Inspect mobile/desktop entry, chooser and both histories with auth enabled against a real local database.
@@ -86,3 +86,5 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 - [ ] 3.3 After an authorized verified deployment, Ben accepts actual reporter/product save/history/CSV behavior; archive only after acceptance.
 
 Phase 1 evidence: backend Ruff clean; 1265 unit tests and 54 disposable-Postgres integration tests passed. Legacy digest and schema preservation, atomic rejection, source snapshots/units, CSV and scoped reads verified. Private implementation evidence: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/backend-implementation.md`.
+
+Phase 2 evidence: final frontend build/lint clean; 1343 tests across90files passed independently. Authenticated local browser saved7mixed lines with trimmed name, exact masterg/box/opak/pojemnik, preserved17curated cards and restored source/name drafts. A simulated lost200response was recovered by readback with onePOST/onebatch. Legacy frozen exact-body replay succeeded without appending reporter. Both histories and UI-downloadedCSV show attribution; seven old reports retained null names and their data. Manual2.4remains unchecked pending human confirmation; root browser evidence is recorded separately under automated E2E.
