@@ -1,39 +1,49 @@
 # Release proposal: mandatory waste reporter and master products
 
-Status: REVIEWED LOCAL CANDIDATE; NOT DEPLOYED. Production promotion needs Ben's explicit approval for migration0033 and the reviewed application.
+Status: reviewed candidate, not deployed. Approval requested for migration 0033 and application PR [85](https://github.com/beniamin-openclaw/pita-supply-os/pull/85).
 
-## Business behavior
+## Behavior
 
-New waste reports require the reporting person's first name, following the existing free-text/datalist convention. Histories and CSV retain that attribution. Existing reports show that no name was recorded; no person is invented or backfilled. The original17cards and manual Other remain. + Product searches the complete authenticated master list, including inactive products. Added rows keep the actual inventory unit, support repeated +1 and manual amounts, and can be removed before save. Products with a missing master unit remain visible but cannot be selected; do not guess a conversion.
+Every new waste report requires the reporter's first name, following the existing name/datalist convention. Both histories and CSV retain it. Historical reports remain unnamed; no person is invented or backfilled.
 
-## Candidate and prerequisites
+The original 17 cards and manual Other remain. + Product searches the entire authenticated master list, including inactive products. Added rows keep their actual inventory unit, accept repeated +1 and manual quantities, and can be removed before saving. Products without a master unit remain visible but disabled with an explanation. No package or unit conversion is guessed.
 
-- Baseline: production/main ae643989ad2d012d52278dbb0a28284c86de1181, merged PR84.
-- Lane: codex/waste-reporter-products; backend phase769a2f7. Final application source:85f6e49. The following release commit adds verification/review documentation only.
-- Apply only `supply-os-v1/migrations/0033_waste_reporter_products.sql` before dependent code. SHA256: `ff52ac1291c162005c65bc1c48f0f2ea4b1c53f9c5a5150716ca859327081bad`.
-- Migration adds nullable reported_by/source_product_id and replaces exactly six named0032checks to admit independent master identities and their units. Preserve all old rows, quantity/reason/void/curated checks, keys and RLS. No order/inventory/master-data change, backfill, data deletion, environment or credential change.
-- Existing0032SHA256 remains cbdb193e040ca37d031afe6cd74b3c0da1bd9e72859b7ab8cf5450fdd58a9f67; never reapply it.
-- Read-only production preflight2026-11-05: canonical0032check names present,0033notapplied, RLSonboth tables,1realreport/5lines,196masterproducts. Counts may change; repeat immediately before migration. Do not treat the old pre-release zero counts as current.
+## Exact candidate
+
+- Baseline: production/main `ae643989ad2d012d52278dbb0a28284c86de1181` (PR 84).
+- Application source: `85f6e49`; later commits contain verification/release documentation only. The PR's final head and its hosted CI must be confirmed immediately before promotion.
+- Migration: `supply-os-v1/migrations/0033_waste_reporter_products.sql`.
+- Migration SHA256: `ff52ac1291c162005c65bc1c48f0f2ea4b1c53f9c5a5150716ca859327081bad`.
+- Existing 0032 SHA256: `cbdb193e040ca37d031afe6cd74b3c0da1bd9e72859b7ab8cf5450fdd58a9f67`. Do not reapply it.
+
+Migration 0033 adds nullable reporter/source columns and replaces six explicitly named checks to admit master identities and their units. It preserves existing observations, quantity/reason/void/curated checks, keys and RLS. No order, inventory, master-data, credential or environment change is included.
+
+Read-only production preflight on 2026-11-05 confirmed canonical 0032 checks, no 0033 columns, RLS on both tables, one real report/five lines and 196 master products. Repeat this preflight: counts may change as people use the application.
 
 ## Ordered release
 
-1. Confirm final reviewed PR head, green product CI and unchanged main. Confirm explicit approval covers this migration and application merge/deploy. Recheck current Railway/Vercel artifacts and record immediate rollback choices.
-2. Read-only schema preflight compares all six old constraint definitions and verifies new columns absent. Record existing report/line counts, RLS/policies and old-row fingerprints privately; do not log credentials or personal report contents.
-3. Apply exact0033in one transaction with lock timeout5s and statement timeout30s. On contention/failure roll back and investigate; never retry an uncertain commit without readback. Verify two new columns, all required constraints/RLS and unchanged old-row fingerprints. Keep every new observation.
-4. Merge only the reviewed head using expected-head protection. Main auto-deploys the backend to Railway and frontend to Vercel. Keep the brief staggered rollout explicit: a stale frontend can receive a definitive422until refreshed; unsaved drafts must remain intact.
-5. Wait for successful Railway AND Vercel production artifacts for the actual merge SHA, plus product CI. Verify real backend health/data backend and authenticated public API/schema, catalog17, full products and both role-scoped histories/CSV. Check missing-auth/wrong-role denial and public UI reporter/chooser/history on mobile/desktop. Use GET/read-only checks; never create fake production waste or supplier orders.
-6. Only after that hand Ben the live screen for a real named report with an extra master product, history and CSV. Record his acceptance separately; do not archive before acceptance. The Office email/group copy remains unchanged and unsent.
+1. Obtain Ben's explicit approval for this migration plus PR 85. Confirm the reviewed PR head, all three product CI jobs, unchanged main and current Railway/Vercel rollback artifacts.
+2. Recheck the six old constraint definitions and absence of the two new columns. Privately record existing-row fingerprints, counts, constraints and RLS/policies. Do not save credentials or personal report contents.
+3. Apply exact 0033 in one transaction, with a 5-second lock timeout and 30-second statement timeout. On failure, roll back and investigate. After an uncertain result, read the state before retrying. Verify new columns/checks, retained RLS and unchanged old-row fingerprints.
+4. Merge only the reviewed head with expected-head protection. Main auto-deploys Railway and Vercel. During the brief staggered rollout an old frontend may receive a definitive 422 until refreshed; drafts must remain intact.
+5. Wait for successful production artifacts on BOTH hosts for the actual merge SHA and green product CI. Verify backend health/data source, authenticated catalog and full products, both scoped histories/CSV, no-auth/wrong-role denial and mobile/desktop UI. Use read-only production checks; do not invent production waste or supplier orders.
+6. Only then ask Ben to test a real named report with an extra product, history and CSV. Record his acceptance separately; do not archive before acceptance. Office email/group drafts remain unchanged and unsent.
 
-## Rollback and limits
+## Rollback and accepted limits
 
-Preserve additive columns, tables, old and new reports and audit. Never DROP, DELETE, rewrite observations or backfill people as rollback. A failed migration transaction changes nothing; a committed migration can remain safely in place with the old application until master-unit data appears.
+Preserve all tables, additive columns, reports and audit. Never DROP, DELETE, rewrite observations or backfill names as rollback. Failed transactional DDL changes nothing. A committed migration may remain with the old application until widened-unit observations exist.
 
-After any master g/opak/box/pojemnik or other widened-unit row has been written, ae643989's kg/szt-only waste response models are NOT a safe application rollback. Prefer a forward patch or retain the widened reader. If immediate feature withdrawal is required, the concrete known compatible fallback is pre-waste source `02a0930e09e09648a0e75dfb22f1cb1d96006144`, which disables waste while preserving tables/data. Recorded artifacts: Railway deployment `5c51c288-e002-4b0a-8ad6-b87fe3746c8f`; Vercel GitHub Production deployment `7491246259`. Recheck artifact availability/current parallel main changes before using them, and verify both hosting surfaces after rollback. Never silently revert unrelated later work.
+Once master g, opak, box, pojemnik or other widened units are stored, the old `ae643989` waste readers are unsafe: they accept only kg/szt. Prefer a forward patch or retain widened readers. For emergency withdrawal, the concrete known compatible fallback is pre-waste source `02a0930e09e09648a0e75dfb22f1cb1d96006144`, temporarily disabling waste while retaining its data. Recorded artifacts:
 
-No full production database backup is created or asserted by this additive release. Transactional DDL and row/schema fingerprints protect the scoped migration, not unrelated database failures. Blank master units need a separately authorized master-data correction; this release exposes them honestly.
+- Railway: `5c51c288-e002-4b0a-8ad6-b87fe3746c8f`.
+- Vercel GitHub Production deployment: `7491246259`.
 
-## Verification and exact next step
+Recheck artifact availability and parallel main changes before rollback; verify both hosting surfaces afterwards. Do not revert unrelated work.
 
-Backend: Ruff clean,1265unit tests and54disposable-Postgres integration tests passed on769a2f7; independent Phase1review approved without P1/P2findings. Local canonical0032→0033preservation regression passes. The synthetic browser clone's old draft schema was normalized to canonical0032before0033; production was queried read-only and already has canonical checks.
+No full production database backup is created or claimed by this additive release. Approval covers that stated limit and the data-preserving forward-patch/feature-withdrawal recovery path. Transactional DDL and row/schema fingerprints protect the scoped migration, not unrelated database failures. Missing master units require a separate master-data correction.
 
-Frontend build/lint and1343tests/90files passed on final application85f6e49. Root independently reran all gates. Authenticated real-Postgres browser E2E passed: required-name focus/noPOST, full master chooser/missing-unit explanation, mixed units including literal0.5g, scoped draft reload, lost200readback without duplicate, by-batch404locked + identical retry, unchanged legacy replay, both histories, actual CSV and separate same-name source totals. Independent final plan and safety reviews APPROVED with0P1/P2; each independently ran39focused frontend tests. See verification.md and reviews/. Draft PR: https://github.com/beniamin-openclaw/pita-supply-os/pull/85. Backend/frontend application source remains85f6e49; later commits contain verification/review/release documentation only. Hosted product CI runs on the final PR head; confirm all three product jobs before promotion. Do not merge before explicit approval. Private evidence directory: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/`.
+## Verification and next step
+
+Ruff, 1265 backend tests, 54 real-Postgres integration tests, frontend build/lint and 1343 frontend tests across 90 files passed. Root independently reran the complete gates. Authenticated real-Postgres browser E2E passed: required name, full chooser, exact mixed units including 0.5 g, reload retention, lost-response recovery without duplication, locked 404 and identical retry, unchanged legacy replay, both histories, real CSV download and separate same-name source totals. Seven legacy reports retained their original data. Two final reviews approved the application without actionable P1/P2 findings; see `verification.md` and `reviews/`.
+
+Local evidence: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/`. These private machine-local artifacts provide provenance and are not team-shared evidence or production proof. Hosted CI and the exact release head are confirmed in the operator handoff. Next: Ben approves this concrete migration/application promotion; no production live-test handoff before verified deployment.
