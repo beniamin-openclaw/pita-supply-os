@@ -1,7 +1,7 @@
 ---
 change_id: waste-reporter-products
 title: Reporter attribution and full-database waste products
-status: planned
+status: implementing
 created: 2026-11-05
 updated: 2026-11-05
 archived_at: null

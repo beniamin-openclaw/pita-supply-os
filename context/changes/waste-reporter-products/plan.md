@@ -9,7 +9,7 @@ Every newly created report requires a trimmed nonblank reported_by name (maximum
 - Add nullable reported_by to waste_reports and nullable source_product_id to waste_report_lines via migration0033. Old rows remain null. Never backfill a guessed person or map curated IDs to purchasing IDs by name.
 - source_product_id identifies a master product independently of the existing curated product_id. Exactly one curated/master/manual identity; master rows have no free-form description and use server-resolved immutable name/unit snapshots. Totals group by source_product_id as well as existing identity/unit/location. CSV appends attribution/source fields without moving existing columns.
 - Master units are arbitrary inventory-unit strings, including opak/box; never coerce them to kg/szt. Master g is a base unit and is not the curated display-grams-to-kg conversion. All base quantities retain exact3decimal precision/bounds. Existing curated and Other validation stays intact.
-- Request reads may parse an absent reporter only for old exact-batch replay. Before any new INSERT, a name is mandatory and master IDs/units are checked against real backend products. Existing exact legacy batch replay must still succeed even if a product's current metadata changed. Missing name/unknown ID/wrong unit is definitive rejected422, not unknown503.
+- Request reads may parse an absent reporter only for old exact-batch replay. Before any new INSERT, a name is mandatory. The winning new batch resolves/checks master IDs and units inside the same transaction before commit; failures roll the whole batch back. Existing exact legacy batch replay must still succeed even if a product's current metadata changed. Missing name/unknown ID/wrong unit is definitive rejected422, not unknown503.
 - Omit newly introduced null fields from the digest to preserve existing legacy hashes; new names/source IDs participate in immutable payload digest and response matching. Changed name/source with same batch409. Backend data access stays behind _choose_backend and shared error types.
 - Fresh/ordinary restored drafts gain a blank name; preserve previous quantities, duplicates and selected master metadata. Never mutate an already frozen legacy payload, add fields during retry or unlock on a by-batch404. Expose a clear localized message for legacy uncertain drafts needing readback.
 - All API use goes via apiClient; all copy PL/EN via i18n. Source snapshots are revalidated by the server, not trusted from the browser. Name suggestions are stored only after a confirmed successful save.
@@ -22,7 +22,7 @@ Modify backend models/errors/main/supabase backend, add0033migration, update was
 ### Success criteria
 
 #### Automated verification
-- Backend validates new attribution and master identity/unit before writes, preserves legacy exact retry and returns stable rejection/conflict outcomes.
+- Backend validates new attribution and master identity/unit before committing writes, preserves legacy exact retry and returns stable rejection/conflict outcomes.
 - Disposable Postgres proves migration compatibility, snapshots, mixed units, totals/CSV, atomic rollback and scoped attribution/history without altering existing rows.
 
 #### Manual verification
@@ -60,8 +60,8 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 ### Phase 1: Persisted attribution and master-product contract
 
 #### Automated
-- [ ] 1.1 Backend validates new attribution and master identity/unit before writes, preserves legacy exact retry and returns stable rejection/conflict outcomes.
-- [ ] 1.2 Disposable Postgres proves migration compatibility, snapshots, mixed units, totals/CSV, atomic rollback and scoped attribution/history without altering existing rows.
+- [x] 1.1 Backend validates new attribution and master identity/unit before committing writes, preserves legacy exact retry and returns stable rejection/conflict outcomes.
+- [x] 1.2 Disposable Postgres proves migration compatibility, snapshots, mixed units, totals/CSV, atomic rollback and scoped attribution/history without altering existing rows.
 
 #### Manual
 - [ ] 1.3 Ben reviews the concrete migration, candidate and rollback before any new production promotion.
@@ -84,3 +84,5 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 
 #### Manual
 - [ ] 3.3 After an authorized verified deployment, Ben accepts actual reporter/product save/history/CSV behavior; archive only after acceptance.
+
+Phase 1 evidence: backend Ruff clean; 1265 unit tests and 54 disposable-Postgres integration tests passed. Legacy digest and schema preservation, atomic rejection, source snapshots/units, CSV and scoped reads verified. Private implementation evidence: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/backend-implementation.md`.

@@ -7204,6 +7204,8 @@ def _waste_call(fn: Callable, *args: Any) -> Any:
         return fn(*args)
     except errors.WasteConflictError:
         raise _waste_error(409, "waste_conflict") from None
+    except errors.WasteValidationError as exc:
+        raise _waste_error(422, exc.code) from None
     except Exception:
         log.exception("waste storage operation failed")
         raise _waste_error(503, "waste_storage_error", "unknown") from None
@@ -7371,7 +7373,7 @@ def _waste_export(backend: Any, start: date, end: date, location_id: str | None)
     fields = ["report_id", "location_id", "business_date", "batch_uuid", "created_at", "line_id",
               "product_id", "description", "name_pl", "name_en", "quantity", "unit",
               "submitted_quantity", "submitted_unit", "reason", "reason_detail", "voided_at",
-              "void_reason", "void_role"]
+              "void_reason", "void_role", "reported_by", "source_product_id"]
     try:
         writer.writerow(fields)
         cursor = None

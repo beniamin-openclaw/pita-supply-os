@@ -15,6 +15,14 @@ class WasteConflictError(Exception):
     """The batch identifier already belongs to a different payload."""
 
 
+class WasteValidationError(Exception):
+    """A rejected waste write whose transaction committed no report."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
 class OrderNotFoundError(Exception):
     """Raised when an update can't find the order_id (or receipt_id) it targets."""
 

@@ -14,9 +14,10 @@ from .waste_catalog import BY_ID
 class WasteLineInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     product_id: str | None = None
+    source_product_id: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=120)
     quantity: Decimal
-    unit: Literal["kg", "g", "szt"]
+    unit: str = Field(min_length=1, max_length=120)
     reason: Literal["burned", "dropped", "expired", "spoiled", "other"]
     reason_detail: str | None = Field(default=None, max_length=500)
 
@@ -29,6 +30,20 @@ class WasteLineInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_line(self) -> "WasteLineInput":
+        if self.source_product_id is not None:
+            if (not self.source_product_id.strip() or self.product_id is not None or
+                    self.description is not None or not self.unit.strip()):
+                raise ValueError("invalid source product identity")
+            canonical = self.quantity
+        else:
+            canonical = self._curated_quantity()
+        if canonical <= 0 or canonical > Decimal("999999.999"):
+            raise ValueError("quantity out of range")
+        if self.reason == "other" and (not self.reason_detail or not self.reason_detail.strip()):
+            raise ValueError("reason detail required")
+        return self
+
+    def _curated_quantity(self) -> Decimal:
         item = BY_ID.get(self.product_id) if self.product_id else None
         if self.product_id is not None and (not item or self.description is not None):
             raise ValueError("invalid product or description")
@@ -42,12 +57,7 @@ class WasteLineInput(BaseModel):
             raise ValueError("invalid unit")
         if self.unit == "g" and self.quantity.as_tuple().exponent < 0:
             raise ValueError("grams must be whole")
-        canonical = self.quantity / 1000 if self.unit == "g" else self.quantity
-        if canonical <= 0 or canonical > Decimal("999999.999"):
-            raise ValueError("quantity out of range")
-        if self.reason == "other" and (not self.reason_detail or not self.reason_detail.strip()):
-            raise ValueError("reason detail required")
-        return self
+        return self.quantity / 1000 if self.unit == "g" else self.quantity
 
 
 class WasteCatalogItem(BaseModel):
@@ -71,6 +81,17 @@ class WasteCreate(BaseModel):
     batch_uuid: UUID
     business_date: date
     lines: list[WasteLineInput] = Field(min_length=1, max_length=100)
+    # Absent only for replaying an old frozen batch; storage rejects every new unnamed batch.
+    reported_by: str | None = Field(default=None, max_length=120)
+
+    @field_validator("reported_by", mode="before")
+    @classmethod
+    def reporter_name(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("reporter required")
+        return value
 
     @field_validator("business_date", mode="before")
     @classmethod
@@ -95,13 +116,14 @@ class WasteVoid(BaseModel):
 class WasteReportLine(BaseModel):
     line_id: UUID
     product_id: str | None
+    source_product_id: str | None = None
     description: str | None
     name_pl: str
     name_en: str
     quantity: Decimal
-    unit: Literal["kg", "szt"]
+    unit: str
     submitted_quantity: Decimal
-    submitted_unit: Literal["kg", "g", "szt"]
+    submitted_unit: str
     reason: Literal["burned", "dropped", "expired", "spoiled", "other"]
     reason_detail: str | None
     voided_at: datetime | None
@@ -116,16 +138,18 @@ class WasteReport(BaseModel):
     batch_uuid: UUID
     created_at: datetime
     lines: list[WasteReportLine]
+    reported_by: str | None = None
 
 
 class WasteTotal(BaseModel):
     location_id: str
     product_id: str | None
+    source_product_id: str | None = None
     description: str | None
     name_pl: str
     name_en: str
     quantity: Decimal
-    unit: Literal["kg", "szt"]
+    unit: str
 
 
 class WasteList(BaseModel):
