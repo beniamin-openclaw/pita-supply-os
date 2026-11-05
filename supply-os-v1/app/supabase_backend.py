@@ -48,7 +48,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection
 
 from .config import DataBackend, settings
-from .errors import OrderNotFoundError, OrderStatusConflictError, WasteConflictError
+from .errors import (
+    OrderNotFoundError,
+    OrderStatusConflictError,
+    WasteConflictError,
+    WasteValidationError,
+)
 from .waste_catalog import BY_ID
 from .models import (
     FinanceDocument,
@@ -103,17 +108,31 @@ def _waste_report(conn: Connection, report_id: str, location_id: str | None = No
 
 def append_waste_report(location_id: str, request: WasteCreate) -> WasteReport:
     payload = request.model_dump(mode="json")
+    if payload["reported_by"] is None:
+        del payload["reported_by"]
     for item, line in zip(payload["lines"], request.lines):
         item["quantity"] = format(line.quantity.normalize(), "f")
+        if item["source_product_id"] is None:
+            del item["source_product_id"]
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     report_id = str(uuid4())
     with _get_engine().begin() as conn:
+        existing = conn.execute(text("SELECT report_id, request_digest FROM waste_reports "
+                                     "WHERE location_id=:loc AND batch_uuid=:batch"),
+                                {"loc": location_id, "batch": str(request.batch_uuid)}).mappings().first()
+        if existing:
+            if existing["request_digest"] != digest:
+                raise WasteConflictError()
+            return _waste_report(conn, existing["report_id"], location_id)
+        if not request.reported_by or not request.reported_by.strip():
+            raise WasteValidationError("waste_reporter_required")
         inserted = conn.execute(text("""INSERT INTO waste_reports
-            (report_id, location_id, business_date, batch_uuid, request_digest)
-            VALUES (:id, :loc, :day, :batch, :digest)
+            (report_id, location_id, business_date, batch_uuid, request_digest, reported_by)
+            VALUES (:id, :loc, :day, :batch, :digest, :reporter)
             ON CONFLICT (location_id, batch_uuid) DO NOTHING RETURNING report_id"""),
             {"id": report_id, "loc": location_id, "day": request.business_date,
-             "batch": str(request.batch_uuid), "digest": digest}).scalar()
+             "batch": str(request.batch_uuid), "digest": digest,
+             "reporter": request.reported_by}).scalar()
         if not inserted:
             row = conn.execute(text("SELECT report_id, request_digest FROM waste_reports "
                                     "WHERE location_id=:loc AND batch_uuid=:batch"),
@@ -121,22 +140,37 @@ def append_waste_report(location_id: str, request: WasteCreate) -> WasteReport:
             if row["request_digest"] != digest:
                 raise WasteConflictError()
             return _waste_report(conn, row["report_id"], location_id)
+        source_ids = {line.source_product_id for line in request.lines
+                      if line.source_product_id is not None}
+        sources = {row["product_id"]: row for row in conn.execute(text(
+            "SELECT product_id, product_name_pl, inventory_unit FROM products "
+            "WHERE product_id = ANY(CAST(:ids AS text[]))"),
+            {"ids": list(source_ids)}).mappings()} if source_ids else {}
         for ordinal, line in enumerate(request.lines):
             item = BY_ID.get(line.product_id)
-            unit = item["unit"] if item else line.unit
+            source = sources.get(line.source_product_id) if line.source_product_id is not None else None
+            if line.source_product_id is not None and (
+                    source is None or line.unit != source["inventory_unit"]):
+                raise WasteValidationError("waste_product_invalid")
+            unit = source["inventory_unit"] if source else item["unit"] if item else line.unit
+            name_pl = source["product_name_pl"] if source else item["name_pl"] if item else line.description
+            name_en = source["product_name_pl"] if source else item["name_en"] if item else line.description
+            quantity = line.quantity / 1000 if not source and line.unit == "g" else line.quantity
             params = {"line_id": str(uuid4()), "report_id": report_id, "ordinal": ordinal,
-                      "product_id": line.product_id, "description": line.description,
-                      "name_pl": item["name_pl"] if item else line.description,
-                      "name_en": item["name_en"] if item else line.description,
-                      "quantity": line.quantity / 1000 if line.unit == "g" else line.quantity,
+                      "product_id": line.product_id, "source_product_id": line.source_product_id,
+                      "description": line.description,
+                      "name_pl": name_pl, "name_en": name_en,
+                      "quantity": quantity,
                       "unit": unit, "submitted_quantity": line.quantity,
                       "submitted_unit": line.unit, "reason": line.reason,
                       "reason_detail": line.reason_detail}
             conn.execute(text("""INSERT INTO waste_report_lines
                 (line_id, report_id, ordinal, product_id, description, name_pl, name_en,
-                 quantity, unit, submitted_quantity, submitted_unit, reason, reason_detail)
+                 quantity, unit, submitted_quantity, submitted_unit, reason, reason_detail,
+                 source_product_id)
                 VALUES (:line_id, :report_id, :ordinal, :product_id, :description, :name_pl, :name_en,
-                 :quantity, :unit, :submitted_quantity, :submitted_unit, :reason, :reason_detail)"""), params)
+                 :quantity, :unit, :submitted_quantity, :submitted_unit, :reason, :reason_detail,
+                 :source_product_id)"""), params)
         return _waste_report(conn, report_id, location_id)
 
 
@@ -186,11 +220,11 @@ def load_waste_reports(date_from: date, date_to: date, location_id: str | None,
         grouped = {row["report_id"]: [] for row in selected}
         for line in lines:
             grouped[line["report_id"]].append(dict(line))
-        totals = conn.execute(text(f"""SELECT r.location_id, l.product_id, l.description,
+        totals = conn.execute(text(f"""SELECT r.location_id, l.product_id, l.source_product_id, l.description,
             MIN(l.name_pl) AS name_pl, MIN(l.name_en) AS name_en, l.unit,
             SUM(l.quantity) AS quantity FROM waste_reports r
             JOIN waste_report_lines l ON l.report_id=r.report_id WHERE {where} AND l.voided_at IS NULL
-            GROUP BY r.location_id, l.product_id, l.description, l.unit
+            GROUP BY r.location_id, l.product_id, l.source_product_id, l.description, l.unit
             ORDER BY r.location_id, name_pl, l.unit"""), params).mappings().all() if include_totals else []
         return WasteBackendPage(reports=[WasteReport.model_validate({**dict(row),
                                   "lines": grouped[row["report_id"]]}) for row in selected],

@@ -25,3 +25,13 @@ describe("waste quantities", () => {
     expect(addWasteQuantity("999999.999", "0.001", "szt")).toBeNull();
   });
 });
+
+it("keeps fractional master grams and nonstandard inventory units in their base unit", () => {
+  for (const unit of ["g", "box", "opak", "pojemnik", "szt."]) {
+    expect(parseWasteQuantity("0,125", unit, true)).toBe(125);
+    expect(addWasteQuantity("0,125", "1", unit, true)).toBe("1.125");
+    expect(parseWasteQuantity("1000000", unit, true)).toBeNull();
+    expect(parseWasteQuantity("0.0001", unit, true)).toBeNull();
+  }
+  expect(parseWasteQuantity("0.125", "g")).toBeNull();
+});

@@ -3,6 +3,7 @@ import asyncio
 import base64
 import json
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import uuid4
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -190,3 +191,38 @@ def test_captain_waste_export_forces_token_location_and_rejects_other_role(monke
     assert "text/csv" in response.headers["content-type"]
     assert scopes == [("WOLA", False)]
     assert response.text.startswith("report_id,location_id,business_date")
+
+
+def test_waste_reporter_is_trimmed_bounded_and_legacy_parseable():
+    body = {"batch_uuid": str(uuid4()), "business_date": "2026-11-04",
+            "lines": [{"product_id": "pita", "quantity": "1", "unit": "szt", "reason": "burned"}]}
+    assert WasteCreate.model_validate(body).reported_by is None
+    assert WasteCreate.model_validate({**body, "reported_by": "  Ola  "}).reported_by == "Ola"
+    assert WasteCreate.model_validate({**body, "reported_by": "  " + "x" * 120 + "  "}).reported_by == "x" * 120
+    for name in ["", "   ", "x" * 121]:
+        with pytest.raises(ValidationError):
+            WasteCreate.model_validate({**body, "reported_by": name})
+
+
+@pytest.mark.parametrize("unit", ["kg", "szt", "opak", "box", "g"])
+def test_waste_source_product_keeps_its_own_base_unit(unit):
+    line = WasteLineInput(source_product_id="P1", quantity="0.125", unit=unit, reason="dropped")
+    assert line.quantity == Decimal("0.125") and line.unit == unit
+    for invalid in [{"product_id": "pita"}, {"description": "invented"},
+                    {"source_product_id": " "}, {"quantity": "1000000"}]:
+        with pytest.raises(ValidationError):
+            WasteLineInput.model_validate({**line.model_dump(mode="json"), **invalid})
+    with pytest.raises(ValidationError):
+        WasteLineInput(description="Other", quantity="1", unit="opak", reason="dropped")
+
+
+def test_waste_domain_validation_is_definitively_rejected():
+    from app import errors
+
+    def reject():
+        raise errors.WasteValidationError("waste_reporter_required")
+
+    with pytest.raises(main.HTTPException) as caught:
+        main._waste_call(reject)
+    assert caught.value.status_code == 422
+    assert caught.value.detail == {"code": "waste_reporter_required", "write_outcome": "rejected"}

@@ -8,7 +8,7 @@
 // private-mode browser or a full quota must degrade to "no suggestions yet",
 // never break the form that calls this.
 
-export type NameSuggestionRole = "ordered_by" | "received_by" | "count_user";
+export type NameSuggestionRole = "ordered_by" | "received_by" | "count_user" | "reported_by";
 
 const STORAGE_PREFIX = "supply_os_name_suggestions_";
 const MAX_NAMES = 10;

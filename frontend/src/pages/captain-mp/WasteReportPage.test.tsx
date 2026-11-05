@@ -9,9 +9,10 @@ import { WasteReportPage } from "./WasteReportPage";
 const catalog = { items: [{ product_id: "tomato", name_pl: "Pomidor", name_en: "Tomato", section: "fridge", unit: "kg", display_unit: "g", quick_additions: ["50", "100"], calibration: "provisional" }] };
 const list = { reports: [], totals: [], next_cursor: null };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-const saved = (body: string) => { const p = JSON.parse(body); return { report_id: "r1", batch_uuid: p.batch_uuid, business_date: p.business_date, lines: p.lines.map((line: Record<string, unknown>) => ({...line, submitted_quantity: line.quantity, submitted_unit: line.unit})) }; };
+const saved = (body: string) => { const p = JSON.parse(body); return { report_id: "r1", batch_uuid: p.batch_uuid, business_date: p.business_date, reported_by: p.reported_by, lines: p.lines.map((line: Record<string, unknown>) => ({...line, submitted_quantity: line.quantity, submitted_unit: line.unit})) }; };
 function mount() { return render(<LangProvider><MemoryRouter><WasteReportPage /></MemoryRouter></LangProvider>); }
 async function fill() {
+  fireEvent.change(await screen.findByLabelText(/Imię zgłaszającego/), {target:{value:"Ala"}});
   await screen.findByRole("group", {name:"Pomidor"});
   await waitFor(() => expect(screen.getByRole("button", { name: "+100 g" })).toBeEnabled());
   fireEvent.click(screen.getByRole("button", { name: "+100 g" }));
@@ -223,6 +224,7 @@ it("restores explicit dates and duplicate legacy rows without coalescing their r
   vi.stubGlobal("fetch",vi.fn(async(url:string,init?:RequestInit)=>{if(url.includes("catalog"))return json(catalog);if(init?.method==="POST"){posts.push(String(init.body));return json(saved(posts[0]));}return json(list);}));
   mount();await waitFor(()=>expect(screen.getAllByRole("group",{name:"Pomidor"})).toHaveLength(2));
   expect(screen.getByLabelText("Data")).toHaveValue("2026-01-02");
+  fireEvent.change(screen.getByLabelText(/Imię zgłaszającego/),{target:{value:"Ala"}});
   fireEvent.click(screen.getByRole("button",{name:"Zapisz straty"}));await screen.findByText("Zapisano straty.");
   expect(JSON.parse(posts[0]).lines.map((x:{quantity:string;reason:string})=>[x.quantity,x.reason])).toEqual([["100","dropped"],["50","burned"]]);
 });

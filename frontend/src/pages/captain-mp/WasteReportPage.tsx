@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { addNameSuggestion, getNameSuggestions } from "../../lib/nameSuggestions";
+import type { Product } from "../../types";
+import { WasteProductPicker } from "./components/WasteProductPicker";
 import { getToken } from "../../auth";
 import { wasteRequest, WasteRequestError } from "../../apiClient";
 import { useT } from "../../i18n";
@@ -10,10 +13,11 @@ import { WasteQuantityInput } from "./components/WasteQuantityInput";
 import { parseWasteQuantity, type WasteUnit } from "./lib/wasteQuantity";
 import { afterSaveFailure, reportMatchesPayload, todayWarsaw, wasteErrorKey, type WasteCatalogItem, type WastePayload, type WasteReport } from "./lib/wasteReport";
 
-type Row = { product: string; description: string; quantity: string; unit: "kg" | "szt"; reason: string; detail: string };
-type Draft = { date: string; rows: Row[]; batch: string; frozen: WastePayload | null };
+type SourceProduct = { product_id: string; name: string; unit: string };
+type Row = { id?: string; source?: SourceProduct; product: string; description: string; quantity: string; unit: "kg" | "szt"; reason: string; detail: string };
+type Draft = { reportedBy?: string; date: string; rows: Row[]; batch: string; frozen: WastePayload | null };
 const blank = (): Row => ({ product: "", description: "", quantity: "", unit: "kg", reason: "", detail: "" });
-const fresh = (): Draft => ({ date: todayWarsaw(), rows: [], batch: crypto.randomUUID(), frozen: null });
+const fresh = (): Draft => ({ reportedBy: "", date: todayWarsaw(), rows: [], batch: crypto.randomUUID(), frozen: null });
 
 export function WasteReportPage() {
   const { t, lang } = useT();
@@ -24,6 +28,7 @@ export function WasteReportPage() {
   const [key, setKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [catalog, setCatalog] = useState<WasteCatalogItem[]>([]);
+  const [nameSuggestions, setNameSuggestions] = useState(() => getNameSuggestions("reported_by"));
   const [error, setError] = useState("");
   const [invalidField, setInvalidField] = useState<{ index: number; field: string } | null>(null);
   const [message, setMessage] = useState("");
@@ -88,6 +93,16 @@ export function WasteReportPage() {
     const invalid = invalidField?.index === index && invalidField.field === field;
     return { "aria-invalid": invalid || undefined, "aria-describedby": invalid ? "waste-validation-error" : undefined };
   }
+  function rememberReporter(payload: WastePayload): void {
+    if (payload.reported_by) {
+      addNameSuggestion("reported_by", payload.reported_by);
+      setNameSuggestions(getNameSuggestions("reported_by"));
+    }
+  }
+  function addProduct(product: Product): void {
+    if (!draft || locked || !product.inventory_unit.trim()) return;
+    persist({...draft, rows:[...draft.rows,{...blank(),id:crypto.randomUUID(),product:"__master__",source:{product_id:product.product_id,name:product.product_name_pl,unit:product.inventory_unit}}]});
+  }
   async function save(payload: WastePayload) {
     if (!draft || pending.current) return;
     if (getToken("captain") !== token) { setError(t("waste.scope")); return; }
@@ -98,7 +113,7 @@ export function WasteReportPage() {
       const report = await wasteRequest<WasteReport>("/api/captain/waste/reports", "captain", token, payload);
       if (getToken("captain") !== token) return;
       if (!report?.report_id || !reportMatchesPayload(report, payload)) throw new WasteRequestError("unknown", 200, "decode");
-      if (persist(fresh(), payload)) { setMessage(t("waste.saved")); }
+      if (persist(fresh(), payload)) { rememberReporter(payload); setMessage(t("waste.saved")); }
     } catch (e) {
       if (getToken("captain") !== token) return;
       const frozen = afterSaveFailure(payload, e, !!draft.frozen);
@@ -111,27 +126,27 @@ export function WasteReportPage() {
     const selected = draft.rows.map((row, index) => ({row,index})).filter(({row}) => row.quantity.trim() || row.description.trim() || row.reason || row.detail.trim());
     const lines = selected.map(({row}) => {
       const item = catalog.find(p => p.product_id === row.product);
-      const unit: WasteUnit = row.product === "__other__" ? row.unit : item?.display_unit || "szt";
-      return { product_id: item?.product_id || null, description: row.product === "__other__" ? row.description.trim() : null, quantity: row.quantity.trim().replace(",", "."), unit, reason: row.reason, reason_detail: row.reason === "other" ? row.detail.trim() : null };
+      const unit: WasteUnit = row.source?.unit || (row.product === "__other__" ? row.unit : item?.display_unit || "szt");
+      return { product_id: item?.product_id || null, ...(row.source ? {source_product_id: row.source.product_id} : {}), description: row.product === "__other__" ? row.description.trim() : null, quantity: row.quantity.trim().replace(",", "."), unit, reason: row.reason, reason_detail: row.reason === "other" ? row.detail.trim() : null };
     });
-    let invalid: { index: number; field: string } | null = !draft.date || draft.date > todayWarsaw() ? { index: -1, field: "date" } : null;
+    let invalid: { index: number; field: string } | null = !draft.reportedBy?.trim() || draft.reportedBy.trim().length > 120 ? {index:-1,field:"reported_by"} : !draft.date || draft.date > todayWarsaw() ? { index: -1, field: "date" } : null;
     for (let i = 0; !invalid && i < lines.length; i++) {
       const line = lines[i];
-      if (!catalog.some(p => p.product_id === selected[i].row.product) && selected[i].row.product !== "__other__") invalid = { index: i, field: "product" };
+      if (!selected[i].row.source && !catalog.some(p => p.product_id === selected[i].row.product) && selected[i].row.product !== "__other__") invalid = { index: i, field: "product" };
       else if (selected[i].row.product === "__other__" && (!line.description || line.description.length > 120)) invalid = { index: i, field: "description" };
-      else if (!parseWasteQuantity(line.quantity, line.unit)) invalid = { index: i, field: "quantity" };
+      else if (!parseWasteQuantity(line.quantity, line.unit, !!selected[i].row.source)) invalid = { index: i, field: "quantity" };
       else if (!["burned", "dropped", "expired", "spoiled", "other"].includes(line.reason)) invalid = { index: i, field: "reason" };
       else if (line.reason === "other" && (!line.reason_detail || line.reason_detail.length > 500)) invalid = { index: i, field: "detail" };
     }
     if (invalid || lines.length === 0 || lines.length > 100) {
-      setError(t("waste.invalid"));
+      setError(t(invalid?.field === "reported_by" ? "waste.reportedByRequired" : "waste.invalid"));
       const sourceIndex = invalid && invalid.index >= 0 ? selected[invalid.index].index : -1;
       setInvalidField(invalid ? {...invalid,index:sourceIndex} : null);
       const row = document.querySelector<HTMLElement>(`[data-waste-row="${sourceIndex}"]`);
-      const target = invalid?.field === "date" ? document.querySelector<HTMLElement>("[data-waste-date]") : row?.querySelector<HTMLElement>(`[data-waste-field="${invalid?.field}"]`);
+      const target = invalid?.field === "reported_by" ? document.querySelector<HTMLElement>("[data-waste-reporter]") : invalid?.field === "date" ? document.querySelector<HTMLElement>("[data-waste-date]") : row?.querySelector<HTMLElement>(`[data-waste-field="${invalid?.field}"]`);
       target?.focus(); return;
     }
-    void save({ batch_uuid: draft.batch, business_date: draft.date, lines });
+    void save({ batch_uuid: draft.batch, business_date: draft.date, reported_by: draft.reportedBy!.trim(), lines });
   }
   async function readback() {
     if (!draft?.frozen || pending.current || !currentDraft()) return;
@@ -141,24 +156,24 @@ export function WasteReportPage() {
       const result = await wasteRequest<WasteReport>(`/api/captain/waste/reports/by-batch/${encodeURIComponent(draft.frozen.batch_uuid)}`, "captain", token);
       if (getToken("captain") !== token) return;
       if (!result?.report_id || !reportMatchesPayload(result, draft.frozen)) throw new Error();
-      if (persist(fresh(), draft.frozen)) { setMessage(t("waste.saved")); setError(""); }
+      if (persist(fresh(), draft.frozen)) { rememberReporter(draft.frozen); setMessage(t("waste.saved")); setError(""); }
     } catch { if (!staleRef.current) setError(t("waste.uncertain")); } finally { pending.current = false; setBusy(false); }
   }
   const locked = busy || stale || !!draft?.frozen;
   const selectedCount = draft?.rows.filter(row => row.quantity.trim() || row.description.trim() || row.reason || row.detail.trim()).length || 0;
   const control = "min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
   function renderRow(row: Row, index: number, item?: WasteCatalogItem, renderKey = `other-${index}`) {
-    const name = item ? (lang === "pl" ? item.name_pl : item.name_en) : t("waste.other");
-    const unit = row.product === "__other__" ? row.unit : item?.display_unit || "szt";
+    const name = row.source?.name || (item ? (lang === "pl" ? item.name_pl : item.name_en) : t("waste.other"));
+    const unit = row.source?.unit || (row.product === "__other__" ? row.unit : item?.display_unit || "szt");
     const entered = !!(row.quantity.trim() || row.description.trim() || row.reason || row.detail.trim());
-    return <fieldset key={renderKey} data-waste-row={index} aria-label={name} disabled={locked}
+    return <fieldset key={row.id || renderKey} data-waste-row={index} aria-label={name} disabled={locked}
       className={`rounded-xl border bg-white p-3 sm:p-4 space-y-3 ${entered ? "border-blue-300 border-l-4 border-l-brand" : "border-slate-200"}`}>
       <div className="flex items-center justify-between gap-3"><h3 className="font-semibold text-slate-900">{name}</h3>
         {entered && <button type="button" className="min-h-11 px-2 text-sm text-slate-600 underline" aria-label={`${t("waste.clear")} — ${name}`} onClick={() => persist({...draft!,rows:draft!.rows.filter((_,i)=>i!==index)})}>{t("waste.clear")}</button>}
       </div>
-      {!item && <><label className="block text-sm text-slate-600">{t("waste.description")}<input data-waste-field="description" {...fieldProps(index,"description")} required maxLength={120} className={`${control} block w-full mt-1`} value={row.description} onChange={e=>patchRow(index,{description:e.target.value})}/></label>
+      {!item && !row.source && <><label className="block text-sm text-slate-600">{t("waste.description")}<input data-waste-field="description" {...fieldProps(index,"description")} required maxLength={120} className={`${control} block w-full mt-1`} value={row.description} onChange={e=>patchRow(index,{description:e.target.value})}/></label>
         <label className="block text-sm text-slate-600">{t("waste.unit")}<select className={`${control} mt-1 block`} value={row.unit} onChange={e=>patchRow(index,{unit:e.target.value as "kg"|"szt",quantity:""})}><option value="kg">kg</option><option value="szt">szt</option></select></label></>}
-      <WasteQuantityInput required={entered} labelContext={name} value={row.quantity} unit={unit} additions={item?.quick_additions || []} error={invalidField?.index===index && invalidField.field==="quantity"} onChange={quantity=>patchRow(index,{quantity},item?.product_id)} />
+      <WasteQuantityInput baseUnit={!!row.source} required={entered} labelContext={name} value={row.quantity} unit={unit} additions={row.source ? ["1"] : item?.quick_additions || []} error={invalidField?.index===index && invalidField.field==="quantity"} onChange={quantity=>patchRow(index,{quantity},item?.product_id)} />
       {(entered || !item) && <label className="block text-sm text-slate-600">{t("waste.reason")}<span className="sr-only"> — {name}</span><select data-waste-field="reason" {...fieldProps(index,"reason")} required className={`${control} block w-full mt-1`} value={row.reason} onChange={e=>patchRow(index,{reason:e.target.value})}><option value="">{t("waste.choose")}</option>{["burned","dropped","expired","spoiled","other"].map(reason=><option key={reason} value={reason}>{t(`waste.${reason}` as StringKey)}</option>)}</select></label>}
       {row.reason==="other" && <label className="block text-sm text-slate-600">{t("waste.reasonDetail")}<span className="sr-only"> — {name}</span><input data-waste-field="detail" {...fieldProps(index,"detail")} required maxLength={500} className={`${control} block w-full mt-1`} value={row.detail} onChange={e=>patchRow(index,{detail:e.target.value})}/></label>}
       {!item && <button type="button" className="min-h-11 text-sm underline text-slate-600" onClick={()=>persist({...draft!,rows:draft!.rows.filter((_,i)=>i!==index)})}>{t("waste.remove")}</button>}
@@ -170,13 +185,16 @@ export function WasteReportPage() {
       <p className="mt-1 text-sm text-slate-500">{t("waste.entryHint")}</p>
       {error && <p id="waste-validation-error" role="alert" className="my-3 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}{message && <p role="status" className="my-3 rounded-lg bg-green-50 p-3 text-green-800">{message}</p>}
       {draft && <div data-waste-form className="space-y-5 mt-4">
+        <div><label className="block text-sm font-medium text-slate-600" htmlFor="waste-reporter">{t("waste.reportedBy")} <span className="text-red-600" aria-hidden="true">*</span></label><input id="waste-reporter" data-waste-reporter {...fieldProps(-1,"reported_by")} autoComplete="name" list="waste-reporter-suggestions" maxLength={120} required disabled={locked} className={`${control} block w-full mt-1`} value={draft.reportedBy || ""} onChange={event => {setInvalidField(null);persist({...draft,reportedBy:event.target.value});}}/><datalist id="waste-reporter-suggestions">{nameSuggestions.map(name=><option key={name} value={name}/>)}</datalist><p className="mt-1 text-xs text-slate-500">{t("waste.reportedByRequired")}</p></div>
+        {draft.frozen && !draft.frozen.reported_by && <p role="status" className="text-sm text-amber-800">{t("waste.legacyUncertain")}</p>}
         <label className="block text-sm font-medium text-slate-600">{t("waste.date")}<input data-waste-date {...fieldProps(-1,"date")} className={`${control} block mt-1`} type="date" max={todayWarsaw()} required value={draft.date} disabled={locked} onChange={e=>{setInvalidField(null);persist({...draft,date:e.target.value});}}/></label>
         {catalog.length===0 && !error && <p role="status" className="text-sm text-slate-500">{t("waste.loading")}</p>}
         {(["fridge","freezer","dry"] as const).map(section=><section key={section} aria-label={t(`waste.${section}`)} className="space-y-2"><h2 className="text-xs font-bold uppercase tracking-wide text-slate-500 pt-2">{t(`waste.${section}`)}</h2>{catalog.filter(item=>item.section===section).flatMap(item=>{
           const matches=draft.rows.map((row,index)=>({row,index})).filter(({row})=>row.product===item.product_id);
           return matches.length ? matches.map(({row,index}, occurrence)=>renderRow(row,index,item,`${item.product_id}-${occurrence}`)) : [renderRow({...blank(),product:item.product_id},-1,item,`${item.product_id}-0`)];
         })}</section>)}
-        {draft.rows.map((row,index)=>(row.product==="__other__" || (catalog.length>0 && !catalog.some(item=>item.product_id===row.product))) && (row.product || row.quantity || row.description || row.reason || row.detail) ? renderRow(row,index) : null)}
+        {draft.rows.map((row,index)=>(row.source || row.product==="__other__" || (catalog.length>0 && !catalog.some(item=>item.product_id===row.product))) && (row.product || row.quantity || row.description || row.reason || row.detail) ? renderRow(row,index) : null)}
+        <WasteProductPicker token={token} disabled={locked || draft.rows.length>=100} onSelect={addProduct}/>
         <button type="button" className={`${control} text-sm font-semibold text-brand w-full`} disabled={locked || draft.rows.length>=100} onClick={()=>persist({...draft,rows:[...draft.rows,{...blank(),product:"__other__"}]})}>{t("waste.add")}</button>
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.04)]"><div className="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div><p className="text-sm font-semibold text-slate-900">{t("waste.selected",{count:selectedCount})}</p><p className="text-xs text-slate-500">{t("waste.draftHint")}</p></div>
