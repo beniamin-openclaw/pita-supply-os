@@ -64,7 +64,7 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 - [x] 1.2 Disposable Postgres proves migration compatibility, snapshots, mixed units, totals/CSV, atomic rollback and scoped attribution/history without altering existing rows. — 769a2f7
 
 #### Manual
-- [ ] 1.3 Ben reviews the concrete migration, candidate and rollback before any new production promotion.
+- [x] 1.3 Ben reviews the concrete migration, candidate and rollback before any new production promotion. — e4d4c54
 
 ### Phase 2: Familiar name entry and searchable product additions
 
@@ -90,3 +90,5 @@ Phase 1 evidence: backend Ruff clean; 1265 unit tests and 54 disposable-Postgres
 Phase 2 evidence: final frontend build/lint clean; 1343 tests across90files passed independently. Authenticated local browser saved7mixed lines with trimmed name, exact masterg/box/opak/pojemnik, preserved17curated cards and restored source/name drafts. A simulated lost200response was recovered by readback with onePOST/onebatch. Legacy frozen exact-body replay succeeded without appending reporter. Both histories and UI-downloadedCSV show attribution; seven old reports retained null names and their data. Manual2.4remains unchecked pending human confirmation; root browser evidence is recorded separately under automated E2E.
 
 Phase 3 evidence: final application85f6e49passes all product gates and authenticated real-Postgres E2E; verification.md records exact checks/artifacts. Independent plan/safety reviews both APPROVED with no actionable P1/P2. release-proposal.md identifies migration0033fingerprint, ordered release, narrow-reader rollback hazard and exact pre-waste artifacts. Production promotion and all human acceptance criteria remain pending; no Office communication changed/sent.
+
+Release evidence: Ben explicitly approved migration0033 and PR85. Migration committed2026-11-05T11:03:27Z with old-row hashes/RLS unchanged. PR85 merged as e4d4c549; actual Railway/Vercel production artifacts and main CI42015841730 pass. Production read-only API/UI/CSV verified; release-verification.md records details. Manual2.4/3.3 remain pending human confirmation; no production test report was invented.

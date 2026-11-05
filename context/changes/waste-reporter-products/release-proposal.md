@@ -1,6 +1,6 @@
 # Release proposal: mandatory waste reporter and master products
 
-Status: reviewed candidate, not deployed. Approval requested for migration 0033 and application PR [85](https://github.com/beniamin-openclaw/pita-supply-os/pull/85).
+Status: APPROVED AND DEPLOYED. Ben explicitly approved migration 0033 and PR [85](https://github.com/beniamin-openclaw/pita-supply-os/pull/85). Actual production merge: `e4d4c5490d726fce10c38719c6e0fa2ebdee0ef2`; see release-verification.md. The ordered steps below retain the reviewed procedure.
 
 ## Behavior
 
@@ -33,9 +33,9 @@ Read-only production preflight on 2026-11-05 confirmed canonical 0032 checks, no
 
 Preserve all tables, additive columns, reports and audit. Never DROP, DELETE, rewrite observations or backfill names as rollback. Failed transactional DDL changes nothing. A committed migration may remain with the old application until widened-unit observations exist.
 
-Once master g, opak, box, pojemnik or other widened units are stored, the old `ae643989` waste readers are unsafe: they accept only kg/szt. Prefer a forward patch or retain widened readers. For emergency withdrawal, the concrete known compatible fallback is pre-waste source `02a0930e09e09648a0e75dfb22f1cb1d96006144`, temporarily disabling waste while retaining its data. Recorded artifacts:
+Once master g, opak, box, pojemnik or other widened units are stored, the old `ae643989` waste readers are unsafe: they accept only kg/szt. Prefer a forward patch or retain widened readers. For emergency withdrawal, the concrete known compatible fallback is pre-waste source `02a0930e09e09648a0e75dfb22f1cb1d96006144`, temporarily disabling waste while retaining its data. Historical artifact references (availability checked at release):
 
-- Railway: `5c51c288-e002-4b0a-8ad6-b87fe3746c8f`.
+- Railway: `5c51c288-e002-4b0a-8ad6-b87fe3746c8f` is now REMOVED. Do not assume one-click restoration; redeploy the known pre-waste source through a reviewed corrective release if feature withdrawal is needed.
 - Vercel GitHub Production deployment: `7491246259`.
 
 Recheck artifact availability and parallel main changes before rollback; verify both hosting surfaces afterwards. Do not revert unrelated work.
@@ -46,4 +46,4 @@ No full production database backup is created or claimed by this additive releas
 
 Ruff, 1265 backend tests, 54 real-Postgres integration tests, frontend build/lint and 1343 frontend tests across 90 files passed. Root independently reran the complete gates. Authenticated real-Postgres browser E2E passed: required name, full chooser, exact mixed units including 0.5 g, reload retention, lost-response recovery without duplication, locked 404 and identical retry, unchanged legacy replay, both histories, real CSV download and separate same-name source totals. Seven legacy reports retained their original data. Two final reviews approved the application without actionable P1/P2 findings; see `verification.md` and `reviews/`.
 
-Local evidence: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/`. These private machine-local artifacts provide provenance and are not team-shared evidence or production proof. Hosted CI and the exact release head are confirmed in the operator handoff. Next: Ben approves this concrete migration/application promotion; no production live-test handoff before verified deployment.
+Local evidence: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/`. These private machine-local artifacts provide provenance and are not team-shared evidence or production proof. Hosted CI and the exact release head are confirmed in the operator handoff. The migration and actual Railway/Vercel deployment are now verified. Next: Ben tests a real named report with an extra product and confirms acceptance before archive. No synthetic production reports were created.
