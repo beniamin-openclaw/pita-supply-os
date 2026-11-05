@@ -79,8 +79,8 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 ### Phase 3: Verification, independent review and release proposal
 
 #### Automated
-- [x] 3.1 Full product gates and auth-enabled real-Postgres browser E2E pass for the final application candidate.
-- [x] 3.2 Independent implementation review resolves actionable findings and release artifacts identify exact source, schema prerequisite, rollback and pending operator acceptance.
+- [x] 3.1 Full product gates and auth-enabled real-Postgres browser E2E pass for the final application candidate. — 5dfeaa6
+- [x] 3.2 Independent implementation review resolves actionable findings and release artifacts identify exact source, schema prerequisite, rollback and pending operator acceptance. — 5dfeaa6
 
 #### Manual
 - [ ] 3.3 After an authorized verified deployment, Ben accepts actual reporter/product save/history/CSV behavior; archive only after acceptance.
