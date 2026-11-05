@@ -69,9 +69,9 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 ### Phase 2: Familiar name entry and searchable product additions
 
 #### Automated
-- [x] 2.1 Missing/blank names block save with accessible focus; confirmed names persist to payload/history/CSV and suggestions, with legacy read fallback.
-- [x] 2.2 + Product searches the complete master list, preserves exact unit and immutable identity on add/remove/reload and supports repeated additions/manual input without changing curated cards or Other.
-- [x] 2.3 Scope/late-response/frozen-body guards remain intact, including legacy uncertain drafts and name/source mismatch detection.
+- [x] 2.1 Missing/blank names block save with accessible focus; confirmed names persist to payload/history/CSV and suggestions, with legacy read fallback. — 85f6e49
+- [x] 2.2 + Product searches the complete master list, preserves exact unit and immutable identity on add/remove/reload and supports repeated additions/manual input without changing curated cards or Other. — 85f6e49
+- [x] 2.3 Scope/late-response/frozen-body guards remain intact, including legacy uncertain drafts and name/source mismatch detection. — 85f6e49
 
 #### Manual
 - [ ] 2.4 Inspect mobile/desktop entry, chooser and both histories with auth enabled against a real local database.
@@ -79,8 +79,8 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 ### Phase 3: Verification, independent review and release proposal
 
 #### Automated
-- [ ] 3.1 Full product gates and auth-enabled real-Postgres browser E2E pass for the final application candidate.
-- [ ] 3.2 Independent implementation review resolves actionable findings and release artifacts identify exact source, schema prerequisite, rollback and pending operator acceptance.
+- [x] 3.1 Full product gates and auth-enabled real-Postgres browser E2E pass for the final application candidate.
+- [x] 3.2 Independent implementation review resolves actionable findings and release artifacts identify exact source, schema prerequisite, rollback and pending operator acceptance.
 
 #### Manual
 - [ ] 3.3 After an authorized verified deployment, Ben accepts actual reporter/product save/history/CSV behavior; archive only after acceptance.
@@ -88,3 +88,5 @@ Run full backend Ruff/pytest/integration and frontend build/lint/Vitest. Local b
 Phase 1 evidence: backend Ruff clean; 1265 unit tests and 54 disposable-Postgres integration tests passed. Legacy digest and schema preservation, atomic rejection, source snapshots/units, CSV and scoped reads verified. Private implementation evidence: `/Users/ben/Documents/Codex/2026-11-05/supply-v2-waste-report/reporter-products/backend-implementation.md`.
 
 Phase 2 evidence: final frontend build/lint clean; 1343 tests across90files passed independently. Authenticated local browser saved7mixed lines with trimmed name, exact masterg/box/opak/pojemnik, preserved17curated cards and restored source/name drafts. A simulated lost200response was recovered by readback with onePOST/onebatch. Legacy frozen exact-body replay succeeded without appending reporter. Both histories and UI-downloadedCSV show attribution; seven old reports retained null names and their data. Manual2.4remains unchecked pending human confirmation; root browser evidence is recorded separately under automated E2E.
+
+Phase 3 evidence: final application85f6e49passes all product gates and authenticated real-Postgres E2E; verification.md records exact checks/artifacts. Independent plan/safety reviews both APPROVED with no actionable P1/P2. release-proposal.md identifies migration0033fingerprint, ordered release, narrow-reader rollback hazard and exact pre-waste artifacts. Production promotion and all human acceptance criteria remain pending; no Office communication changed/sent.

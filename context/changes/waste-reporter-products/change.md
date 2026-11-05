@@ -1,7 +1,7 @@
 ---
 change_id: waste-reporter-products
 title: Reporter attribution and full-database waste products
-status: implementing
+status: impl_reviewed
 created: 2026-11-05
 updated: 2026-11-05
 archived_at: null
@@ -11,4 +11,4 @@ Ben confirmed the deployed waste feature works, then requested mandatory reporte
 
 Use isolated branch codex/waste-reporter-products in the existing clean worktree. Implementation, tests, local real-Postgres E2E and independent review are authorized. A concrete production proposal must identify migration0033 and rollback before final promotion under AGENTS. Never create fake production observations or supplier orders, send Office messages, or access signed-in Telegram.
 
-Exact next step: implement the reviewed additive contract, verify both roles with auth enabled and disposable Postgres, then present the exact migration/application release candidate. No live-test handoff until deployment is confirmed or explicitly proposed.
+Exact next step: publish the reviewed application85f6e49with verification/release documentation, confirm hosted product CI, then request Ben's explicit approval for migration0033and the application production promotion. Local implementation/E2E and independent reviews pass; all production actions and new-feature human acceptance remain pending. No live-test handoff until deployment is confirmed.
