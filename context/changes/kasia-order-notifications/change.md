@@ -124,3 +124,12 @@ activate the approved schedules. Preserve capture start, snapshots and ACKs;
 disable capture/consumer only for recovery and reconcile any capture-off gap.
 Runtime/state evidence is maintained in JARVIS docs/REMOTE_RUNTIME_STATE.md and
 docs/worklog/2026-11-06-kasia-supply-activation.md. Credentials remain outside Git.
+
+Consumer update15:42CET: PR343 merged84a5f0da after both full hosted gates and
+phone/container gates. Worker8e72cf04 and the minute timer are live. Three real
+events were durably ingested/ACKed and delivered with correct Telegram receipts
+to Ken1/Westfield2; natural15:41tick exit0 and attempts1 show no repeated send.
+Sourcepending0/truncatedfalse. Wola remains held until its COO bot send restriction
+is removed;9point routes are active. Daily17/phone/urgent calls are still off
+pending the owner's provider handoff, specific scope confirmation and exact-text
+call approval/timing. No synthetic production order or phone call was performed.
