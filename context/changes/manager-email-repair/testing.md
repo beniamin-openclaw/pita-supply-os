@@ -26,13 +26,13 @@ Testy `pytest`, `pytest -m integration` oraz `vitest` już wykonuje istniejący 
 |---|---|---|
 | Nowe przypadki w istniejącym CI | PASS lokalnie | +24 przypadki: 15 pełnych przepływów Postgres, 3 anulowane członkostwa, 2 dodatkowe warianty tworzenia siatki, 4 szerokości PDF |
 | Próba na starej wersji `e4d4c54` | Błędy wykryte zgodnie z oczekiwaniem | 11 frontendowych, 13 Postgres/API, 3 członkostwa i 4 PDF; po poprawce te przypadki przechodzą. Stary kod uruchomiono w osobnej kopii poza repo, bez `.env` |
-| Pełny backend / Postgres / frontend | PASS | 1269 / 69 / 1361; Ruff, ESLint i build PASS. Hosted CI tej nieopublikowanej wersji jeszcze nie wykonano |
+| Pełny backend / Postgres / frontend | PASS lokalnie i w GitHubie | 1269 / 69 / 1361; Ruff, ESLint i build PASS. CI kandydata: 42213133059 / 42213162572; CI wdrożonego merge: 42213429402 — wszystkie trzy zadania PASS |
 | Rzeczywiste katalogi — lokalna kopia | PASS | 18 wariantów: Warszawa (wszystkie 7 aktywnych lokali), Kraków, Katowice, Gdańsk, wszystkie 10 aktywnych lokali, mieszany zestaw 4 miast; każdy × Pago / Mory / oba |
 | Zapis i odmowy API na rzeczywistych danych | PASS | Prefill, odczyt po zapisie, sumy po magazynie/lokalu, zły duplikat, ujemna ilość 422 bez utraty danych, pusty transport 400 bez zapisu, ponowna finalizacja 409 |
 | Treści i dokumenty | PASS | 74 podglądy mail/list; 36 PDF z 18 lokalnych transportów; ilości, jednostki, kolumny i zakres dostawcy porównane z zapisanymi danymi |
 | Układ wydruku | PASS po dodatkowej naprawie | Stary PDF 10 lokali wychodził poza stronę. Wszystkie 37 nowych PDF (36 + wariant 13 kolumn) mają cały tekst w marginesach. Obejrzano wyrenderowane przykłady 10 i 13 kolumn oraz Mory Gdańsk |
 | Przeglądarka + API + Postgres + przechwycony Gmail | PASS w granicy lokalnego testu | Błędne konto: brak finalizacji/szkicu. Poprawne konto testowe: dwa MIME z PDF, dokładni odbiorcy i nadawca, dwa zdarzenia historii. Wszystkie zewnętrzne żądania Google przechwycone; 0 prawdziwych szkiców/wysyłek |
-| Produkcja — aktualny odczyt | Stara wersja, błędy nadal obecne | Warszawa ma katalogi; Forum/Supersam/Słony nadal 0 dla obu magazynów; 4 dostawców z adresem nadal `manual`. Nie wdrożono ani nie zmieniono konfiguracji |
+| Produkcja — odczyt po zatwierdzonym wdrożeniu | PASS | Oba hosty: `085b8176`. Wszystkie 10 aktywnych lokali mają katalogi Pago/Mory; cztery zatwierdzone kanały zwracają `email`, także w szczegółach istniejących zamówień. Sumy 12 transportów zgodne; 6 odmów dostępu 401; katalogi Kapitanów zachowują zakres. Przeglądarka: zwijanie, kierowcy, pickery Supersamu, blokada pustych i niezapisanych dokumentów; 3 prawdziwe pobrania PDF bez wysyłki. Szczegóły: `release-verification.md` |
 | Ochrona `main` | LUKA — brak wymuszenia CI | GitHub zwraca `protected=false`, protection API: `Branch not protected`. Sam zielony CI nie blokuje pominięcia testów |
 
 Dodatkowo wykryte i naprawione:
@@ -44,7 +44,7 @@ Dowody prywatne: `/Users/ben/Documents/Codex/2026-11-06/manager-email-repair/`: 
 
 ## Warunki dalszego wydania
 
-- Wymagane jest zatwierdzenie wdrożenia kodu i osobno proponowanych czterech kanałów e-mail. Bez migracji, bez modyfikowania istniejących produkcyjnych zamówień.
-- Po zgodzie: zweryfikować aktualny `main`, CI i identyczność wdrożonych artefaktów, następnie publiczny odczyt i obecność produktów/wyborów oraz prawdziwe logowanie Google i uprawnienia nadawcy. Lokalny test nie dowodzi zgód ani aliasów prawdziwego konta.
+- Ben zatwierdził wdrożenie i cztery kanały e-mail. Wdrożono i sprawdzono aktualny `main`, CI, oba hosty oraz publiczny UI/API. Bez migracji i bez modyfikowania istniejących zamówień. Liczby zamówień/wierszy/zdarzeń nie zmieniły się; wskazany pusty transport ma identyczną zawartość przed i po kontroli.
+- Pozostaje przejście Bena: rzeczywiste logowanie Google, uprawnienia nadawcy, przegląd ilości i szkiców bez wysyłki. Lokalny test nie dowodzi zgód ani aliasów prawdziwego konta. Kontrola produkcji blokowała wszystkie zapisy w przeglądarce i połączenia do Google.
 - Rekomendacja zabezpieczenia repo: wymagać udanych `Backend (ruff + pytest)`, `Backend integration (real Postgres)`, `Frontend (build + lint)` przed zmianą `main`. Jest to propozycja zmiany polityki, nie wprowadzona reguła ani nowa konwencja PR.
 - Kontakty e-mail części dostawców w Gdańsku pozostają nieuzupełnione; nie podstawiać adresów innych miast. Nigdy nie traktować szkicu jako dowodu wysłania maila.

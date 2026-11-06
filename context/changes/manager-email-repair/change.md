@@ -1,17 +1,17 @@
 ---
 change_id: manager-email-repair
 title: Manager email lists and city transport editing
-status: verified_locally_awaiting_release_approval
+status: deployed_verified_awaiting_operator_walkthrough
 created: 2026-11-06
 updated: 2026-11-06
 ---
 
-Ben requested repair of Marek's manager-email report, checks for other cities, and transport fixes from four browser annotations. No production release, configuration write, message sending or supplier order has been approved in this chat.
+Ben requested repair of Marek's manager-email report, checks for other cities, and transport fixes from four browser annotations. Ben subsequently explicitly approved deployment and email activation for the four suppliers, with nothing sent. PR #86 is merged and production-verified at `085b81765804242ef9444f867459c12a09d28d25`; the four guarded channel changes were applied at 11:53:59 UTC on 6 November. No email, Gmail draft or supplier order was created by this work. Exact release, verification, rollback and operator steps: `release-verification.md`. The findings below retain the pre-release audit context.
 
 Confirmed on production, read-only:
 
 - Marek's 5 November screenshot shows the copy list, not the complete email. The old list prints the internal name and repeats the supplier name under `Kod`; this is not an actual supplier code. Both dispatch and post-send copy duplicated the formatter and omitted off-catalogue extras.
-- Kuchnie Świata and Selgros in Kraków/Katowice have confirmed email addresses but `ordering_method=manual`, selecting copy-list UI without email greeting, signature or Gmail. Marek supplied the contacts in his 15 October reply (thread `1a135645196a2f71`). Current minima are 600/750 PLN and cutoff 17:00; notes preserve the older hold pending terms. `prod-sql.sql` proposes exactly four guarded channel changes using those existing addresses; it has NOT run on production.
+- Before release, Kuchnie Świata and Selgros in Kraków/Katowice had confirmed email addresses but `ordering_method=manual`, selecting copy-list UI without email greeting, signature or Gmail. Marek supplied the contacts in his 15 October reply (thread `1a135645196a2f71`). Minima are 600/750 PLN and cutoff 17:00; notes preserve the older hold pending terms. `prod-sql.sql` was applied after approval for exactly these four suppliers; API and order-detail readbacks now return `email`.
 - Bukat Kraków and Dis-Pack Kraków/Katowice already use email. Dis-Pack's later description of website ordering remains a workflow question; no change proposed for it. Gdańsk Blue Service/Kuchnie/Selgros have no email contact. Coca-Cola was described as WhatsApp ordering. No other city's contact was substituted. Regional combined orders from Warsaw remain manual internal lists.
 - API previews checked 74 real order snapshots (73 across active locations plus one inactive Poznań sample): no duplicated product IDs. Active-location samples carry company/address/phone/signers/mailbox metadata. Active catalogue groups have names/units. This does not validate every historical order, invoice pack, delivery calendar or Gmail alias.
 - Transport `TRN-20261106-PAGO-99710a` had six member orders, zero positive aggregate lines and all saved quantities zero. Supersam's Pago/Mory orders and Gdańsk's Pago order had no lines. The backend correctly refused finalization; the UI still offered empty PDFs and a doomed draft attempt.
@@ -36,11 +36,11 @@ Verification (candidate on `codex/manager-email-repair`, based on main `e4d4c549
 
 Private evidence: `/Users/ben/Documents/Codex/2026-11-06/manager-email-repair/`. No credentials stored in this change folder. Browser PDFs for review are local test documents.
 
-Release proposal: after Ben's explicit approval, publish this reviewed backend/frontend change and optionally apply `prod-sql.sql` for the four named suppliers. No schema migration. Recheck current main, CI, contacts/terms and deployed artifacts before claiming live; preserve existing transports/orders. Verify public UI/API read-only, then Ben tests actual Gmail popup/mailbox/alias and quantities step by step. Sending any email remains separately approved per exact content/recipients.
+Release completed after Ben's explicit approval, with no schema migration. Both hosts run the approved source; hosted CI on candidate and merge passed. Production verification used read-only API/browser checks, plus the four approved supplier changes. Existing orders/transports were preserved. Ben next tests actual Gmail popup/mailbox/alias and quantities step by step. Sending any email remains separately approved per exact content/recipients.
 
 Rollback: revert this code change through a reviewed release; preserve all orders/history (new city warehouse lines may need the patched version to add further products). If the four channel changes need reversal, run `rollback-sql.sql` only after a fresh state check; it restores manual channels and records the reversal without touching orders/drafts. Prefer forward correction if new work relies on these flows.
 
-Blockers/exact next step: Ben's production decision, then live artifact verification and attended Gmail/manual acceptance. Gdańsk email contacts remain missing; do not enable guessed recipients. This is a locally verified candidate, not a completed production fix.
+Blockers/exact next step: deployed and verified within the read-only production boundary; Ben's attended Gmail/manual acceptance remains. Gdańsk email contacts remain missing; do not enable guessed recipients. See `release-verification.md` for the current state.
 
 
 ## Expanded regression audit — 2026-11-06
@@ -49,4 +49,4 @@ Ben requested a prevention plan and independent full checks before deciding on p
 
 This audit found two additional defects and fixed them: cancelled transport members still appeared as cargo/blocked adding a location again, and wide driver PDFs overflowed portrait A4. New route/integration/layout tests cover those failures. All 37 new PDFs have text inside page margins; representative rendered pages checked visually. Correct-account order/driver test MIME payloads have PDFs and exact recipients, and record two events only in local Postgres; wrong-account attempt leaves the batch draft. No actual Google account consent or alias acceptance is proven.
 
-Current read-only production check still shows the old catalogue/channel defects; nothing deployed or changed there. GitHub reports main unprotected: the CI runs on push/PR but is not enforced. Requiring the three existing CI jobs is proposed policy, not applied. Exact next step: Ben's scoped production decision; then release artifact verification and real Google acceptance. No messages or real supplier orders sent.
+That pre-release check showed the original catalogue/channel defects. The subsequent approved deployment and production readback resolved them; see `release-verification.md`. GitHub reports main unprotected: CI runs on push/PR but is not enforced. Requiring the three existing CI jobs remains proposed policy, not applied. Exact next step: Ben's real Google/manual acceptance. No messages or real supplier orders sent.

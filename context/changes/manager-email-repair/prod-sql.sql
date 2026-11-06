@@ -1,4 +1,5 @@
--- Prepared 2026-11-06; NOT applied. Requires Ben's production approval.
+-- Applied 2026-11-06 11:53:59 UTC after Ben's explicit production approval.
+-- Do not reapply. Guard rejects repeats; see release-verification.md.
 -- Source: Marek's 2026-10-15 reply, Gmail thread 1a135645196a2f71.
 -- Contacts were loaded, but the four suppliers remained manual pending terms.
 -- Minima/cutoffs are now present. Change only these four channels; never send.
