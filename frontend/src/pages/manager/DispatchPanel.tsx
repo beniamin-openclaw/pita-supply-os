@@ -35,7 +35,6 @@ import { Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useT } from "../../i18n";
-import { compareProductOrder } from "../../lib/productOrder";
 import type { ManagerOrderDetail, ManagerOrderLineDetail, OrderingMethod } from "../../types";
 import {
   type DraftMap,
@@ -44,9 +43,9 @@ import {
 } from "./lib/draftState";
 import {
   buildEmailBody,
+  buildCopyList,
   buildEmailSubject,
   buildGmailComposeUrl,
-  copyListQty,
   draftCc,
   fallbackCc,
 } from "./lib/emailBody";
@@ -135,18 +134,10 @@ export function DispatchPanel({
     }
   }
 
-  // Plain-text list (Produkt | Ilość | kod) for portal/phone, draft qty > 0,
-  // in the canonical supplier order (same as the e-mail and every screen).
-  const listText = useMemo(() => {
-    const rows = detail.lines
-      .filter((ln) => effQty(ln) > 0)
-      .sort(compareProductOrder)
-      .map((ln) => {
-        const code = ln.supplier_product_name || "";
-        return `${ln.product_name_pl} | ${copyListQty(ln, effQty(ln))} | ${code}`.replace(/\s*\|\s*$/, "");
-      });
-    return [t("manager.copyList.header"), ...rows].join("\n");
-  }, [detail.lines, effQty, t]);
+  const listText = useMemo(
+    () => buildCopyList(detail, effQty, t("manager.copyList.header")),
+    [detail, effQty, t],
+  );
 
   const emptyNote: ReactNode = empty ? (
     <p className="mt-2 text-xs font-semibold text-amber-700">{t("manager.emptyOrder")}</p>

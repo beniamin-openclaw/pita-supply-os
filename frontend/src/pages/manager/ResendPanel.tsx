@@ -14,14 +14,13 @@ import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useT } from "../../i18n";
-import { compareProductOrder } from "../../lib/productOrder";
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../types";
 import { type DraftMap, draftQty } from "./lib/draftState";
 import {
   buildEmailBody,
+  buildCopyList,
   buildGmailComposeUrl,
   buildResendSubject,
-  copyListQty,
   draftCc,
   fallbackCc,
 } from "./lib/emailBody";
@@ -124,21 +123,10 @@ export function ResendPanel({
     }
   };
 
-  // Plain-text list (Produkt | Ilość | kod), qty > 0 — mirrors DispatchPanel
-  // (canonical supplier order).
-  const listText = useMemo(() => {
-    const rows = detail.lines
-      .filter((ln) => effQty(ln) > 0)
-      .sort(compareProductOrder)
-      .map((ln) => {
-        const code = ln.supplier_product_name || "";
-        return `${ln.product_name_pl} | ${copyListQty(ln, effQty(ln))} | ${code}`.replace(
-          /\s*\|\s*$/,
-          "",
-        );
-      });
-    return [t("manager.copyList.header"), ...rows].join("\n");
-  }, [detail.lines, effQty, t]);
+  const listText = useMemo(
+    () => buildCopyList(detail, effQty, t("manager.copyList.header")),
+    [detail, effQty, t],
+  );
 
   return (
     <div className="border-t border-slate-200 p-4">

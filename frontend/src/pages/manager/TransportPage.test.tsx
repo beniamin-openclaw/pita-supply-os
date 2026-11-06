@@ -21,6 +21,7 @@ vi.mock("../../apiClient", async (importOriginal) => {
       transportBatches: vi.fn(),
       transportBatch: vi.fn(),
       transportCreate: vi.fn(),
+      transportAddLocation: vi.fn(),
       transportBatchPatch: vi.fn(),
       managerOrderable: vi.fn(),
     },
@@ -191,6 +192,32 @@ afterEach(() => {
 });
 
 describe("TransportPage — filter bar (transport-v2)", () => {
+  it("collapses eligible orders without losing the selection", async () => {
+    renderPage();
+    await settle();
+    await click(screen.getAllByRole("checkbox")[0]);
+    const toggle = screen.getByRole("button", { name: /Do połączenia/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await click(toggle);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    await click(toggle);
+    expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
+  });
+
+  it("prefills both selected warehouses for every location in a new grid", async () => {
+    vi.mocked(api.transportAddLocation).mockResolvedValue({ transport_id: "TRN-NEW", order_id: "NEW", prefilled_count: 1 });
+    renderPage();
+    await settle();
+    await click(screen.getByRole("button", { name: "Nowy transport z lokalizacjami" }));
+    const dialog = screen.getByRole("dialog");
+    const confirm = within(dialog).getByRole("button", { name: /Utwórz/ });
+    await click(confirm);
+    await settle();
+    for (const location of LOCATIONS) {
+      expect(api.transportAddLocation).toHaveBeenCalledWith("TRN-NEW", location.location_id, true);
+      expect(api.transportAddLocation).toHaveBeenCalledWith("TRN-NEW", location.location_id, true, "SUP_MORY");
+    }
+  });
   it("starts with both chips on: Pago run with companions, one history fetch for all suppliers", async () => {
     renderPage();
     await settle();
@@ -363,7 +390,12 @@ function batchDetail(
         lines: [SOUVLAKI_LINE],
       },
     ],
-    lines: [],
+    lines: [{
+      product_id: "P027", product_name_pl: "Souvlaki", supplier_product_id: "SP_PAGO_P027",
+      supplier_product_name: "Souvlaki karton", purchase_unit: "karton", total_qty_purchase: 3,
+      supplier_id: "SUP_PAGO", supplier_name: "Pago", warehouse_pickup: true,
+      per_location: [{ location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-W", qty_purchase: 3 }],
+    }],
     ...overrides,
   } as TransportBatchDetail;
 }

@@ -3087,6 +3087,37 @@ def test_receiving_submit_against_transport_manager_created_order(mocker):
 
 # ---------- Phase 9: manager-first grid creation with prefill ----------
 
+def test_own_catalog_city_can_use_warehouse_transport_without_changing_captain_catalog(mocker):
+    for supplier_id in ("SUP_PAGO", "SUP_MORY"):
+        city = _location("SUPERSAM", "Pita Bros Supersam").model_copy(update={"own_catalog": True})
+        sp = _supplier_product(supplier_id=supplier_id)
+        header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+        patches = _enable_sheet_backend_for_write(
+            mocker, orders=[], transport_batches=[header], locations=[city],
+            supplier_products=[sp],
+            location_product_settings=[LocationProductSetting(
+                setting_id="S1", location_id="SUPERSAM", product_id="P027",
+                target_stock_qty_base=10,
+            )],
+        )
+        manager = client.get(
+            f"/api/manager/orderable?supplier_id={supplier_id}&location_id=SUPERSAM",
+            headers=MANAGER_AUTH,
+        )
+        assert manager.status_code == 200
+        assert [r["supplier_product_id"] for r in manager.json()] == [sp.supplier_product_id]
+        added = client.post(
+            "/api/manager/transport/add-location", headers=MANAGER_AUTH,
+            json={"transport_id": "TRN-X", "location_id": "SUPERSAM",
+                  "supplier_id": supplier_id, "prefill_products": True},
+        )
+        assert added.status_code == 200, added.text
+        assert added.json()["prefilled_count"] == 1
+        assert patches["append_order_lines"].call_args.args[0][0].supplier_product_id == sp.supplier_product_id
+        # The ordinary Captain catalogue remains city-scoped.
+        from app.main import _build_orderable_items
+        assert _build_orderable_items(sheets, "SUPERSAM", supplier_id) == []
+
 def test_add_location_prefill_creates_zero_qty_lines_for_orderable_products(mocker):
     header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
     settings = [

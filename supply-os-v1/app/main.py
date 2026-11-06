@@ -305,6 +305,7 @@ def _build_orderable_items(
     suggestion_alerts_enabled: bool = True,
     include_unconfigured: bool = False,
     with_open_orders: bool = False,
+    shared_warehouse: bool = False,
 ) -> list[dict]:
     """Orderable line dicts for one location + supplier (shared by the Captain
     and Manager orderable routes).
@@ -314,6 +315,9 @@ def _build_orderable_items(
     location does not normally carry (e.g. Gyros 15 KG at Norblin). Those items
     carry ``configured_for_location = False`` and zero thresholds; the active
     filters still apply. The Captain path never sets it.
+
+    ``shared_warehouse`` lets Managers use the shared Pago/Mory catalogue
+    when a city's own catalogue has no rows for that warehouse.
 
     Mirrors the prior inline ``captain_orderable`` body: reads through the chosen
     ``backend`` (so sheet/supabase serve live master data), filters
@@ -356,9 +360,17 @@ def _build_orderable_items(
     }
     locations = backend.load_locations()
     require_stock_count = _location_requires_stock_count(locations, location_id)
-    effective = effective_supplier_products(
-        backend.load_supplier_products(), location_id, locations
-    )
+    supplier_products = backend.load_supplier_products()
+    effective = effective_supplier_products(supplier_products, location_id, locations)
+    # Managers collect from the same Pago/Mory warehouses for every city.
+    # Captain city catalogues and every other supplier retain their own scope.
+    if shared_warehouse and supplier_id in ("SUP_PAGO", "SUP_MORY"):
+        if not any(sp.supplier_id == supplier_id for sp in effective):
+            effective = [
+                sp
+                for sp in effective_supplier_products(supplier_products, None, locations)
+                if sp.supplier_id == supplier_id
+            ]
     sps = [
         sp
         for sp in effective
@@ -791,6 +803,7 @@ def manager_orderable(
     return _build_orderable_items(
         _choose_backend(), location_id, supplier_id,
         include_unconfigured=include_unconfigured,
+        shared_warehouse=True,
     )
 
 
@@ -3240,6 +3253,7 @@ def manager_add_line(
     orderable = _build_orderable_items(
         backend, order.location_id, order.supplier_id,
         include_unconfigured=req.allow_unconfigured,
+        shared_warehouse=True,
     )
     match = next(
         (it for it in orderable if it["supplier_product_id"] == req.supplier_product_id),
@@ -6290,7 +6304,7 @@ def manager_transport_add_location(
     prefilled_count = 0
     if req.prefill_products:
         orderable = _build_orderable_items(
-            backend, req.location_id, target_supplier_id
+            backend, req.location_id, target_supplier_id, shared_warehouse=True
         )
         skeleton_lines = [
             OrderLine(

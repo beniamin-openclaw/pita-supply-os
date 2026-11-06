@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { LangProvider } from "../../i18n";
 import type { ManagerOrderDetail, ManagerOrderLineDetail } from "../../types";
 import { DispatchPanel } from "./DispatchPanel";
+import { ResendPanel } from "./ResendPanel";
 
 function makeLine(overrides: Partial<ManagerOrderLineDetail> = {}): ManagerOrderLineDetail {
   return {
@@ -108,6 +109,40 @@ describe("DispatchPanel — other channels untouched", () => {
     expect(screen.getByRole("button", { name: "Oznacz jako zamówione ✓" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Kopiuj listę" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Otwórz w Gmail" })).toBeNull();
+  });
+});
+
+describe("supplier copy list", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["portal", "phone", "manual"] as const)(
+    "%s copies one supplier name and quantity, with no internal-name code column",
+    async (ordering_method) => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal("navigator", { clipboard: { writeText } });
+      renderPanel(makeDetail({ ordering_method }));
+      fireEvent.click(screen.getByRole("button", { name: "Kopiuj listę" }));
+      expect(writeText).toHaveBeenCalledWith("Produkt | Ilość\nPita 15cm | 2 karton");
+    },
+  );
+
+  it("uses the same list for a sent order and preserves off-catalogue items", () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(
+      <LangProvider>
+        <ResendPanel
+          detail={makeDetail({ ordering_method: "manual", status: "manager_sent", extra_items: "Feta - 5 kg" })}
+          drafts={{}}
+          dirty={false}
+          onToast={() => {}}
+        />
+      </LangProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Kopiuj listę" }));
+    expect(writeText).toHaveBeenCalledWith(
+      "Produkt | Ilość\nPita 15cm | 2 karton\nFeta (spoza katalogu) | 5 kg",
+    );
   });
 });
 

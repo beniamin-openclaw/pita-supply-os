@@ -23,7 +23,7 @@ import {
   type ReactElement,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronUp, Loader2 } from "lucide-react";
 
 import { api, ApiError } from "../../apiClient";
 import { AppHeader } from "../../components/ui/AppHeader";
@@ -262,6 +262,7 @@ export function TransportPage(): ReactElement {
 
   // Eligible orders to combine ---------------------------------------------------
   const [eligible, setEligible] = useState<TransportEligibleOrder[] | null>(null);
+  const [eligibleOpen, setEligibleOpen] = useState(true);
   const [eligibleError, setEligibleError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -919,6 +920,9 @@ export function TransportPage(): ReactElement {
               // call at a time so a per-location failure is isolated and named.
                
               await api.transportAddLocation(transportId, locationId, true);
+              if (scope.includeCompanions) {
+                await api.transportAddLocation(transportId, locationId, true, "SUP_MORY");
+              }
             } catch (e) {
               const detailMsg = e instanceof ApiError ? e.detail : String(e);
               errors.push(`${label}: ${detailMsg}`);
@@ -1154,7 +1158,19 @@ export function TransportPage(): ReactElement {
 
         {/* ---- Eligible orders (to combine) ---- */}
         <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-800 mb-3">{t("manager.transport.eligible.title")}</h2>
+          <h2>
+            <button
+              type="button"
+              aria-expanded={eligibleOpen}
+              aria-controls="trn-eligible-orders"
+              onClick={() => setEligibleOpen((open) => !open)}
+              className="flex w-full items-center justify-between text-left text-sm font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <span>{t("manager.transport.eligible.title")} {eligible ? `(${visibleEligible.length})` : ""}</span>
+              {eligibleOpen ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+            </button>
+          </h2>
+          <div id="trn-eligible-orders" hidden={!eligibleOpen} className="mt-3">
 
           {eligibleError && (
             <div className="rounded border-2 border-red-400 bg-red-50 p-3 text-sm text-red-900 mb-3" role="alert">
@@ -1313,6 +1329,7 @@ export function TransportPage(): ReactElement {
               )}
             </div>
           )}
+          </div>
         </section>
 
         {/* ---- Past batches + detail ---- */}
