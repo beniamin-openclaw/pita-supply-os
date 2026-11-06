@@ -88,3 +88,39 @@ Exact next step: the main agent reviews this commit against the consumer, then
 prepares the separately approved rollout: migration 0034 first, code with capture
 off, dedicated secret token plus one explicit aware start instant, source/consumer
 activation and a production-safe end-to-end verification. No rollout ran here.
+
+## Approved production release — 2026-11-06
+
+The owner subsequently approved deployment and standing messages. Main Codex
+rebased this source onto production085b8176; candidate7729af52 passed1303 backend
+unit tests,75 real disposable-Postgres tests and1361 frontend tests/build/lint.
+PR87 passed all hosted product gates and merged as
+219f1376e5cf9cfeeb88daa05187bbb3d41bf02f.
+
+Migration0034 committed13:45:38UTC with SHA256
+0bad27e610034701a128c3644171e732e6c44848a0c8b67f8be9bab4cf52f3ff.
+The new table was empty, RLSon, zero policies and the immutable trigger present;
+existing counts stayed593orders/4573lines/79order_events/20transport_batches/
+285transport_events. No historical backfill or synthetic production order.
+
+Capture is now enabled with a dedicated integration token and start instant
+2026-11-06T14:02:57.769149Z. Railway deployment
+8d71474f-9f94-48e1-bc44-cf05c52a0e02 is SUCCESS on219f1376, image
+sha256:2c4206db3d3d3c8a0a219ff69d74de8add9bddbcbcc88f4b73953df1bc747fed.
+Readback: health200, dedicated pendingGET200 with the same start instant,
+one real pending snapshot/truncatedfalse, anonymous and invalid token401.
+No ACK, message, call or order mutation was used to verify activation.
+
+The separate consumer is not yet active. Its pinned-image rootless check-config
+and both dry-runs read the real Source successfully with its existing SQLite
+volume mounted read-only. A fresh local cross-repo Captain→Postgres→SourceClient
+→SQLite→stub Telegram/call test passed; temporary Postgres was stopped afterward.
+Actual outbound timing/acceptance, provider access and Wola's restricted COO bot
+remain blockers owned by main Codex. New source snapshots queue durably meanwhile.
+
+Exact next step: complete consumer final CI/merge, verify all routes and provider
+permissions, perform the separately approved exact-text Warsaw call test, then
+activate the approved schedules. Preserve capture start, snapshots and ACKs;
+disable capture/consumer only for recovery and reconcile any capture-off gap.
+Runtime/state evidence is maintained in JARVIS docs/REMOTE_RUNTIME_STATE.md and
+docs/worklog/2026-11-06-kasia-supply-activation.md. Credentials remain outside Git.
