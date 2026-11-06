@@ -24,6 +24,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, timezone
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app import errors, sheets
@@ -3819,3 +3820,35 @@ def test_release_without_marker_sends_no_marker_field(mocker):
     assert r.status_code == 200, r.text
     assert "supplier_order_reference" not in patches["update_order"].call_args.kwargs
     patches["append_transport_event"].assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["detail", "list", "add-again"])
+def test_cancelled_transport_member_is_history_not_cargo(mocker, operation):
+    header = TransportBatch(transport_id="TRN-X", supplier_id="SUP_PAGO", status="draft")
+    orders = [
+        _order("LIVE", status=OrderStatus.MANAGER_CLAIMED, supplier_order_reference="TRN-X"),
+        _order("CANCELLED", location_id="BRACKA", status=OrderStatus.CANCELLED,
+               supplier_order_reference="TRN-X", extra_items="Do not collect this"),
+    ]
+    _enable_sheet_backend_for_write(
+        mocker, orders=orders, transport_batches=[header],
+        locations=[_location("WOLA", "Wola"), _location("BRACKA", "Bracka")],
+        lines=[_line("LIVE", "L1", captain_qty=3), _line("CANCELLED", "L2", captain_qty=99)],
+    )
+    if operation == "detail":
+        response = client.get("/api/manager/transport/batch/TRN-X", headers=MANAGER_AUTH)
+        assert response.status_code == 200
+        detail = response.json()
+        assert [o["order_id"] for o in detail["orders"]] == ["LIVE"]
+        assert detail["order_count"] == 1
+        assert detail["location_ids"] == ["WOLA"]
+        assert detail["lines"][0]["total_qty_purchase"] == 3
+    elif operation == "list":
+        response = client.get("/api/manager/transport/batches", headers=MANAGER_AUTH)
+        assert response.status_code == 200
+        assert response.json()[0]["order_count"] == 1
+        assert response.json()[0]["location_ids"] == ["WOLA"]
+    else:
+        response = client.post("/api/manager/transport/add-location", headers=MANAGER_AUTH,
+                               json={"transport_id": "TRN-X", "location_id": "BRACKA"})
+        assert response.status_code == 200, response.text

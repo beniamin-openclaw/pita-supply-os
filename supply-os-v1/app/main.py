@@ -5285,7 +5285,7 @@ def manager_transport_batches(
     by_transport: dict[str, list[Order]] = {}
     for order in orders:
         ref = order.supplier_order_reference
-        if not ref or not ref.startswith("TRN-"):
+        if order.status == OrderStatus.CANCELLED or not ref or not ref.startswith("TRN-"):
             continue
         by_transport.setdefault(ref, []).append(order)
 
@@ -5446,7 +5446,9 @@ def manager_transport_batch_detail(
         )
 
     orders = backend.load_orders()
-    group = [o for o in orders if o.supplier_order_reference == transport_id]
+    # Cancelled members retain the marker for audit, but are no longer cargo.
+    group = [o for o in orders
+             if o.supplier_order_reference == transport_id and o.status != OrderStatus.CANCELLED]
 
     # 404 only when NEITHER member orders NOR a header row exist: an empty
     # draft (header, zero members) is a legitimate v2 state — the manager
@@ -6271,7 +6273,8 @@ def manager_transport_add_location(
     orders = backend.load_orders()
     group = [o for o in orders if o.supplier_order_reference == req.transport_id]
     if any(
-        o.location_id == req.location_id and o.supplier_id == target_supplier_id
+        o.status != OrderStatus.CANCELLED
+        and o.location_id == req.location_id and o.supplier_id == target_supplier_id
         for o in group
     ):
         raise HTTPException(
