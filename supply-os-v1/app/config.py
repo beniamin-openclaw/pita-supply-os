@@ -3,6 +3,7 @@ import base64
 import binascii
 import json
 import logging
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -83,6 +84,11 @@ class Settings(BaseSettings):
     # Single shared token for the Manager/Office dispatcher.
     # Empty => Manager auth DISABLED (dev).
     manager_token: SecretStr = SecretStr("")
+
+    # Dedicated ingestion source: no Telegram credentials, sends or historical backfill.
+    order_notifications_enabled: bool = False
+    order_notifications_token: SecretStr = SecretStr("")
+    order_notifications_started_at: datetime | None = None
 
     # Standing CC (DW) on every supplier order email (feedback r7): the office
     # keeps a copy of what left for the supplier. Single source of truth for BOTH

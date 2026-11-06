@@ -68,6 +68,7 @@ from .models import (
     Order,
     OrderEvent,
     OrderLine,
+    OrderSubmissionEvent,
     Product,
     Receipt,
     ReceiptLine,
@@ -93,6 +94,7 @@ SUPPORTS_PERSISTENCE = True
 # flag (`main._supports_finance`) and 503 on the seed/sheets backends.
 SUPPORTS_FINANCE = True
 SUPPORTS_WASTE_REPORTS = True
+SUPPORTS_ORDER_SUBMISSIONS = True
 
 
 def _waste_report(conn: Connection, report_id: str, location_id: str | None = None) -> WasteReport | None:
@@ -561,6 +563,60 @@ def get_order(order_id: str) -> Order | None:
 
 def append_order(order: Order) -> None:
     _insert("orders", _ORDER_COLUMNS, order)
+
+
+def append_order_submission(
+    order: Order, lines: list[OrderLine], event: OrderSubmissionEvent,
+) -> None:
+    """Commit the Captain order, its lines and immutable snapshot as one unit."""
+    if (event.order_id != order.order_id or event.location_id != order.location_id
+            or event.supplier_id != order.supplier_id
+            or event.submitted_at != order.captain_submitted_at
+            or event.requested_delivery_date != order.requested_delivery_date
+            or event.line_count != len(lines)
+            or any(line.order_id != order.order_id for line in lines)):
+        raise ValueError("Submission snapshot does not match order and lines")
+    with _get_engine().begin() as conn:
+        for table, columns, models in (("orders", _ORDER_COLUMNS, [order]),
+                                       ("order_lines", _ORDER_LINE_COLUMNS, lines)):
+            payload = [{c: _to_db(model.model_dump().get(c)) for c in columns} for model in models]
+            if payload:
+                conn.execute(text(f"INSERT INTO {table} ({', '.join(columns)}) "
+                                  f"VALUES ({', '.join(_bind(c) for c in columns)})"), payload)
+        conn.execute(text("""INSERT INTO order_submission_events (order_id, submitted_at, payload)
+            VALUES (:order_id, :submitted_at, CAST(:payload AS jsonb))"""),
+            {"order_id": event.order_id, "submitted_at": event.submitted_at,
+             "payload": event.model_dump_json()})
+
+
+def load_order_submissions(
+    *, since: datetime | None, until: datetime | None, limit: int,
+) -> list[OrderSubmissionEvent]:
+    """Pending ingestion by default; a bounded time window includes ingested events."""
+    if since is None:
+        where = "ingested_at IS NULL"
+        params = {"limit": limit}
+    else:
+        where = "submitted_at >= :since AND submitted_at < :until"
+        params = {"since": since, "until": until, "limit": limit}
+    with _get_engine().connect() as conn:
+        payloads = conn.execute(text(f"SELECT payload FROM order_submission_events WHERE {where} "
+                                     "ORDER BY submitted_at, order_id LIMIT :limit"), params).scalars()
+        return [OrderSubmissionEvent.model_validate(payload) for payload in payloads]
+
+
+def ack_order_submissions(order_ids: list[str]) -> int:
+    """Acknowledge durable consumer ingestion only; never mutate the order or snapshot."""
+    with _get_engine().begin() as conn:
+        found = conn.execute(text("SELECT order_id FROM order_submission_events "
+                                  "WHERE order_id = ANY(CAST(:ids AS text[])) "
+                                  "ORDER BY order_id FOR UPDATE"), {"ids": order_ids}).scalars().all()
+        if set(found) != set(order_ids):
+            raise ValueError("Unknown order_ids")
+        conn.execute(text("UPDATE order_submission_events SET ingested_at = now() "
+                          "WHERE order_id = ANY(CAST(:ids AS text[])) AND ingested_at IS NULL"),
+                     {"ids": order_ids})
+    return len(found)
 
 
 def append_order_lines(lines: list[OrderLine]) -> None:

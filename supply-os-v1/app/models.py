@@ -3,7 +3,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 from decimal import Decimal
 from uuid import UUID
 import re
@@ -536,6 +536,42 @@ class Order(BaseModel):
     # not answered. Informational only.
     coverage_days: Optional[int] = None
     lines: list[OrderLine] = Field(default_factory=list)
+
+
+class OrderSubmissionEvent(BaseModel):
+    """Immutable submit-time snapshot; ingestion never implies Telegram delivery."""
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    order_id: str
+    location_id: str
+    location_name: str
+    supplier_id: str
+    supplier_name: str
+    submitted_at: AwareDatetime
+    requested_delivery_date: date | None
+    line_count: int = Field(ge=0)
+
+
+class OrderSubmissionPage(BaseModel):
+    items: list[OrderSubmissionEvent]
+    truncated: bool
+    capture_started_at: AwareDatetime
+
+
+class OrderSubmissionAck(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    order_ids: list[Annotated[str, Field(strict=True, min_length=1, max_length=200)]] = Field(
+        min_length=1, max_length=100)
+
+    @field_validator("order_ids")
+    @classmethod
+    def unique_ids(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or any(not item.strip() for item in value):
+            raise ValueError("order_ids must be unique nonempty ids")
+        return value
+
+
+class OrderSubmissionAckResponse(BaseModel):
+    acknowledged: int
 
 
 class OrderEvent(BaseModel):

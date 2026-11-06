@@ -431,6 +431,174 @@ def test_waste_reporter_source_csv_scopes_and_rejected_outcomes():
     assert list(csv.DictReader(io.StringIO(client.get("/api/captain/waste/export", headers=other).text))) == []
 
 
+def _submission(order_id="ORD-SUBMISSION-1", submitted_at=None):
+    from app import models
+    submitted_at = submitted_at or datetime(2026, 11, 5, 12, tzinfo=timezone.utc)
+    order = Order(order_id=order_id, location_id="WOLA", supplier_id="SUP_X",
+        order_date=submitted_at.date(), status=OrderStatus.CAPTAIN_SUBMITTED,
+        captain_user="WOLA", captain_submitted_at=submitted_at)
+    lines = [OrderLine(order_line_id=order_id + "-L1", order_id=order_id,
+        product_id="P1", supplier_product_id="SP1", captain_final_qty_purchase=2)]
+    event = models.OrderSubmissionEvent(order_id=order_id, location_id="WOLA", location_name="Wola",
+        supplier_id="SUP_X", supplier_name="X", submitted_at=submitted_at,
+        requested_delivery_date=None, line_count=1)
+    return order, lines, event
+
+
+def test_submission_atomic_capture_immutable_and_rls():
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+    order, lines, event = _submission()
+    supabase_backend.append_order_submission(order, lines, event)
+    assert len(supabase_backend.get_order(order.order_id).lines) == 1
+    supabase_backend.update_order(order.order_id, status=OrderStatus.MANAGER_SENT,
+                                 requested_delivery_date=date(2026, 11, 7))
+    assert supabase_backend.load_order_submissions(since=None, until=None, limit=101) == [event]
+    with supabase_backend._get_engine().connect() as conn:
+        assert conn.execute(text("SELECT relrowsecurity FROM pg_class "
+                                 "WHERE relname='order_submission_events'")).scalar() is True
+        assert conn.execute(text("SELECT count(*) FROM pg_policies "
+                                 "WHERE tablename='order_submission_events'")).scalar() == 0
+    for assignment in ("payload = '{}'::jsonb", "submitted_at = now()", "order_id = 'changed'"):
+        with pytest.raises(DBAPIError), supabase_backend._get_engine().begin() as conn:
+            conn.execute(text(f"UPDATE order_submission_events SET {assignment}"))
+    role = "submission_rls_test_" + uuid4().hex
+    with supabase_backend._get_engine().connect() as conn:
+        transaction = conn.begin()
+        try:
+            conn.exec_driver_sql(f'CREATE ROLE "{role}" NOLOGIN')
+            conn.exec_driver_sql(f'GRANT USAGE ON SCHEMA public TO "{role}"')
+            conn.exec_driver_sql(f'GRANT SELECT ON order_submission_events TO "{role}"')
+            conn.exec_driver_sql(f'SET LOCAL ROLE "{role}"')
+            assert conn.execute(text("SELECT count(*) FROM order_submission_events")).scalar() == 0
+        finally:
+            transaction.rollback()
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql((MIGRATIONS_DIR / "0034_order_submission_events.sql").read_text())
+    assert supabase_backend.load_order_submissions(since=None, until=None, limit=101) == [event]
+
+
+@pytest.mark.parametrize("failure", ["line", "event"])
+def test_submission_transaction_rolls_back_order_lines_and_event(failure):
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+    order, lines, event = _submission()
+    if failure == "line":
+        lines[0] = lines[0].model_copy(update={"product_id": "missing-product"})
+    else:
+        with supabase_backend._get_engine().begin() as conn:
+            conn.exec_driver_sql("ALTER TABLE order_submission_events ADD CONSTRAINT "
+                                 "reject_test_event CHECK (order_id <> 'ORD-SUBMISSION-1')")
+    try:
+        with pytest.raises(DBAPIError):
+            supabase_backend.append_order_submission(order, lines, event)
+        assert supabase_backend.get_order(order.order_id) is None
+        with supabase_backend._get_engine().connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM order_lines")).scalar() == 0
+            assert conn.execute(text("SELECT count(*) FROM order_submission_events")).scalar() == 0
+    finally:
+        if failure == "event":
+            with supabase_backend._get_engine().begin() as conn:
+                conn.exec_driver_sql("ALTER TABLE order_submission_events DROP CONSTRAINT reject_test_event")
+
+
+def test_submission_pending_ack_idempotent_unknown_atomic_and_window():
+    from datetime import timedelta
+    from sqlalchemy import text
+    start = datetime(2026, 11, 5, 12, tzinfo=timezone.utc)
+    for order_id, moment in [("B", start), ("A", start), ("C", start + timedelta(hours=1))]:
+        supabase_backend.append_order_submission(*_submission(order_id, moment))
+    def pending():
+        return supabase_backend.load_order_submissions(since=None, until=None, limit=101)
+    assert [e.order_id for e in pending()] == ["A", "B", "C"]
+    with pytest.raises(ValueError):
+        supabase_backend.ack_order_submissions(["A", "unknown"])
+    assert [e.order_id for e in pending()] == ["A", "B", "C"]
+    assert supabase_backend.ack_order_submissions(["A", "B"]) == 2
+    with supabase_backend._get_engine().connect() as conn:
+        first = conn.execute(text("SELECT ingested_at FROM order_submission_events WHERE order_id='A'")).scalar()
+    assert supabase_backend.ack_order_submissions(["A", "B"]) == 2
+    with supabase_backend._get_engine().connect() as conn:
+        assert conn.execute(text("SELECT ingested_at FROM order_submission_events WHERE order_id='A'")).scalar() == first
+    assert [e.order_id for e in pending()] == ["C"]
+    assert [e.order_id for e in supabase_backend.load_order_submissions(
+        since=start, until=start + timedelta(hours=1), limit=1001)] == ["A", "B"]
+    assert supabase_backend.get_order("A").status == OrderStatus.CAPTAIN_SUBMITTED
+    _make_order(order_id="manager-skeleton")
+    assert [e.order_id for e in pending()] == ["C"]
+
+
+def test_submission_api_real_capture_auth_pending_ack_and_window(monkeypatch):
+    from fastapi.testclient import TestClient
+    from pydantic import SecretStr
+    from app.main import app
+    monkeypatch.setattr(settings, "order_notifications_enabled", True, raising=False)
+    monkeypatch.setattr(settings, "order_notifications_token", SecretStr("integration-local-test"), raising=False)
+    start = datetime(2026, 11, 5, tzinfo=timezone.utc)
+    monkeypatch.setattr(settings, "order_notifications_started_at", start, raising=False)
+    client = TestClient(app)
+    path = "/api/integrations/order-submissions"
+    auth = {"Authorization": "Bearer integration-local-test"}
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers={"Authorization": "Bearer test_manager_token"}).status_code == 401
+    assert client.get("/api/locations", headers=auth).status_code == 401
+    body = {"supplier_id": "SUP_X", "ordered_by": "Test Captain", "lines": [
+        {"product_id": "P1", "supplier_product_id": "SP1", "current_stock_qty_base": 2,
+         "captain_final_qty_purchase": 8}], "requested_delivery_date": "2026-11-07"}
+    response = client.post("/api/captain/submit", json=body,
+                           headers={"Authorization": "Bearer test_wola_token"})
+    assert response.status_code == 200, response.text
+    order_id = response.json()["order_id"]
+    page = client.get(path, headers=auth).json()
+    assert page["items"][0]["order_id"] == order_id
+    assert page["items"][0]["requested_delivery_date"] == "2026-11-07"
+    assert page["capture_started_at"] == "2026-11-05T00:00:00Z"
+    assert client.post(path + "/ack", json={"order_ids": [order_id, "unknown"]}, headers=auth).status_code == 400
+    assert len(client.get(path, headers=auth).json()["items"]) == 1
+    assert client.post(path + "/ack", json={"order_ids": [order_id]}, headers=auth).json() == {"acknowledged": 1}
+    assert client.get(path, headers=auth).json()["items"] == []
+    event_time = datetime.fromisoformat(page["items"][0]["submitted_at"].replace("Z", "+00:00"))
+    from datetime import timedelta
+    window = client.get(path, headers=auth, params={"since": event_time.isoformat(),
+        "until": (event_time + timedelta(hours=1)).isoformat()}).json()
+    assert window["items"] == page["items"]
+
+
+def test_submission_api_limits_oldest_first_and_marks_truncation(monkeypatch):
+    from datetime import timedelta
+    from fastapi.testclient import TestClient
+    from pydantic import SecretStr
+    from sqlalchemy import text
+    from app.main import app
+    monkeypatch.setattr(settings, "order_notifications_enabled", True)
+    monkeypatch.setattr(settings, "order_notifications_token", SecretStr("integration-local-test"))
+    start = datetime(2026, 11, 5, tzinfo=timezone.utc)
+    monkeypatch.setattr(settings, "order_notifications_started_at", start)
+    submissions = [_submission(f"ORDER-{i:04}", start) for i in range(1001)]
+    supabase_backend._insert_many("orders", supabase_backend._ORDER_COLUMNS,
+                                  [order for order, _, _ in submissions])
+    with supabase_backend._get_engine().begin() as conn:
+        conn.execute(text("INSERT INTO order_submission_events (order_id, submitted_at, payload) "
+                          "VALUES (:id, :at, CAST(:payload AS jsonb))"),
+            [{"id": event.order_id, "at": event.submitted_at, "payload": event.model_dump_json()}
+             for _, _, event in reversed(submissions)])
+    client = TestClient(app)
+    path = "/api/integrations/order-submissions"
+    auth = {"Authorization": "Bearer integration-local-test"}
+    first = client.get(path, headers=auth).json()
+    assert len(first["items"]) == 100 and first["truncated"] is True
+    assert first["items"][0]["order_id"] == "ORDER-0000"
+    assert first["items"][-1]["order_id"] == "ORDER-0099"
+    ids = [item["order_id"] for item in first["items"]]
+    assert client.post(path + "/ack", headers=auth, json={"order_ids": ids}).status_code == 200
+    assert client.get(path, headers=auth).json()["items"][0]["order_id"] == "ORDER-0100"
+    window = client.get(path, headers=auth, params={"since": start.isoformat(),
+        "until": (start + timedelta(hours=1)).isoformat()}).json()
+    assert len(window["items"]) == 1000 and window["truncated"] is True
+    assert window["items"][0]["order_id"] == "ORDER-0000"
+    assert window["items"][-1]["order_id"] == "ORDER-0999"
+
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 # FK-safe drop/truncate order (children before parents).
@@ -440,7 +608,7 @@ _ALL_TABLES = [
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
-    "order_lines", "order_events", "orders", "transport_events", "transport_batches",
+    "order_submission_events", "order_lines", "order_events", "orders", "transport_events", "transport_batches",
     "supplier_delivery_rules",
     "location_product_settings", "supplier_products", "locations", "suppliers",
     "products", "_meta",
@@ -451,7 +619,7 @@ _TXN_TABLES = [
     "finance_documents",
     "receipt_lines", "receipts", "inventory_count_lines",
     "inventory_count_events", "inventory_counts",
-    "order_lines", "order_events", "orders", "transport_events", "transport_batches",
+    "order_submission_events", "order_lines", "order_events", "orders", "transport_events", "transport_batches",
 ]
 
 
@@ -653,6 +821,7 @@ def _schema():
         conn.exec_driver_sql(delivery_window_pack_suffix)
         conn.exec_driver_sql((MIGRATIONS_DIR / "0032_waste_reports.sql").read_text())
         conn.exec_driver_sql((MIGRATIONS_DIR / "0033_waste_reporter_products.sql").read_text())
+        conn.exec_driver_sql((MIGRATIONS_DIR / "0034_order_submission_events.sql").read_text())
 
     # Minimal master data so orders/lines/receipts satisfy their FKs.
     supabase_backend._insert(

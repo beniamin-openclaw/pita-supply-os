@@ -16,6 +16,7 @@ dev mode. Never leave tokens empty in production.
 """
 import logging
 import secrets
+from datetime import datetime
 from typing import Optional
 
 from fastapi import Header, HTTPException, status
@@ -54,6 +55,7 @@ def require_captain(authorization: Optional[str] = Header(None)) -> str:
 
     Dev mode (no captain_tokens configured): warns once, returns "WOLA".
     """
+    _reject_integration_token(authorization)
     raw = settings.captain_tokens.get_secret_value()
     if not raw:
         if not _DEV_WARNED["captain"]:
@@ -90,6 +92,7 @@ def require_manager(authorization: Optional[str] = Header(None)) -> None:
 
     Dev mode (no manager_token configured): warns once, allows access.
     """
+    _reject_integration_token(authorization)
     raw = settings.manager_token.get_secret_value()
     if not raw:
         if not _DEV_WARNED["manager"]:
@@ -120,6 +123,7 @@ def require_any_auth(authorization: Optional[str] = Header(None)) -> str:
     Used for master-data read endpoints (products, suppliers, locations)
     that any authenticated user can fetch.
     """
+    _reject_integration_token(authorization)
     captain_raw = settings.captain_tokens.get_secret_value()
     manager_raw = settings.manager_token.get_secret_value()
 
@@ -153,3 +157,29 @@ def require_any_auth(authorization: Optional[str] = Header(None)) -> str:
         detail="Invalid token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _reject_integration_token(authorization: Optional[str]) -> None:
+    presented = _strip_bearer(authorization)
+    token = settings.order_notifications_token.get_secret_value()
+    if token and presented and secrets.compare_digest(presented.encode(), token.encode()):
+        raise HTTPException(status_code=401, detail="Integration token cannot access business routes",
+                            headers={"WWW-Authenticate": "Bearer"})
+
+
+def require_order_notifications_config() -> datetime:
+    started = settings.order_notifications_started_at
+    if (not settings.order_notifications_enabled
+            or not settings.order_notifications_token.get_secret_value().strip()
+            or started is None or started.utcoffset() is None):
+        raise HTTPException(status_code=503, detail="Order submission source is not configured")
+    return started
+
+
+def require_order_notifications(authorization: Optional[str] = Header(None)) -> None:
+    require_order_notifications_config()
+    presented = _strip_bearer(authorization)
+    expected = settings.order_notifications_token.get_secret_value()
+    if not presented or not secrets.compare_digest(presented.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Invalid integration token",
+                            headers={"WWW-Authenticate": "Bearer"})
