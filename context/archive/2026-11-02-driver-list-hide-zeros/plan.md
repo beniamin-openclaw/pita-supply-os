@@ -122,11 +122,11 @@ tests keep passing unchanged.
 
 #### Automated
 
-- [x] 1.1 Frontend tests pass: `npm run test`
-- [x] 1.2 Frontend build passes: `npm run build`
-- [x] 1.3 Frontend lint passes: `npm run lint`
-- [x] 1.4 Backend unaffected: `ruff check .` + `python -m pytest`
+- [x] 1.1 Frontend tests pass: `npm run test` — 741052c
+- [x] 1.2 Frontend build passes: `npm run build` — 741052c
+- [x] 1.3 Frontend lint passes: `npm run lint` — 741052c
+- [x] 1.4 Backend unaffected: `ruff check .` + `python -m pytest` — 741052c
 
 #### Manual
 
-- [ ] 1.5 Live test on prod: driver PDF shows no zero cells, totals unchanged
+- [x] 1.5 Live test on prod: driver PDF shows no zero cells, totals unchanged (operator confirmed 2026-11-02) — 02a0930
