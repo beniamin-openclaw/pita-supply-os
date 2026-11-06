@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from . import (
     delivery_calendar,
@@ -28,7 +28,13 @@ from . import (
     supabase_backend,
     supabase_storage,
 )
-from .auth import require_any_auth, require_captain, require_manager
+from .auth import (
+    require_any_auth, require_captain, require_manager,
+    require_order_notifications, require_order_notifications_config,
+)
+from .models import (
+    OrderSubmissionAck, OrderSubmissionAckResponse, OrderSubmissionEvent, OrderSubmissionPage,
+)
 from .models import WasteCatalog, WasteCreate, WasteList, WasteReport, WasteVoid
 from .waste_catalog import ITEMS as WASTE_CATALOG
 from .order_qty import effective_ordered_qty, is_manager_final_set
@@ -881,6 +887,43 @@ def _is_persistent(backend) -> bool:
     return getattr(backend, "SUPPORTS_PERSISTENCE", False) is True
 
 
+def _require_order_submission_backend(backend: Any) -> None:
+    if (not _is_persistent(backend)
+            or getattr(backend, "SUPPORTS_ORDER_SUBMISSIONS", False) is not True):
+        raise HTTPException(status_code=503, detail="Backend cannot persist order submissions")
+
+
+@app.get("/api/integrations/order-submissions", response_model=OrderSubmissionPage)
+def integration_order_submissions(
+    since: AwareDatetime | None = None,
+    until: AwareDatetime | None = None,
+    _: None = Depends(require_order_notifications),
+) -> OrderSubmissionPage:
+    if ((since is None) != (until is None)
+            or (since is not None and not timedelta(0) < until - since <= timedelta(hours=48))):
+        raise HTTPException(status_code=422, detail="Provide paired since/until with 0 < window <= 48h")
+    backend = _choose_backend()
+    _require_order_submission_backend(backend)
+    limit = 100 if since is None else 1000
+    events = backend.load_order_submissions(since=since, until=until, limit=limit + 1)
+    return OrderSubmissionPage(items=events[:limit], truncated=len(events) > limit,
+                               capture_started_at=require_order_notifications_config())
+
+
+@app.post("/api/integrations/order-submissions/ack", response_model=OrderSubmissionAckResponse)
+def integration_order_submissions_ack(
+    req: OrderSubmissionAck,
+    _: None = Depends(require_order_notifications),
+) -> OrderSubmissionAckResponse:
+    backend = _choose_backend()
+    _require_order_submission_backend(backend)
+    try:
+        count = backend.ack_order_submissions(req.order_ids)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Unknown order_ids")
+    return OrderSubmissionAckResponse(acknowledged=count)
+
+
 class _MasterData:
     """Bundle of loaded master data for one captain submit call."""
 
@@ -1270,7 +1313,24 @@ def captain_submit(
         coverage_days=req.coverage_days,
     )
 
-    persisted = _persist_order(backend, order, order_lines)
+    if settings.order_notifications_enabled:
+        capture_started_at = require_order_notifications_config()
+        _require_order_submission_backend(backend)
+    else:
+        capture_started_at = None
+    if capture_started_at is not None and order.captain_submitted_at >= capture_started_at:
+        location = next((loc for loc in backend.load_locations()
+                         if loc.location_id == location_id), None)
+        if location is None:
+            raise HTTPException(status_code=503, detail="Submission location is not configured")
+        backend.append_order_submission(order, order_lines, OrderSubmissionEvent(
+            order_id=order.order_id, location_id=location_id, location_name=location.location_name,
+            supplier_id=order.supplier_id, supplier_name=master.supplier.supplier_name,
+            submitted_at=order.captain_submitted_at,
+            requested_delivery_date=order.requested_delivery_date, line_count=len(order_lines)))
+        persisted = True
+    else:
+        persisted = _persist_order(backend, order, order_lines)
     if not persisted:
         warnings.append(
             "Order was not persisted (read-only backend) — data is in-memory only."
