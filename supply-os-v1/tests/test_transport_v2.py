@@ -248,7 +248,8 @@ def test_batches_supplier_ids_ignore_cancelled_members(mocker):
     )
     summary = _summary()
     assert summary["supplier_ids"] == ["SUP_PAGO"]
-    assert summary["order_count"] == 2  # the count itself is unchanged
+    assert summary["order_count"] == 1
+    assert summary["location_ids"] == ["WOLA"]
 
 
 # ---------- GET /draft-config: order_mailbox ----------

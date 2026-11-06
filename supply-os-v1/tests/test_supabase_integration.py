@@ -1803,3 +1803,128 @@ def test_migration_0031_delivery_window_and_pack_suffix_roundtrip():
                 "DELETE FROM locations WHERE location_id IN ('WESTFIELD_IT', 'OLD31_IT')"
             )
             conn.exec_driver_sql("DELETE FROM suppliers WHERE supplier_id = 'SUP_INTE_IT'")
+
+
+@pytest.fixture
+def warehouse_transport_masters():
+    """Production catalogue shapes, using only the throwaway integration DB."""
+    for loc in ("FORUM", "SUPERSAM", "SLONY"):
+        supabase_backend._insert("locations", supabase_backend._LOCATION_COLUMNS,
+            Location(location_id=loc, location_name=loc, own_catalog=True))
+        supabase_backend._insert("location_product_settings",
+            supabase_backend._LOCATION_PRODUCT_SETTING_COLUMNS,
+            LocationProductSetting(setting_id=f"IT-{loc}", location_id=loc,
+                                   product_id="P1", target_stock_qty_base=10))
+    for sup, unit, conversion in (("SUP_PAGO", "karton", 5), ("SUP_MORY", "opak", 10)):
+        supabase_backend._insert("suppliers", supabase_backend._SUPPLIER_COLUMNS,
+            Supplier(supplier_id=sup, supplier_name=sup, email="warehouse@example.test"))
+        supabase_backend._insert("supplier_products", supabase_backend._SUPPLIER_PRODUCT_COLUMNS,
+            SupplierProduct(supplier_product_id=f"IT-{sup}", supplier_id=sup, product_id="P1",
+                supplier_product_name=f"Pita {unit}", purchase_unit=unit,
+                units_per_purchase_unit=conversion, warehouse_pickup=sup == "SUP_PAGO"))
+    yield
+    with supabase_backend._get_engine().begin() as conn:
+        conn.exec_driver_sql("TRUNCATE " + ", ".join(_TXN_TABLES) + " CASCADE")
+        conn.exec_driver_sql("DELETE FROM supplier_products WHERE supplier_product_id "
+                             "IN ('IT-SUP_PAGO', 'IT-SUP_MORY')")
+        conn.exec_driver_sql("DELETE FROM suppliers WHERE supplier_id IN ('SUP_PAGO', 'SUP_MORY')")
+        conn.exec_driver_sql("DELETE FROM location_product_settings WHERE setting_id "
+                             "IN ('IT-FORUM', 'IT-SUPERSAM', 'IT-SLONY')")
+        conn.exec_driver_sql("DELETE FROM locations WHERE location_id IN ('FORUM', 'SUPERSAM', 'SLONY')")
+
+
+@pytest.mark.parametrize("location_ids", [
+    ("WOLA",), ("FORUM",), ("SUPERSAM",), ("SLONY",),
+    ("WOLA", "FORUM", "SUPERSAM", "SLONY"),
+], ids=["warsaw", "krakow", "katowice", "gdansk", "all-cities"])
+@pytest.mark.parametrize("supplier_ids", [
+    ("SUP_PAGO",), ("SUP_MORY",), ("SUP_PAGO", "SUP_MORY"),
+], ids=["pago", "mory", "combined"])
+def test_manager_city_transport_lifecycle_postgres(
+    warehouse_transport_masters, monkeypatch, location_ids, supplier_ids,
+):
+    """Real API/persistence: catalogue, prefill, save, reload, finalize, retry.
+
+    The same product at two warehouses has different units/conversions;
+    neither aggregation nor saving may mix their purchase quantities.
+    """
+    from sqlalchemy import text
+    from fastapi.testclient import TestClient
+    from pydantic import SecretStr
+    from app.main import app
+
+    monkeypatch.setattr(settings, "captain_tokens", SecretStr(
+        ",".join(f"{loc}:it-{loc}" for loc in location_ids)))
+    manager = {"Authorization": "Bearer test_manager_token"}
+    with TestClient(app) as api:
+        def request(method, path, **kwargs):
+            response = api.request(method, "/api/manager/" + path, headers=manager, **kwargs)
+            assert response.status_code == 200, response.text
+            return response.json()
+
+        for loc in location_ids:
+            for sup in supplier_ids:
+                items = request("GET", "orderable", params={"location_id": loc, "supplier_id": sup})
+                assert [item["supplier_product_id"] for item in items] == [f"IT-{sup}"]
+                captain = api.get("/api/captain/orderable", params={"supplier_id": sup},
+                                  headers={"Authorization": f"Bearer it-{loc}"})
+                assert captain.status_code == 200, captain.text
+                assert len(captain.json()) == (1 if loc == "WOLA" else 0)
+        assert api.post("/api/manager/transport/create", json={"supplier_id": supplier_ids[0]},
+                        headers={"Authorization": f"Bearer it-{location_ids[0]}"}).status_code == 401
+        assert api.post("/api/manager/transport/create",
+                        json={"supplier_id": supplier_ids[0]}).status_code == 401
+        batch = request("POST", "transport/create", json={"supplier_id": supplier_ids[0],
+            "order_ids": [], "allow_companions": len(supplier_ids) == 2})["transport_id"]
+        for loc in location_ids:
+            for sup in supplier_ids:
+                added = request("POST", "transport/add-location", json={"transport_id": batch,
+                    "location_id": loc, "supplier_id": sup, "prefill_products": True})
+                assert added["prefilled_count"] == 1
+        path = f"transport/batch/{batch}"
+        empty = request("GET", path)
+        assert len(empty["orders"]) == len(location_ids) * len(supplier_ids)
+        assert empty["lines"] == []
+        assert api.post("/api/manager/transport/finalize", headers=manager,
+                        json={"transport_id": batch}).status_code == 400
+        assert request("GET", path) == empty  # empty send must not write anything
+        expected = {}
+        empty_ids = set()
+        zero_order = next((o for o in empty["orders"] if o["supplier_id"] != supplier_ids[0]),
+                          empty["orders"][0])
+        for index, order in enumerate(empty["orders"], start=1):
+            qty = 0 if len(empty["orders"]) > 1 and order == zero_order else index
+            if qty == 0:
+                empty_ids.add(order["order_id"])
+                with supabase_backend._get_engine().begin() as conn:
+                    conn.execute(text("UPDATE order_lines SET captain_final_qty_purchase=7 "
+                                      "WHERE order_line_id=:line"),
+                                 {"line": order["lines"][0]["order_line_id"]})
+            else:
+                expected[(order["supplier_id"], order["location_id"])] = qty
+            request("PATCH", f"order/{order['order_id']}", json={"manager_finals": [{
+                "order_line_id": order["lines"][0]["order_line_id"],
+                "manager_final_qty_purchase": qty, "manager_comment": "integration test"}]})
+            saved = request("GET", f"order/{order['order_id']}")["lines"][0]
+            conversion = 5 if order["supplier_id"] == "SUP_PAGO" else 10
+            if qty == 0:
+                assert saved["captain_final_qty_purchase"] == 7
+            assert saved["manager_final_set"] is True
+            assert saved["manager_final_qty_purchase"] == qty
+            assert saved["manager_final_qty_base"] == qty * conversion
+        detail = request("GET", path)
+        actual = {(line["supplier_id"], cell["location_id"]): cell["qty_purchase"]
+                  for line in detail["lines"] for cell in line["per_location"]}
+        assert {key: qty for key, qty in actual.items() if qty > 0} == expected
+        for line in detail["lines"]:
+            assert line["total_qty_purchase"] == sum(c["qty_purchase"] for c in line["per_location"])
+            assert line["purchase_unit"] == ("karton" if line["supplier_id"] == "SUP_PAGO" else "opak")
+        finalized = request("POST", "transport/finalize", json={"transport_id": batch})
+        assert set(finalized["sent"]) == {o["order_id"] for o in empty["orders"]} - empty_ids
+        sent = request("GET", path)
+        assert sent["status"] == "sent"
+        assert all(o["status"] == "manager_sent" for o in sent["orders"])
+        assert {o["order_id"] for o in sent["orders"]}.isdisjoint(empty_ids)
+        assert sent["lines"] == detail["lines"]
+        assert api.post("/api/manager/transport/finalize", headers=manager,
+                        json={"transport_id": batch}).status_code == 409

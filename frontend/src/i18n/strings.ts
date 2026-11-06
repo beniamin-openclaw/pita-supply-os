@@ -976,7 +976,7 @@ export const STRINGS = {
     en: "{supplier} is ordered only as part of a Transport batch — this order is not sent from this screen. Add it to a batch on the Transport screen.",
   },
   "manager.transportOnlyLink": { pl: "Przejdź do ekranu Transport", en: "Go to the Transport screen" },
-  "manager.copyList.header": { pl: "Produkt | Ilość | Kod", en: "Product | Qty | Code" },
+  "manager.copyList.header": { pl: "Produkt | Ilość", en: "Product | Qty" },
   // Read-only bulk-pack hint next to a quantity in the invoice unit
   // (feedback-1001 D36): "= 6 kartonów + 2 paczki".
   "manager.caseHint": { pl: "= {split}", en: "= {split}" },
@@ -2162,6 +2162,14 @@ export const STRINGS = {
   "manager.transport.send.reason.noOrders": {
     pl: "Transport nie ma zamówień.",
     en: "The transport has no orders.",
+  },
+  "manager.transport.send.reason.noQuantity": {
+    pl: "Transport nie ma zapisanych ilości większych od zera. Wpisz ilości w tabeli i zapisz zmiany.",
+    en: "The transport has no saved quantities above zero. Enter quantities in the table and save changes.",
+  },
+  "manager.transport.send.reason.emptyOrderDocument": {
+    pl: "Brak pozycji do zlecenia odbioru. Dla Pago uwzględniane są tylko produkty odbierane z jego magazynu i zatwierdzone pozycje spoza katalogu.",
+    en: "No items for the pickup order. For Pago, only products collected from its warehouse and approved off-catalogue items are included.",
   },
   "manager.transport.send.reason.tooManyExtras": {
     pl: "Zaznaczono {count} pozycji spoza katalogu — można najwyżej {max}. Odznacz część.",

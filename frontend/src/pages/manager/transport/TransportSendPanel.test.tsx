@@ -111,6 +111,7 @@ function makeDetail(overrides: Partial<TransportBatchDetail> = {}): TransportBat
         total_qty_purchase: 3,
         supplier_id: "SUP_PAGO",
         supplier_name: "Pago",
+        warehouse_pickup: true,
         per_location: [
           { location_id: "WOLA", location_name: "Pita Bros Wola", order_id: "ORD-P", qty_purchase: 3 },
         ],
@@ -738,6 +739,40 @@ describe("TransportSendPanel — mark-only and undo", () => {
 });
 
 describe("TransportSendPanel — downloads and status", () => {
+  it("blocks empty documents and drafts before Gmail or finalize", async () => {
+    renderPanel(makeDetail({ lines: [], orders: makeDetail().orders.map((o) => ({ ...o, extra_items: "" })) }));
+    for (const name of ["Lista dla kierowcy (PDF)", "Zlecenie odbioru (PDF)"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    }
+    expect(orderButton()).toBeDisabled();
+    expect(driverButton()).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Oznacz jako wysłane bez maila" })).toBeDisabled();
+    expect(vi.mocked(orderDraft.acquireVerifiedGmailToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.transportFinalize)).not.toHaveBeenCalled();
+  });
+
+  it.each([{ dirty: true }, { logisticsDirty: true }])("requires saving edits before PDF downloads: %j", (opts) => {
+    renderPanel(makeDetail(), opts);
+    expect(screen.getByRole("button", { name: "Lista dla kierowcy (PDF)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Zlecenie odbioru (PDF)" })).toBeDisabled();
+  });
+
+  it("preserves a driver list containing only off-catalogue items", () => {
+    renderPanel(makeDetail({ lines: [] }));
+    expect(screen.getByRole("button", { name: "Lista dla kierowcy (PDF)" })).toBeEnabled();
+    expect(driverButton()).toBeEnabled();
+    expect(orderButton()).toBeDisabled();
+  });
+
+  it("keeps the driver list available when all products are outside Pago's warehouse", () => {
+    renderPanel(makeDetail({ lines: makeDetail().lines.map((line) => ({ ...line, warehouse_pickup: false })),
+      orders: makeDetail().orders.map((o) => ({ ...o, extra_items: "" })) }));
+    expect(screen.getByRole("button", { name: "Lista dla kierowcy (PDF)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Zlecenie odbioru (PDF)" })).toBeDisabled();
+    expect(orderButton()).toBeDisabled();
+    expect(driverButton()).toBeEnabled();
+  });
+
   it("the ZOW download uses the currently ticked extras", async () => {
     renderPanel(makeDetail());
     await click(orderButton());

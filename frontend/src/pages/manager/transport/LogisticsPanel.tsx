@@ -91,7 +91,7 @@ function LogisticsField({
 
   const hasNoOptions = configured.length === 0 && suggestions.length === 0;
   const [mode, setMode] = useState<FieldMode>(() =>
-    hasNoOptions || (value !== "" && !options.includes(value)) ? "manual" : "select",
+    value !== "" && !options.includes(value) ? "manual" : "select",
   );
 
   const inputClass =

@@ -297,6 +297,21 @@ export function TransportSendPanel({
     ...(logisticsDirty ? [t("manager.transport.send.reason.logisticsDirty")] : []),
   ];
   const unsavedReason: string | null = unsavedReasons[0] ?? null;
+  const driverDoc = buildTransportDriverPrintDoc(detail, displayLabel);
+  const orderDoc = buildTransportPagoPrintDoc(
+    detail, pagoDisplayLabel, approvedLines.map((line) => line.text),
+  );
+  const noQuantityReason =
+    isDraft && !detail.lines.some((line) => line.total_qty_purchase > 0)
+      ? t("manager.transport.send.reason.noQuantity") : null;
+  const orderDocumentReason =
+    orderDoc.products.length === 0 && orderDoc.approvedExtraItems.length === 0
+      ? t("manager.transport.send.reason.emptyOrderDocument") : null;
+  const driverDocumentReason =
+    !driverDoc.sections.some((section) => section.products.length > 0) && driverDoc.extraItems.length === 0
+      ? t("manager.transport.send.reason.noQuantity") : null;
+  const downloadDriverReason = unsavedReason ?? driverDocumentReason;
+  const downloadOrderReason = unsavedReason ?? noQuantityReason ?? orderDocumentReason;
   const configReason: string | null =
     configStatus === "loading"
       ? t("manager.transport.send.reason.configLoading")
@@ -307,6 +322,8 @@ export function TransportSendPanel({
   const orderReason = ((): string | null => {
     if (unsavedReason) return unsavedReason;
     if (isDraft && detail.orders.length === 0) return t("manager.transport.send.reason.noOrders");
+    if (noQuantityReason) return noQuantityReason;
+    if (orderDocumentReason && extraLines.length === 0) return orderDocumentReason;
     if (configReason) return configReason;
     if (!hasValidRecipient(supplierEmail)) {
       return t(
@@ -321,6 +338,7 @@ export function TransportSendPanel({
 
   const driverReason = ((): string | null => {
     if (unsavedReason) return unsavedReason;
+    if (driverDocumentReason) return driverDocumentReason;
     if (configReason) return configReason;
     if (!hasValidRecipient(driverRecipients)) {
       return t("manager.transport.send.reason.noDriverRecipient");
@@ -355,7 +373,7 @@ export function TransportSendPanel({
 
   /** Why the card's confirm button is disabled (null = enabled). */
   const confirmReasonFor = (kind: TransportDraftKind): string | null =>
-    kind === "order" ? (orderReason ?? extrasReason) : driverReason;
+    kind === "order" ? (orderReason ?? extrasReason ?? orderDocumentReason) : driverReason;
 
   /** Refresh the page before releasing the buttons — bounded, and its own
    * errors are the page's to report. */
@@ -370,29 +388,24 @@ export function TransportSendPanel({
   // ---- PDF downloads (preview) ---------------------------------------------
 
   const handleDownload = async (which: "driver" | "pago"): Promise<void> => {
+    if (busy !== null || (which === "driver" ? downloadDriverReason : downloadOrderReason)) return;
     setError(null);
     setBusy(which === "driver" ? "downloadDriver" : "downloadPago");
     try {
       const generatedAt = new Date().toLocaleString("pl-PL");
       if (which === "driver") {
-        const doc = buildTransportDriverPrintDoc(detail, displayLabel);
         await withDeadline(
           downloadTransportPdf(
-            buildDriverPdfDocDefinition(doc, t, generatedAt),
+            buildDriverPdfDocDefinition(driverDoc, t, generatedAt),
             transportPdfFilename(displayLabel, "lista-kierowcy"),
           ),
           STEP_DEADLINE_MS,
           stepTimeout,
         );
       } else {
-        const doc = buildTransportPagoPrintDoc(
-          detail,
-          pagoDisplayLabel,
-          approvedLines.map((line) => line.text),
-        );
         await withDeadline(
           downloadTransportPdf(
-            buildPagoPdfDocDefinition(doc, t, generatedAt),
+            buildPagoPdfDocDefinition(orderDoc, t, generatedAt),
             transportPdfFilename(pagoDisplayLabel, "zamowienie"),
           ),
           STEP_DEADLINE_MS,
@@ -431,8 +444,8 @@ export function TransportSendPanel({
     if (busy !== null || reasonFor(kind) !== null) return;
     // Synchronous, before the token: an extras set the record would reject
     // (422) must stop here, not after the draft already exists.
-    if (kind === "order" && extrasReason !== null) {
-      setError(extrasReason);
+    if (kind === "order" && (extrasReason ?? orderDocumentReason) !== null) {
+      setError(extrasReason ?? orderDocumentReason);
       return;
     }
     // Everything the flow needs is captured synchronously, BEFORE the first
@@ -654,7 +667,7 @@ export function TransportSendPanel({
   // ---- "Oznacz jako wysłane bez maila" (draft batches) ----------------------
 
   const handleMarkOnly = async (): Promise<void> => {
-    if (busy !== null || unsavedReason !== null) return;
+    if (busy !== null || (unsavedReason ?? noQuantityReason) !== null) return;
     if (!window.confirm(t("manager.transport.send.markOnly.confirm", { id: detail.transport_id }))) {
       return;
     }
@@ -730,6 +743,9 @@ export function TransportSendPanel({
       : orderReason !== null && orderReason === driverReason
         ? [orderReason]
         : sendReasons;
+  const documentReasons = clientId && !isCancelled
+    ? shownReasons
+    : Array.from(new Set([...unsavedReasons, downloadDriverReason, downloadOrderReason]));
 
   const renderConfirmCard = (kind: TransportDraftKind): ReactElement => {
     const reason = confirmReasonFor(kind);
@@ -888,7 +904,8 @@ export function TransportSendPanel({
         <button
           type="button"
           onClick={() => void handleDownload("driver")}
-          disabled={busy !== null}
+          disabled={busy !== null || downloadDriverReason !== null}
+          title={downloadDriverReason ?? undefined}
           className={BUTTON_OUTLINE}
         >
           {busy === "downloadDriver" ? spinner : <Download size={16} aria-hidden="true" />}
@@ -897,13 +914,17 @@ export function TransportSendPanel({
         <button
           type="button"
           onClick={() => void handleDownload("pago")}
-          disabled={busy !== null}
+          disabled={busy !== null || downloadOrderReason !== null}
+          title={downloadOrderReason ?? undefined}
           className={BUTTON_OUTLINE}
         >
           {busy === "downloadPago" ? spinner : <Download size={16} aria-hidden="true" />}
           {t("manager.transport.send.downloadPago")}
         </button>
       </div>
+      {documentReasons.filter((reason) => reason !== null).map((reason) => (
+        <p key={reason} className="text-xs text-amber-700">{reason}</p>
+      ))}
       {approvedLines.length > 0 && (
         <p className="text-xs text-slate-600">
           {t("manager.transport.send.approvedExtrasInPdf", { count: approvedLines.length })}
@@ -936,26 +957,12 @@ export function TransportSendPanel({
                   {t("manager.transport.send.driverButton")}
                 </button>
               </div>
-              {shownReasons.length > 0 && (
-                <ul className="text-xs text-amber-700">
-                  {shownReasons.map((r) => (
-                    <li key={r}>{r}</li>
-                  ))}
-                </ul>
-              )}
             </div>
           )}
 
           {!clientId && (
             <div className="space-y-0.5 text-xs">
               <p className="text-slate-600">{t("manager.transport.send.noClientId")}</p>
-              {/* Mark-only still works here — say why it is disabled. */}
-              {isDraft &&
-                unsavedReasons.map((r) => (
-                  <p key={r} className="text-amber-700">
-                    {r}
-                  </p>
-                ))}
             </div>
           )}
 
@@ -989,8 +996,8 @@ export function TransportSendPanel({
                 <button
                   type="button"
                   onClick={() => void handleMarkOnly()}
-                  disabled={busy !== null || unsavedReason !== null || detail.orders.length === 0}
-                  title={unsavedReason ?? undefined}
+                  disabled={busy !== null || (unsavedReason ?? noQuantityReason) !== null || detail.orders.length === 0}
+                  title={unsavedReason ?? noQuantityReason ?? undefined}
                   className={BUTTON_OUTLINE}
                 >
                   {busy === "mark" ? spinner : null}

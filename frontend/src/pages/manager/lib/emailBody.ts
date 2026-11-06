@@ -208,6 +208,22 @@ export function extraItemRows(extraItems: string | null | undefined): Array<[str
   return rows;
 }
 
+/** Supplier-facing copy list: one name per product, using the same rows as the email. */
+export function buildCopyList(
+  detail: ManagerOrderDetail,
+  effectiveQtyFor: (line: ManagerOrderLineDetail) => number,
+  header: string,
+): string {
+  const rows = visibleLines(detail, effectiveQtyFor).map((line) => {
+    const name = line.supplier_product_name || line.product_name_pl;
+    return `${name} | ${copyListQty(line, effectiveQtyFor(line))}`;
+  });
+  const extras = extraItemRows(detail.extra_items).map(([name, qty]) =>
+    `${name} ${EXTRA_ITEM_MARKER}${qty ? ` | ${qty}` : ""}`,
+  );
+  return [header, ...rows, ...extras].join("\n");
+}
+
 /**
  * Plaintext Polish body (order-email-v2 layout, approved 2026-09-28, with the
  * supplier-email-v21 changes of 12.10: off-catalogue items as numbered table

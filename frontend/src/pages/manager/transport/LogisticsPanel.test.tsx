@@ -81,6 +81,25 @@ function type(id: string, value: string): void {
 const SAVE = /Zapisz logistykę/;
 
 describe("LogisticsPanel — unsaved-changes flag", () => {
+  it("shows the driver and vehicle selects when their config arrives after mount", () => {
+    const ui = (loaded: boolean): ReactElement => (
+      <LangProvider>
+        <LogisticsPanel
+          detail={makeDetail()}
+          driverSuggestions={[]}
+          vehicleSuggestions={[]}
+          driverOptions={loaded ? ["Jan Nowak"] : []}
+          vehicleOptions={loaded ? ["Ford TEST"] : []}
+          busy={false}
+          onSave={() => {}}
+        />
+      </LangProvider>
+    );
+    const view = render(ui(false));
+    view.rerender(ui(true));
+    expect(screen.getByRole("combobox", { name: "Kierowca" })).toHaveTextContent("Jan Nowak");
+    expect(screen.getByRole("combobox", { name: "Samochód" })).toHaveTextContent("Ford TEST");
+  });
   it("is clean on mount and dirty after an edit, with the save button shown", () => {
     const h = renderPanel(makeDetail());
     expect(lastDirty(h)).toBe(false);
