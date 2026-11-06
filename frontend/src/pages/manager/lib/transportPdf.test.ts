@@ -115,6 +115,26 @@ describe("transportPdfFilename", () => {
 });
 
 describe("buildDriverPdfDocDefinition", () => {
+  it.each([5, 7, 10, 13])("keeps every location column within an A4 page for %i locations", (count) => {
+    const doc = buildTransportDriverPrintDoc(batch(), "Test");
+    doc.locations = Array.from({ length: count }, (_, i) => `Location ${i + 1}`);
+    for (const section of doc.sections) for (const row of section.products) {
+      row.qtyByLocation = Array.from({ length: count }, () => 1);
+      row.totalQty = count;
+    }
+    const definition = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);
+    expect(definition.pageOrientation).toBe("landscape");
+    for (const node of definition.content) {
+      const table = (node as { table?: { headerRows?: number; widths: number[] } }).table;
+      if (table?.headerRows !== 1) continue;
+      expect(table.widths).toHaveLength(count + 4);
+      expect(table.widths.every((width) => Number.isFinite(width) && width > 0)).toBe(true);
+      // A4 landscape minus margins; include the actual layout's cell padding and borders.
+      expect(table.widths.reduce((sum, width) => sum + width, 0) + table.widths.length * 8.5 + 0.5)
+        .toBeLessThanOrEqual(841.89 - 60 + 0.01);
+    }
+  });
+
   it("includes the title bar text", () => {
     const doc = buildTransportDriverPrintDoc(batch(), "Transport Sobota · Bukat · 22.08.26");
     const pdfDoc = buildDriverPdfDocDefinition(doc, makeT(), GENERATED_AT);

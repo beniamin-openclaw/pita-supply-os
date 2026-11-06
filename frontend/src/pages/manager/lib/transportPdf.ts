@@ -32,7 +32,7 @@ export type TFunc = (key: StringKey, vars?: Record<string, string | number>) => 
 // (and unit-testable) without ever loading the pdfmake runtime.
 export interface PdfDocDefinition {
   pageSize: "A4";
-  pageOrientation: "portrait";
+  pageOrientation: "portrait" | "landscape";
   pageMargins: [number, number, number, number];
   defaultStyle: { fontSize: number; font?: string };
   styles: Record<string, Record<string, unknown>>;
@@ -153,6 +153,11 @@ export function buildDriverPdfDocDefinition(
     ]);
   }
 
+  const landscape = doc.locations.length > 4;
+  // Distribute A4 landscape after fixed columns, margins, cell padding and borders.
+  const locationWidth = landscape
+    ? (841.89 - 60 - 210 - (doc.locations.length + 4) * 8.5 - 0.5) / doc.locations.length
+    : 45;
   const columnHeaders = [
     { text: t("manager.transport.print.lpCol"), style: "tableHeader" },
     { text: t("manager.transport.print.productCol"), style: "tableHeader" },
@@ -186,7 +191,7 @@ export function buildDriverPdfDocDefinition(
     {
       table: {
         headerRows: 1,
-        widths: [20, "*", 30, ...doc.locations.map(() => 45), 40],
+        widths: [20, landscape ? 120 : "*", 30, ...doc.locations.map(() => locationWidth), 40],
         body: [columnHeaders, ...bodyRowsFor(section.products)],
       },
       layout: TABLE_BORDER_LAYOUT,
@@ -212,7 +217,7 @@ export function buildDriverPdfDocDefinition(
 
   return {
     pageSize: "A4",
-    pageOrientation: "portrait",
+    pageOrientation: landscape ? "landscape" : "portrait",
     pageMargins: [30, 30, 30, 30],
     defaultStyle: { fontSize: 9 },
     styles: SHARED_STYLES,
