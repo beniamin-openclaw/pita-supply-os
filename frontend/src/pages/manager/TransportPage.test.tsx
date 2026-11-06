@@ -204,18 +204,34 @@ describe("TransportPage — filter bar (transport-v2)", () => {
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
   });
 
-  it("prefills both selected warehouses for every location in a new grid", async () => {
+  it.each([
+    { name: "Pago and Mory", off: null, lead: "SUP_PAGO", companion: true },
+    { name: "Pago only", off: "Magazyn Mory", lead: "SUP_PAGO", companion: false },
+    { name: "Mory only", off: "Pago", lead: "SUP_MORY", companion: false },
+  ])("prefills exactly the selected warehouses for Warsaw and own-city locations: $name", async ({ off, lead, companion }) => {
+    const gridLocations: Location[] = [...LOCATIONS,
+      { location_id: "FORUM", location_name: "Forum", city: "Kraków", own_catalog: true, active: true, notes: "" },
+      { location_id: "SUPERSAM", location_name: "Supersam", city: "Katowice", own_catalog: true, active: true, notes: "" },
+      { location_id: "SLONY", location_name: "Słony Spichlerz", city: "Gdańsk", own_catalog: true, active: true, notes: "" },
+    ];
+    vi.mocked(api.transportAddLocation).mockClear();
+    vi.mocked(api.locations).mockResolvedValue(gridLocations);
     vi.mocked(api.transportAddLocation).mockResolvedValue({ transport_id: "TRN-NEW", order_id: "NEW", prefilled_count: 1 });
     renderPage();
     await settle();
+    if (off) await click(chip(off));
     await click(screen.getByRole("button", { name: "Nowy transport z lokalizacjami" }));
-    const dialog = screen.getByRole("dialog");
-    const confirm = within(dialog).getByRole("button", { name: /Utwórz/ });
-    await click(confirm);
+    await click(within(screen.getByRole("dialog")).getByRole("button", { name: /Utwórz/ }));
     await settle();
-    for (const location of LOCATIONS) {
+    expect(api.transportCreate).toHaveBeenCalledWith({
+      supplier_id: lead, order_ids: [], allow_companions: companion,
+    });
+    expect(api.transportAddLocation).toHaveBeenCalledTimes(gridLocations.length * (companion ? 2 : 1));
+    for (const location of gridLocations) {
       expect(api.transportAddLocation).toHaveBeenCalledWith("TRN-NEW", location.location_id, true);
-      expect(api.transportAddLocation).toHaveBeenCalledWith("TRN-NEW", location.location_id, true, "SUP_MORY");
+      if (companion) {
+        expect(api.transportAddLocation).toHaveBeenCalledWith("TRN-NEW", location.location_id, true, "SUP_MORY");
+      }
     }
   });
   it("starts with both chips on: Pago run with companions, one history fetch for all suppliers", async () => {

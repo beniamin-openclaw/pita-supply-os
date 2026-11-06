@@ -41,3 +41,12 @@ Release proposal: after Ben's explicit approval, publish this reviewed backend/f
 Rollback: revert this code change through a reviewed release; preserve all orders/history (new city warehouse lines may need the patched version to add further products). If the four channel changes need reversal, run `rollback-sql.sql` only after a fresh state check; it restores manual channels and records the reversal without touching orders/drafts. Prefer forward correction if new work relies on these flows.
 
 Blockers/exact next step: Ben's production decision, then live artifact verification and attended Gmail/manual acceptance. Gdańsk email contacts remain missing; do not enable guessed recipients. This is a locally verified candidate, not a completed production fix.
+
+
+## Expanded regression audit — 2026-11-06
+
+Ben requested a prevention plan and independent full checks before deciding on production. Executed plan/results: `testing.md`. Added 24 permanent cases to existing CI suites; 1269 backend, 69 real-Postgres integration and 1361 frontend tests plus lint/build pass. Before/after evidence includes failing old-code tests and 18 scenarios on copied production master data (all 10 active locations, both single warehouses and combined transports), 74 message/list previews, 36 transport PDFs plus a 13-column layout case, and a real local browser/API/database flow with Google requests intercepted.
+
+This audit found two additional defects and fixed them: cancelled transport members still appeared as cargo/blocked adding a location again, and wide driver PDFs overflowed portrait A4. New route/integration/layout tests cover those failures. All 37 new PDFs have text inside page margins; representative rendered pages checked visually. Correct-account order/driver test MIME payloads have PDFs and exact recipients, and record two events only in local Postgres; wrong-account attempt leaves the batch draft. No actual Google account consent or alias acceptance is proven.
+
+Current read-only production check still shows the old catalogue/channel defects; nothing deployed or changed there. GitHub reports main unprotected: the CI runs on push/PR but is not enforced. Requiring the three existing CI jobs is proposed policy, not applied. Exact next step: Ben's scoped production decision; then release artifact verification and real Google acceptance. No messages or real supplier orders sent.
